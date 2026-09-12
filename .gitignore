@@ -1,0 +1,60 @@
+# Copyright (c) 2026 Element Creations Ltd.
+#
+# SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
+# Please see LICENSE files in the repository root for full details.
+
+# Built application files
+*.apk
+*.ap_
+*.aab
+
+# Files for the ART/Dalvik VM
+*.dex
+
+# Java class files
+*.class
+
+# Generated files
+bin/
+gen/
+out/
+
+# Gradle files
+.gradle/
+build/
+
+# Python cache
+__pycache__/
+
+# Local configuration file (sdk path, etc)
+local.properties
+
+# Log Files
+*.log
+
+# Android Studio Navigation editor temp files
+.navigation/
+
+# Android Studio captures folder
+captures/
+
+# IntelliJ
+*.iml
+.idea/
+
+# .kotlin folder
+.kotlin
+
+# External native build folder generated in Android Studio 2.2 and later
+.externalNativeBuild
+.cxx/
+
+/tmp
+.DS_Store
+
+# Local checkouts of sibling repositories (see docs/local_stack.md)
+checkouts/**
+
+# The locally built matrix-rust-rtc AAR and its dated copies (see docs/local_stack.md, layer 1)
+rtc/local/*.aar
+rtc/local/sdks/
