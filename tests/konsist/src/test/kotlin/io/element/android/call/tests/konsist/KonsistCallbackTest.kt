@@ -1,0 +1,24 @@
+/*
+ * Copyright (c) 2026 Element Creations Ltd.
+ *
+ * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
+ * Please see LICENSE files in the repository root for full details.
+ */
+
+package io.element.android.call.tests.konsist
+
+import com.lemonappdev.konsist.api.Konsist
+import com.lemonappdev.konsist.api.verify.assertFalse
+import org.junit.Test
+
+class KonsistCallbackTest {
+    @Test
+    fun `we should not invoke Callback Input directly, we should use forEach`() {
+        Konsist
+            .scopeFromProduction()
+            .files
+            .assertFalse {
+                it.text.contains("callback?.")
+            }
+    }
+}

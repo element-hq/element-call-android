@@ -1,0 +1,25 @@
+/*
+ * Copyright (c) 2026 Element Creations Ltd.
+ *
+ * SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
+ * Please see LICENSE files in the repository root for full details.
+ */
+
+package io.element.android.call.tests.konsist
+
+import com.lemonappdev.konsist.api.Konsist
+import com.lemonappdev.konsist.api.ext.list.withParameter
+import com.lemonappdev.konsist.api.verify.assertEmpty
+import org.junit.Test
+
+class KonsistParameterNameTest {
+    @Test
+    fun `Function parameter should not end with 'Press' but with 'Click'`() {
+        Konsist.scopeFromProject()
+            .functions()
+            .withParameter { parameter ->
+                parameter.name.endsWith("Press") && !parameter.name.endsWith("LongPress")
+            }
+            .assertEmpty(additionalMessage = "Please rename the parameter, for instance from 'onBackPress' to 'onBackClick'.")
+    }
+}
