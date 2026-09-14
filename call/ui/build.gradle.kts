@@ -15,6 +15,14 @@ plugins {
 
 android {
     namespace = "io.element.android.call.ui"
+
+    testOptions {
+        unitTests {
+            // The Robolectric Compose tests need the merged manifest (for the test Activity) and the
+            // module's strings, the way Element X's view tests do.
+            isIncludeAndroidResources = true
+        }
+    }
 }
 
 dependencies {

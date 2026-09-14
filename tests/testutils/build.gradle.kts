@@ -26,4 +26,5 @@ dependencies {
     implementation(libs.test.turbine)
     implementation(libs.molecule.runtime)
     implementation(libs.androidx.compose.ui.test.junit)
+    implementation(libs.androidx.activity.activity)
 }
