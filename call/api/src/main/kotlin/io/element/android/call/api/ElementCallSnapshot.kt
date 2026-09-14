@@ -5,12 +5,10 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.call.impl
+package io.element.android.call.api
 
-import io.element.android.features.call.api.CallData
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.id.UserId
-import io.element.android.libraries.matrix.api.room.RoomMember
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcParticipant
@@ -26,16 +24,16 @@ import kotlinx.collections.immutable.persistentSetOf
 /**
  * Everything known about the call currently running, as one immutable value.
  *
- * Held by [NativeCallController] rather than by a presenter, because a call outlives any one screen:
+ * Held by [ElementCallController] rather than by a presenter, because a call outlives any one screen:
  * the same snapshot backs the full-screen call UI and the minimized bar, and survives both.
  *
  * Deliberately free of anything that needs a live handle on the RTC library - video frames in
- * particular are reached through [NativeCallController.videoFrames], so this stays a value that can
+ * particular are reached through [ElementCallController.videoFrames], so this stays a value that can
  * be constructed in a test or a preview without a call existing at all.
  */
-data class NativeCallSnapshot(
-    val callData: CallData,
-    val connection: NativeCallConnection,
+data class ElementCallSnapshot(
+    val callData: ElementCallData,
+    val connection: ElementCallConnection,
     /**
      * The room's display name, or null until it has been read.
      *
@@ -60,7 +58,7 @@ data class NativeCallSnapshot(
      * and the room. Empty, or missing an entry, is normal rather than exceptional - the member list
      * loads asynchronously - so a tile has to be able to draw without one.
      */
-    val roomMembers: ImmutableMap<UserId, RoomMember> = persistentMapOf(),
+    val roomMembers: ImmutableMap<UserId, ElementCallRoomMember> = persistentMapOf(),
     /**
      * Members the RTC core sees in the slot, including us. Known before media connects, and in every
      * compatibility mode - the core is fed a membership in all three.
@@ -168,20 +166,20 @@ data class NativeCallSnapshot(
         }
 }
 
-sealed interface NativeCallConnection {
+sealed interface ElementCallConnection {
     /** Waiting for the microphone permission before anything can start. */
-    data object RequestingPermission : NativeCallConnection
+    data object RequestingPermission : ElementCallConnection
 
-    data object Joining : NativeCallConnection
+    data object Joining : ElementCallConnection
 
-    data object ConnectingMedia : NativeCallConnection
+    data object ConnectingMedia : ElementCallConnection
 
-    data object Connected : NativeCallConnection
+    data object Connected : ElementCallConnection
 
     /** The transport is up but reporting trouble. */
-    data object Degraded : NativeCallConnection
+    data object Degraded : ElementCallConnection
 
-    data class Failed(val message: String) : NativeCallConnection
+    data class Failed(val message: String) : ElementCallConnection
 
-    data object Ended : NativeCallConnection
+    data object Ended : ElementCallConnection
 }

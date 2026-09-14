@@ -8,21 +8,14 @@
 package io.element.android.call.api.rtc
 
 /**
- * Logging for the `matrix-rust-rtc` core.
+ * How the `matrix-rust-rtc` core logs. Passed through `ElementCallOptions.logging`.
  *
  * The configuration is recorded up front but only applied once the native library is actually
  * loaded, on the first native call. Applying it eagerly would pull `libmatrix_rtc_ffi.so` - and the
  * statically linked libwebrtc - into every app start, whether or not a native call ever happens.
- */
-interface MatrixRtcLoggingService {
-    /**
-     * Record the configuration to apply when the core starts. Only the first configuration takes
-     * effect: the core installs a process-wide subscriber and will not replace it.
-     */
-    fun setConfiguration(configuration: MatrixRtcLoggingConfiguration)
-}
-
-/**
+ * Only the first configuration takes effect: the core installs a process-wide subscriber and will
+ * not replace it.
+ *
  * @param logLevel baseline level, applied to every target with no override in [filter].
  * @param filter `RUST_LOG` style per-target overrides, comma separated. Targets are Rust module
  * paths matched by prefix; the roots are `matrix_rtc_core`, `matrix_rtc_media`,

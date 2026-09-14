@@ -13,16 +13,14 @@ import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.os.Build
 import androidx.core.content.getSystemService
-import dev.zacsweers.metro.AppScope
-import dev.zacsweers.metro.ContributesBinding
 import io.element.android.call.api.audio.AudioFocus
-import io.element.android.call.api.audio.AudioFocusRequester
-import io.element.android.libraries.di.annotations.ApplicationContext
 import timber.log.Timber
 
-@ContributesBinding(AppScope::class)
+/**
+ * Voice-communication focus over `AudioManager`, the call's share of Element X's `DefaultAudioFocus`.
+ */
 class DefaultAudioFocus(
-    @ApplicationContext private val context: Context,
+    context: Context,
 ) : AudioFocus {
     private val audioManager = requireNotNull(context.getSystemService<AudioManager>())
 
@@ -30,10 +28,7 @@ class DefaultAudioFocus(
     private var audioFocusChangeListener: AudioManager.OnAudioFocusChangeListener? = null
 
     @Suppress("DEPRECATION")
-    override fun requestAudioFocus(
-        requester: AudioFocusRequester,
-        onFocusLost: () -> Unit,
-    ) {
+    override fun requestAudioFocus(onFocusLost: () -> Unit) {
         val listener = AudioManager.OnAudioFocusChangeListener {
             when (it) {
                 AudioManager.AUDIOFOCUS_GAIN -> {
@@ -41,40 +36,34 @@ class DefaultAudioFocus(
                     Timber.d("AudioFocus: AUDIOFOCUS_GAIN")
                 }
                 AudioManager.AUDIOFOCUS_LOSS -> {
-                    // Permanent focus loss (e.g., phone call) — always stop/pause.
+                    // Permanent focus loss (e.g., phone call) - always report.
                     Timber.d("AudioFocus: AUDIOFOCUS_LOSS")
                     onFocusLost()
                 }
                 AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
                 AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
                     Timber.d("AudioFocus: transient loss ($it)")
-                    if (requester.pausesOnTransientFocusLoss()) {
-                        onFocusLost()
-                    }
+                    onFocusLost()
                 }
             }
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val audioAttributes = AudioAttributes.Builder()
-                .setUsage(requester.toAudioUsage())
+                .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
                 .build()
-            val focusGain = if (requester == AudioFocusRequester.RecordVoiceMessage) {
-                AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE
-            } else {
-                AudioManager.AUDIOFOCUS_GAIN
-            }
-            val request = AudioFocusRequest.Builder(focusGain)
+            val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
                 .setAudioAttributes(audioAttributes)
                 .setOnAudioFocusChangeListener(listener)
-                .setWillPauseWhenDucked(requester.willPausedWhenDucked())
+                // No action when focus is lost, so being ducked is as good as pausing.
+                .setWillPauseWhenDucked(true)
                 .build()
             audioManager.requestAudioFocus(request)
             audioFocusRequest = request
         } else {
             audioManager.requestAudioFocus(
                 listener,
-                requester.toAudioStream(),
+                AudioManager.STREAM_VOICE_CALL,
                 AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE,
             )
             audioFocusChangeListener = listener
@@ -88,45 +77,5 @@ class DefaultAudioFocus(
         } else {
             audioFocusChangeListener?.let { audioManager.abandonAudioFocus(it) }
         }
-    }
-}
-
-private fun AudioFocusRequester.toAudioUsage(): Int {
-    return when (this) {
-        AudioFocusRequester.ElementCall,
-        AudioFocusRequester.RecordVoiceMessage -> AudioAttributes.USAGE_VOICE_COMMUNICATION
-        AudioFocusRequester.VoiceMessage,
-        AudioFocusRequester.MediaViewer -> AudioAttributes.USAGE_MEDIA
-    }
-}
-
-private fun AudioFocusRequester.toAudioStream(): Int {
-    return when (this) {
-        AudioFocusRequester.ElementCall,
-        AudioFocusRequester.RecordVoiceMessage -> AudioManager.STREAM_VOICE_CALL
-        AudioFocusRequester.VoiceMessage,
-        AudioFocusRequester.MediaViewer -> AudioManager.STREAM_MUSIC
-    }
-}
-
-private fun AudioFocusRequester.pausesOnTransientFocusLoss(): Boolean {
-    return when (this) {
-        // The AudioRecord API keeps capturing regardless.
-        AudioFocusRequester.RecordVoiceMessage,
-        AudioFocusRequester.VoiceMessage -> false
-        AudioFocusRequester.ElementCall,
-        AudioFocusRequester.MediaViewer -> true
-    }
-}
-
-private fun AudioFocusRequester.willPausedWhenDucked(): Boolean {
-    return when (this) {
-        // (note that for Element Call, there is no action when the focus is lost)
-        AudioFocusRequester.ElementCall,
-        AudioFocusRequester.VoiceMessage,
-        AudioFocusRequester.RecordVoiceMessage -> true
-        // For the MediaViewer, we let the system automatically handle the ducking
-        // https://developer.android.com/media/optimize/audio-focus#automatic-ducking
-        AudioFocusRequester.MediaViewer -> false
     }
 }

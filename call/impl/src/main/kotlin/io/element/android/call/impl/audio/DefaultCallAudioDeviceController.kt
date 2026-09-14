@@ -15,13 +15,9 @@ import android.os.Build
 import android.os.PowerManager
 import androidx.annotation.RequiresApi
 import androidx.core.content.getSystemService
-import dev.zacsweers.metro.AppScope
-import dev.zacsweers.metro.ContributesBinding
-import dev.zacsweers.metro.SingleIn
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.audio.CallAudioDeviceController
 import io.element.android.call.api.audio.CallAudioDeviceType
-import io.element.android.libraries.di.annotations.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,10 +40,8 @@ import java.util.concurrent.Executors
  *   enumerates and applies, which is why it needs a listener that fights to re-assert the route
  *   whenever something changes it. This owns both halves, so the listener only has to notice.
  */
-@SingleIn(AppScope::class)
-@ContributesBinding(AppScope::class)
 class DefaultCallAudioDeviceController(
-    @ApplicationContext private val context: Context,
+    private val context: Context,
 ) : CallAudioDeviceController {
     private val audioManager = requireNotNull(context.getSystemService<AudioManager>())
 

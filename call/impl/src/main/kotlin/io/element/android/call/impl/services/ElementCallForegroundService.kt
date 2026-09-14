@@ -25,15 +25,10 @@ import androidx.core.app.Person
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
-import dev.zacsweers.metro.Inject
-import io.element.android.call.impl.NativeCallController
-import io.element.android.call.impl.di.NativeCallBindings
-import io.element.android.call.impl.receivers.NativeCallActionReceiver
-import io.element.android.libraries.architecture.bindings
-import io.element.android.libraries.designsystem.icons.CompoundDrawables
-import io.element.android.libraries.push.api.notifications.ForegroundServiceType
-import io.element.android.libraries.push.api.notifications.NotificationIdProvider
-import io.element.android.libraries.ui.strings.CommonStrings
+import io.element.android.call.api.ElementCallNotificationConfig
+import io.element.android.call.impl.ElementCallStackRegistry
+import io.element.android.call.impl.R
+import io.element.android.call.impl.receivers.ElementCallActionReceiver
 import timber.log.Timber
 
 /**
@@ -46,27 +41,30 @@ import timber.log.Timber
  * than declared once - `startForeground` throws if a type's permission is missing - and starting the
  * service again once the camera is granted is what upgrades it. Restarting is cheap and idempotent:
  * `onStartCommand` runs again on the same instance.
+ *
+ * The notification's id, channel, icons and content intent come from the host's
+ * [ElementCallNotificationConfig], so that a host with a second call path can share one id with it.
  */
-class NativeCallForegroundService : Service() {
-    @Inject
-    lateinit var controller: NativeCallController
-
+class ElementCallForegroundService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
-    override fun onCreate() {
-        super.onCreate()
-        bindings<NativeCallBindings>().inject(this)
-    }
-
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val stack = ElementCallStackRegistry.active() ?: run {
+            // The system restarted a sticky service after the process died and the host has not
+            // rebuilt a stack yet: there is no call to keep alive.
+            Timber.w("ElementCall: foreground service started with no stack alive, stopping")
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        val config = stack.options.notification
         val isProjecting = intent?.getBooleanExtra(EXTRA_IS_PROJECTING, false) == true
-        createNotificationChannel()
-        val notification = buildNotification()
+        createNotificationChannel(config)
+        val notification = buildNotification(stack.controller.state.value?.roomName, stack.controller.state.value?.isMicrophoneMuted == true, config)
 
         return try {
             ServiceCompat.startForeground(
                 this,
-                NOTIFICATION_ID,
+                config.notificationId,
                 notification,
                 grantedServiceTypes(this, isProjecting),
             )
@@ -74,7 +72,7 @@ class NativeCallForegroundService : Service() {
         } catch (throwable: Throwable) {
             // Most likely the microphone permission was revoked mid-call, which makes a microphone
             // foreground service illegal to start.
-            Timber.w(throwable, "NativeCall: cannot start foreground service")
+            Timber.w(throwable, "ElementCall: cannot start foreground service")
             stopSelf()
             START_NOT_STICKY
         }
@@ -93,32 +91,29 @@ class NativeCallForegroundService : Service() {
      * changes - a permission granted, a screen share started - so the title follows the call rather
      * than being frozen at whatever it was when the call began.
      */
-    private fun buildNotification(): Notification {
-        val call = controller.state.value
-        val roomName = call?.roomName?.takeIf { it.isNotBlank() }
-            ?: getString(CommonStrings.common_call_in_progress)
+    private fun buildNotification(roomName: String?, isMuted: Boolean, config: ElementCallNotificationConfig): Notification {
+        val title = roomName?.takeIf { it.isNotBlank() } ?: getString(R.string.element_call_notification_call_in_progress)
         // CallStyle needs somebody to name the call after, and for a room that is the room.
-        val caller = Person.Builder().setName(roomName).setImportant(true).build()
+        val caller = Person.Builder().setName(title).setImportant(true).build()
 
-        val hangUpIntent = broadcast(NativeCallActionReceiver.ACTION_HANG_UP, HANG_UP_REQUEST_CODE)
-        val isMuted = call?.isMicrophoneMuted == true
-        val muteIntent = broadcast(NativeCallActionReceiver.ACTION_TOGGLE_MUTE, TOGGLE_MUTE_REQUEST_CODE)
+        val hangUpIntent = broadcast(ElementCallActionReceiver.ACTION_HANG_UP, HANG_UP_REQUEST_CODE)
+        val muteIntent = broadcast(ElementCallActionReceiver.ACTION_TOGGLE_MUTE, TOGGLE_MUTE_REQUEST_CODE)
 
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_phone_call)
+        return NotificationCompat.Builder(this, config.channelId)
+            .setSmallIcon(config.smallIcon)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setStyle(NotificationCompat.CallStyle.forOngoingCall(caller, hangUpIntent))
             .addPerson(caller)
-            // Tapping it comes back to the call rather than doing nothing, which is what the first
-            // version of this did. Straight to MainActivity because that is where the call is drawn -
-            // there is no call Activity to return to, which is the whole point of the architecture.
-            .setContentIntent(returnToCallIntent())
+            // Tapping it comes back to the call rather than doing nothing. The host says where the
+            // call is drawn; by default its launch Activity, which is where a host that draws the call
+            // in its main Activity wants to land.
+            .setContentIntent(config.contentIntent?.invoke(this) ?: returnToAppIntent())
             .addAction(
                 NotificationCompat.Action.Builder(
-                    if (isMuted) CompoundDrawables.ic_compound_mic_off_solid else CompoundDrawables.ic_compound_mic_on_solid,
-                    getString(if (isMuted) CommonStrings.a11y_unmute_microphone else CommonStrings.a11y_mute_microphone),
+                    if (isMuted) config.unmuteIcon else config.muteIcon,
+                    getString(if (isMuted) R.string.element_call_notification_unmute_microphone else R.string.element_call_notification_mute_microphone),
                     muteIntent,
                 ).build()
             )
@@ -126,12 +121,11 @@ class NativeCallForegroundService : Service() {
     }
 
     /**
-     * Back into the running call.
-     *
-     * `MainActivity` is `singleTask`, so this brings the existing task forward rather than building a
-     * second one - the call is already drawn inside it and simply becomes visible again.
+     * Back into the host app. With a `singleTask` main Activity this brings the existing task forward
+     * rather than building a second one - the call is already drawn inside it and simply becomes
+     * visible again.
      */
-    private fun returnToCallIntent(): PendingIntent? {
+    private fun returnToAppIntent(): PendingIntent? {
         val intent = packageManager.getLaunchIntentForPackage(packageName)
             ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             ?: return null
@@ -139,36 +133,26 @@ class NativeCallForegroundService : Service() {
     }
 
     private fun broadcast(action: String, requestCode: Int): PendingIntent {
-        val intent = Intent(this, NativeCallActionReceiver::class.java).setAction(action)
+        val intent = Intent(this, ElementCallActionReceiver::class.java).setAction(action)
         // Explicitly not immutable: mutability is irrelevant here since the receiver reads no extras,
         // but PendingIntentCompat wants the choice made rather than defaulted.
         return PendingIntentCompat.getBroadcast(this, requestCode, intent, PendingIntent.FLAG_UPDATE_CURRENT, false)!!
     }
 
-    private fun createNotificationChannel() {
-        // Channels arrived in O, and the app still supports 24 (Versions.MIN_SDK_FOSS). Touching
-        // NotificationChannel below that throws before the service can start its own notification.
+    private fun createNotificationChannel(config: ElementCallNotificationConfig) {
+        // Channels arrived in O, and the library supports 24. Touching NotificationChannel below that
+        // throws before the service can start its own notification.
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val manager = getSystemService<NotificationManager>() ?: return
         val channel = NotificationChannel(
-            CHANNEL_ID,
-            "Native call",
+            config.channelId,
+            config.channelName ?: getString(R.string.element_call_notification_channel_name),
             NotificationManager.IMPORTANCE_LOW,
         )
         manager.createNotificationChannel(channel)
     }
 
     companion object {
-        private const val CHANNEL_ID = "native_call_foreground_service_channel"
-
-        /**
-         * From the shared provider rather than the hardcoded 4242 this used to be.
-         * [ForegroundServiceType.ONGOING_CALL] is the WebView call's id too, which is right: only one
-         * call runs at a time and the two paths are mutually exclusive, so they must not be able to
-         * leave two ongoing-call notifications in the shade.
-         */
-        private val NOTIFICATION_ID = NotificationIdProvider.getForegroundServiceNotificationId(ForegroundServiceType.ONGOING_CALL)
-
         private const val EXTRA_IS_PROJECTING = "is_projecting"
         private const val HANG_UP_REQUEST_CODE = 0
         private const val TOGGLE_MUTE_REQUEST_CODE = 1
@@ -185,6 +169,7 @@ class NativeCallForegroundService : Service() {
          * a one-shot token from a system dialog, so the caller has to say. It is claimed *before* the
          * projection is, which is the order Android 14 requires, and dropped as soon as sharing stops
          * so the screen-recording indicator does not linger over a call that is only using a camera.
+         * The host must have declared the type in its manifest (README, host requirements).
          */
         private fun grantedServiceTypes(context: Context, isProjecting: Boolean): Int {
             var types = ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
@@ -201,10 +186,10 @@ class NativeCallForegroundService : Service() {
             // Starting a microphone foreground service without the permission throws, so bail out
             // early and let the call run only while the Activity is in the foreground.
             if (!isGranted(context, Manifest.permission.RECORD_AUDIO)) {
-                Timber.w("NativeCall: not starting foreground service, no microphone permission")
+                Timber.w("ElementCall: not starting foreground service, no microphone permission")
                 return
             }
-            val intent = Intent(context, NativeCallForegroundService::class.java)
+            val intent = Intent(context, ElementCallForegroundService::class.java)
                 .putExtra(EXTRA_IS_PROJECTING, isProjecting)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
@@ -214,7 +199,7 @@ class NativeCallForegroundService : Service() {
         }
 
         fun stop(context: Context) {
-            context.stopService(Intent(context, NativeCallForegroundService::class.java))
+            context.stopService(Intent(context, ElementCallForegroundService::class.java))
         }
     }
 }

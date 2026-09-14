@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+  ~ Copyright (c) 2026 Element Creations Ltd.
+  ~
+  ~ SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
+  ~ Please see LICENSE files in the repository root for full details.
+  -->
+<resources>
+    <!-- The ongoing-call notification posted by the foreground service. A host overlays a key by declaring it with the same name. -->
+    <string name="element_call_notification_channel_name">Ongoing call</string>
+    <string name="element_call_notification_call_in_progress">Call in progress</string>
+    <string name="element_call_notification_mute_microphone">Mute microphone</string>
+    <string name="element_call_notification_unmute_microphone">Unmute microphone</string>
+</resources>

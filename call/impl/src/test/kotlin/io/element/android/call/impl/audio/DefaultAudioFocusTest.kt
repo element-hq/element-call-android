@@ -11,69 +11,46 @@ import android.media.AudioAttributes
 import android.media.AudioManager
 import androidx.core.content.getSystemService
 import com.google.common.truth.Truth.assertThat
-import io.element.android.call.api.audio.AudioFocusRequester
-import io.element.android.tests.testutils.robolectric.RobolectricTest
+import io.element.android.call.tests.testutils.robolectric.RobolectricTest
 import org.junit.Test
 import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 
 class DefaultAudioFocusTest : RobolectricTest() {
     @Test
-    fun `voice message playback requests focus for media, not for a call`() {
-        assertThat(usageOf(AudioFocusRequester.VoiceMessage)).isEqualTo(AudioAttributes.USAGE_MEDIA)
+    fun `the call requests focus for voice communication`() {
+        val context = RuntimeEnvironment.getApplication()
+        val audioManager = requireNotNull(context.getSystemService<AudioManager>())
+
+        DefaultAudioFocus(context).requestAudioFocus {}
+
+        val request = requireNotNull(shadowOf(audioManager).lastAudioFocusRequest)
+        assertThat(requireNotNull(request.audioFocusRequest).audioAttributes.usage).isEqualTo(AudioAttributes.USAGE_VOICE_COMMUNICATION)
     }
 
     @Test
-    fun `media viewer playback requests focus for media`() {
-        assertThat(usageOf(AudioFocusRequester.MediaViewer)).isEqualTo(AudioAttributes.USAGE_MEDIA)
+    fun `a transient focus loss is reported like a permanent one`() {
+        listOf(
+            AudioManager.AUDIOFOCUS_LOSS,
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT,
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK,
+        ).forEach { focusChange ->
+            assertThat(losesFocusOn(focusChange)).isTrue()
+        }
     }
 
     @Test
-    fun `voice message recording requests focus for voice communication`() {
-        assertThat(usageOf(AudioFocusRequester.RecordVoiceMessage)).isEqualTo(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+    fun `gaining focus is not a loss`() {
+        assertThat(losesFocusOn(AudioManager.AUDIOFOCUS_GAIN)).isFalse()
     }
 
-    @Test
-    fun `element call requests focus for voice communication`() {
-        assertThat(usageOf(AudioFocusRequester.ElementCall)).isEqualTo(AudioAttributes.USAGE_VOICE_COMMUNICATION)
-    }
-
-    @Test
-    fun `a transient focus loss does not pause a voice message`() {
-        assertThat(losesFocusOn(AudioFocusRequester.VoiceMessage, AudioManager.AUDIOFOCUS_LOSS_TRANSIENT)).isFalse()
-        assertThat(losesFocusOn(AudioFocusRequester.VoiceMessage, AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK)).isFalse()
-    }
-
-    @Test
-    fun `a permanent focus loss pauses a voice message`() {
-        assertThat(losesFocusOn(AudioFocusRequester.VoiceMessage, AudioManager.AUDIOFOCUS_LOSS)).isTrue()
-    }
-
-    @Test
-    fun `a transient focus loss does not stop a voice message recording`() {
-        assertThat(losesFocusOn(AudioFocusRequester.RecordVoiceMessage, AudioManager.AUDIOFOCUS_LOSS_TRANSIENT)).isFalse()
-    }
-
-    @Test
-    fun `a transient focus loss still pauses the media viewer`() {
-        assertThat(losesFocusOn(AudioFocusRequester.MediaViewer, AudioManager.AUDIOFOCUS_LOSS_TRANSIENT)).isTrue()
-    }
-
-    private fun losesFocusOn(requester: AudioFocusRequester, focusChange: Int): Boolean {
+    private fun losesFocusOn(focusChange: Int): Boolean {
         val context = RuntimeEnvironment.getApplication()
         val audioManager = requireNotNull(context.getSystemService<AudioManager>())
         var focusLost = false
-        DefaultAudioFocus(context).requestAudioFocus(requester) { focusLost = true }
+        DefaultAudioFocus(context).requestAudioFocus { focusLost = true }
         val request = requireNotNull(shadowOf(audioManager).lastAudioFocusRequest)
         request.listener.onAudioFocusChange(focusChange)
         return focusLost
-    }
-
-    private fun usageOf(requester: AudioFocusRequester): Int {
-        val context = RuntimeEnvironment.getApplication()
-        val audioManager = requireNotNull(context.getSystemService<AudioManager>())
-        DefaultAudioFocus(context).requestAudioFocus(requester) {}
-        val request = requireNotNull(shadowOf(audioManager).lastAudioFocusRequest)
-        return requireNotNull(request.audioFocusRequest).audioAttributes.usage
     }
 }

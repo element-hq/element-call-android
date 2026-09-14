@@ -9,20 +9,17 @@ package io.element.android.call.impl
 
 import android.content.Context
 import android.os.SystemClock
-import dev.zacsweers.metro.AppScope
-import dev.zacsweers.metro.ContributesBinding
-import io.element.android.call.impl.services.NativeCallForegroundService
-import io.element.android.libraries.di.annotations.ApplicationContext
+import io.element.android.call.impl.services.ElementCallForegroundService
 
 /**
- * The Android surface a running call needs, behind an interface so [NativeCallController] can be
+ * The Android surface a running call needs, behind an interface so [DefaultElementCallController] can be
  * tested on the JVM.
  *
  * Both members are static platform calls that throw outside an instrumented environment - starting a
  * service needs a real `Context`, and `SystemClock` is one of the stubbed-out `android.jar` methods.
  * Neither is worth a Robolectric runner on tests that are otherwise about call logic.
  */
-interface NativeCallPlatform {
+internal interface ElementCallPlatform {
     /**
      * Milliseconds since boot, monotonic.
      *
@@ -50,13 +47,12 @@ interface NativeCallPlatform {
     fun stopForegroundService()
 }
 
-@ContributesBinding(AppScope::class)
-class DefaultNativeCallPlatform(
-    @ApplicationContext private val context: Context,
-) : NativeCallPlatform {
+internal class DefaultElementCallPlatform(
+    private val context: Context,
+) : ElementCallPlatform {
     override fun elapsedRealtimeMs(): Long = SystemClock.elapsedRealtime()
 
-    override fun startForegroundService(isProjecting: Boolean) = NativeCallForegroundService.start(context, isProjecting)
+    override fun startForegroundService(isProjecting: Boolean) = ElementCallForegroundService.start(context, isProjecting)
 
-    override fun stopForegroundService() = NativeCallForegroundService.stop(context)
+    override fun stopForegroundService() = ElementCallForegroundService.stop(context)
 }

@@ -134,7 +134,8 @@ class KonsistBoundaryTest {
             // call/impl
             "ElementCallStack",
             "ElementCallPictureInPicture",
-            "AndroidCallAudioRouting",
+            "DefaultCallAudioDeviceController",
+            "DefaultAudioFocus",
             "ElementCallForegroundService",
             "ElementCallActionReceiver",
             "MatrixRtcNative",

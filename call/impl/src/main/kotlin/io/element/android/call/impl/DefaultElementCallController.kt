@@ -7,37 +7,30 @@
 
 package io.element.android.call.impl
 
-import dev.zacsweers.metro.AppScope
-import dev.zacsweers.metro.Inject
-import dev.zacsweers.metro.SingleIn
-import io.element.android.features.call.api.CallData
-import io.element.android.features.call.api.CurrentCall
-import io.element.android.features.call.api.CurrentCallTracker
-import io.element.android.features.call.api.RingingCallTracker
+import io.element.android.call.api.ElementCallConnection
+import io.element.android.call.api.ElementCallController
+import io.element.android.call.api.ElementCallData
+import io.element.android.call.api.ElementCallLifecycleListener
+import io.element.android.call.api.ElementCallOptions
+import io.element.android.call.api.ElementCallRoomContextProvider
+import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.audio.AudioFocus
-import io.element.android.call.api.audio.AudioFocusRequester
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.audio.CallAudioDeviceController
-import io.element.android.libraries.di.annotations.AppCoroutineScope
-import io.element.android.libraries.matrix.api.MatrixClient
-import io.element.android.libraries.matrix.api.MatrixClientProvider
-import io.element.android.libraries.matrix.api.notification.CallIntent
-import io.element.android.libraries.matrix.api.notification.RtcNotificationType
-import io.element.android.libraries.matrix.api.room.roomMembers
 import io.element.android.call.api.rtc.MatrixRtcCall
 import io.element.android.call.api.rtc.MatrixRtcCallEvent
+import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.MatrixRtcElementCallCompat
 import io.element.android.call.api.rtc.MatrixRtcLeaveReason
+import io.element.android.call.api.rtc.MatrixRtcNotificationType
 import io.element.android.call.api.rtc.MatrixRtcNotify
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
-import io.element.android.call.api.rtc.MatrixRtcServiceProvider
+import io.element.android.call.api.rtc.MatrixRtcService
 import io.element.android.call.api.rtc.MatrixRtcSession
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTransport
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
-import io.element.android.libraries.preferences.api.store.AppPreferencesStore
-import io.element.android.services.appnavstate.api.AppForegroundStateService
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.collections.immutable.toImmutableSet
@@ -64,51 +57,44 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.jvm.optionals.getOrNull
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Owns the one native call that can be running, for as long as it runs.
  *
- * This exists because a call is not a screen. The spike drove everything from a presenter inside
- * `NativeCallActivity`, which made the Activity's composition the call's lifetime: navigating away
+ * This exists because a call is not a screen. The spike first drove everything from a presenter
+ * inside an Activity, which made the Activity's composition the call's lifetime: navigating away
  * ended the call, so the only shape the UI could take was a full-screen one in its own task - the
  * very limitation that makes the Element Call WebView awkward to embed. Holding the session here, on
- * [AppCoroutineScope], means the call is a fact about the app rather than about whatever is on
+ * the session's [scope], means the call is a fact about the session rather than about whatever is on
  * screen, and the full-screen UI and the minimized bar become two renderings of it.
  *
  * Single call by construction: [startCall] refuses while one is running. Multi-call would need a map
  * keyed by room, and nothing in the product asks for it yet.
  *
- * Everything that mutates goes through [mutex] on [appCoroutineScope], so callers can fire and
- * forget from any thread and the UI only ever sees whole snapshots.
+ * Everything that mutates goes through [mutex] on [scope], so callers can fire and forget from any
+ * thread and the UI only ever sees whole snapshots.
  */
-@SingleIn(AppScope::class)
-@Inject
-class NativeCallController(
-    @AppCoroutineScope private val appCoroutineScope: CoroutineScope,
-    private val platform: NativeCallPlatform,
-    private val matrixClientProvider: MatrixClientProvider,
-    private val rtcServiceProvider: MatrixRtcServiceProvider,
+internal class DefaultElementCallController(
+    private val scope: CoroutineScope,
+    private val platform: ElementCallPlatform,
+    private val rtcService: MatrixRtcService,
     private val audioDeviceController: CallAudioDeviceController,
-    private val appPreferencesStore: AppPreferencesStore,
-    private val currentCallTracker: CurrentCallTracker,
-    private val ringingCallTracker: RingingCallTracker,
-    private val appForegroundStateService: AppForegroundStateService,
     private val audioFocus: AudioFocus,
-) {
+    private val lifecycleListener: ElementCallLifecycleListener,
+    private val roomContextProvider: ElementCallRoomContextProvider,
+    private val options: ElementCallOptions,
+) : ElementCallController {
     private val mutex = Mutex()
 
-    private val _state = MutableStateFlow<NativeCallSnapshot?>(null)
+    private val _state = MutableStateFlow<ElementCallSnapshot?>(null)
 
-    /** The call currently running, or null when there is none. */
-    val state: StateFlow<NativeCallSnapshot?> = _state.asStateFlow()
+    override val state: StateFlow<ElementCallSnapshot?> = _state.asStateFlow()
 
     /**
-     * Whether leaving the app should shrink the call into a floating window. See [NativeCallPip].
-     *
      * A maximized call, or a minimized one with a picture in it. The second case completes the
      * handover the floating tile design implies: a minimized video call is already a tile floating
      * over our own app, so leaving the app should hand that tile to the system rather than making it
@@ -116,14 +102,13 @@ class NativeCallController(
      * over someone's launcher earns nothing, and the ongoing-call notification is the right
      * affordance for it.
      */
-    val shouldEnterPictureInPicture: StateFlow<Boolean> = _state
+    override val shouldEnterPictureInPicture: StateFlow<Boolean> = _state
         .map { it != null && (it.isMaximized || it.hasVideo) }
-        .stateIn(appCoroutineScope, SharingStarted.Eagerly, false)
+        .stateIn(scope, SharingStarted.Eagerly, false)
 
     private val _isInPictureInPicture = MutableStateFlow(false)
 
-    /** Whether the app is currently a floating window, which only the Activity is told. */
-    val isInPictureInPicture: StateFlow<Boolean> = _isInPictureInPicture.asStateFlow()
+    override val isInPictureInPicture: StateFlow<Boolean> = _isInPictureInPicture.asStateFlow()
 
     init {
         // Keeps the audio layer told whether the phone might be at somebody's ear.
@@ -141,13 +126,13 @@ class NativeCallController(
         // blanking another app's screen is never ours to do. The earpiece condition is the audio
         // layer's own and is checked there.
         //
-        // In init rather than per call: this is app-scoped and lives as long as the process, and a
-        // null call resolves to false, which is the right answer between calls.
-        appCoroutineScope.launch {
+        // In init rather than per call: this lives as long as the session, and a null call resolves
+        // to false, which is the right answer between calls.
+        scope.launch {
             combine(
                 _state,
                 _isInPictureInPicture,
-                appForegroundStateService.isInForeground,
+                lifecycleListener.isAppInForeground,
             ) { call, isInPip, isForeground ->
                 call != null && call.isMaximized && !call.hasVideo && !isInPip && isForeground
             }
@@ -156,7 +141,7 @@ class NativeCallController(
         }
     }
 
-    fun setInPictureInPicture(isInPictureInPicture: Boolean) {
+    override fun setInPictureInPicture(isInPictureInPicture: Boolean) {
         _isInPictureInPicture.value = isInPictureInPicture
         // Coming back out of PiP has to leave the call maximized rather than merely visible: PiP was
         // entered *from* the full-screen call, and dropping the user into a minimized bar over the
@@ -173,7 +158,7 @@ class NativeCallController(
      * cancellation is not instantaneous - so "no call" is a normal thing for a late emission to
      * find, not an error.
      */
-    private fun updateState(block: (NativeCallSnapshot) -> NativeCallSnapshot) {
+    private fun updateState(block: (ElementCallSnapshot) -> ElementCallSnapshot) {
         _state.update { it?.let(block) }
     }
 
@@ -205,30 +190,29 @@ class NativeCallController(
      * Begin a call. Does nothing if one is already running, including for the same room: rejoining
      * would mint a new member id and leave the old membership behind as a ghost.
      *
-     * Returns immediately. Nothing happens beyond entering [NativeCallConnection.RequestingPermission]
+     * Returns immediately. Nothing happens beyond entering [ElementCallConnection.RequestingPermission]
      * until the host answers with [setMicrophonePermissionGranted] - only an Activity can ask for a
      * permission, and this is not one.
      */
-    fun startCall(callData: CallData) {
-        appCoroutineScope.launch {
+    override fun startCall(callData: ElementCallData) {
+        scope.launch {
             mutex.withLock {
                 if (_state.value != null) {
-                    Timber.w("NativeCall: a call is already running, ignoring start for ${callData.roomId}")
+                    Timber.w("ElementCall: a call is already running, ignoring start for ${callData.roomId}")
                     return@withLock
                 }
-                Timber.i("NativeCall: call requested for ${callData.roomId}")
-                _state.value = NativeCallSnapshot(
+                Timber.i("ElementCall: call requested for ${callData.roomId}")
+                _state.value = ElementCallSnapshot(
                     callData = callData,
-                    connection = NativeCallConnection.RequestingPermission,
+                    connection = ElementCallConnection.RequestingPermission,
                 )
-                // Reported as soon as the call is requested rather than once it connects, so the room
-                // header's Join button hides while we are still joining rather than blinking through
-                // an interval where the app believes we are not in the call we are joining.
-                currentCallTracker.onCallStarted(CurrentCall.RoomCall(callData.roomId))
-                appForegroundStateService.updateIsInCallState(true)
+                // Reported as soon as the call is requested rather than once it connects, so a host's
+                // Join button hides while we are still joining rather than blinking through an
+                // interval where the app believes we are not in the call we are joining.
+                lifecycleListener.onCallStarted(callData)
                 // Started here rather than after joining, because the bar is on screen from this
                 // moment and a call labelled with a room id would be worse than one labelled late.
-                roomJob = appCoroutineScope.launch { observeRoom(callData) }
+                roomJob = scope.launch { observeRoom(callData) }
             }
         }
     }
@@ -244,13 +228,15 @@ class NativeCallController(
      * anybody else is in the session, so joining a call already in progress rings nobody, and that
      * check belongs on the side that knows the session's membership rather than here.
      */
-    private suspend fun notifyFor(client: MatrixClient, callData: CallData): MatrixRtcNotify {
-        // Defaults to a group call rather than a ring if the room cannot be read: an unwanted ring
-        // wakes people up, a missing one only makes the call quieter than it should have been.
-        val isDm = client.getRoom(callData.roomId)?.use { it.isDm() } == true
+    private suspend fun notifyFor(callData: ElementCallData): MatrixRtcNotify {
+        // Defaults to a group call rather than a ring if the room cannot be read in time: an unwanted
+        // ring wakes people up, a missing one only makes the call quieter than it should have been.
+        val isDm = withTimeoutOrNull(ROOM_CONTEXT_TIMEOUT_MS) {
+            roomContextProvider.roomContext(callData.roomId).first()
+        }?.isDm == true
         return MatrixRtcNotify(
-            type = if (isDm) RtcNotificationType.RING else RtcNotificationType.NOTIFY,
-            intent = if (callData.isAudioCall) CallIntent.AUDIO else CallIntent.VIDEO,
+            type = if (isDm) MatrixRtcNotificationType.RING else MatrixRtcNotificationType.NOTIFY,
+            intent = if (callData.isAudioCall) MatrixRtcCallIntent.AUDIO else MatrixRtcCallIntent.VIDEO,
         )
     }
 
@@ -259,24 +245,18 @@ class NativeCallController(
      * call, and who its participants are.
      *
      * The RTC layer knows participants only as member ids and user ids - it has no idea what anyone
-     * is called or what they look like, and no reason to. Names and avatars come from the room, and
-     * joining the two up is this class's job rather than the UI's, so that the bar and the call
-     * screen do not each have to do it.
+     * is called or what they look like, and no reason to. Names and avatars come from the host's room
+     * context, and joining the two up is this class's job rather than the UI's, so that the bar and
+     * the call screen do not each have to do it.
      */
-    private suspend fun observeRoom(callData: CallData) {
-        val client = matrixClientProvider.getOrRestore(callData.sessionId).getOrNull() ?: return
-        client.getRoom(callData.roomId)?.use { room ->
-            coroutineScope {
-                launch { room.roomInfoFlow.collect { info -> updateState { it.copy(roomName = info.name, isDm = info.isDm) } } }
-                launch {
-                    room.membersStateFlow.collect { members ->
-                        val byUserId = members.roomMembers().orEmpty().associateBy { member -> member.userId }
-                        updateState { it.copy(roomMembers = byUserId.toImmutableMap()) }
-                    }
-                }
-                // The member list is lazily loaded, and a call is exactly the moment it is needed:
-                // without this the tiles would show user ids until something else happened to ask.
-                room.updateMembers()
+    private suspend fun observeRoom(callData: ElementCallData) {
+        roomContextProvider.roomContext(callData.roomId).collect { context ->
+            updateState {
+                it.copy(
+                    roomName = context.displayName,
+                    isDm = context.isDm,
+                    roomMembers = context.members.toImmutableMap(),
+                )
             }
         }
     }
@@ -285,13 +265,13 @@ class NativeCallController(
      * Answer the microphone permission request. Denial fails the call: it is audio first, and
      * `AudioRecord` would fail anyway.
      */
-    fun setMicrophonePermissionGranted(granted: Boolean) {
-        appCoroutineScope.launch {
+    override fun setMicrophonePermissionGranted(granted: Boolean) {
+        scope.launch {
             mutex.withLock {
                 val current = _state.value ?: return@withLock
                 if (!granted) {
-                    Timber.i("NativeCall: microphone permission denied")
-                    updateState { it.copy(connection = NativeCallConnection.Failed("Microphone permission denied")) }
+                    Timber.i("ElementCall: microphone permission denied")
+                    updateState { it.copy(connection = ElementCallConnection.Failed("Microphone permission denied")) }
                     return@withLock
                 }
                 // The host re-reports a permission it already has whenever it is recreated, so this
@@ -302,15 +282,15 @@ class NativeCallController(
                 // Both must be in place before capture starts: the service so the microphone survives
                 // backgrounding, the audio focus so other apps duck.
                 platform.startForegroundService()
-                audioFocus.requestAudioFocus(AudioFocusRequester.ElementCall) {}
+                audioFocus.requestAudioFocus {}
 
-                callJob = appCoroutineScope.launch { runCall(current.callData) }
+                callJob = scope.launch { runCall(current.callData) }
             }
         }
     }
 
-    fun setCameraPermissionGranted(granted: Boolean) {
-        appCoroutineScope.launch {
+    override fun setCameraPermissionGranted(granted: Boolean) {
+        scope.launch {
             updateState { it.copy(isCameraPermissionGranted = granted) }
             if (!granted) return@launch
             // Started again, not for the first time: the service is already running for the
@@ -324,40 +304,36 @@ class NativeCallController(
         }
     }
 
-    fun setMicrophoneMuted(muted: Boolean) {
+    override fun setMicrophoneMuted(muted: Boolean) {
         // Muting reaches the transport as well as capture, so it suspends.
-        appCoroutineScope.launch { call?.setMicrophoneMuted(muted) }
+        scope.launch { call?.setMicrophoneMuted(muted) }
     }
 
-    fun setCameraEnabled(enabled: Boolean) {
-        appCoroutineScope.launch { call?.setCameraEnabled(enabled) }
+    override fun setCameraEnabled(enabled: Boolean) {
+        scope.launch { call?.setCameraEnabled(enabled) }
     }
 
-    fun switchCamera() {
-        appCoroutineScope.launch { call?.switchCamera() }
+    override fun switchCamera() {
+        scope.launch { call?.switchCamera() }
     }
 
-    fun setAudioTestToneEnabled(enabled: Boolean) {
+    override fun setAudioTestToneEnabled(enabled: Boolean) {
         call?.setAudioTestToneEnabled(enabled)
     }
 
-    /** Send call audio to [device]. The list to choose from is [NativeCallSnapshot.audioDevices]. */
-    fun selectAudioDevice(device: CallAudioDevice) {
+    override fun selectAudioDevice(device: CallAudioDevice) {
         audioDeviceController.select(device)
     }
 
-    fun setMaximized(maximized: Boolean) {
+    override fun setMaximized(maximized: Boolean) {
         updateState { it.copy(isMaximized = maximized) }
     }
 
-    /** Show or hide the per-tile debug readout. See [NativeCallSnapshot.isTileStatsVisible]. */
-    fun toggleTileStats() {
+    override fun toggleTileStats() {
         updateState { it.copy(isTileStatsVisible = !it.isTileStatsVisible) }
     }
 
     /**
-     * Video frames for one member's stream, or an empty flow when no call is running.
-     *
      * Shared rather than handed straight through, because [MatrixRtcCall.videoFrames] is **cold and
      * one stream per collector** - its own KDoc says "collect it once per member; two collectors
      * means two streams". Two tiles on one member opened two `videoStream` handles on the same track,
@@ -373,7 +349,7 @@ class NativeCallController(
      * no subscriber, which means the upstream is cancelled and the core stops decoding for nobody.
      * Minimizing the call still stops video; it just no longer matters how many tiles were drawing it.
      */
-    fun videoFrames(memberId: String, kind: MatrixRtcStreamKind = MatrixRtcStreamKind.CAMERA): Flow<MatrixRtcVideoFrame> {
+    override fun videoFrames(memberId: String, kind: MatrixRtcStreamKind): Flow<MatrixRtcVideoFrame> {
         val currentCall = call ?: return emptyFlow()
         val scope = videoSharingScope ?: return emptyFlow()
         return sharedVideoFlows.computeIfAbsent(VideoStreamKey(memberId, kind)) {
@@ -386,19 +362,14 @@ class NativeCallController(
     }
 
     /**
-     * Start or stop sharing the screen.
-     *
      * The order here is the whole reason this lives in the controller rather than being passed
      * straight through: from Android 14 the foreground service has to *already* be running with the
      * `mediaProjection` type when the projection is claimed, and claiming happens inside
      * `setScreenShareEnabled`. Upgrading the service afterwards, or in parallel, is a
      * `SecurityException` from the platform rather than a warning.
-     *
-     * @param token the user's grant from the system dialog, which only an Activity can raise. Null
-     * stops sharing.
      */
-    fun setScreenShareEnabled(token: MatrixRtcScreenCaptureToken?) {
-        appCoroutineScope.launch {
+    override fun setScreenShareEnabled(token: MatrixRtcScreenCaptureToken?) {
+        scope.launch {
             val currentCall = call ?: return@launch
             if (token != null) {
                 platform.startForegroundService(isProjecting = true)
@@ -413,37 +384,28 @@ class NativeCallController(
     }
 
     /**
-     * Tell the core how big a member's video is actually being drawn.
-     *
      * Driven from the tile that draws it, because the layout is the only thing that knows. Without
      * this every tile receives the sender's best simulcast layer whatever size it is shown at - a
      * 100dp thumbnail decoding and compositing 720p, which is most of what the phone was doing.
      */
-    fun setVideoConstraints(memberId: String, kind: MatrixRtcStreamKind, constraints: MatrixRtcVideoConstraints) {
-        appCoroutineScope.launch { call?.setVideoConstraints(memberId, kind, constraints) }
+    override fun setVideoConstraints(memberId: String, kind: MatrixRtcStreamKind, constraints: MatrixRtcVideoConstraints) {
+        scope.launch { call?.setVideoConstraints(memberId, kind, constraints) }
     }
 
-    /** End the call and publish a leave membership. */
-    fun hangUp() {
-        appCoroutineScope.launch { endCall(leave = true) }
+    override fun hangUp() {
+        scope.launch { endCall(leave = true) }
     }
 
-    private suspend fun runCall(callData: CallData) {
-        updateState { it.copy(connection = NativeCallConnection.Joining) }
-        Timber.i("NativeCall: joining ${callData.roomId}")
-
-        val matrixClient = matrixClientProvider.getOrRestore(callData.sessionId).getOrElse {
-            fail("No session: ${it.message}")
-            return
-        }
-        val rtcService = rtcServiceProvider.provide(matrixClient)
+    private suspend fun runCall(callData: ElementCallData) {
+        updateState { it.copy(connection = ElementCallConnection.Joining) }
+        Timber.i("ElementCall: joining ${callData.roomId}")
 
         val transport = rtcService.discoverTransports()
             .getOrElse {
                 fail("Transport discovery failed: ${it.message}")
                 return
             }
-            .also { Timber.i("NativeCall: discovered transports=$it") }
+            .also { Timber.i("ElementCall: discovered transports=$it") }
             .filterIsInstance<MatrixRtcTransport.LiveKit>()
             .firstOrNull()
         if (transport == null) {
@@ -453,47 +415,46 @@ class NativeCallController(
 
         // Read once, here, rather than observed: the mode is fixed for the lifetime of a session -
         // it decides the member id, the SFU identity and the token endpoint as well as the wire
-        // format - so changing it mid-call is not something the core could act on. Changing it in
-        // developer settings therefore applies to the next call.
+        // format - so changing it mid-call is not something the core could act on.
         //
-        // Temporary: pinned to the state-event mode while the app builds against the released Rust SDK.
+        // Temporary: pinned to the state-event mode while the library builds against the released Rust SDK.
         // The two sticky modes need MSC4354, which the widget-driver stopgap cannot carry - see
-        // `libraries/rustrtc/FEEDBACK.md`, "Widget-driver stopgap". The preference is still read so the
-        // pin is visible in the log, and so that lifting it is a one-line change here.
-        val preferredElementCallCompat = appPreferencesStore.getNativeCallElementCallCompatFlow().first()
+        // `docs/FEEDBACK.md`, "Widget-driver stopgap". The option is still read so the pin is visible in
+        // the log, and so that lifting it is a one-line change here.
+        val preferredElementCallCompat = options.elementCallCompat
         val elementCallCompat = MatrixRtcElementCallCompat.STATE_EVENTS
         if (preferredElementCallCompat != elementCallCompat) {
-            Timber.i("NativeCall: Element Call compatibility $preferredElementCallCompat is not available on the released SDK, pinned to $elementCallCompat")
+            Timber.i("ElementCall: Element Call compatibility $preferredElementCallCompat is not available on the released SDK, pinned to $elementCallCompat")
         }
-        Timber.i("NativeCall: joining with Element Call compatibility $elementCallCompat")
+        Timber.i("ElementCall: joining with Element Call compatibility $elementCallCompat")
 
         val joined = rtcService.joinSession(
             roomId = callData.roomId,
             slotId = DEFAULT_SLOT_ID,
             transport = transport,
             elementCallCompat = elementCallCompat,
-            notify = notifyFor(matrixClient, callData),
+            notify = notifyFor(callData),
         ).getOrElse {
             fail("Join failed: ${it.message}")
             return
         }
         session = joined
 
-        updateState { it.copy(connection = NativeCallConnection.ConnectingMedia) }
+        updateState { it.copy(connection = ElementCallConnection.ConnectingMedia) }
         val connected = joined.connectMedia(transport).getOrElse {
             fail("Media failed: ${it.message}")
             return
         }
         call = connected
-        // A child of the app scope rather than this coroutine: the shared flows have to outlive any
-        // one tile's collection, and are torn down with the call in endCall().
-        videoSharingScope = CoroutineScope(appCoroutineScope.coroutineContext + SupervisorJob())
+        // A child of the session scope rather than this coroutine: the shared flows have to outlive
+        // any one tile's collection, and are torn down with the call in endCall().
+        videoSharingScope = CoroutineScope(scope.coroutineContext + SupervisorJob())
 
         connected.publishMicrophone().onFailure {
             fail("Microphone failed: ${it.message}")
             return
         }
-        Timber.i("NativeCall: connected as ${connected.localMemberId}")
+        Timber.i("ElementCall: connected as ${connected.localMemberId}")
 
         // Communication mode is device-wide state we borrow, held for as long as the call runs and
         // handed back in endCall(). Routing choices do not stick outside that mode, so the speaker
@@ -510,11 +471,11 @@ class NativeCallController(
             // short-lived enough for that gap to catch it.
             startObservers(joined, connected)
 
-            // Whatever was ringing for this call has now been answered. Until this lands the
-            // ringtone keeps playing over the connected call, the full-screen incoming UI stays up,
-            // and the missed-call timeout still fires - so answering looks like it failed while
-            // actually having worked. A no-op for an outgoing call, which was never ringing.
-            ringingCallTracker.onCallJoined(callData)
+            // Whatever was ringing for this call has now been answered. Until this lands the host's
+            // ringtone keeps playing over the connected call, its incoming UI stays up, and its
+            // missed-call timeout still fires - so answering looks like it failed while actually
+            // having worked. A no-op for an outgoing call, which was never ringing.
+            lifecycleListener.onCallJoined(callData)
 
             // A video call starts with the camera on. The caller asked for video and the callee
             // answered a notification that said video, so making them find the camera button is
@@ -526,12 +487,12 @@ class NativeCallController(
             // working call.
             if (!callData.isAudioCall && _state.value?.isCameraPermissionGranted == true) {
                 connected.setCameraEnabled(true)
-                    .onFailure { Timber.w(it, "NativeCall: could not start the camera for a video call") }
+                    .onFailure { Timber.w(it, "ElementCall: could not start the camera for a video call") }
             }
 
             updateState {
                 it.copy(
-                    connection = NativeCallConnection.Connected,
+                    connection = ElementCallConnection.Connected,
                     connectedAtElapsedMs = platform.elapsedRealtimeMs(),
                 )
             }
@@ -595,10 +556,10 @@ class NativeCallController(
             call.events.collect { event ->
                 // Active speakers arrive several times a second and are on screen anyway, so they
                 // would only bury the events that say something happened.
-                if (event !is MatrixRtcCallEvent.ActiveSpeakers) Timber.d("NativeCall: $event")
+                if (event !is MatrixRtcCallEvent.ActiveSpeakers) Timber.d("ElementCall: $event")
                 when (event) {
                     is MatrixRtcCallEvent.MediaConnectionDegraded -> updateState {
-                        it.copy(connection = if (event.degraded) NativeCallConnection.Degraded else NativeCallConnection.Connected)
+                        it.copy(connection = if (event.degraded) ElementCallConnection.Degraded else ElementCallConnection.Connected)
                     }
                     is MatrixRtcCallEvent.ActiveSpeakers -> updateState {
                         val speakers = event.speakers.map { speaker -> speaker.memberId }.toImmutableSet()
@@ -608,11 +569,11 @@ class NativeCallController(
                         it.copy(frameEncryption = (it.frameEncryption + (event.memberId to event.state)).toImmutableMap())
                     }
                     is MatrixRtcCallEvent.Ended -> {
-                        updateState { it.copy(connection = NativeCallConnection.Ended) }
+                        updateState { it.copy(connection = ElementCallConnection.Ended) }
                         // Torn down from a coroutine of its own, not this one: endCall cancels the
                         // job this collector runs in, and a coroutine cannot wait for its own death.
                         // The far end has already ended the session, so there is nothing to leave.
-                        appCoroutineScope.launch { endCall(leave = false) }
+                        scope.launch { endCall(leave = false) }
                     }
                     else -> Unit
                 }
@@ -636,7 +597,7 @@ class NativeCallController(
      *
      * Never ourselves: we are in the strip, and spotlighting us would draw the same person twice.
      */
-    private fun NativeCallSnapshot.nextSpotlight(speakers: Set<String>): String? {
+    private fun ElementCallSnapshot.nextSpotlight(speakers: Set<String>): String? {
         val remotes = participants.filterNot { it.isLocal }
         if (remotes.isEmpty()) return null
 
@@ -654,8 +615,8 @@ class NativeCallController(
     }
 
     private fun fail(message: String) {
-        Timber.w("NativeCall: $message")
-        _state.update { it?.copy(connection = NativeCallConnection.Failed(message)) }
+        Timber.w("ElementCall: $message")
+        _state.update { it?.copy(connection = ElementCallConnection.Failed(message)) }
         // Not torn down here: the message is the whole point of the failed state, and clearing the
         // snapshot would take it off screen before it could be read. The host dismisses the call.
     }
@@ -669,10 +630,10 @@ class NativeCallController(
     private suspend fun endCall(leave: Boolean) {
         val leavingSession: MatrixRtcSession?
         val leavingCall: MatrixRtcCall?
-        val endedCallData: CallData?
+        val endedCallData: ElementCallData?
         mutex.withLock {
             if (_state.value == null && callJob == null) return
-            Timber.i("NativeCall: ending call (leave=$leave)")
+            Timber.i("ElementCall: ending call (leave=$leave)")
             endedCallData = _state.value?.callData
             callJob?.cancel()
             callJob = null
@@ -702,17 +663,15 @@ class NativeCallController(
         audioDeviceController.stop()
         audioFocus.releaseAudioFocus()
         platform.stopForegroundService()
-        currentCallTracker.onCallEnded()
-        // Clears the active call, and stops a ring that never got answered - hanging up from the
-        // call screen while the far end is still ringing us is a real sequence, not a hypothetical.
-        endedCallData?.let { ringingCallTracker.onCallEnded(it) }
-        appForegroundStateService.updateIsInCallState(false)
+        // Clears the host's active call, and stops a ring that never got answered - hanging up from
+        // the call screen while the far end is still ringing us is a real sequence, not a hypothetical.
+        lifecycleListener.onCallEnded(endedCallData)
     }
 
     internal companion object {
         /**
-         * MSC4143 slots are not readable from the SDK yet, so both ends of a spike call agree on a
-         * fixed one. Revisit once slot state is exposed.
+         * MSC4143 slots are not readable from the SDK yet, so both ends of a call agree on a fixed one.
+         * Revisit once slot state is exposed.
          *
          * The `m.call#` prefix is not decoration: MSC4143 requires a slot id to start with
          * `{applicationType}#`, and the bare `m.call` we used before is invalid. Nothing on our side
@@ -755,5 +714,11 @@ class NativeCallController(
          * short enough that handing the floor to someone else is followed promptly.
          */
         const val SPOTLIGHT_MIN_DWELL_MS = 2_000L
+
+        /**
+         * How long to wait for the room context before deciding whether the far end rings. The
+         * turnkey provider answers from the room info, which is immediate; a host's cache is too.
+         */
+        const val ROOM_CONTEXT_TIMEOUT_MS = 1_500L
     }
 }

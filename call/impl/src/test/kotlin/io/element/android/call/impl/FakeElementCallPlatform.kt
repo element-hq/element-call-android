@@ -7,8 +7,7 @@
 
 package io.element.android.call.impl
 
-
-class FakeNativeCallPlatform(
+internal class FakeElementCallPlatform(
     private var elapsedRealtimeMs: Long = 0L,
     /**
      * Called as the service is started, before the caller carries on.
@@ -18,7 +17,7 @@ class FakeNativeCallPlatform(
      * distinguish.
      */
     private val onStartForegroundService: (isProjecting: Boolean) -> Unit = {},
-) : NativeCallPlatform {
+) : ElementCallPlatform {
     /** Counted rather than flagged: the service is deliberately started twice, once per media permission. */
     var startForegroundServiceCount = 0
     var stopForegroundServiceCount = 0

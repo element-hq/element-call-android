@@ -7,7 +7,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Not required: a device with no camera can still take part in a call, audio only. -->
+    <!-- Neither is required: a device with no camera can still take part in a call, audio only. -->
+    <uses-feature
+        android:name="android.hardware.microphone"
+        android:required="false" />
     <uses-feature
         android:name="android.hardware.camera"
         android:required="false" />
@@ -18,24 +21,27 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!--
-      ~ No Activity of its own, deliberately. The call is drawn inside the app's main Compose tree by
-      ~ NativeCallHost, which is what lets it minimize into a bar above the room instead of only ever
-      ~ being a full-screen window in a separate task - the shape the Element Call WebView is stuck in.
+      ~ No Activity of its own, deliberately. The call is drawn inside the host's own Compose tree
+      ~ (ElementCallOverlay), which is what lets it minimize into a bar above the host's content instead
+      ~ of only ever being a full-screen window in a separate task.
       -->
     <application>
         <!--
           ~ Both types declared, but the service only ever starts with the ones whose permission has
           ~ actually been granted - startForeground throws otherwise, and the camera is asked for
-          ~ lazily, mid-call. See NativeCallForegroundService.
+          ~ lazily, mid-call. See ElementCallForegroundService.
+          ~
+          ~ Screen sharing needs the `mediaProjection` type too. It is Play-reviewed and a library
+          ~ manifest merges into every host, so the host declares it, with its permission, when it turns
+          ~ screen sharing on (README, host requirements): `tools:node="merge"` lets the two declarations
+          ~ combine.
           -->
         <service
-            android:name=".services.NativeCallForegroundService"
+            android:name=".services.ElementCallForegroundService"
             android:exported="false"
-            android:foregroundServiceType="microphone|camera|mediaProjection"
+            android:foregroundServiceType="microphone|camera"
             tools:node="merge" />
 
         <!--
@@ -44,7 +50,7 @@
           ~ call.
           -->
         <receiver
-            android:name=".receivers.NativeCallActionReceiver"
+            android:name=".receivers.ElementCallActionReceiver"
             android:exported="false" />
     </application>
 

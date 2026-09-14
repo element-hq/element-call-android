@@ -18,4 +18,6 @@ android {
 
 dependencies {
     api(libs.coroutines.core)
+    api(libs.kotlinx.collections.immutable)
+    implementation(libs.androidx.annotationjvm)
 }

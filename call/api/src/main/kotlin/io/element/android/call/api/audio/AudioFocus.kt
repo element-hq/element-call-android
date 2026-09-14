@@ -7,30 +7,21 @@
 
 package io.element.android.call.api.audio
 
-enum class AudioFocusRequester {
-    ElementCall,
-    VoiceMessage,
-    RecordVoiceMessage,
-    MediaViewer,
-}
-
 /**
- * Claims and releases system audio focus, so that the app's own players do not talk over each other or over other apps.
+ * Claims and releases system audio focus for the call, so that other apps duck and the host's own
+ * players do not talk over it.
+ *
+ * A host that coordinates focus across several players (Element X's voice messages and media viewer
+ * share one implementation) supplies its own; the default in `element-call` asks for voice
+ * communication focus and nothing else.
  */
 interface AudioFocus {
     /**
-     * Request audio focus for the given requester.
-     * @param requester The mode for which to request audio focus.
-     * @param onFocusLost Callback to be invoked when the audio focus is lost.
-     * @return true if the audio focus was successfully requested, false otherwise.
+     * Request audio focus for the call.
+     * @param onFocusLost invoked when focus is lost for good, or transiently.
      */
-    fun requestAudioFocus(
-        requester: AudioFocusRequester,
-        onFocusLost: () -> Unit,
-    )
+    fun requestAudioFocus(onFocusLost: () -> Unit)
 
-    /**
-     * Release the audio focus.
-     */
+    /** Release the audio focus. */
     fun releaseAudioFocus()
 }
