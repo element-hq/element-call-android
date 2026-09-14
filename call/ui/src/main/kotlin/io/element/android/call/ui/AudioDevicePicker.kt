@@ -15,10 +15,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Bluetooth
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -28,15 +28,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import androidx.compose.ui.unit.dp
-import io.element.android.compound.theme.ElementTheme
-import io.element.android.compound.tokens.generated.CompoundIcons
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.audio.CallAudioDeviceType
-import io.element.android.libraries.designsystem.preview.ElementPreview
-import io.element.android.libraries.designsystem.preview.PreviewsDayNight
-import io.element.android.libraries.designsystem.theme.components.Icon
-import io.element.android.libraries.designsystem.theme.components.Text
-import io.element.android.libraries.ui.strings.CommonStrings
+import io.element.android.call.ui.preview.ElementCallPreview
+import io.element.android.call.ui.preview.PreviewsDayNight
+import io.element.android.call.ui.theme.ElementCallTheme
 import kotlinx.collections.immutable.ImmutableList
 
 /**
@@ -60,9 +56,9 @@ fun AudioDevicePicker(
     ) {
         Column(modifier = Modifier.navigationBarsPadding()) {
             Text(
-                text = stringResource(CommonStrings.screen_call_audio_output_title),
-                style = ElementTheme.typography.fontBodyLgMedium,
-                color = ElementTheme.colors.textPrimary,
+                text = stringResource(R.string.element_call_audio_output_title),
+                style = ElementCallTheme.typography.bodyLgMedium,
+                color = ElementCallTheme.colors.textPrimary,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             )
             devices.forEach { device ->
@@ -96,21 +92,21 @@ private fun AudioDeviceRow(
         Icon(
             imageVector = device.type.icon(),
             contentDescription = null,
-            tint = ElementTheme.colors.iconSecondary,
+            tint = ElementCallTheme.colors.iconSecondary,
         )
         Text(
             text = device.label(),
-            style = ElementTheme.typography.fontBodyMdRegular,
-            color = ElementTheme.colors.textPrimary,
+            style = ElementCallTheme.typography.bodyMdRegular,
+            color = ElementCallTheme.colors.textPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
         if (isSelected) {
             Icon(
-                imageVector = CompoundIcons.Check(),
-                contentDescription = stringResource(CommonStrings.a11y_selected),
-                tint = ElementTheme.colors.iconAccentPrimary,
+                imageVector = ElementCallTheme.icons.selected,
+                contentDescription = stringResource(R.string.element_call_a11y_selected),
+                tint = ElementCallTheme.colors.iconAccent,
                 modifier = Modifier.size(20.dp),
             )
         }
@@ -130,14 +126,14 @@ internal fun CallAudioDevice.label(): String {
 }
 
 private fun CallAudioDeviceType.labelRes(): Int = when (this) {
-    CallAudioDeviceType.BLUETOOTH -> CommonStrings.common_audio_device_bluetooth
+    CallAudioDeviceType.BLUETOOTH -> R.string.element_call_audio_device_bluetooth
     CallAudioDeviceType.USB_HEADSET,
     CallAudioDeviceType.USB_DEVICE,
-    CallAudioDeviceType.USB_ACCESSORY -> CommonStrings.common_audio_device_usb
+    CallAudioDeviceType.USB_ACCESSORY -> R.string.element_call_audio_device_usb
     CallAudioDeviceType.WIRED_HEADSET,
-    CallAudioDeviceType.WIRED_HEADPHONES -> CommonStrings.common_audio_device_headphones
-    CallAudioDeviceType.EARPIECE -> CommonStrings.common_audio_device_earpiece
-    CallAudioDeviceType.SPEAKER -> CommonStrings.common_audio_device_speaker
+    CallAudioDeviceType.WIRED_HEADPHONES -> R.string.element_call_audio_device_headphones
+    CallAudioDeviceType.EARPIECE -> R.string.element_call_audio_device_earpiece
+    CallAudioDeviceType.SPEAKER -> R.string.element_call_audio_device_speaker
 }
 
 /**
@@ -150,21 +146,21 @@ private fun CallAudioDeviceType.labelRes(): Int = when (this) {
  */
 @Composable
 internal fun CallAudioDeviceType.icon() = when (this) {
-    CallAudioDeviceType.BLUETOOTH -> Icons.Rounded.Bluetooth
+    CallAudioDeviceType.BLUETOOTH -> ElementCallTheme.icons.bluetooth
     CallAudioDeviceType.USB_HEADSET,
     CallAudioDeviceType.USB_DEVICE,
     CallAudioDeviceType.USB_ACCESSORY,
     CallAudioDeviceType.WIRED_HEADSET,
-    CallAudioDeviceType.WIRED_HEADPHONES -> CompoundIcons.HeadphonesSolid()
-    CallAudioDeviceType.EARPIECE -> CompoundIcons.VolumeOffSolid()
-    CallAudioDeviceType.SPEAKER -> CompoundIcons.VolumeOnSolid()
+    CallAudioDeviceType.WIRED_HEADPHONES -> ElementCallTheme.icons.headphones
+    CallAudioDeviceType.EARPIECE -> ElementCallTheme.icons.earpiece
+    CallAudioDeviceType.SPEAKER -> ElementCallTheme.icons.speaker
 }
 
 // The sheet itself cannot be previewed - a ModalBottomSheet needs a real window - so the rows it is
 // made of are previewed instead, which is where all the per-device rendering actually lives.
 @PreviewsDayNight
 @Composable
-internal fun AudioDeviceRowPreview(@PreviewParameter(CallAudioDevicePreviewParam::class) device: CallAudioDevice) = ElementPreview {
+internal fun AudioDeviceRowPreview(@PreviewParameter(CallAudioDevicePreviewParam::class) device: CallAudioDevice) = ElementCallPreview {
     AudioDeviceRow(device = device, isSelected = device.type == CallAudioDeviceType.BLUETOOTH, onClick = {})
 }
 

@@ -29,7 +29,11 @@ import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -46,18 +50,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.dp
-import io.element.android.compound.theme.ElementTheme
-import io.element.android.compound.tokens.generated.CompoundIcons
-import io.element.android.call.impl.NativeCallConnection
+import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.audio.CallAudioDeviceType
-import io.element.android.libraries.designsystem.preview.ElementPreview
-import io.element.android.libraries.designsystem.preview.PreviewsDayNight
-import io.element.android.libraries.designsystem.theme.components.ButtonSize
-import io.element.android.libraries.designsystem.theme.components.Icon
-import io.element.android.libraries.designsystem.theme.components.IconButton
-import io.element.android.libraries.designsystem.theme.components.Text
-import io.element.android.libraries.designsystem.theme.components.TextButton
-import io.element.android.libraries.ui.strings.CommonStrings
+import io.element.android.call.ui.preview.ElementCallPreview
+import io.element.android.call.ui.preview.PreviewsDayNight
+import io.element.android.call.ui.theme.ElementCallTheme
 
 /**
  * The call, as a product rather than as an instrument.
@@ -67,8 +64,8 @@ import io.element.android.libraries.ui.strings.CommonStrings
  * because it is what the RTC library feedback was written from.
  */
 @Composable
-fun CallScreenView(
-    state: NativeCallState,
+fun ElementCallScreen(
+    state: ElementCallScreenState,
     modifier: Modifier = Modifier,
 ) {
     Surface(modifier = modifier.fillMaxSize()) {
@@ -110,7 +107,8 @@ fun CallScreenView(
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
                             .fillMaxWidth()
-                            .background(CONTROLS_SCRIM),
+                            // Behind the floating landscape controls, so they stay readable over a bright tile.
+                            .background(Brush.verticalGradient(listOf(Color.Transparent, ElementCallTheme.colors.controlsScrim))),
                     ) {
                         CallControlsBar(state, modifier = Modifier.systemBarsPadding())
                     }
@@ -147,26 +145,26 @@ fun CallScreenView(
  * does the person in the spotlight stands in for it rather than leaving the bar blank.
  */
 @Composable
-private fun CallTopBar(state: NativeCallState, modifier: Modifier = Modifier) {
+private fun CallTopBar(state: ElementCallScreenState, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 4.dp, vertical = 4.dp),
     ) {
         IconButton(
-            onClick = { state.eventSink(NativeCallEvent.Minimize) },
+            onClick = { state.eventSink(ElementCallScreenEvent.Minimize) },
             modifier = Modifier.align(Alignment.CenterStart),
         ) {
             Icon(
-                imageVector = CompoundIcons.Collapse(),
-                contentDescription = stringResource(CommonStrings.a11y_minimize_call),
-                tint = ElementTheme.colors.iconPrimary,
+                imageVector = ElementCallTheme.icons.minimize,
+                contentDescription = stringResource(R.string.element_call_a11y_minimize_call),
+                tint = ElementCallTheme.colors.iconPrimary,
             )
         }
         Text(
             text = state.roomName ?: state.spotlightParticipant?.displayName ?: "",
-            style = ElementTheme.typography.fontBodyLgMedium,
-            color = ElementTheme.colors.textPrimary,
+            style = ElementCallTheme.typography.bodyLgMedium,
+            color = ElementCallTheme.colors.textPrimary,
             textAlign = TextAlign.Center,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -186,16 +184,16 @@ private fun CallTopBar(state: NativeCallState, modifier: Modifier = Modifier) {
  * call with two people in it; a group call has the member count in the spotlight instead.
  */
 @Composable
-private fun CallDurationLabel(state: NativeCallState, modifier: Modifier = Modifier) {
-    val isConnected = state.connection is NativeCallConnection.Connected || state.connection is NativeCallConnection.Degraded
+private fun CallDurationLabel(state: ElementCallScreenState, modifier: Modifier = Modifier) {
+    val isConnected = state.connection is ElementCallConnection.Connected || state.connection is ElementCallConnection.Degraded
     if (state.layout != CallLayout.OneToOne || !isConnected) return
     Text(
         text = rememberCallDuration(state.connectedAtElapsedMs),
-        style = ElementTheme.typography.fontBodyMdMedium,
+        style = ElementCallTheme.typography.bodyMdMedium,
         color = Color.White,
         modifier = modifier
             .clip(RoundedCornerShape(percent = 50))
-            .background(PILL_BACKGROUND)
+            .background(ElementCallTheme.colors.overlayScrim)
             .padding(horizontal = 10.dp, vertical = 4.dp),
     )
 }
@@ -213,7 +211,7 @@ private fun CallDurationLabel(state: NativeCallState, modifier: Modifier = Modif
  * case where they have left the app entirely - which, when sharing a screen, is most of the time.
  */
 @Composable
-private fun ScreenShareBanner(state: NativeCallState, modifier: Modifier = Modifier) {
+private fun ScreenShareBanner(state: ElementCallScreenState, modifier: Modifier = Modifier) {
     AnimatedVisibility(
         visible = state.isScreenSharing,
         modifier = modifier,
@@ -224,29 +222,34 @@ private fun ScreenShareBanner(state: NativeCallState, modifier: Modifier = Modif
             modifier = Modifier
                 .padding(horizontal = 16.dp, vertical = 6.dp)
                 .clip(RoundedCornerShape(percent = 50))
-                .background(SHARING_BANNER_BACKGROUND)
+                .background(ElementCallTheme.colors.sharingBanner)
                 .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Icon(
-                imageVector = CompoundIcons.ShareScreenSolid(),
+                imageVector = ElementCallTheme.icons.shareScreenActive,
                 contentDescription = null,
                 tint = Color.White,
                 modifier = Modifier.size(16.dp),
             )
             Text(
-                text = stringResource(CommonStrings.screen_call_sharing_your_screen),
-                style = ElementTheme.typography.fontBodySmMedium,
+                text = stringResource(R.string.element_call_sharing_your_screen),
+                style = ElementCallTheme.typography.bodySmMedium,
                 color = Color.White,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             TextButton(
-                text = stringResource(CommonStrings.action_stop),
-                size = ButtonSize.Small,
-                onClick = { state.eventSink(NativeCallEvent.ToggleScreenShare) },
-            )
+                onClick = { state.eventSink(ElementCallScreenEvent.ToggleScreenShare) },
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.element_call_action_stop),
+                    style = ElementCallTheme.typography.bodySmMedium,
+                    color = ElementCallTheme.colors.onOverlay,
+                )
+            }
         }
     }
 }
@@ -258,20 +261,20 @@ private fun ScreenShareBanner(state: NativeCallState, modifier: Modifier = Modif
  * if both render as blank, and the first is by far the more common.
  */
 @Composable
-private fun ConnectingPlaceholder(state: NativeCallState) {
+private fun ConnectingPlaceholder(state: ElementCallScreenState) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 text = state.connection.label(),
-                style = ElementTheme.typography.fontHeadingMdBold,
-                color = ElementTheme.colors.textPrimary,
+                style = ElementCallTheme.typography.headingMdBold,
+                color = ElementCallTheme.colors.textPrimary,
             )
-            val failure = state.connection as? NativeCallConnection.Failed
+            val failure = state.connection as? ElementCallConnection.Failed
             if (failure != null) {
                 Text(
                     text = failure.message,
-                    style = ElementTheme.typography.fontBodySmRegular,
-                    color = ElementTheme.colors.textCriticalPrimary,
+                    style = ElementCallTheme.typography.bodySmRegular,
+                    color = ElementCallTheme.colors.textCritical,
                     modifier = Modifier.padding(top = 8.dp, start = 24.dp, end = 24.dp),
                 )
             }
@@ -280,7 +283,7 @@ private fun ConnectingPlaceholder(state: NativeCallState) {
 }
 
 @Composable
-private fun CallControlsBar(state: NativeCallState, modifier: Modifier = Modifier) {
+private fun CallControlsBar(state: ElementCallScreenState, modifier: Modifier = Modifier) {
     Row(
         // Tighter than it looks like it should be, because six 52dp buttons do not fit across a
         // small phone with room to breathe between them. See BUTTON_SIZE.
@@ -291,28 +294,28 @@ private fun CallControlsBar(state: NativeCallState, modifier: Modifier = Modifie
         verticalAlignment = Alignment.CenterVertically,
     ) {
         RoundCallButton(
-            onClick = { state.eventSink(NativeCallEvent.ToggleMicrophoneMuted) },
-            icon = if (state.isMicrophoneMuted) CompoundIcons.MicOffSolid() else CompoundIcons.MicOnSolid(),
+            onClick = { state.eventSink(ElementCallScreenEvent.ToggleMicrophoneMuted) },
+            icon = if (state.isMicrophoneMuted) ElementCallTheme.icons.microphoneOff else ElementCallTheme.icons.microphoneOn,
             contentDescription = stringResource(
-                if (state.isMicrophoneMuted) CommonStrings.a11y_unmute_microphone else CommonStrings.a11y_mute_microphone
+                if (state.isMicrophoneMuted) R.string.element_call_a11y_unmute_microphone else R.string.element_call_a11y_mute_microphone
             ),
             isActive = state.isMicrophoneMuted,
         )
         RoundCallButton(
-            onClick = { state.eventSink(NativeCallEvent.ToggleCamera) },
-            icon = if (state.isCameraEnabled) CompoundIcons.VideoCallSolid() else CompoundIcons.VideoCallOffSolid(),
+            onClick = { state.eventSink(ElementCallScreenEvent.ToggleCamera) },
+            icon = if (state.isCameraEnabled) ElementCallTheme.icons.cameraOn else ElementCallTheme.icons.cameraOff,
             contentDescription = stringResource(
-                if (state.isCameraEnabled) CommonStrings.a11y_turn_camera_off else CommonStrings.a11y_turn_camera_on
+                if (state.isCameraEnabled) R.string.element_call_a11y_turn_camera_off else R.string.element_call_a11y_turn_camera_on
             ),
             // Same reading as the mic: the highlighted button is the one that is switched off.
             isActive = !state.isCameraEnabled,
         )
         AudioDeviceButton(state)
         RoundCallButton(
-            onClick = { state.eventSink(NativeCallEvent.ToggleScreenShare) },
-            icon = if (state.isScreenSharing) CompoundIcons.ShareScreenSolid() else CompoundIcons.ShareScreen(),
+            onClick = { state.eventSink(ElementCallScreenEvent.ToggleScreenShare) },
+            icon = if (state.isScreenSharing) ElementCallTheme.icons.shareScreenActive else ElementCallTheme.icons.shareScreen,
             contentDescription = stringResource(
-                if (state.isScreenSharing) CommonStrings.a11y_stop_screen_share else CommonStrings.a11y_start_screen_share
+                if (state.isScreenSharing) R.string.element_call_a11y_stop_screen_share else R.string.element_call_a11y_start_screen_share
             ),
             isActive = state.isScreenSharing,
         )
@@ -320,26 +323,26 @@ private fun CallControlsBar(state: NativeCallState, modifier: Modifier = Modifie
         // both where the design puts it and one fewer button to fit across the bar.
         if (state.layout == CallLayout.Group) {
             RoundCallButton(
-                onClick = { state.eventSink(NativeCallEvent.SwitchCamera) },
-                icon = CompoundIcons.SwitchCameraSolid(),
-                contentDescription = stringResource(CommonStrings.a11y_switch_camera),
+                onClick = { state.eventSink(ElementCallScreenEvent.SwitchCamera) },
+                icon = ElementCallTheme.icons.switchCamera,
+                contentDescription = stringResource(R.string.element_call_a11y_switch_camera),
                 isActive = false,
                 enabled = state.isCameraEnabled,
             )
         }
         RoundCallButton(
-            onClick = { state.eventSink(NativeCallEvent.HangUp) },
-            icon = CompoundIcons.EndCall(),
-            contentDescription = stringResource(CommonStrings.a11y_hang_up),
+            onClick = { state.eventSink(ElementCallScreenEvent.HangUp) },
+            icon = ElementCallTheme.icons.endCall,
+            contentDescription = stringResource(R.string.element_call_a11y_hang_up),
             isActive = false,
-            background = HANG_UP_RED,
+            background = ElementCallTheme.colors.hangUp,
             tint = Color.White,
         )
     }
 }
 
 @Composable
-private fun AudioDeviceButton(state: NativeCallState) {
+private fun AudioDeviceButton(state: ElementCallScreenState) {
     var isPickerVisible by remember { mutableStateOf(false) }
     val selectedType = state.selectedAudioDevice?.type ?: CallAudioDeviceType.EARPIECE
     RoundCallButton(
@@ -347,7 +350,7 @@ private fun AudioDeviceButton(state: NativeCallState) {
         // opening anything - which is the question people actually have mid-call.
         onClick = { isPickerVisible = true },
         icon = selectedType.icon(),
-        contentDescription = stringResource(CommonStrings.screen_call_audio_output_title),
+        contentDescription = stringResource(R.string.element_call_audio_output_title),
         // Same reading as mic and camera: the highlighted button is the one that is switched off,
         // and the earpiece is "loudspeaker off".
         isActive = selectedType == CallAudioDeviceType.EARPIECE,
@@ -357,7 +360,7 @@ private fun AudioDeviceButton(state: NativeCallState) {
         AudioDevicePicker(
             devices = state.audioDevices,
             selectedDevice = state.selectedAudioDevice,
-            onSelect = { state.eventSink(NativeCallEvent.SelectAudioDevice(it)) },
+            onSelect = { state.eventSink(ElementCallScreenEvent.SelectAudioDevice(it)) },
             onDismiss = { isPickerVisible = false },
         )
     }
@@ -374,9 +377,9 @@ private fun RoundCallButton(
     tint: Color? = null,
 ) {
     val resolvedBackground = background
-        ?: if (isActive) Color.White else ElementTheme.colors.bgSubtleSecondary
+        ?: if (isActive) Color.White else ElementCallTheme.colors.bgSubtleSecondary
     val resolvedTint = tint
-        ?: if (isActive) Color.Black else ElementTheme.colors.iconPrimary
+        ?: if (isActive) Color.Black else ElementCallTheme.colors.iconPrimary
     IconButton(
         onClick = onClick,
         enabled = enabled,
@@ -401,25 +404,26 @@ private fun RoundCallButton(
  */
 private val BUTTON_SIZE = 48.dp
 
+/** What the placeholder says about the connection while there is nobody to show. */
+@Composable
+private fun ElementCallConnection.label(): String = when (this) {
+    ElementCallConnection.RequestingPermission,
+    ElementCallConnection.Joining,
+    ElementCallConnection.ConnectingMedia -> stringResource(R.string.element_call_connecting)
+    ElementCallConnection.Connected -> stringResource(R.string.element_call_call_in_progress)
+    ElementCallConnection.Degraded -> stringResource(R.string.element_call_connection_unstable)
+    is ElementCallConnection.Failed -> stringResource(R.string.element_call_call_failed)
+    ElementCallConnection.Ended -> stringResource(R.string.element_call_call_ended)
+}
+
 /** The controls bar's height: its vertical padding either side of a button. Read by the landscape thumbnail inset. */
 private val CONTROLS_HEIGHT = 20.dp + BUTTON_SIZE + 20.dp
 
 /** An icon button's width plus the bar's own padding, kept clear on both sides of the title. */
 private val TOP_BAR_BUTTON_ROOM = 52.dp
 
-private val HANG_UP_RED = Color(0xFFE5484D)
-
-/** Fixed rather than themed: it sits over video, which is not a themed surface. */
-private val PILL_BACKGROUND = Color(0xCC15191E)
-
-/** Behind the floating landscape controls, so they stay readable over a bright tile. */
-private val CONTROLS_SCRIM = Brush.verticalGradient(listOf(Color.Transparent, Color(0xB315191E)))
-
-/** Green rather than the usual pill grey: this is a state the user should notice they are in. */
-private val SHARING_BANNER_BACKGROUND = Color(0xFF0F7B6C)
-
 @PreviewsDayNight
 @Composable
-internal fun CallScreenViewPreview(@PreviewParameter(NativeCallStatePreviewParam::class) state: NativeCallState) = ElementPreview {
-    CallScreenView(state = state)
+internal fun CallScreenViewPreview(@PreviewParameter(ElementCallScreenStatePreviewParam::class) state: ElementCallScreenState) = ElementCallPreview {
+    ElementCallScreen(state = state)
 }

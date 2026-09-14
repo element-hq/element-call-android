@@ -8,28 +8,23 @@
 package io.element.android.call.ui
 
 import androidx.compose.foundation.background
-import io.element.android.call.ui.video.CallVideoRenderer
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
-import io.element.android.compound.theme.ElementTheme
-import io.element.android.compound.tokens.generated.CompoundIcons
-import io.element.android.call.impl.NativeCallSnapshot
-import io.element.android.libraries.designsystem.components.avatar.Avatar
-import io.element.android.libraries.designsystem.components.avatar.AvatarData
-import io.element.android.libraries.designsystem.components.avatar.AvatarSize
-import io.element.android.libraries.designsystem.components.avatar.AvatarType
-import io.element.android.libraries.designsystem.theme.components.Icon
-import io.element.android.libraries.designsystem.theme.components.Text
-import io.element.android.libraries.matrix.ui.model.getAvatarData
+import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
-import io.element.android.libraries.ui.strings.CommonStrings
+import io.element.android.call.ui.theme.ElementCallAvatar
+import io.element.android.call.ui.theme.ElementCallAvatarSize
+import io.element.android.call.ui.theme.ElementCallTheme
+import io.element.android.call.ui.video.CallVideoRenderer
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -44,13 +39,13 @@ import kotlinx.coroutines.flow.Flow
  * shared screen if there is one and the current speaker otherwise. Both are the right answer to
  * "there is only room for one thing, what is it".
  *
- * @param videoFrames how to reach a member's stream, passed rather than read from state so this can
+ * [videoFrames] is how to reach a member's stream, passed rather than read from state so this can
  * open exactly one - collecting is what makes the core decode, and PiP should decode one tile's worth
  * rather than the whole call's.
  */
 @Composable
-fun PictureInPictureCall(
-    call: NativeCallSnapshot,
+fun ElementCallPictureInPictureView(
+    call: ElementCallSnapshot,
     videoFrames: (memberId: String, kind: MatrixRtcStreamKind) -> Flow<MatrixRtcVideoFrame>,
     modifier: Modifier = Modifier,
 ) {
@@ -78,14 +73,11 @@ fun PictureInPictureCall(
                     isMirrored = false,
                     modifier = Modifier.fillMaxSize(),
                 )
-                spotlit != null -> {
-                    val roomMember = call.roomMembers[spotlit.userId]
-                    Avatar(
-                        avatarData = roomMember?.getAvatarData(AvatarSize.CallSpotlight)
-                            ?: AvatarData(id = spotlit.userId.value, name = null, url = null, size = AvatarSize.CallSpotlight),
-                        avatarType = AvatarType.User,
-                    )
-                }
+                spotlit != null -> ElementCallAvatar(
+                    userId = spotlit.userId,
+                    roomMember = call.roomMembers[spotlit.userId],
+                    size = ElementCallAvatarSize.Spotlight,
+                )
                 // Alone in the call, or not connected yet. Says so rather than showing a black
                 // rectangle, which is indistinguishable from a broken window.
                 else -> Box(
@@ -95,17 +87,17 @@ fun PictureInPictureCall(
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
-                        imageVector = CompoundIcons.VideoCallSolid(),
-                        contentDescription = stringResource(CommonStrings.common_call_in_progress),
-                        tint = ElementTheme.colors.iconSecondary,
+                        imageVector = ElementCallTheme.icons.cameraOn,
+                        contentDescription = stringResource(R.string.element_call_call_in_progress),
+                        tint = ElementCallTheme.colors.iconSecondary,
                     )
                 }
             }
 
             if (call.isScreenSharing) {
                 Text(
-                    text = stringResource(CommonStrings.screen_call_sharing_your_screen),
-                    style = ElementTheme.typography.fontBodyXsMedium,
+                    text = stringResource(R.string.element_call_sharing_your_screen),
+                    style = ElementCallTheme.typography.bodyXsMedium,
                     color = Color.White,
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )

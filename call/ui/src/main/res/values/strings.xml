@@ -4,35 +4,35 @@
   ~ SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
   ~ Please see LICENSE files in the repository root for full details.
   -->
-
 <resources>
-    <string name="a11y_state_expanded">"Expanded"</string>
-    <string name="a11y_state_collapsed">"Collapsed"</string>
-    <string name="a11y_active">Active</string>
-    <string name="a11y_inactive">Inactive</string>
-
-    <!-- Native call -->
-    <string name="a11y_mute_microphone">Mute microphone</string>
-    <string name="a11y_unmute_microphone">Unmute microphone</string>
-    <string name="a11y_microphone_muted">Microphone muted</string>
-    <string name="a11y_hang_up">Hang up</string>
-    <string name="a11y_turn_camera_on">Turn the camera on</string>
-    <string name="a11y_turn_camera_off">Turn the camera off</string>
-    <string name="a11y_switch_camera">Switch camera</string>
-    <string name="a11y_start_screen_share">Share your screen</string>
-    <string name="a11y_stop_screen_share">Stop sharing your screen</string>
-    <string name="a11y_minimize_call">Minimize call</string>
-    <string name="a11y_expand_call">Expand call</string>
-    <string name="a11y_selected">Selected</string>
-    <string name="screen_call_audio_output_title">Audio output</string>
-    <string name="screen_call_shared_screen_name">%1$s’s screen</string>
-    <string name="screen_call_sharing_your_screen">You’re sharing your screen</string>
-    <string name="common_audio_device_bluetooth">Bluetooth</string>
-    <string name="common_audio_device_usb">USB device</string>
-    <string name="common_audio_device_headphones">Headphones</string>
-    <string name="common_audio_device_earpiece">Phone</string>
-    <string name="common_audio_device_speaker">Speaker</string>
-    <string name="common_connecting">Connecting…</string>
-    <string name="common_connection_unstable">Connection unstable</string>
-    <string name="common_call_ended">Call ended</string>
+    <!--
+      ~ English source strings for the call UI. A host overlays a key by declaring it with the same name
+      ~ in its own resources, which win at resource merge. No Localazy project yet.
+      -->
+    <string name="element_call_a11y_mute_microphone">Mute microphone</string>
+    <string name="element_call_a11y_unmute_microphone">Unmute microphone</string>
+    <string name="element_call_a11y_microphone_muted">Microphone muted</string>
+    <string name="element_call_a11y_hang_up">Hang up</string>
+    <string name="element_call_a11y_turn_camera_on">Turn the camera on</string>
+    <string name="element_call_a11y_turn_camera_off">Turn the camera off</string>
+    <string name="element_call_a11y_switch_camera">Switch camera</string>
+    <string name="element_call_a11y_start_screen_share">Share your screen</string>
+    <string name="element_call_a11y_stop_screen_share">Stop sharing your screen</string>
+    <string name="element_call_a11y_minimize_call">Minimize call</string>
+    <string name="element_call_a11y_expand_call">Expand call</string>
+    <string name="element_call_a11y_selected">Selected</string>
+    <string name="element_call_action_stop">Stop</string>
+    <string name="element_call_audio_output_title">Audio output</string>
+    <string name="element_call_shared_screen_name">%1$s’s screen</string>
+    <string name="element_call_sharing_your_screen">You’re sharing your screen</string>
+    <string name="element_call_audio_device_bluetooth">Bluetooth</string>
+    <string name="element_call_audio_device_usb">USB device</string>
+    <string name="element_call_audio_device_headphones">Headphones</string>
+    <string name="element_call_audio_device_earpiece">Phone</string>
+    <string name="element_call_audio_device_speaker">Speaker</string>
+    <string name="element_call_connecting">Connecting…</string>
+    <string name="element_call_connection_unstable">Connection unstable</string>
+    <string name="element_call_call_ended">Call ended</string>
+    <string name="element_call_call_failed">Call failed</string>
+    <string name="element_call_call_in_progress">Call in progress</string>
 </resources>

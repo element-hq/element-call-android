@@ -8,7 +8,6 @@
 package io.element.android.call.ui
 
 import androidx.compose.animation.core.animateDpAsState
-import io.element.android.call.ui.video.CallVideoRenderer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +18,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -29,19 +30,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import io.element.android.compound.theme.ElementTheme
-import io.element.android.compound.tokens.generated.CompoundIcons
-import io.element.android.libraries.designsystem.components.avatar.Avatar
-import io.element.android.libraries.designsystem.components.avatar.AvatarData
-import io.element.android.libraries.designsystem.components.avatar.AvatarSize
-import io.element.android.libraries.designsystem.components.avatar.AvatarType
-import io.element.android.libraries.designsystem.theme.components.Icon
-import io.element.android.libraries.designsystem.theme.components.Text
-import io.element.android.libraries.matrix.ui.model.getAvatarData
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
-import io.element.android.libraries.ui.strings.CommonStrings
+import io.element.android.call.ui.theme.ElementCallAvatar
+import io.element.android.call.ui.theme.ElementCallAvatarSize
+import io.element.android.call.ui.theme.ElementCallTheme
+import io.element.android.call.ui.video.CallVideoRenderer
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -80,7 +75,7 @@ fun CallParticipantTile(
     Box(
         modifier = modifier
             .clip(shape)
-            .background(ElementTheme.colors.bgSubtlePrimary)
+            .background(ElementCallTheme.colors.bgSubtlePrimary)
             // The ring is how "who is talking" is answered at a glance in a grid, and it is drawn
             // from the SFU's own view of who it can hear rather than from our decoded audio - so it
             // still lights up for a member whose media we cannot decrypt, which is the case worth
@@ -91,9 +86,9 @@ fun CallParticipantTile(
             .then(
                 when {
                     participant.isActiveSpeaker && appearance == CallTileAppearance.Card ->
-                        Modifier.border(2.dp, ElementTheme.colors.borderSuccessSubtle, shape)
+                        Modifier.border(2.dp, ElementCallTheme.colors.borderActiveSpeaker, shape)
                     appearance == CallTileAppearance.Thumbnail ->
-                        Modifier.border(1.dp, ElementTheme.colors.borderInteractiveSecondary, shape)
+                        Modifier.border(1.dp, ElementCallTheme.colors.borderThumbnail, shape)
                     else -> Modifier
                 }
             ),
@@ -108,9 +103,14 @@ fun CallParticipantTile(
         } else {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 val isLarge = isSpotlight || appearance == CallTileAppearance.FullBleed
-                Avatar(
-                    avatarData = participant.avatarData(if (isLarge) AvatarSize.CallSpotlight else AvatarSize.CallTile),
-                    avatarType = AvatarType.User,
+                // Falls back to an id-derived avatar when the member list has not loaded yet, rather
+                // than showing nothing: the initial and colour come out of the user id, so the
+                // placeholder is already stable and turns into the real avatar without the tile
+                // changing shape.
+                ElementCallAvatar(
+                    userId = participant.userId,
+                    roomMember = participant.roomMember,
+                    size = if (isLarge) ElementCallAvatarSize.Spotlight else ElementCallAvatarSize.Tile,
                 )
             }
         }
@@ -200,7 +200,7 @@ private fun NamePill(
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(percent = 50))
-            .background(PILL_BACKGROUND)
+            .background(ElementCallTheme.colors.overlayScrim)
             .padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -209,13 +209,13 @@ private fun NamePill(
         // asked - and the person it belongs to is in the strip with a real one.
         Icon(
             imageVector = when {
-                participant.isScreenShare -> CompoundIcons.ShareScreenSolid()
-                participant.isMuted -> CompoundIcons.MicOffSolid()
-                else -> CompoundIcons.MicOnSolid()
+                participant.isScreenShare -> ElementCallTheme.icons.shareScreenActive
+                participant.isMuted -> ElementCallTheme.icons.microphoneOff
+                else -> ElementCallTheme.icons.microphoneOn
             },
             contentDescription = null,
             tint = if (participant.isMuted && !participant.isScreenShare) {
-                ElementTheme.colors.iconCriticalPrimary
+                ElementCallTheme.colors.iconCritical
             } else {
                 Color.White
             },
@@ -223,11 +223,11 @@ private fun NamePill(
         )
         Text(
             text = if (participant.isScreenShare) {
-                stringResource(CommonStrings.screen_call_shared_screen_name, participant.displayName)
+                stringResource(R.string.element_call_shared_screen_name, participant.displayName)
             } else {
                 participant.displayName
             },
-            style = ElementTheme.typography.fontBodySmMedium,
+            style = ElementCallTheme.typography.bodySmMedium,
             color = Color.White,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -242,29 +242,17 @@ private fun MutedBadge(modifier: Modifier = Modifier) {
         modifier = modifier
             .size(BADGE_SIZE)
             .clip(CircleShape)
-            .background(PILL_BACKGROUND),
+            .background(ElementCallTheme.colors.overlayScrim),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            imageVector = CompoundIcons.MicOffSolid(),
-            contentDescription = stringResource(CommonStrings.a11y_microphone_muted),
-            tint = ElementTheme.colors.iconCriticalPrimary,
+            imageVector = ElementCallTheme.icons.microphoneOff,
+            contentDescription = stringResource(R.string.element_call_a11y_microphone_muted),
+            tint = ElementCallTheme.colors.iconCritical,
             modifier = Modifier.size(16.dp),
         )
     }
 }
 
-/**
- * Falls back to an id-derived avatar when the member list has not loaded yet, rather than showing
- * nothing: the initial and colour come out of the user id, so the placeholder is already stable and
- * turns into the real avatar without the tile changing shape.
- */
-private fun CallParticipant.avatarData(size: AvatarSize) = roomMember
-    ?.getAvatarData(size)
-    ?: AvatarData(id = userId.value, name = null, url = null, size = size)
-
 private val TILE_CORNER = 12.dp
 private val BADGE_SIZE = 28.dp
-
-/** Fixed rather than themed: it sits over video, which is not a themed surface. */
-private val PILL_BACKGROUND = Color(0xCC15191E)

@@ -8,23 +8,22 @@
 package io.element.android.call.ui
 
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
-import io.element.android.features.call.api.CallData
-import io.element.android.call.impl.NativeCallConnection
-import io.element.android.call.impl.NativeCallSnapshot
+import io.element.android.call.api.ElementCallConnection
+import io.element.android.call.api.ElementCallData
+import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.rtc.id.RoomId
-import io.element.android.libraries.matrix.api.core.SessionId
 
-open class NativeCallSnapshotPreviewParam : PreviewParameterProvider<NativeCallSnapshot> {
-    override val values: Sequence<NativeCallSnapshot>
+open class ElementCallSnapshotPreviewParam : PreviewParameterProvider<ElementCallSnapshot> {
+    override val values: Sequence<ElementCallSnapshot>
         get() = sequenceOf(
-            aCallSnapshot(connection = NativeCallConnection.Joining),
-            aCallSnapshot(connection = NativeCallConnection.Connected, connectedAtElapsedMs = 0L),
-            aCallSnapshot(connection = NativeCallConnection.Connected, connectedAtElapsedMs = 0L, isMicrophoneMuted = true),
-            aCallSnapshot(connection = NativeCallConnection.Degraded, connectedAtElapsedMs = 0L),
+            aCallSnapshot(connection = ElementCallConnection.Joining),
+            aCallSnapshot(connection = ElementCallConnection.Connected, connectedAtElapsedMs = 0L),
+            aCallSnapshot(connection = ElementCallConnection.Connected, connectedAtElapsedMs = 0L, isMicrophoneMuted = true),
+            aCallSnapshot(connection = ElementCallConnection.Degraded, connectedAtElapsedMs = 0L),
             // The room name arrives asynchronously, so the bar has to survive not having one.
-            aCallSnapshot(connection = NativeCallConnection.Connected, connectedAtElapsedMs = 0L, roomName = null),
+            aCallSnapshot(connection = ElementCallConnection.Connected, connectedAtElapsedMs = 0L, roomName = null),
             aCallSnapshot(
-                connection = NativeCallConnection.Connected,
+                connection = ElementCallConnection.Connected,
                 connectedAtElapsedMs = 0L,
                 roomName = "A room with a name long enough that it has to be cut short",
             ),
@@ -32,14 +31,13 @@ open class NativeCallSnapshotPreviewParam : PreviewParameterProvider<NativeCallS
 }
 
 fun aCallSnapshot(
-    connection: NativeCallConnection = NativeCallConnection.Connected,
+    connection: ElementCallConnection = ElementCallConnection.Connected,
     roomName: String? = "Paulina",
     isMicrophoneMuted: Boolean = false,
     connectedAtElapsedMs: Long? = null,
     isMaximized: Boolean = false,
-) = NativeCallSnapshot(
-    callData = CallData(
-        sessionId = SessionId("@alice:example.org"),
+) = ElementCallSnapshot(
+    callData = ElementCallData(
         roomId = RoomId("!aRoom:example.org"),
         isAudioCall = true,
     ),

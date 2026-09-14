@@ -18,7 +18,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,15 +33,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.dp
-import io.element.android.compound.theme.ElementTheme
-import io.element.android.compound.tokens.generated.CompoundIcons
-import io.element.android.call.impl.NativeCallConnection
-import io.element.android.call.impl.NativeCallSnapshot
-import io.element.android.libraries.designsystem.preview.ElementPreview
-import io.element.android.libraries.designsystem.preview.PreviewsDayNight
-import io.element.android.libraries.designsystem.theme.components.Icon
-import io.element.android.libraries.designsystem.theme.components.Text
-import io.element.android.libraries.ui.strings.CommonStrings
+import io.element.android.call.api.ElementCallConnection
+import io.element.android.call.api.ElementCallSnapshot
+import io.element.android.call.ui.preview.ElementCallPreview
+import io.element.android.call.ui.preview.PreviewsDayNight
+import io.element.android.call.ui.theme.ElementCallTheme
 
 /**
  * The call, docked above the app while the user gets on with something else.
@@ -47,13 +45,13 @@ import io.element.android.libraries.ui.strings.CommonStrings
  * This is the shape the Element Call WebView could never take. A WebView call is a fullscreen thing
  * in its own task, so "shrink to a strip above the room header and keep the audio running" is not a
  * layout problem there, it is an architectural one - which is why the minimized design was never
- * built. Here it is only a different rendering of [NativeCallSnapshot].
+ * built. Here it is only a different rendering of [ElementCallSnapshot].
  *
  * Always dark, matching the call screen it minimizes from, regardless of the app's theme.
  */
 @Composable
-fun MinimizedCallBar(
-    call: NativeCallSnapshot,
+fun ElementCallMinimizedBar(
+    call: ElementCallSnapshot,
     onToggleMicrophone: () -> Unit,
     onHangUp: () -> Unit,
     onClick: () -> Unit,
@@ -61,7 +59,7 @@ fun MinimizedCallBar(
 ) {
     Surface(
         modifier = modifier.fillMaxWidth(),
-        color = BAR_BACKGROUND,
+        color = ElementCallTheme.colors.barBackground,
     ) {
         Row(
             modifier = Modifier
@@ -77,11 +75,11 @@ fun MinimizedCallBar(
                 onClick = onToggleMicrophone,
                 background = Color.White,
                 contentDescription = stringResource(
-                    if (call.isMicrophoneMuted) CommonStrings.a11y_unmute_microphone else CommonStrings.a11y_mute_microphone
+                    if (call.isMicrophoneMuted) R.string.element_call_a11y_unmute_microphone else R.string.element_call_a11y_mute_microphone
                 ),
             ) {
                 Icon(
-                    imageVector = if (call.isMicrophoneMuted) CompoundIcons.MicOffSolid() else CompoundIcons.MicOnSolid(),
+                    imageVector = if (call.isMicrophoneMuted) ElementCallTheme.icons.microphoneOff else ElementCallTheme.icons.microphoneOn,
                     contentDescription = null,
                     tint = Color.Black,
                     modifier = Modifier.size(20.dp),
@@ -94,7 +92,7 @@ fun MinimizedCallBar(
             ) {
                 Text(
                     text = call.roomName.orEmpty(),
-                    style = ElementTheme.typography.fontBodyMdMedium,
+                    style = ElementCallTheme.typography.bodyMdMedium,
                     color = Color.White,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -110,15 +108,15 @@ fun MinimizedCallBar(
                     // icon carries it next to the duration.
                     if (call.isScreenSharing) {
                         Icon(
-                            imageVector = CompoundIcons.ShareScreenSolid(),
-                            contentDescription = stringResource(CommonStrings.screen_call_sharing_your_screen),
-                            tint = SHARING_GREEN,
+                            imageVector = ElementCallTheme.icons.shareScreenActive,
+                            contentDescription = stringResource(R.string.element_call_sharing_your_screen),
+                            tint = ElementCallTheme.colors.sharingAccent,
                             modifier = Modifier.size(14.dp),
                         )
                     }
                     Text(
                         text = call.subtitle(),
-                        style = ElementTheme.typography.fontBodySmRegular,
+                        style = ElementCallTheme.typography.bodySmRegular,
                         color = Color.White.copy(alpha = 0.7f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -129,11 +127,11 @@ fun MinimizedCallBar(
 
             CircularCallButton(
                 onClick = onHangUp,
-                background = HANG_UP_RED,
-                contentDescription = stringResource(CommonStrings.a11y_hang_up),
+                background = ElementCallTheme.colors.hangUp,
+                contentDescription = stringResource(R.string.element_call_a11y_hang_up),
             ) {
                 Icon(
-                    imageVector = CompoundIcons.EndCall(),
+                    imageVector = ElementCallTheme.icons.endCall,
                     contentDescription = null,
                     tint = Color.White,
                     modifier = Modifier.size(20.dp),
@@ -171,30 +169,23 @@ private fun CircularCallButton(
  * the state, and a timer started at zero would claim a call was up while it was still joining.
  */
 @Composable
-private fun NativeCallSnapshot.subtitle(): String = when (connection) {
-    NativeCallConnection.RequestingPermission,
-    NativeCallConnection.Joining,
-    NativeCallConnection.ConnectingMedia -> stringResource(CommonStrings.common_connecting)
-    NativeCallConnection.Degraded -> stringResource(CommonStrings.common_connection_unstable)
-    is NativeCallConnection.Failed -> connection.message
-    NativeCallConnection.Ended -> stringResource(CommonStrings.common_call_ended)
-    NativeCallConnection.Connected -> rememberCallDuration(connectedAtElapsedMs)
+private fun ElementCallSnapshot.subtitle(): String = when (val connection = connection) {
+    ElementCallConnection.RequestingPermission,
+    ElementCallConnection.Joining,
+    ElementCallConnection.ConnectingMedia -> stringResource(R.string.element_call_connecting)
+    ElementCallConnection.Degraded -> stringResource(R.string.element_call_connection_unstable)
+    is ElementCallConnection.Failed -> connection.message
+    ElementCallConnection.Ended -> stringResource(R.string.element_call_call_ended)
+    ElementCallConnection.Connected -> rememberCallDuration(connectedAtElapsedMs)
 }
 
 /** Read by the host so content below can consume exactly the space the bar takes. */
 internal val MINIMIZED_CALL_BAR_HEIGHT = 56.dp
 
-/** Fixed rather than themed: the bar is the call, and the call screen is always dark. */
-private val BAR_BACKGROUND = Color(0xFF15191E)
-private val HANG_UP_RED = Color(0xFFE5484D)
-
-/** Matches the sharing banner on the call screen, so the two read as the same state. */
-private val SHARING_GREEN = Color(0xFF25B39A)
-
 @PreviewsDayNight
 @Composable
-internal fun MinimizedCallBarPreview(@PreviewParameter(NativeCallSnapshotPreviewParam::class) call: NativeCallSnapshot) = ElementPreview {
-    MinimizedCallBar(
+internal fun MinimizedCallBarPreview(@PreviewParameter(ElementCallSnapshotPreviewParam::class) call: ElementCallSnapshot) = ElementCallPreview {
+    ElementCallMinimizedBar(
         call = call,
         onToggleMicrophone = {},
         onHangUp = {},

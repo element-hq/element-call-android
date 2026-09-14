@@ -8,6 +8,7 @@
 package io.element.android.call.ui.video
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -18,9 +19,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.viewinterop.AndroidView
-import io.element.android.compound.theme.ElementTheme
-import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
+import io.element.android.call.ui.TileFrameCounter
+import io.element.android.call.ui.theme.ElementCallTheme
 import kotlinx.coroutines.flow.Flow
 import livekit.org.webrtc.JavaI420Buffer
 import livekit.org.webrtc.VideoFrame
@@ -40,16 +41,15 @@ import timber.log.Timber
  *
  * @param frames the stream to draw. Nothing is shown until the first frame arrives.
  * @param isMirrored whether to flip horizontally. True for our own front camera and nothing else.
+ * @param modifier sizes the view; see above.
+ * @param frameCounter told about every frame drawn, for the debug overlay. Counts only - it must never
+ * write Compose state, or reading the numbers would cost more than producing them.
  */
 @Composable
 fun CallVideoRenderer(
     frames: Flow<MatrixRtcVideoFrame>,
     isMirrored: Boolean,
     modifier: Modifier = Modifier,
-    /**
-     * Told about every frame drawn, for the debug overlay. Counts only - it must never write Compose
-     * state, or reading the numbers would cost more than producing them.
-     */
     frameCounter: TileFrameCounter? = null,
 ) {
     // Previews and Paparazzi have no GL context, and the renderer's init would try to make one.
@@ -58,8 +58,8 @@ fun CallVideoRenderer(
         Box(modifier = modifier, contentAlignment = Alignment.Center) {
             Text(
                 text = "video",
-                style = ElementTheme.typography.fontBodyXsRegular,
-                color = ElementTheme.colors.textSecondary,
+                style = ElementCallTheme.typography.bodyXsRegular,
+                color = ElementCallTheme.colors.textSecondary,
             )
         }
         return

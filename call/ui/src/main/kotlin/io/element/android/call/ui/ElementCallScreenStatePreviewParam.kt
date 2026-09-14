@@ -8,10 +8,9 @@
 package io.element.android.call.ui
 
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
-import io.element.android.call.impl.NativeCallConnection
+import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.audio.CallAudioDeviceType
-import io.element.android.call.api.rtc.id.UserId
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcParticipant
@@ -19,6 +18,7 @@ import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamState
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
+import io.element.android.call.api.rtc.id.UserId
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableMap
@@ -26,15 +26,15 @@ import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 
-open class NativeCallStatePreviewParam : PreviewParameterProvider<NativeCallState> {
-    override val values: Sequence<NativeCallState>
+open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<ElementCallScreenState> {
+    override val values: Sequence<ElementCallScreenState>
         get() = sequenceOf(
-            aNativeCallState(connection = NativeCallConnection.RequestingPermission),
-            aNativeCallState(connection = NativeCallConnection.Joining),
+            anElementCallScreenState(connection = ElementCallConnection.RequestingPermission),
+            anElementCallScreenState(connection = ElementCallConnection.Joining),
             // Joined and counting members, no media yet.
-            aNativeCallState(connection = NativeCallConnection.ConnectingMedia, memberCount = 2),
-            aNativeCallState(
-                connection = NativeCallConnection.Connected,
+            anElementCallScreenState(connection = ElementCallConnection.ConnectingMedia, memberCount = 2),
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
                 memberCount = 2,
                 participants = listOf(aLocalParticipant(), aRemoteParticipant()),
                 audioLevels = mapOf(
@@ -47,23 +47,23 @@ open class NativeCallStatePreviewParam : PreviewParameterProvider<NativeCallStat
                 ),
                 activeSpeakerIds = setOf(A_LOCAL_MEMBER_ID),
             ),
-            aNativeCallState(
-                connection = NativeCallConnection.Connected,
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
                 memberCount = 2,
                 participants = listOf(aLocalParticipant(isMuted = true), aRemoteParticipant()),
                 isMicrophoneMuted = true,
             ),
             // Joined and fed a membership, but the transport has not reported anyone yet: the count
             // leads the participant list, which is the usual order on a call we have just joined.
-            aNativeCallState(
-                connection = NativeCallConnection.Connected,
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
                 memberCount = 2,
                 participants = emptyList(),
             ),
             // Media is up and the SFU hears the other side, but nothing decodes for us: packets are
             // arriving, almost all of the audio played is invented, and the key is missing.
-            aNativeCallState(
-                connection = NativeCallConnection.Connected,
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
                 memberCount = 2,
                 participants = listOf(aLocalParticipant(), aRemoteParticipant()),
                 audioLevels = mapOf(
@@ -79,8 +79,8 @@ open class NativeCallStatePreviewParam : PreviewParameterProvider<NativeCallStat
             ),
             // Three memberships in a two-party call: the third publishes nothing and the core has never
             // reported an encryption state for it. The observed shape of a leave that never landed.
-            aNativeCallState(
-                connection = NativeCallConnection.Connected,
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
                 memberCount = 3,
                 participants = listOf(aLocalParticipant(), aRemoteParticipant(), aStaleParticipant()),
                 audioLevels = mapOf(
@@ -95,8 +95,8 @@ open class NativeCallStatePreviewParam : PreviewParameterProvider<NativeCallStat
             ),
             // Our camera on, the other side audio only. The tile is a placeholder in a preview, but
             // its box is what shows whether the card still reads properly with a picture in it.
-            aNativeCallState(
-                connection = NativeCallConnection.Connected,
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
                 memberCount = 2,
                 participants = listOf(aLocalParticipant(), aRemoteParticipant()),
                 isCameraEnabled = true,
@@ -105,8 +105,8 @@ open class NativeCallStatePreviewParam : PreviewParameterProvider<NativeCallStat
             ),
             // Both sides on video, which is the case the list layout has to survive: two tiles plus
             // two cards' worth of diagnostics is what pushes the hang-up button off a short screen.
-            aNativeCallState(
-                connection = NativeCallConnection.Connected,
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
                 memberCount = 2,
                 participants = listOf(aLocalParticipant(), aRemoteParticipant()),
                 isCameraEnabled = true,
@@ -118,46 +118,46 @@ open class NativeCallStatePreviewParam : PreviewParameterProvider<NativeCallStat
             ),
             // Camera permission granted but the camera off, which is the state the controls row has
             // to distinguish from "never asked".
-            aNativeCallState(
-                connection = NativeCallConnection.Connected,
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
                 memberCount = 2,
                 participants = listOf(aLocalParticipant(), aRemoteParticipant()),
                 isCameraPermissionGranted = true,
             ),
             // Publishing the test tone instead of the microphone.
-            aNativeCallState(
-                connection = NativeCallConnection.Connected,
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
                 memberCount = 2,
                 participants = listOf(aLocalParticipant(), aRemoteParticipant()),
                 audioLevels = mapOf(A_LOCAL_MEMBER_ID to MatrixRtcAudioLevel(level = 0.8f, frameCount = 400)),
                 isAudioTestToneEnabled = true,
             ),
             // On the loudspeaker.
-            aNativeCallState(
-                connection = NativeCallConnection.Connected,
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
                 memberCount = 2,
                 participants = listOf(aLocalParticipant(), aRemoteParticipant()),
                 selectedAudioDevice = A_SPEAKER,
             ),
             // On a headset that was paired mid-call, which is what the picker exists for.
-            aNativeCallState(
-                connection = NativeCallConnection.Connected,
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
                 memberCount = 2,
                 participants = listOf(aLocalParticipant(), aRemoteParticipant()),
                 audioDevices = listOf(A_BLUETOOTH_HEADSET, AN_EARPIECE, A_SPEAKER),
                 selectedAudioDevice = A_BLUETOOTH_HEADSET,
             ),
-            aNativeCallState(
-                connection = NativeCallConnection.Degraded,
+            anElementCallScreenState(
+                connection = ElementCallConnection.Degraded,
                 memberCount = 2,
                 participants = listOf(aLocalParticipant(), aRemoteParticipant(isReachable = false)),
             ),
-            aNativeCallState(connection = NativeCallConnection.Failed("Homeserver offers no LiveKit transport")),
-            aNativeCallState(connection = NativeCallConnection.Ended),
+            anElementCallScreenState(connection = ElementCallConnection.Failed("Homeserver offers no LiveKit transport")),
+            anElementCallScreenState(connection = ElementCallConnection.Ended),
             // A DM, both on video: the other person full-bleed, us as a thumbnail with the switch
             // camera button on it, the duration over the top, and no switch camera in the bar.
-            aNativeCallState(
-                connection = NativeCallConnection.Connected,
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
                 memberCount = 2,
                 participants = listOf(aLocalParticipant(), aRemoteParticipant()),
                 isDm = true,
@@ -169,8 +169,8 @@ open class NativeCallStatePreviewParam : PreviewParameterProvider<NativeCallStat
                 ),
             ),
             // A DM where the other side has no camera: their avatar fills the area instead.
-            aNativeCallState(
-                connection = NativeCallConnection.Connected,
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
                 memberCount = 2,
                 participants = listOf(aLocalParticipant(), aRemoteParticipant()),
                 isDm = true,
@@ -180,8 +180,8 @@ open class NativeCallStatePreviewParam : PreviewParameterProvider<NativeCallStat
             ),
             // A DM with our camera off and the other side muted: the thumbnail keeps its place as an
             // avatar with no switch button, and the mute badge is the only chrome on the big tile.
-            aNativeCallState(
-                connection = NativeCallConnection.Connected,
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
                 memberCount = 2,
                 participants = listOf(aLocalParticipant(), aRemoteParticipant(isMuted = true)),
                 isDm = true,
@@ -189,16 +189,16 @@ open class NativeCallStatePreviewParam : PreviewParameterProvider<NativeCallStat
                 videoFrames = mapOf(A_REMOTE_MEMBER_ID to emptyFlow()),
             ),
             // A DM that a third person has joined: back to the group layout, whatever the room says.
-            aNativeCallState(
-                connection = NativeCallConnection.Connected,
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
                 memberCount = 3,
                 participants = listOf(aLocalParticipant(), aRemoteParticipant(), aStaleParticipant()),
                 isDm = true,
             ),
             // Twelve people: past what the grid can hold legibly, so the strip is a scrolling row of
             // fixed-size tiles and the spotlight has the rest. Only the first few strip tiles fit.
-            aNativeCallState(
-                connection = NativeCallConnection.Connected,
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
                 memberCount = 12,
                 participants = listOf(aLocalParticipant(), aRemoteParticipant()) + (1..10).map { aCrowdParticipant(it) },
                 activeSpeakerIds = setOf(A_REMOTE_MEMBER_ID),
@@ -210,8 +210,8 @@ open class NativeCallStatePreviewParam : PreviewParameterProvider<NativeCallStat
             ),
             // Fifty people. The screen should look no different from twelve - the same first page,
             // more dots - because everything past the next page is not composed at all.
-            aNativeCallState(
-                connection = NativeCallConnection.Connected,
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
                 memberCount = 50,
                 participants = listOf(aLocalParticipant(), aRemoteParticipant()) + (1..48).map { aCrowdParticipant(it) },
                 activeSpeakerIds = setOf(A_REMOTE_MEMBER_ID),
@@ -220,8 +220,8 @@ open class NativeCallStatePreviewParam : PreviewParameterProvider<NativeCallStat
         )
 }
 
-fun aNativeCallState(
-    connection: NativeCallConnection = NativeCallConnection.Connected,
+fun anElementCallScreenState(
+    connection: ElementCallConnection = ElementCallConnection.Connected,
     memberCount: Int = 0,
     participants: List<MatrixRtcParticipant> = emptyList(),
     audioLevels: Map<String, MatrixRtcAudioLevel> = emptyMap(),
@@ -247,8 +247,8 @@ fun aNativeCallState(
     // Zero rather than null so a connected preview shows a duration; the label reads a fixed value
     // under inspection anyway.
     connectedAtElapsedMs: Long? = 0L,
-    eventSink: (NativeCallEvent) -> Unit = {},
-) = NativeCallState(
+    eventSink: (ElementCallScreenEvent) -> Unit = {},
+) = ElementCallScreenState(
     connection = connection,
     memberCount = memberCount,
     participants = participants.toImmutableList(),

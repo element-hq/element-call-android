@@ -8,7 +8,6 @@
 package io.element.android.call.ui
 
 import androidx.compose.animation.core.Animatable
-import io.element.android.call.ui.video.CallVideoRenderer
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -32,16 +31,15 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import io.element.android.compound.theme.ElementTheme
-import io.element.android.call.impl.NativeCallSnapshot
-import io.element.android.libraries.designsystem.components.avatar.Avatar
-import io.element.android.libraries.designsystem.components.avatar.AvatarData
-import io.element.android.libraries.designsystem.components.avatar.AvatarSize
-import io.element.android.libraries.designsystem.components.avatar.AvatarType
-import io.element.android.call.api.rtc.id.UserId
-import io.element.android.libraries.matrix.ui.model.getAvatarData
+import io.element.android.call.api.ElementCallRoomMember
+import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
+import io.element.android.call.api.rtc.id.UserId
+import io.element.android.call.ui.theme.ElementCallAvatar
+import io.element.android.call.ui.theme.ElementCallAvatarSize
+import io.element.android.call.ui.theme.ElementCallTheme
+import io.element.android.call.ui.video.CallVideoRenderer
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -54,7 +52,7 @@ import kotlin.math.roundToInt
  * out-of-app mode, so the system only shrinks the Activity once the user has left the app entirely.
  * Floating over *our own* content while the user carries on scrolling a timeline is something only
  * the app can draw, which is why this is hand-rolled rather than delegated. Native PiP still covers
- * the moment the user leaves - see `PictureInPictureCall` - and the two hand over to each other.
+ * the moment the user leaves - see `ElementCallPictureInPictureView` - and the two hand over to each other.
  *
  * Draggable and corner-snapping, because a fixed thumbnail eventually covers the one thing the user
  * wants to read, and because every messenger that has this behaves the same way, so the gesture needs
@@ -65,8 +63,8 @@ import kotlin.math.roundToInt
  * expands back to the full screen where the real controls are.
  */
 @Composable
-fun FloatingCallTile(
-    call: NativeCallSnapshot,
+fun ElementCallFloatingTile(
+    call: ElementCallSnapshot,
     videoFrames: (memberId: String, kind: MatrixRtcStreamKind) -> Flow<MatrixRtcVideoFrame>,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -98,7 +96,7 @@ fun FloatingCallTile(
                 .size(width = TILE_WIDTH, height = TILE_HEIGHT)
                 .shadow(elevation = 8.dp, shape = RoundedCornerShape(TILE_CORNER))
                 .clip(RoundedCornerShape(TILE_CORNER))
-                .background(ElementTheme.colors.bgSubtlePrimary)
+                .background(ElementCallTheme.colors.bgSubtlePrimary)
                 .pointerInput(maxX, maxY) {
                     detectDragGestures(
                         onDrag = { change, delta ->
@@ -127,9 +125,10 @@ fun FloatingCallTile(
                 )
             } else {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Avatar(
-                        avatarData = tile.avatarData,
-                        avatarType = AvatarType.User,
+                    ElementCallAvatar(
+                        userId = tile.userId,
+                        roomMember = tile.roomMember,
+                        size = ElementCallAvatarSize.Tile,
                     )
                 }
             }
@@ -138,11 +137,12 @@ fun FloatingCallTile(
 }
 
 /** What the floating tile draws: one member's stream, or their face when there is no video. */
-private class FloatingTile(
+private data class FloatingTile(
     val memberId: String?,
     val kind: MatrixRtcStreamKind,
     val isMirrored: Boolean,
-    val avatarData: AvatarData,
+    val userId: UserId,
+    val roomMember: ElementCallRoomMember?,
 )
 
 /**
@@ -154,16 +154,18 @@ private class FloatingTile(
  * would draw the same person twice - there is no strip here, so the choice is between our own tile
  * and an empty rectangle.
  */
-private fun NativeCallSnapshot.floatingTile(): FloatingTile? {
-    fun avatarOf(userId: UserId) =
-        roomMembers[userId]?.getAvatarData(AvatarSize.CallTile)
-            ?: AvatarData(id = userId.value, name = null, url = null, size = AvatarSize.CallTile)
-
+private fun ElementCallSnapshot.floatingTile(): FloatingTile? {
     val sharer = participants.firstOrNull { participant ->
         !participant.isLocal && participant.streams.any { it.kind == MatrixRtcStreamKind.SCREEN_SHARE && !it.isMuted }
     }
     if (sharer != null) {
-        return FloatingTile(sharer.memberId, MatrixRtcStreamKind.SCREEN_SHARE, isMirrored = false, avatarData = avatarOf(sharer.userId))
+        return FloatingTile(
+            memberId = sharer.memberId,
+            kind = MatrixRtcStreamKind.SCREEN_SHARE,
+            isMirrored = false,
+            userId = sharer.userId,
+            roomMember = roomMembers[sharer.userId],
+        )
     }
 
     val remote = participants.firstOrNull { it.memberId == spotlightMemberId && !it.isLocal }
@@ -174,7 +176,8 @@ private fun NativeCallSnapshot.floatingTile(): FloatingTile? {
         memberId = chosen.memberId.takeIf { hasCamera },
         kind = MatrixRtcStreamKind.CAMERA,
         isMirrored = chosen.isLocal && isFrontCamera,
-        avatarData = avatarOf(chosen.userId),
+        userId = chosen.userId,
+        roomMember = roomMembers[chosen.userId],
     )
 }
 

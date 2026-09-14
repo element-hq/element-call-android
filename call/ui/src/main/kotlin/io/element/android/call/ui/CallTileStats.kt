@@ -11,9 +11,11 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -23,10 +25,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.element.android.compound.theme.ElementTheme
-import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
+import io.element.android.call.ui.theme.ElementCallTheme
 import kotlinx.coroutines.delay
 import kotlin.time.Duration.Companion.seconds
 
@@ -60,7 +61,7 @@ class TileFrameCounter {
     }
 }
 
-class FrameSample(val framesPerInterval: Int, val width: Int, val height: Int)
+data class FrameSample(val framesPerInterval: Int, val width: Int, val height: Int)
 
 /**
  * What a tile is really receiving, over the tile.
@@ -86,7 +87,7 @@ internal fun CallTileStatsOverlay(
     modifier: Modifier = Modifier,
 ) {
     var sample by remember { mutableStateOf(FrameSample(0, 0, 0)) }
-    var bitrateKbps by remember { mutableStateOf(0L) }
+    var bitrateKbps by remember { mutableLongStateOf(0L) }
     var previousBytes by remember { mutableStateOf<Long?>(null) }
 
     // Once a second, which is both fast enough to be useful and slow enough that reading these
@@ -109,7 +110,7 @@ internal fun CallTileStatsOverlay(
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(4.dp))
-            .background(STATS_BACKGROUND)
+            .background(ElementCallTheme.colors.statsBackground)
             .padding(horizontal = 4.dp, vertical = 2.dp),
     ) {
         // What arrived, against what we asked for. Side by side because that pair is the whole story
@@ -148,7 +149,7 @@ private fun StatLine(text: String) {
         // Monospaced so the numbers do not dance as they change, which is most of what makes a live
         // readout hard to read. Smaller than any product type scale on purpose: this has to fit over
         // a 100dp thumbnail without covering the person in it.
-        style = ElementTheme.typography.fontBodyXsRegular.copy(
+        style = ElementCallTheme.typography.bodyXsRegular.copy(
             fontFamily = FontFamily.Monospace,
             fontSize = 9.sp,
             lineHeight = 11.sp,
@@ -157,4 +158,3 @@ private fun StatLine(text: String) {
 }
 
 private val SAMPLE_INTERVAL = 1.seconds
-private val STATS_BACKGROUND = Color(0xCC000000)

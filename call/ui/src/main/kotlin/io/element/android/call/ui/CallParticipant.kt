@@ -7,10 +7,10 @@
 
 package io.element.android.call.ui
 
-import io.element.android.call.api.rtc.id.UserId
-import io.element.android.libraries.matrix.api.room.RoomMember
+import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.id.UserId
 
 /**
  * One member of the call, as a tile needs to draw them.
@@ -24,7 +24,7 @@ data class CallParticipant(
     val memberId: String,
     val userId: UserId,
     /** Null until the room's member list has loaded, which is normal early in a call. */
-    val roomMember: RoomMember?,
+    val roomMember: ElementCallRoomMember?,
     val isLocal: Boolean,
     /** Whether the microphone stream is muted, or absent entirely - both mean "cannot be heard". */
     val isMuted: Boolean,
@@ -97,7 +97,7 @@ data class CallParticipant(
  * so a member the SFU was happily relaying to everyone else read here as having muted themselves.
  */
 fun MatrixRtcParticipant.toCallParticipant(
-    roomMembers: Map<UserId, RoomMember>,
+    roomMembers: Map<UserId, ElementCallRoomMember>,
     activeSpeakerIds: Set<String>,
     isFrontCamera: Boolean,
 ): CallParticipant {
@@ -136,7 +136,7 @@ fun screenShareTileId(memberId: String) = "$memberId#${MatrixRtcStreamKind.SCREE
  * there would be no frames to draw even if we wanted the tile.
  */
 fun MatrixRtcParticipant.toCallTiles(
-    roomMembers: Map<UserId, RoomMember>,
+    roomMembers: Map<UserId, ElementCallRoomMember>,
     activeSpeakerIds: Set<String>,
     isFrontCamera: Boolean,
 ): List<CallParticipant> {

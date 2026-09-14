@@ -7,7 +7,7 @@
 
 package io.element.android.call.ui
 
-interface NativeCallNavigator {
+interface ElementCallNavigator {
     fun close()
 
     /**
@@ -15,7 +15,7 @@ interface NativeCallNavigator {
      *
      * On the navigator because only an Activity can launch a permission request, and the camera is
      * requested in response to a tap rather than up front like the microphone. The answer comes back
-     * as [NativeCallEvent.SetCameraPermissionGranted], not as a return value - the user may take as
+     * as [ElementCallScreenEvent.SetCameraPermissionGranted], not as a return value - the user may take as
      * long as they like over it, or never answer at all.
      */
     fun requestCameraPermission()

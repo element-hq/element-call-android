@@ -33,7 +33,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.FloatState
 import androidx.compose.runtime.LaunchedEffect
@@ -64,14 +67,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import io.element.android.compound.theme.ElementTheme
-import io.element.android.compound.tokens.generated.CompoundIcons
-import io.element.android.libraries.designsystem.theme.components.Icon
-import io.element.android.libraries.designsystem.theme.components.IconButton
-import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
-import io.element.android.libraries.ui.strings.CommonStrings
+import io.element.android.call.ui.theme.ElementCallTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlin.math.ceil
@@ -104,12 +102,12 @@ import kotlin.math.roundToInt
  * call. They come back as they come within a page, and a speaker promoted from that far arrives at
  * the spotlight as a new tile would rather than sliding in from three screens away.
  *
- * @param pipInsets how far in from the area's edges the one-to-one thumbnail must stay, over and
- * above its own margin - for chrome that floats over the tiles rather than sitting beside them.
+ * [pipInsets] is how far in from the area's edges the one-to-one thumbnail must stay, over and above
+ * its own margin - for chrome that floats over the tiles rather than sitting beside them.
  */
 @Composable
 internal fun CallTileLayout(
-    state: NativeCallState,
+    state: ElementCallScreenState,
     modifier: Modifier = Modifier,
     pipInsets: PaddingValues = PaddingValues(0.dp),
 ) {
@@ -203,7 +201,7 @@ internal fun CallTileLayout(
             val pageFling = rememberSnapFlingBehavior(
                 remember { PageSnapLayoutInfoProvider({ currentArrangement.strip?.pages }, scrollOffset, pageFlingVelocity) },
             )
-            val stripFling = if (strip?.pages != null) pageFling else null
+            val stripFling = strip?.pages?.let { pageFling }
             // Back to the start when the axis changes - a rotation, or the strip appearing - and
             // deliberately *not* when the strip goes away: the tiles are still animating out of it
             // then, and zeroing the offset under them would make every one of them jump.
@@ -252,7 +250,7 @@ internal fun CallTileLayout(
                 val parked = state.tiles.filter { it.tileId !in composedIds && state.videoFrames[it.tileId] != null }
                 parked.filter { parkedTiles.add(it.tileId) }.forEach { tile ->
                     state.eventSink(
-                        NativeCallEvent.SetVideoConstraints(
+                        ElementCallScreenEvent.SetVideoConstraints(
                             memberId = tile.memberId,
                             kind = tile.streamKind,
                             constraints = MatrixRtcVideoConstraints.NotVisible,
@@ -321,7 +319,7 @@ internal fun CallTileLayout(
                         scrollable = scrollable,
                         isDrawn = isDrawn,
                         isPresent = state.tiles.any { it.tileId == participant.tileId },
-                        onExited = { rendered.removeAll { it.tileId == participant.tileId } },
+                        onExit = { rendered.removeAll { it.tileId == participant.tileId } },
                         stats = if (state.isTileStatsVisible) {
                             TileStats(
                                 receiveStats = state.receiveStats[participant.memberId],
@@ -332,7 +330,7 @@ internal fun CallTileLayout(
                         } else {
                             null
                         },
-                        onLongPress = { state.eventSink(NativeCallEvent.ToggleTileStats) },
+                        onLongPress = { state.eventSink(ElementCallScreenEvent.ToggleTileStats) },
                     )
                 }
             }
@@ -374,7 +372,7 @@ internal fun CallTileLayout(
             if (layout == CallLayout.OneToOne && localSlot != null && state.videoFrames[local.tileId] != null) {
                 Box(modifier = Modifier.animatedSlot(localSlot).zIndex(OVERLAY_Z_INDEX)) {
                     SwitchCameraButton(
-                        onClick = { state.eventSink(NativeCallEvent.SwitchCamera) },
+                        onClick = { state.eventSink(ElementCallScreenEvent.SwitchCamera) },
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .padding(8.dp),
@@ -397,11 +395,11 @@ private fun SwitchCameraButton(onClick: () -> Unit, modifier: Modifier = Modifie
     IconButton(
         onClick = onClick,
         modifier = modifier,
-        colors = IconButtonDefaults.iconButtonColors(containerColor = PILL_BACKGROUND, contentColor = Color.White),
+        colors = IconButtonDefaults.iconButtonColors(containerColor = ElementCallTheme.colors.overlayScrim, contentColor = Color.White),
     ) {
         Icon(
-            imageVector = CompoundIcons.SwitchCameraSolid(),
-            contentDescription = stringResource(CommonStrings.a11y_switch_camera),
+            imageVector = ElementCallTheme.icons.switchCamera,
+            contentDescription = stringResource(R.string.element_call_a11y_switch_camera),
             tint = Color.White,
             modifier = Modifier.size(20.dp),
         )
@@ -428,10 +426,11 @@ private fun ReportVideoConstraints(
     slot: Rect,
     hasVideo: Boolean,
     isVisible: Boolean,
-    eventSink: (NativeCallEvent) -> Unit,
+    eventSink: (ElementCallScreenEvent) -> Unit,
 ) {
     val width = slot.width.roundToInt()
     val height = slot.height.roundToInt()
+    val currentEventSink by rememberUpdatedState(eventSink)
     LaunchedEffect(participant.tileId, participant.streamKind, hasVideo, isVisible, width, height) {
         if (!hasVideo) return@LaunchedEffect
         val constraints = if (isVisible) {
@@ -440,8 +439,8 @@ private fun ReportVideoConstraints(
         } else {
             MatrixRtcVideoConstraints.NotVisible
         }
-        eventSink(
-            NativeCallEvent.SetVideoConstraints(
+        currentEventSink(
+            ElementCallScreenEvent.SetVideoConstraints(
                 memberId = participant.memberId,
                 kind = participant.streamKind,
                 constraints = constraints,
@@ -476,11 +475,11 @@ private fun rememberDrawn(isVisible: Boolean): Boolean {
 /**
  * One member, at whatever rectangle the arrangement currently gives them.
  *
- * @param isPresent whether they are still in the call. False means they have left and this is
- * playing them out; [onExited] is what finally removes them.
- * @param inStrip whether [slot] is in the scrolling strip, and so has the scroll offset taken off it.
- * @param isDrawn whether to draw their video at all. False for a tile scrolled off screen, which
- * shows the avatar instead and lets its renderer go. See [rememberDrawn].
+ * [isPresent] is whether they are still in the call. False means they have left and this is playing
+ * them out; [onExit] is what finally removes them. [inStrip] is whether [slot] is in the scrolling
+ * strip, and so has the scroll offset taken off it. [isDrawn] is whether to draw their video at all:
+ * false for a tile scrolled off screen, which shows the avatar instead and lets its renderer go. See
+ * [rememberDrawn].
  */
 @Composable
 private fun CallTile(
@@ -494,7 +493,7 @@ private fun CallTile(
     scrollable: ScrollableState,
     isDrawn: Boolean,
     isPresent: Boolean,
-    onExited: () -> Unit,
+    onExit: () -> Unit,
     stats: TileStats?,
     onLongPress: () -> Unit,
 ) {
@@ -503,6 +502,7 @@ private fun CallTile(
     // preview and screenshot of this screen showed nothing at all.
     val isInspecting = LocalInspectionMode.current
     val presence = remember { Animatable(if (isInspecting) 1f else 0f) }
+    val currentOnExit by rememberUpdatedState(onExit)
     LaunchedEffect(isPresent) {
         if (isInspecting) return@LaunchedEffect
         if (isPresent) {
@@ -512,7 +512,7 @@ private fun CallTile(
             // Only reached if they stayed gone: coming back cancels this effect at the animation
             // above, so a member who leaves and rejoins mid-fade is never removed underneath
             // themselves.
-            onExited()
+            currentOnExit()
         }
     }
 
@@ -586,7 +586,7 @@ private fun PageIndicator(pageCount: Int, currentPage: Int, modifier: Modifier =
     if (pageCount > MAX_PAGE_DOTS) {
         Text(
             text = "${currentPage + 1} / $pageCount",
-            style = ElementTheme.typography.fontBodySmMedium,
+            style = ElementCallTheme.typography.bodySmMedium,
             color = Color.White,
             modifier = modifier,
         )
@@ -603,7 +603,7 @@ private fun PageIndicator(pageCount: Int, currentPage: Int, modifier: Modifier =
                 modifier = Modifier
                     .size(if (isCurrent) 8.dp else 6.dp)
                     .clip(CircleShape)
-                    .background(if (isCurrent) Color.White else PAGE_DOT_INACTIVE),
+                    .background(if (isCurrent) Color.White else ElementCallTheme.colors.pageDotInactive),
             )
         }
     }
@@ -641,20 +641,20 @@ private fun MemberCountPill(count: Int, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(percent = 50))
-            .background(PILL_BACKGROUND)
+            .background(ElementCallTheme.colors.overlayScrim)
             .padding(horizontal = 10.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Icon(
-            imageVector = CompoundIcons.UserProfile(),
+            imageVector = ElementCallTheme.icons.participants,
             contentDescription = null,
             tint = Color.White,
             modifier = Modifier.size(14.dp),
         )
         Text(
             text = count.toString(),
-            style = ElementTheme.typography.fontBodySmMedium,
+            style = ElementCallTheme.typography.bodySmMedium,
             color = Color.White,
         )
     }
@@ -678,6 +678,7 @@ private fun MemberCountPill(count: Int, modifier: Modifier = Modifier) {
  * area. Only while it *is* a strip tile - a tile being promoted travels out unclipped, one being
  * demoted arrives from under the spotlight's edge.
  *
+ * @param slot where the tile is to sit, in the layout's pixel coordinates at a scroll of zero.
  * @param inStrip whether [slot] is a strip position that the scroll offset applies to.
  * @param scroll the strip's scroll, or null for content that does not scroll.
  */
@@ -753,7 +754,7 @@ private class LastStripScroll {
 }
 
 /** A tile's last known rectangle, and whether it was a strip position at the time. */
-private class TileSlot(val rect: Rect, val inStrip: Boolean)
+private data class TileSlot(val rect: Rect, val inStrip: Boolean)
 
 /**
  * Where everyone goes: the spotlight, and everyone else in a grid beside or below it.
@@ -768,6 +769,11 @@ private class TileSlot(val rect: Rect, val inStrip: Boolean)
  * In pixels rather than in Dp because it feeds an animation and a `Constraints`, both of which want
  * pixels, and rounding once at the end is better than rounding at every step.
  *
+ * @param tileIds every tile to place, in drawing order.
+ * @param spotlightTileId the tile that gets the big rectangle, or null when nobody is spotlighted.
+ * @param width the area's width in pixels.
+ * @param height the area's height in pixels.
+ * @param spacing the gap between tiles in pixels.
  * @param layout which arrangement is wanted. [CallLayout.OneToOne] only applies when the tiles have
  * the shape it needs - a spotlight and exactly one other - and falls back to the group arrangement
  * otherwise, so callers can pass the state's answer without checking it first.
@@ -836,7 +842,7 @@ internal fun computeSlots(
  * Null when the area is too small to hold a spotlight and a single row at all, in which case the
  * grid, however cramped, is the better answer.
  *
- * @param indicatorHeight room kept along the bottom of a paged strip for its dots.
+ * [indicatorHeight] is the room kept along the bottom of a paged strip for its dots.
  */
 private fun scrollArrangement(
     strip: List<String>,
@@ -1150,9 +1156,9 @@ private fun landscapeStrip(count: Int, width: Float, height: Float, spacing: Flo
     }
 }
 
-private class LandscapeStrip(val width: Float, val columns: Int?)
+private data class LandscapeStrip(val width: Float, val columns: Int?)
 
-private class Grid(val columns: Int, val tileWidth: Float, val tileHeight: Float)
+private data class Grid(val columns: Int, val tileWidth: Float, val tileHeight: Float)
 
 /**
  * The column count that makes the tiles largest while still fitting everyone.
@@ -1202,7 +1208,6 @@ private const val SIZE_TOLERANCE = 0.5f
 
 /** Room under a paged strip for its dots. */
 private val PAGE_INDICATOR_HEIGHT = 20.dp
-private val PAGE_DOT_INACTIVE = Color(0x66FFFFFF)
 
 /** More pages than this are counted rather than dotted. Eight dots is about as many as an eye counts. */
 private const val MAX_PAGE_DOTS = 8
@@ -1232,9 +1237,6 @@ private const val ENTER_SCALE = 0.85f
 /** Our tile sits over the others; overlays anchored to slots sit over every tile. */
 private const val LOCAL_Z_INDEX = 1f
 private const val OVERLAY_Z_INDEX = 2f
-
-/** Fixed rather than themed: it sits over video, which is not a themed surface. */
-private val PILL_BACKGROUND = Color(0xCC15191E)
 
 /**
  * Deliberately not bouncy. A tile carrying someone's face overshooting its position is the kind of

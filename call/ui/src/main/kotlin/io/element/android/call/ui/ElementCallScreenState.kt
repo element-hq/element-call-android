@@ -7,7 +7,7 @@
 
 package io.element.android.call.ui
 
-import io.element.android.call.impl.NativeCallConnection
+import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
@@ -20,8 +20,8 @@ import kotlinx.collections.immutable.ImmutableSet
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.Flow
 
-data class NativeCallState(
-    val connection: NativeCallConnection,
+data class ElementCallScreenState(
+    val connection: ElementCallConnection,
     /**
      * Members the RTC core sees in the slot, including us. Known before media connects, and in every
      * compatibility mode - the core is fed a membership in all three.
@@ -107,9 +107,9 @@ data class NativeCallState(
      * is the point of it.
      */
     val tiles: ImmutableList<CallParticipant>,
-    /** Who the controller has settled on for the big tile. See `NativeCallSnapshot.spotlightMemberId`. */
+    /** Who the controller has settled on for the big tile. See `ElementCallSnapshot.spotlightMemberId`. */
     val spotlightMemberId: String?,
-    val eventSink: (NativeCallEvent) -> Unit,
+    val eventSink: (ElementCallScreenEvent) -> Unit,
 ) {
     /**
      * Who gets the big tile: a shared screen if there is one, else whoever the SFU currently hears,
@@ -158,14 +158,14 @@ data class NativeCallState(
      * two is a change of rectangles for the same tiles rather than a change of screen.
      */
     val layout: CallLayout
-        get() = if (isDm && tiles.size == 2 && tiles.count { it.isLocal } == 1 && tiles.none { it.isScreenShare }) {
-            CallLayout.OneToOne
-        } else {
-            CallLayout.Group
-        }
+        get() = if (isDm && hasOneToOneTiles) CallLayout.OneToOne else CallLayout.Group
+
+    /** Exactly the two of us, each on a single camera tile. */
+    private val hasOneToOneTiles: Boolean
+        get() = tiles.size == 2 && tiles.count { it.isLocal } == 1 && tiles.none { it.isScreenShare }
 }
 
-/** How the tiles are arranged. See [NativeCallState.layout]. */
+/** How the tiles are arranged. See [ElementCallScreenState.layout]. */
 enum class CallLayout {
     /** The other person fills the screen, we are a thumbnail over them. */
     OneToOne,
