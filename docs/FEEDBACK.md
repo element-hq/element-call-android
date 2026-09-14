@@ -1,8 +1,9 @@
 # matrix-rust-rtc — integration feedback
 
-Notes from integrating the prebuilt `matrixrtc-release.aar` into Element X Android to validate the architecture of
-a frame-in / frame-out RTC library on Android. The integration lives in `libraries/matrixrtc` (a Kotlin wrapper that
-is the only module importing `uniffi.matrix_rtc_ffi`) and `features/callnative` (capture, playback, UI).
+Notes from integrating the prebuilt `matrixrtc-release.aar` — first as a spike inside Element X Android, now as this
+library — to validate the architecture of a frame-in / frame-out RTC library on Android. The integration lives in
+`call/impl` (`…impl.rtc` is the only package importing `uniffi.matrix_rtc_ffi`; capture and playback are in
+`…impl.rtc.media`) and `call/ui`.
 
 Feedback is a first-class output of that work, not a by-product — this file is the deliverable.
 
@@ -44,7 +45,7 @@ we raised and fixed the on-device bugs we reported, so this file has been cut ba
 resolved is recorded in the library's own changelog rather than duplicated here; the host-side workarounds those
 items forced — a `runBlocking` bridge over the command sender, a 1 Hz `memberCount` poll, a shadow copy of our own
 mute state, reconciling `localIdentity()` against the media roster, and boxing every PCM sample — have all been
-deleted from `libraries/matrixrtc`.
+deleted from the wrapper.
 
 The v0.2.0 AAR also brought Element Call interop, which the app exposes as a three-way developer setting
 (*Developer settings → Native calls → Element Call compatibility*) read when a call is placed. All three modes are
@@ -155,7 +156,7 @@ between entries.
    through the room-state subscription as a departure exactly `keepAliveTimeoutMs` after the join, with
    no `restartDelayedEvent` anywhere in between.
 
-   **Reported, fixed upstream, and confirmed fixed.** `libraries/matrixrtc` carried a workaround — a 10 s
+   **Reported, fixed upstream, and confirmed fixed.** The wrapper carried a workaround — a 10 s
    coroutine ticker calling `heartbeat()`, the entry point the FFI documents "for hosts that would rather
    drive the keep-alive from their own scheduler" and the only one that actually beat. That ticker has been
    deleted and the host now relies on the driver `join()` starts, as documented. Verified in
@@ -957,7 +958,7 @@ kind of thing gets diagnosed.
    eventId, timestamp }` — the four fields `LegacyStateMemberEvent` takes, plus two. The listener is
    called with the current snapshot immediately and then on every change, with several changes in one
    sync coalesced, so no host needs the 30 s poll `matrix-rtc-livekit`'s native path uses.
-   `ElementCallCompat.STATE_EVENTS` is two-way in `libraries/matrixrtc` as of this change.
+   `MatrixRtcElementCallCompat.STATE_EVENTS` is two-way in `call/impl` as of this change.
 
    Three notes for the next person, all of which cost us time to establish and none of which are
    obvious from the signature:
@@ -1031,28 +1032,29 @@ kind of thing gets diagnosed.
 
 ## Widget-driver stopgap
 
-The app builds against the **released** Kotlin bindings (`org.matrix.rustcomponents:sdk-android`, the version
-`develop` pins). Those lack the entry points the native call stack needs, so
-`libraries/matrixrtc/impl/.../bridge/widget/` drives the SDK's *widget driver* in-process (no web view) as the
-Matrix bridge for exactly them. The widget machine already implements delayed events, a room-state feed and
-encrypted to-device messaging for Element Call web; `WidgetMatrixBridge` speaks its JSON API through
-`MatrixWidgetDriver.send` / `incomingMessages`. Everything else - `sendRawStateEvent`, the OpenID token, members,
-encryption state - stays on the released SDK. Same design as Element X iOS (`Services/NativeCall/Widget/`).
+The library builds against the **released** Kotlin bindings (`org.matrix.rustcomponents:sdk-android`, the version
+Element X `develop` pins). Those lack the entry points the native call stack needs, so
+`call/matrix/…/temporary/widget/` drives the SDK's *widget driver* in-process (no web view) as the Matrix bridge
+for exactly them. The widget machine already implements delayed events, a room-state feed and encrypted to-device
+messaging for Element Call web; `WidgetMatrixBridge` speaks its JSON API through `WidgetDriver.send` /
+`incomingMessages`. Everything else - `sendStateEventRaw`, the OpenID token, members, encryption state - stays on
+the released SDK. Same design as Element X iOS (`ElementCallMatrix/Widget/`).
 
-**The shape that makes it disposable.** `MatrixRtcRoomBridge` (`bridge/MatrixRtcRoomBridge.kt`) is the one
-interface listing the gap; `MatrixRtcCommandSender`, `RoomStateFeeder` and `SessionStateFeeder` depend on it and
-never learn about widgets. Every file in `bridge/widget/` carries a `Temporary:` header. Retiring the stopgap is:
+**The shape that makes it disposable.** The Matrix port (`ElementCallMatrixTransport` and `ElementCallMatrixRoom`
+in `call/api/…/matrix/`) is the one place listing the gap; `MatrixRtcCommandSender`, `RoomStateFeeder` and
+`SessionStateFeeder` depend on it and never learn about widgets. Every declaration in `temporary/widget/` is
+annotated `@ElementCallTemporaryApi`, and a Konsist rule keeps the package inside `call/matrix`. Retiring the
+stopgap is:
 
-1. Re-add the `JoinedRoom` / `MatrixClient` methods this branch once had (`sendDelayedEvent`,
-   `sendDelayedStateEvent`, `updateDelayedEvent`, `stateEventsFlow`, `stickyEventsFlow`, `sendStickyEvent`,
-   `sendToDeviceMessage`, `toDeviceMessagesFlow`; the SDK-backed versions are in commit `8a2e944437`, the
-   last one before the bridge landed, in `JoinedRustRoom.kt` and
+1. When the Kotlin bindings expose them, call the SDK directly from `SdkElementCallMatrixRoom` and
+   `ElementCallSdkTransport` (`sendDelayedEvent`, `updateDelayedEvent`, `stateEvents`, `stickyEvents`,
+   `sendStickyEvent`, `sendToDeviceMessage`, `toDeviceMessages`; the SDK-backed versions the spike once had are
+   in Element X commit `8a2e944437`, the last one before the bridge landed, in `JoinedRustRoom.kt` and
    `RustMatrixClient.kt`).
-2. Write an SDK-backed `MatrixRtcRoomBridge` over them - session-long for to-device, so the relay goes too.
-3. Delete `bridge/widget/` (bridge, capability grant, relay, registry), drop `onSessionEnded` from
-   `RustMatrixRtcSession`, restore the compat picker in developer settings and the preference read in
-   `NativeCallController`, and drop the `capabilities` parameter of `JoinedRoom.getWidgetDriver` if nothing else
-   took it up. The `RustWidgetDriver` recv-loop and `send: Boolean` fixes are genuine bug fixes and stay.
+2. Delete `call/matrix/…/temporary/widget/` (driver, bridge, capability grant, relay, registry), drop
+   `onSessionEnded` from `RustMatrixRtcSession`, and lift the compat pin in `DefaultElementCallController` so
+   `ElementCallOptions.elementCallCompat` is obeyed. The `RustWidgetDriver` recv-loop hardening the spike made in
+   Element X is a genuine bug fix for the WebView call too and can go to Element X on its own.
 
 **Missing from the released FFI** (each retires part of the bridge; all of them retire it):
 
@@ -1063,7 +1065,7 @@ never learn about widgets. Every file in `bridge/widget/` carries a `Temporary:`
 - `Client.subscribeToToDeviceMessages(eventTypes)` delivering the **encryption info**: attested sender, sender device
   id and cross-signing status. The widget path delivers `{type, content, sender, encrypted}` only.
 - `Room.sendStickyRaw` (MSC4354) for the sticky-event compat modes; until then calls are pinned to the state-event
-  mode (`NativeCallController`, developer options picker disabled). `Room.sendRaw` returning the event id would
+  mode (`DefaultElementCallController`; `ElementCallOptions.elementCallCompat` is read but not obeyed). `Room.sendRaw` returning the event id would
   also let MSC4075 notifications relate to their membership.
 
 **Trust relaxation while the stopgap is in place.** The core drops a media key whose sender is not cross-signed

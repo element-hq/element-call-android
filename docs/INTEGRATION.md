@@ -1,9 +1,9 @@
 # matrix-rust-rtc — integration guide
 
-How to put `matrix-rust-rtc` into a Matrix client, written from the integration in this repository. Element X
-Android is the worked example throughout, and every file reference points at code you can read: the wrapper lives in
-`libraries/matrixrtc` (the only module that imports `uniffi.matrix_rtc_ffi`) and the call feature — capture,
-playback, UI — in `features/callnative`.
+How to put `matrix-rust-rtc` into a Matrix client, written from the integration in this repository. The
+`element-call-android` library is the worked example throughout, and every file reference points at code you can
+read: the wrapper lives in `call/impl/…/rtc` (the only package that imports `uniffi.matrix_rtc_ffi`), the call —
+capture, playback, controller — in the rest of `call/impl`, and the UI in `call/ui`.
 
 The companion document is [`FEEDBACK.md`](FEEDBACK.md), which records what is still missing or wrong in the library.
 This one records what you have to *do*. Where a step exists only to work around a library gap, it says so and points
@@ -52,20 +52,20 @@ The AAR (`matrixrtc-release.aar`) contains four things, and you will end up depe
 Gradle wiring is a flat file dependency; there is no Maven coordinate yet:
 
 ```kotlin
-// libraries/rustrtc/build.gradle.kts
+// rtc/local/build.gradle.kts
 configurations.maybeCreate("default")
 artifacts.add("default", file("matrixrtc-release.aar"))
 ```
 
 ```kotlin
-// libraries/matrixrtc/impl/build.gradle.kts
-implementation(projects.libraries.rustrtc)
+// call/impl/build.gradle.kts
+implementation(projects.rtc.local)
 // uniffi bindings runtime
 implementation(variantOf(libs.jna) { artifactType("aar") })
 ```
 
-**Confine the FFI to one module.** Nothing outside `libraries/matrixrtc/impl` imports `uniffi.matrix_rtc_ffi`. The
-`api` module exposes only your own types — `MatrixRtcCall`, `MatrixRtcVideoFrame`, `MatrixRtcStreamKind`. This is
+**Confine the FFI to one package.** Nothing outside `call/impl/…/rtc` imports `uniffi.matrix_rtc_ffi`. The
+`call/api` module exposes only your own types — `MatrixRtcCall`, `MatrixRtcVideoFrame`, `MatrixRtcStreamKind`. This is
 worth the boilerplate: the FFI surface changes between library versions, and the UI should not.
 
 **`libs/libwebrtc.jar` is load-bearing for video** and is not formally part of the library's contract
@@ -88,7 +88,7 @@ and never triggers `JNI_OnLoad` — so going straight to uniffi leaves libwebrtc
 media call dies on a null dereference inside `RtcRuntime()`.
 
 ```kotlin
-// libraries/matrixrtc/impl/MatrixRtcFfi.kt
+// call/impl/…/rtc/MatrixRtcFfi.kt
 MatrixRtc.initialize()       // runs JNI_OnLoad: hands libwebrtc its JavaVM* and class loader
 uniffiEnsureInitialized()
 ```
@@ -126,7 +126,7 @@ RtcSessionManagerHandle().apply {
 
 Seven callbacks, each mapping onto one SDK send. All of them suspend, so map them straight onto your suspending
 client calls with no blocking bridge in between (an earlier version needed a `runBlocking` bridge; v0.2.0 removed
-the need). Reference implementation: `libraries/matrixrtc/impl/MatrixRtcCommandSender.kt`.
+the need). Reference implementation: `call/impl/…/rtc/MatrixRtcCommandSender.kt`.
 
 | Callback | Maps to | Returns |
 | :--- | :--- | :--- |
@@ -139,8 +139,9 @@ the need). Reference implementation: `libraries/matrixrtc/impl/MatrixRtcCommandS
 | `sendToDeviceMessage` | `client.sendToDeviceMessage(type, messages, encrypt = true)` | one delivery verdict per recipient |
 
 **On the released SDK, only `sendStateEvent` reaches the SDK directly.** The Kotlin bindings do not yet expose
-delayed events, sticky events or to-device sends, so the other six callbacks go through `MatrixRtcRoomBridge`
-(`libraries/matrixrtc/impl/bridge/`), whose only implementation today drives the SDK's widget machine in-process -
+delayed events, sticky events or to-device sends, so the other six callbacks go through the Matrix port
+(`ElementCallMatrixRoom` in `call/api`), whose turnkey implementation in `call/matrix` drives the SDK's widget machine
+in-process -
 `FEEDBACK.md`, "Widget-driver stopgap", has the wire details and what retires it. The rows above describe the
 operations; the bridge is where they land until the SDK grows the calls named in each row.
 
@@ -287,11 +288,12 @@ subscription must be established exactly once, and two callers racing would eith
 holding a manager that calls are not joined on.
 
 ```kotlin
-// appnav/loggedin/MatrixRtcBootstrap.kt — started from the logged-in flow, behind a feature flag
+// In the host, once per session, behind its feature flag. Element X does this from its logged-in flow;
+// ElementCallStack.start() is what brings the core up, with the session rather than with the first call.
 featureFlagService.isFeatureEnabledFlow(FeatureFlags.NativeCall)
     .filter { it }.take(1)
-    .onEach { matrixRtcServiceProvider.provide(matrixClient).start() }
-    .launchIn(coroutineScope)
+    .onEach { elementCallStack.start() }
+    .launchIn(sessionScope)
 ```
 
 Make `start()` idempotent and call it from `join` too, so a caller that forgets still gets a working call — just one
@@ -761,7 +763,7 @@ subscriber's collector has run — so releasing after `emit` frees the frame whi
 dispatched to. On device that was about a third of frames arriving already released and the rest of the picture
 black.
 
-So fan out explicitly (`features/callnative/impl/SharedFrameStream.kt`): **retain once per subscriber before
+So fan out explicitly (`call/impl/…/SharedFrameStream.kt`): **retain once per subscriber before
 offering**, each subscriber releases its own reference when its collector returns, and collectors run inline from
 their own channel loop with no dispatcher change in between. Every path accounted for — no subscribers means release
 immediately and never queue; a slow subscriber's own one-deep channel drops and releases; a departing subscriber's
@@ -777,7 +779,7 @@ thread, and aborting the process, reliably, whenever a third participant joined.
 
 The same rule covers a change of *layout*, not only of position. Our one-to-one arrangement — the other person
 full-bleed, ourselves as a thumbnail in a corner — is not a different screen but the same keyed tile composables
-handed different rectangles (`CallTileLayout.kt`, `NativeCallState.layout`), so a third member joining or leaving a
+handed different rectangles (`CallTileLayout.kt`, `ElementCallScreenState.layout`), so a third member joining or leaving a
 DM call moves everyone to where the group layout puts them without a single renderer being rebuilt. A layout switch
 that swaps composables is a subscriber count going to zero for every tile at once, which is the linger race above
 multiplied by the call.
@@ -940,7 +942,7 @@ only ever sees whole snapshots.
 **Rate-limit high-frequency diagnostics before they become state.** The PCM meter reports ten times a second *per
 member*. Funnelled straight into the snapshot, an eleven-person call produced over a hundred snapshots a second from
 that one source, each a new state and a recomposition of every tile. Sample it to ten a second in total
-(`AUDIO_LEVEL_SAMPLE_MS = 100`, in `NativeCallController.startObservers`); a meter needs no more. It helps that
+(`AUDIO_LEVEL_SAMPLE_MS = 100`, in `DefaultElementCallController.startObservers`); a meter needs no more. It helps that
 nothing but the diagnostics overlay reads the PCM levels: the speaker ring on a tile comes from the SFU's
 `ActiveSpeakers` event, which is both cheaper and more useful — it still lights up for a member whose media we cannot
 decrypt, which is exactly the case worth being able to see.

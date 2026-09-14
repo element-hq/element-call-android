@@ -46,7 +46,8 @@ The host decides where those composables sit. The plan this repository follows i
 Everything in `call/impl` and `call/matrix` is `internal` unless it is on the allowlist in `KonsistBoundaryTest`.
 The rules are enforced by `tests/konsist` (`KonsistBoundaryTest`, one assertion per rule) and by Gradle:
 `verifyNoComposeDependencies` fails `check` if any `androidx.compose` artifact reaches the runtime classpath of
-`call/api`, `call/impl` or `call/matrix`.
+`call/api`, `call/impl` or `call/matrix` (the annotation-only `runtime-annotation` excepted: `androidx.activity`
+drags it in and it carries no runtime).
 
 Package root: `io.element.android.call`. Distinct from Element X's packages so both can share a classpath.
 
@@ -110,6 +111,9 @@ until one does.
 
 - JUnit4, Truth, Turbine, coroutines-test, Molecule. Import assertion methods; `isTrue()` not `isEqualTo(true)`.
 - Test classes end with `Test`. Helpers live in `tests/testutils`; fakes for the library's own ports live in `call/test`.
+- Behaviour is tested where it lives: the call itself in `call/impl` (`DefaultElementCallControllerTest`, the real
+  controller over the fakes), what the screen makes of a snapshot in `call/ui` (`ElementCallScreenStateTest`, over
+  `FakeElementCallController`). A test that drives a real controller through the screen tests two things at once.
 
 ### No DI framework, no Appyx, no Activity
 

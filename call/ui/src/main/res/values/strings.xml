@@ -19,7 +19,6 @@
     <string name="element_call_a11y_start_screen_share">Share your screen</string>
     <string name="element_call_a11y_stop_screen_share">Stop sharing your screen</string>
     <string name="element_call_a11y_minimize_call">Minimize call</string>
-    <string name="element_call_a11y_expand_call">Expand call</string>
     <string name="element_call_a11y_selected">Selected</string>
     <string name="element_call_action_stop">Stop</string>
     <string name="element_call_audio_output_title">Audio output</string>
