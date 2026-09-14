@@ -109,6 +109,20 @@ between entries.
    `captureVideo` takes, in native code every host would otherwise reimplement — CameraX hands out
    `YUV_420_888` with pixel strides that need de-interleaving by hand. We guard the assumption with a
    `Class.forName` test (`MatrixRtcAarClasspathTest`) so a change fails our build rather than a device.
+26. **The AAR's `proguard.txt` is not ProGuard syntax, and it breaks every minified host.** The file is a
+    47-byte C-style comment, `/* Placeholder for consumer ProGuard rules */`. ProGuard and R8 only know `#`
+    comments, so R8 stops the host's release build at "Compilation failed to complete, position: offset: 0,
+    line: 1, column: 1, origin: … proguard.txt" the moment the AAR is on its classpath - Element X's release
+    build included, the day it consumes this library as an artifact. Found by `tests/consumer`, the minified
+    consumer build; until the core ships a valid file, `rtc/local` repackages the AAR without it and
+    `call/impl` carries the rules the core actually needs (`consumer-rules.pro`: JNA, `uniffi.matrix_rtc_ffi`,
+    `org.matrix.rtc`, `livekit.org.webrtc`, `livekit.org.jni_zero`). Those rules, or real ones, belong in the AAR.
+27. **`libmatrix_rtc_ffi.so` is not 16 KB page aligned.** Android 16 shows the user an "Android App
+    Compatibility" dialog on install naming the library ("LOAD segment not aligned") and runs the app in
+    compatibility mode; Play requires 16 KB support for new apps and updates targeting Android 15+. Build the
+    `.so` with the NDK's 16 KB flags (`-Wl,-z,max-page-size=16384`) and check it with `check_elf_alignment.sh`
+    in the release pipeline. Seen on the Android 16 emulator; also flagged by lint's `Aligned16KB` on every
+    build of `call/ui`.
 
 ### Deployment
 
