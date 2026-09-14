@@ -51,9 +51,12 @@ code lands.
    exclude it or accept that the call is unavailable there.
 3. The host's Rust SDK version must be at least the one this library was compiled against (see
    `gradle/libs.versions.toml`, `matrix_sdk`).
-4. *pending* Picture-in-picture: `android:supportsPictureInPicture="true"` and `smallestScreenSize` in
-   `configChanges` on the host Activity.
-5. *pending* Screen sharing: the `mediaProjection` foreground-service type and its permission in the host manifest.
+4. Picture-in-picture: `android:supportsPictureInPicture="true"` and `smallestScreenSize` in `configChanges` on
+   the host Activity; `ElementCallPictureInPicture.attach(activity, controller)` from its `onCreate`, and
+   `ElementCallPictureInPicture.onUserLeaveHint(activity, controller)` from its `onUserLeaveHint()` override.
+5. Screen sharing: the library's service declares `microphone|camera`; a host that turns screen sharing on adds
+   `FOREGROUND_SERVICE_MEDIA_PROJECTION` and the `mediaProjection` type to `ElementCallForegroundService` in its
+   own manifest, with `tools:node="merge"`. That type is Play-reviewed, so the library does not declare it.
 
 ## Documentation
 

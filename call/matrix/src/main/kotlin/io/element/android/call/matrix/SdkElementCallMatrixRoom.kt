@@ -17,19 +17,15 @@ import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.call.api.rtc.id.UserId
 import io.element.android.call.matrix.temporary.widget.WidgetMatrixBridge
 import io.element.android.call.matrix.util.runCatchingExceptions
-import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.withContext
 import org.matrix.rustcomponents.sdk.MembershipState
 import org.matrix.rustcomponents.sdk.Room
 import org.matrix.rustcomponents.sdk.RoomInfo
-import org.matrix.rustcomponents.sdk.RoomInfoListener
 import timber.log.Timber
 import uniffi.matrix_sdk_base.EncryptionState
 
@@ -48,20 +44,7 @@ internal class SdkElementCallMatrixRoom(
     private val dispatchers: ElementCallDispatchers,
     private val onClose: () -> Unit,
 ) : ElementCallMatrixRoom {
-    private val roomInfo: Flow<RoomInfo> = callbackFlow {
-        val handle = room.subscribeToRoomInfoUpdates(
-            object : RoomInfoListener {
-                override fun call(roomInfo: RoomInfo) {
-                    trySend(roomInfo)
-                }
-            }
-        )
-        trySend(room.roomInfo())
-        awaitClose {
-            handle.cancel()
-            handle.close()
-        }
-    }.flowOn(dispatchers.io)
+    private val roomInfo: Flow<RoomInfo> = room.roomInfoUpdates(dispatchers)
 
     override val isEncrypted: Flow<Boolean> = roomInfo
         .mapNotNull {

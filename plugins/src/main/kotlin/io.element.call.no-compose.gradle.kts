@@ -15,6 +15,7 @@ import extension.VerifyNoComposeDependenciesTask
 val verifyNoComposeDependencies = tasks.register<VerifyNoComposeDependenciesTask>("verifyNoComposeDependencies") {
     group = "verification"
     description = "Fails if any androidx.compose artifact is on the release runtime classpath."
+    projectPath.set(project.path)
     rootComponent.set(
         configurations.named("releaseRuntimeClasspath").flatMap { it.incoming.resolutionResult.rootComponent }
     )

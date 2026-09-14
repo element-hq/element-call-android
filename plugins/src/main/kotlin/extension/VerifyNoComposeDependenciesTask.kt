@@ -28,6 +28,10 @@ abstract class VerifyNoComposeDependenciesTask : DefaultTask() {
     @get:Input
     abstract val rootComponent: Property<ResolvedComponentResult>
 
+    /** For the failure message; captured at configuration time, since `project` is off limits at execution. */
+    @get:Input
+    abstract val projectPath: Property<String>
+
     @TaskAction
     fun verify() {
         val offenders = mutableSetOf<String>()
@@ -38,9 +42,10 @@ abstract class VerifyNoComposeDependenciesTask : DefaultTask() {
                 .filterIsInstance<ResolvedDependencyResult>()
                 .forEach { dependency ->
                     val selected = dependency.selected
-                    val group = selected.moduleVersion?.group.orEmpty()
-                    if (group.startsWith("androidx.compose")) {
-                        offenders.add(selected.moduleVersion.toString())
+                    val module = selected.moduleVersion
+                    val group = module?.group.orEmpty()
+                    if (group.startsWith("androidx.compose") && "$group:${module?.name}" !in ANNOTATION_ONLY_ARTIFACTS) {
+                        offenders.add(module.toString())
                     }
                     visit(selected)
                 }
@@ -48,9 +53,21 @@ abstract class VerifyNoComposeDependenciesTask : DefaultTask() {
         visit(rootComponent.get())
         if (offenders.isNotEmpty()) {
             throw GradleException(
-                "${project.path} must not depend on Compose, but its runtime classpath contains:\n" +
+                "${projectPath.get()} must not depend on Compose, but its runtime classpath contains:\n" +
                     offenders.sorted().joinToString("\n") { " - $it" }
             )
         }
+    }
+
+    private companion object {
+        /**
+         * `@Stable` and `@Immutable` and nothing else: no runtime, no compiler plugin. `androidx.activity`
+         * reaches it through `androidx.navigationevent`, and every host that draws anything already has it.
+         * Letting it through keeps the check about Compose rather than about a marker jar.
+         */
+        val ANNOTATION_ONLY_ARTIFACTS = setOf(
+            "androidx.compose.runtime:runtime-annotation",
+            "androidx.compose.runtime:runtime-annotation-android",
+        )
     }
 }
