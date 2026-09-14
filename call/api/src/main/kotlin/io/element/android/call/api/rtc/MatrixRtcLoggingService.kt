@@ -5,9 +5,7 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.api
-
-import io.element.android.libraries.matrix.api.tracing.LogLevel
+package io.element.android.call.api.rtc
 
 /**
  * Logging for the `matrix-rust-rtc` core.
@@ -35,7 +33,7 @@ interface MatrixRtcLoggingService {
  * core logging stays off entirely.
  */
 data class MatrixRtcLoggingConfiguration(
-    val logLevel: LogLevel,
+    val logLevel: MatrixRtcLogLevel,
     val writesToLogcat: Boolean,
     val filter: String = DEFAULT_FILTER,
 ) {
@@ -59,4 +57,13 @@ data class MatrixRtcLoggingConfiguration(
         const val DEFAULT_FILTER =
             "matrix_rtc_media=debug,matrix_rtc_livekit=debug,livekit=info,libwebrtc=warn,webrtc_sys=warn"
     }
+}
+
+/** The core's log levels, as the host chooses them. */
+enum class MatrixRtcLogLevel {
+    ERROR,
+    WARN,
+    INFO,
+    DEBUG,
+    TRACE,
 }

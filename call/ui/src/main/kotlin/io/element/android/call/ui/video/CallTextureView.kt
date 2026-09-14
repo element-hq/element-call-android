@@ -5,7 +5,7 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.features.callnative.impl.ui
+package io.element.android.call.ui.video
 
 import android.content.Context
 import android.graphics.SurfaceTexture

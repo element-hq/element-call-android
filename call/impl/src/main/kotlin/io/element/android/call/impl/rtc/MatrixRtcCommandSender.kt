@@ -5,19 +5,19 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.impl
+package io.element.android.call.impl.rtc
 
 import io.element.android.libraries.matrix.api.MatrixClient
-import io.element.android.libraries.matrix.api.core.DeviceId
-import io.element.android.libraries.matrix.api.core.RoomId
-import io.element.android.libraries.matrix.api.core.UserId
+import io.element.android.call.api.rtc.id.DeviceId
+import io.element.android.call.api.rtc.id.RoomId
+import io.element.android.call.api.rtc.id.UserId
 import io.element.android.libraries.matrix.api.exception.ClientException
 import io.element.android.libraries.matrix.api.exception.ErrorKind
 import io.element.android.libraries.matrix.api.room.JoinedRoom
-import io.element.android.libraries.matrixrtc.impl.bridge.MatrixRtcBridgeException
-import io.element.android.libraries.matrixrtc.impl.bridge.MatrixRtcDelayedEventAction
-import io.element.android.libraries.matrixrtc.impl.bridge.MatrixRtcRoomBridge
-import io.element.android.libraries.matrixrtc.impl.bridge.widget.MatrixRtcBridgeRegistry
+import io.element.android.call.api.matrix.ElementCallMatrixException
+import io.element.android.call.api.matrix.ElementCallDelayedEventAction
+import io.element.android.call.api.matrix.ElementCallMatrixRoom
+import io.element.android.call.matrix.temporary.widget.MatrixRtcBridgeRegistry
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
@@ -32,7 +32,7 @@ import uniffi.matrix_rtc_ffi.FfiToDeviceRecipient
  *
  * Two destinations. What the released SDK exposes goes straight to it: the state event through
  * [JoinedRoom.sendRawStateEvent]. What it does not - delayed events, sticky events, to-device - goes
- * through the room's [MatrixRtcRoomBridge], looked up in [bridges] because a bridge lives as long as a
+ * through the room's [ElementCallMatrixRoom], looked up in [bridges] because a bridge lives as long as a
  * call in its room while this sender lives as long as the session.
  *
  * Every callback suspends, so each one maps straight onto the suspending call it needs, with no
@@ -65,7 +65,7 @@ internal class MatrixRtcCommandSender(
 
     /**
      * @return the event id the homeserver assigned. Unread for an `m.rtc.slot`, but in
-     * [io.element.android.libraries.matrixrtc.api.MatrixRtcElementCallCompat.STATE_EVENTS] the membership itself
+     * [io.element.android.call.api.rtc.MatrixRtcElementCallCompat.STATE_EVENTS] the membership itself
      * comes through here, and there it is what an MSC4075 notification relates to.
      */
     override suspend fun sendStateEvent(roomId: String, eventType: String, stateKey: String, contentJson: String): String {
@@ -90,7 +90,7 @@ internal class MatrixRtcCommandSender(
 
     /**
      * The dead man's switch for a membership carried as *room state*, which is what
-     * [io.element.android.libraries.matrixrtc.api.MatrixRtcElementCallCompat.STATE_EVENTS] publishes.
+     * [io.element.android.call.api.rtc.MatrixRtcElementCallCompat.STATE_EVENTS] publishes.
      *
      * Only ever called in that mode: the message-like [sendDelayedEvent] has no state key to send a
      * membership under, so the two are not interchangeable. Worth knowing that this is the better half
@@ -111,7 +111,7 @@ internal class MatrixRtcCommandSender(
 
     override suspend fun cancelDelayedEvent(roomId: String, delayId: String) {
         command("cancelDelayedEvent", classify = ::delayedEventFailure) {
-            bridge(roomId).updateDelayedEvent(delayId, MatrixRtcDelayedEventAction.CANCEL).getOrThrow()
+            bridge(roomId).updateDelayedEvent(delayId, ElementCallDelayedEventAction.CANCEL).getOrThrow()
         }
     }
 
@@ -121,7 +121,7 @@ internal class MatrixRtcCommandSender(
         // dropping us out of a call we are still in, minutes later, with nothing in the log to connect
         // cause to effect. Hence the test that pins each one to its action.
         command("restartDelayedEvent", classify = ::delayedEventFailure) {
-            bridge(roomId).updateDelayedEvent(delayId, MatrixRtcDelayedEventAction.RESTART).getOrThrow()
+            bridge(roomId).updateDelayedEvent(delayId, ElementCallDelayedEventAction.RESTART).getOrThrow()
         }
     }
 
@@ -186,7 +186,7 @@ internal class MatrixRtcCommandSender(
             ?: throw CommandSenderException.SendException("Not a joined room: $roomId")
     }
 
-    private fun bridge(roomId: String): MatrixRtcRoomBridge {
+    private fun bridge(roomId: String): ElementCallMatrixRoom {
         return bridges[RoomId(roomId)]
             ?: throw CommandSenderException.SendException("No live bridge for $roomId")
     }
@@ -226,7 +226,7 @@ private fun sendFailure(throwable: Throwable, description: String): CommandSende
  */
 private fun bridgeFailure(throwable: Throwable, description: String): CommandSenderException {
     return when (throwable) {
-        is MatrixRtcBridgeException.NotSupported -> CommandSenderException.NotSupported("$description: ${throwable.message}")
+        is ElementCallMatrixException.NotSupported -> CommandSenderException.NotSupported("$description: ${throwable.message}")
         else -> sendFailure(throwable, description)
     }
 }
@@ -244,7 +244,7 @@ private fun bridgeFailure(throwable: Throwable, description: String): CommandSen
  * running, or that timed out, is a transient failure - the next attempt may well have a bridge.
  */
 private fun delayedEventFailure(throwable: Throwable, description: String): CommandSenderException {
-    if (throwable is MatrixRtcBridgeException.NotSupported) return bridgeFailure(throwable, description)
+    if (throwable is ElementCallMatrixException.NotSupported) return bridgeFailure(throwable, description)
     val (errcode, message) = throwable.matrixError() ?: return sendFailure(throwable, description)
     val neverSupported = when (errcode) {
         // 404 M_UNRECOGNIZED: the endpoint is not implemented at all.
@@ -263,7 +263,7 @@ private fun delayedEventFailure(throwable: Throwable, description: String): Comm
 
 /** The Matrix error code and message a homeserver answered with, from either transport. */
 private fun Throwable.matrixError(): Pair<String?, String?>? = when (this) {
-    is MatrixRtcBridgeException.MatrixApi -> errcode to message
+    is ElementCallMatrixException.MatrixApi -> errcode to message
     is ClientException.MatrixApi -> kind.toErrcode() to message
     else -> null
 }

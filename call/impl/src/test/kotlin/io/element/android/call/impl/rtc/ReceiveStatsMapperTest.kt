@@ -5,7 +5,7 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.impl
+package io.element.android.call.impl.rtc
 
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test

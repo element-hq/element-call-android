@@ -5,20 +5,20 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.features.callnative.impl.ui
+package io.element.android.call.ui
 
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
-import io.element.android.features.callnative.impl.NativeCallConnection
-import io.element.android.libraries.audio.api.CallAudioDevice
-import io.element.android.libraries.audio.api.CallAudioDeviceType
-import io.element.android.libraries.matrix.api.core.UserId
-import io.element.android.libraries.matrixrtc.api.MatrixRtcAudioLevel
-import io.element.android.libraries.matrixrtc.api.MatrixRtcFrameEncryptionState
-import io.element.android.libraries.matrixrtc.api.MatrixRtcParticipant
-import io.element.android.libraries.matrixrtc.api.MatrixRtcReceiveStats
-import io.element.android.libraries.matrixrtc.api.MatrixRtcStreamKind
-import io.element.android.libraries.matrixrtc.api.MatrixRtcStreamState
-import io.element.android.libraries.matrixrtc.api.MatrixRtcVideoFrame
+import io.element.android.call.impl.NativeCallConnection
+import io.element.android.call.api.audio.CallAudioDevice
+import io.element.android.call.api.audio.CallAudioDeviceType
+import io.element.android.call.api.rtc.id.UserId
+import io.element.android.call.api.rtc.MatrixRtcAudioLevel
+import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
+import io.element.android.call.api.rtc.MatrixRtcParticipant
+import io.element.android.call.api.rtc.MatrixRtcReceiveStats
+import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcStreamState
+import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableMap

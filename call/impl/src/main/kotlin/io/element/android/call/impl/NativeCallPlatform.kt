@@ -5,13 +5,13 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.features.callnative.impl
+package io.element.android.call.impl
 
 import android.content.Context
 import android.os.SystemClock
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesBinding
-import io.element.android.features.callnative.impl.services.NativeCallForegroundService
+import io.element.android.call.impl.services.NativeCallForegroundService
 import io.element.android.libraries.di.annotations.ApplicationContext
 
 /**

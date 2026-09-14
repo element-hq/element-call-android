@@ -5,7 +5,7 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.audio.api
+package io.element.android.call.api.audio
 
 enum class AudioFocusRequester {
     ElementCall,

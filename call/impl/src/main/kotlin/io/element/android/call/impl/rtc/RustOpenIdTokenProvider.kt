@@ -5,7 +5,7 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.impl
+package io.element.android.call.impl.rtc
 
 import io.element.android.libraries.matrix.api.MatrixClient
 import uniffi.matrix_rtc_ffi.FfiOpenIdToken

@@ -5,27 +5,27 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.features.callnative.impl.fake
+package io.element.android.call.test
 
 import io.element.android.libraries.matrix.api.MatrixClient
-import io.element.android.libraries.matrix.api.core.RoomId
-import io.element.android.libraries.matrixrtc.api.MatrixRtcAudioLevel
-import io.element.android.libraries.matrixrtc.api.MatrixRtcCall
-import io.element.android.libraries.matrixrtc.api.MatrixRtcCallEvent
-import io.element.android.libraries.matrixrtc.api.MatrixRtcElementCallCompat
-import io.element.android.libraries.matrixrtc.api.MatrixRtcLeaveReason
-import io.element.android.libraries.matrixrtc.api.MatrixRtcMembership
-import io.element.android.libraries.matrixrtc.api.MatrixRtcNotify
-import io.element.android.libraries.matrixrtc.api.MatrixRtcParticipant
-import io.element.android.libraries.matrixrtc.api.MatrixRtcReceiveStats
-import io.element.android.libraries.matrixrtc.api.MatrixRtcScreenCaptureToken
-import io.element.android.libraries.matrixrtc.api.MatrixRtcService
-import io.element.android.libraries.matrixrtc.api.MatrixRtcServiceProvider
-import io.element.android.libraries.matrixrtc.api.MatrixRtcSession
-import io.element.android.libraries.matrixrtc.api.MatrixRtcStreamKind
-import io.element.android.libraries.matrixrtc.api.MatrixRtcTransport
-import io.element.android.libraries.matrixrtc.api.MatrixRtcVideoConstraints
-import io.element.android.libraries.matrixrtc.api.MatrixRtcVideoFrame
+import io.element.android.call.api.rtc.id.RoomId
+import io.element.android.call.api.rtc.MatrixRtcAudioLevel
+import io.element.android.call.api.rtc.MatrixRtcCall
+import io.element.android.call.api.rtc.MatrixRtcCallEvent
+import io.element.android.call.api.rtc.MatrixRtcElementCallCompat
+import io.element.android.call.api.rtc.MatrixRtcLeaveReason
+import io.element.android.call.api.rtc.MatrixRtcMembership
+import io.element.android.call.api.rtc.MatrixRtcNotify
+import io.element.android.call.api.rtc.MatrixRtcParticipant
+import io.element.android.call.api.rtc.MatrixRtcReceiveStats
+import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
+import io.element.android.call.api.rtc.MatrixRtcService
+import io.element.android.call.api.rtc.MatrixRtcServiceProvider
+import io.element.android.call.api.rtc.MatrixRtcSession
+import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcTransport
+import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
+import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow

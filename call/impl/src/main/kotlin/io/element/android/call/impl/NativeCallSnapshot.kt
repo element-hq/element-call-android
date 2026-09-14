@@ -5,17 +5,17 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.features.callnative.impl
+package io.element.android.call.impl
 
 import io.element.android.features.call.api.CallData
-import io.element.android.libraries.audio.api.CallAudioDevice
-import io.element.android.libraries.matrix.api.core.UserId
+import io.element.android.call.api.audio.CallAudioDevice
+import io.element.android.call.api.rtc.id.UserId
 import io.element.android.libraries.matrix.api.room.RoomMember
-import io.element.android.libraries.matrixrtc.api.MatrixRtcAudioLevel
-import io.element.android.libraries.matrixrtc.api.MatrixRtcFrameEncryptionState
-import io.element.android.libraries.matrixrtc.api.MatrixRtcParticipant
-import io.element.android.libraries.matrixrtc.api.MatrixRtcReceiveStats
-import io.element.android.libraries.matrixrtc.api.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcAudioLevel
+import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
+import io.element.android.call.api.rtc.MatrixRtcParticipant
+import io.element.android.call.api.rtc.MatrixRtcReceiveStats
+import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.ImmutableMap
 import kotlinx.collections.immutable.ImmutableSet

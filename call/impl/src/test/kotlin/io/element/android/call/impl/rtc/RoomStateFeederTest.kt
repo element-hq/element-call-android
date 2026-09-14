@@ -5,21 +5,21 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.impl
+package io.element.android.call.impl.rtc
 
 import com.google.common.truth.Truth.assertThat
-import io.element.android.libraries.matrix.api.core.EventId
+import io.element.android.call.api.rtc.id.EventId
 import io.element.android.libraries.matrix.api.room.RoomMembersState
 import io.element.android.libraries.matrix.test.A_ROOM_ID
 import io.element.android.libraries.matrix.test.A_USER_ID
 import io.element.android.libraries.matrix.test.room.FakeBaseRoom
 import io.element.android.libraries.matrix.test.room.FakeJoinedRoom
 import io.element.android.libraries.matrix.test.room.aRoomMember
-import io.element.android.libraries.matrixrtc.api.MatrixRtcElementCallCompat
-import io.element.android.libraries.matrixrtc.api.MatrixRtcEventTypes
-import io.element.android.libraries.matrixrtc.impl.bridge.FakeMatrixRtcRoomBridge
-import io.element.android.libraries.matrixrtc.impl.bridge.MatrixRtcRoomStateEvent
-import io.element.android.libraries.matrixrtc.impl.bridge.MatrixRtcStickyEvent
+import io.element.android.call.api.rtc.MatrixRtcElementCallCompat
+import io.element.android.call.api.rtc.MatrixRtcEventTypes
+import io.element.android.call.api.matrix.FakeMatrixRtcRoomBridge
+import io.element.android.call.api.matrix.ElementCallRoomStateEvent
+import io.element.android.call.api.matrix.ElementCallStickyEvent
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.TestScope
@@ -152,7 +152,7 @@ class RoomStateFeederTest {
     @Test
     fun `an empty state snapshot is not fed, unlike an empty sticky one`() = runTest {
         val manager = RecordingSessionManager()
-        val stateEvents = MutableStateFlow(emptyList<MatrixRtcRoomStateEvent>())
+        val stateEvents = MutableStateFlow(emptyList<ElementCallRoomStateEvent>())
 
         startFeeder(manager, stateEvents = stateEvents, elementCallCompat = MatrixRtcElementCallCompat.STATE_EVENTS)
 
@@ -329,8 +329,8 @@ class RoomStateFeederTest {
      */
     private fun TestScope.startFeeder(
         manager: RtcSessionManagerHandleInterface,
-        stickyEvents: MutableStateFlow<List<MatrixRtcStickyEvent>> = MutableStateFlow(emptyList()),
-        stateEvents: MutableStateFlow<List<MatrixRtcRoomStateEvent>> = MutableStateFlow(emptyList()),
+        stickyEvents: MutableStateFlow<List<ElementCallStickyEvent>> = MutableStateFlow(emptyList()),
+        stateEvents: MutableStateFlow<List<ElementCallRoomStateEvent>> = MutableStateFlow(emptyList()),
         elementCallCompat: MatrixRtcElementCallCompat = MatrixRtcElementCallCompat.OFF,
         roomMembers: RoomMembersState = RoomMembersState.Ready(persistentListOf(aRoomMember(A_USER_ID))),
         slotId: String? = A_SLOT_ID,
@@ -365,7 +365,7 @@ class RoomStateFeederTest {
         stateKey: String = A_STATE_KEY,
         contentJson: String = """{"memberships":[{"membershipID":"$stateKey","expires":3600000}]}""",
         timestampMs: Long? = 1_700_000_000_000L,
-    ) = MatrixRtcRoomStateEvent(
+    ) = ElementCallRoomStateEvent(
         eventType = MatrixRtcEventTypes.MEMBER_ELEMENT_CALL_STATE_UNSTABLE,
         stateKey = stateKey,
         sender = A_USER_ID,
@@ -377,7 +377,7 @@ class RoomStateFeederTest {
     private fun aMemberStickyEvent(
         memberId: String = A_MEMBER_ID,
         contentJson: String = """{"slot_id":"m.call","member":{"id":"$memberId","membership":"join"}}""",
-    ) = MatrixRtcStickyEvent(
+    ) = ElementCallStickyEvent(
         sender = A_USER_ID,
         eventType = MatrixRtcEventTypes.MEMBER_UNSTABLE,
         stickyKey = memberId,

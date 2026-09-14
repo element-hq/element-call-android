@@ -5,24 +5,24 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.impl
+package io.element.android.call.impl.rtc
 
 import android.content.Context
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesBinding
 import dev.zacsweers.metro.SingleIn
-import io.element.android.libraries.core.coroutine.CoroutineDispatchers
+import io.element.android.call.api.ElementCallDispatchers
 import io.element.android.libraries.di.annotations.ApplicationContext
 import io.element.android.libraries.matrix.api.MatrixClient
 import io.element.android.libraries.matrix.api.core.SessionId
-import io.element.android.libraries.matrixrtc.api.MatrixRtcService
-import io.element.android.libraries.matrixrtc.api.MatrixRtcServiceProvider
+import io.element.android.call.api.rtc.MatrixRtcService
+import io.element.android.call.api.rtc.MatrixRtcServiceProvider
 import java.util.concurrent.ConcurrentHashMap
 
 @SingleIn(AppScope::class)
 @ContributesBinding(AppScope::class)
 class DefaultMatrixRtcServiceProvider(
-    private val dispatchers: CoroutineDispatchers,
+    private val dispatchers: ElementCallDispatchers,
     /** For the camera, at the far end of service -> session -> call. Nothing else here needs one. */
     @ApplicationContext private val context: Context,
 ) : MatrixRtcServiceProvider {

@@ -5,7 +5,7 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.impl.media
+package io.element.android.call.impl.rtc.media
 
 /**
  * What we ask the camera for.

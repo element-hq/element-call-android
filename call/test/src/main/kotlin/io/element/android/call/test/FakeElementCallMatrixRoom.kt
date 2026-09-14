@@ -5,11 +5,11 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.impl.bridge
+package io.element.android.call.api.matrix
 
-import io.element.android.libraries.matrix.api.core.DeviceId
-import io.element.android.libraries.matrix.api.core.RoomId
-import io.element.android.libraries.matrix.api.core.UserId
+import io.element.android.call.api.rtc.id.DeviceId
+import io.element.android.call.api.rtc.id.RoomId
+import io.element.android.call.api.rtc.id.UserId
 import io.element.android.libraries.matrix.test.A_ROOM_ID
 import io.element.android.tests.testutils.lambda.lambdaError
 import kotlinx.coroutines.flow.Flow
@@ -20,16 +20,16 @@ internal class FakeMatrixRtcRoomBridge(
     override val roomId: RoomId = A_ROOM_ID,
     private val startResult: () -> Result<Unit> = { Result.success(Unit) },
     private val sendDelayedEventResult: (String, String?, String, ULong) -> Result<String> = { _, _, _, _ -> lambdaError() },
-    private val updateDelayedEventResult: (String, MatrixRtcDelayedEventAction) -> Result<Unit> = { _, _ -> lambdaError() },
+    private val updateDelayedEventResult: (String, ElementCallDelayedEventAction) -> Result<Unit> = { _, _ -> lambdaError() },
     private val sendToDeviceMessageResult: (String, Map<UserId, Map<DeviceId, String>>) -> Result<Map<UserId, List<DeviceId>>> =
         { _, _ -> lambdaError() },
     private val sendStickyEventResult: (String, String, ULong) -> Result<String> = { _, _, _ -> lambdaError() },
-    private val stickyEvents: Flow<List<MatrixRtcStickyEvent>> = MutableStateFlow(emptyList()),
+    private val stickyEvents: Flow<List<ElementCallStickyEvent>> = MutableStateFlow(emptyList()),
     // Named for the lambda convention rather than after the flow, because `stateEvents(eventType)` in
     // the override below would resolve to the override itself.
-    private val stateEventsResult: (String) -> Flow<List<MatrixRtcRoomStateEvent>> = { MutableStateFlow(emptyList()) },
-    private val toDeviceMessages: Flow<MatrixRtcToDeviceMessage> = emptyFlow(),
-) : MatrixRtcRoomBridge {
+    private val stateEventsResult: (String) -> Flow<List<ElementCallRoomStateEvent>> = { MutableStateFlow(emptyList()) },
+    private val toDeviceMessages: Flow<ElementCallToDeviceMessage> = emptyFlow(),
+) : ElementCallMatrixRoom {
     var startCalledCount = 0
         private set
     var stopCalledCount = 0
@@ -48,7 +48,7 @@ internal class FakeMatrixRtcRoomBridge(
         return sendDelayedEventResult(eventType, stateKey, contentJson, delayMs)
     }
 
-    override suspend fun updateDelayedEvent(delayId: String, action: MatrixRtcDelayedEventAction): Result<Unit> {
+    override suspend fun updateDelayedEvent(delayId: String, action: ElementCallDelayedEventAction): Result<Unit> {
         return updateDelayedEventResult(delayId, action)
     }
 
@@ -60,9 +60,9 @@ internal class FakeMatrixRtcRoomBridge(
         return sendStickyEventResult(eventType, contentJson, durationMs)
     }
 
-    override fun stickyEvents(): Flow<List<MatrixRtcStickyEvent>> = stickyEvents
+    override fun stickyEvents(): Flow<List<ElementCallStickyEvent>> = stickyEvents
 
-    override fun stateEvents(eventType: String): Flow<List<MatrixRtcRoomStateEvent>> = stateEventsResult(eventType)
+    override fun stateEvents(eventType: String): Flow<List<ElementCallRoomStateEvent>> = stateEventsResult(eventType)
 
-    override fun toDeviceMessages(): Flow<MatrixRtcToDeviceMessage> = toDeviceMessages
+    override fun toDeviceMessages(): Flow<ElementCallToDeviceMessage> = toDeviceMessages
 }

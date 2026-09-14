@@ -5,9 +5,10 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.features.callnative.impl.ui
+package io.element.android.call.ui
 
 import androidx.compose.animation.core.animateDpAsState
+import io.element.android.call.ui.video.CallVideoRenderer
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -37,9 +38,9 @@ import io.element.android.libraries.designsystem.components.avatar.AvatarType
 import io.element.android.libraries.designsystem.theme.components.Icon
 import io.element.android.libraries.designsystem.theme.components.Text
 import io.element.android.libraries.matrix.ui.model.getAvatarData
-import io.element.android.libraries.matrixrtc.api.MatrixRtcFrameEncryptionState
-import io.element.android.libraries.matrixrtc.api.MatrixRtcReceiveStats
-import io.element.android.libraries.matrixrtc.api.MatrixRtcVideoFrame
+import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
+import io.element.android.call.api.rtc.MatrixRtcReceiveStats
+import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.libraries.ui.strings.CommonStrings
 import kotlinx.coroutines.flow.Flow
 

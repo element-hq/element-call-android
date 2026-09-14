@@ -5,28 +5,28 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.impl
+package io.element.android.call.impl.rtc
 
 import android.content.Context
-import io.element.android.libraries.core.coroutine.CoroutineDispatchers
-import io.element.android.libraries.core.extensions.runCatchingExceptions
-import io.element.android.libraries.matrixrtc.api.MatrixRtcAudioLevel
-import io.element.android.libraries.matrixrtc.api.MatrixRtcCall
-import io.element.android.libraries.matrixrtc.api.MatrixRtcCallEvent
-import io.element.android.libraries.matrixrtc.api.MatrixRtcFrameEncryptionDiagnostic
-import io.element.android.libraries.matrixrtc.api.MatrixRtcFrameEncryptionState
-import io.element.android.libraries.matrixrtc.api.MatrixRtcParticipant
-import io.element.android.libraries.matrixrtc.api.MatrixRtcReceiveStats
-import io.element.android.libraries.matrixrtc.api.MatrixRtcScreenCaptureToken
-import io.element.android.libraries.matrixrtc.api.MatrixRtcStreamKind
-import io.element.android.libraries.matrixrtc.api.MatrixRtcVideoConstraints
-import io.element.android.libraries.matrixrtc.api.MatrixRtcVideoFrame
-import io.element.android.libraries.matrixrtc.impl.media.AudioCapture
-import io.element.android.libraries.matrixrtc.impl.media.AudioFormat
-import io.element.android.libraries.matrixrtc.impl.media.AudioPlayback
-import io.element.android.libraries.matrixrtc.impl.media.CameraVideoCapture
-import io.element.android.libraries.matrixrtc.impl.media.ScreenVideoCapture
-import io.element.android.libraries.matrixrtc.impl.media.VideoFormat
+import io.element.android.call.api.ElementCallDispatchers
+import io.element.android.call.impl.util.runCatchingExceptions
+import io.element.android.call.api.rtc.MatrixRtcAudioLevel
+import io.element.android.call.api.rtc.MatrixRtcCall
+import io.element.android.call.api.rtc.MatrixRtcCallEvent
+import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionDiagnostic
+import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
+import io.element.android.call.api.rtc.MatrixRtcParticipant
+import io.element.android.call.api.rtc.MatrixRtcReceiveStats
+import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
+import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
+import io.element.android.call.api.rtc.MatrixRtcVideoFrame
+import io.element.android.call.impl.rtc.media.AudioCapture
+import io.element.android.call.impl.rtc.media.AudioFormat
+import io.element.android.call.impl.rtc.media.AudioPlayback
+import io.element.android.call.impl.rtc.media.CameraVideoCapture
+import io.element.android.call.impl.rtc.media.ScreenVideoCapture
+import io.element.android.call.impl.rtc.media.VideoFormat
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
@@ -67,7 +67,7 @@ internal class RustMatrixRtcCall(
      * For the remote video flows, which are collected by the UI: without moving them off the
      * collector's thread every decoded frame would be copied on the main one, thirty times a second.
      */
-    private val dispatchers: CoroutineDispatchers,
+    private val dispatchers: ElementCallDispatchers,
 ) : MatrixRtcCall {
     private val _events = MutableSharedFlow<MatrixRtcCallEvent>(extraBufferCapacity = 32)
     override val events: SharedFlow<MatrixRtcCallEvent> = _events

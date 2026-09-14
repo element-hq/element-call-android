@@ -5,10 +5,10 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.api
+package io.element.android.call.api.rtc
 
-import io.element.android.libraries.matrix.api.core.RoomId
-import io.element.android.libraries.matrix.api.core.UserId
+import io.element.android.call.api.rtc.id.RoomId
+import io.element.android.call.api.rtc.id.UserId
 import kotlinx.coroutines.flow.StateFlow
 
 /**

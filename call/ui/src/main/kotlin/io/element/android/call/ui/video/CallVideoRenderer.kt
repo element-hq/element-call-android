@@ -5,7 +5,7 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.features.callnative.impl.ui
+package io.element.android.call.ui.video
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
@@ -20,7 +20,7 @@ import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.viewinterop.AndroidView
 import io.element.android.compound.theme.ElementTheme
 import io.element.android.libraries.designsystem.theme.components.Text
-import io.element.android.libraries.matrixrtc.api.MatrixRtcVideoFrame
+import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import kotlinx.coroutines.flow.Flow
 import livekit.org.webrtc.JavaI420Buffer
 import livekit.org.webrtc.VideoFrame

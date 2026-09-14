@@ -5,9 +5,9 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.api
+package io.element.android.call.api.rtc
 
-import io.element.android.libraries.matrix.api.core.UserId
+import io.element.android.call.api.rtc.id.UserId
 
 /**
  * Something that happened on the media transport of a connected call.

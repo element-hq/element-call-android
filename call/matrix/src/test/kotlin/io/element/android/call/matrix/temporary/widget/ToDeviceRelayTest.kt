@@ -5,12 +5,12 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.impl.bridge.widget
+package io.element.android.call.matrix.temporary.widget
 
 import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
-import io.element.android.libraries.matrix.api.core.UserId
-import io.element.android.libraries.matrixrtc.impl.bridge.MatrixRtcToDeviceMessage
+import io.element.android.call.api.rtc.id.UserId
+import io.element.android.call.api.matrix.ElementCallToDeviceMessage
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 
@@ -43,7 +43,7 @@ class ToDeviceRelayTest {
         }
     }
 
-    private fun aMessage(eventType: String) = MatrixRtcToDeviceMessage(
+    private fun aMessage(eventType: String) = ElementCallToDeviceMessage(
         eventType = eventType,
         senderId = UserId("@bob:example.org"),
         content = "{}",

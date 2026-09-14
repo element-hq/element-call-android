@@ -5,14 +5,14 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.impl
+package io.element.android.call.impl.rtc
 
 import com.google.common.truth.Truth.assertThat
-import io.element.android.libraries.matrix.api.core.DeviceId
-import io.element.android.libraries.matrix.api.core.UserId
-import io.element.android.libraries.matrixrtc.api.MatrixRtcEventTypes
-import io.element.android.libraries.matrixrtc.impl.bridge.MatrixRtcEventEncryptionInfo
-import io.element.android.libraries.matrixrtc.impl.bridge.MatrixRtcToDeviceMessage
+import io.element.android.call.api.rtc.id.DeviceId
+import io.element.android.call.api.rtc.id.UserId
+import io.element.android.call.api.rtc.MatrixRtcEventTypes
+import io.element.android.call.api.matrix.ElementCallEventEncryptionInfo
+import io.element.android.call.api.matrix.ElementCallToDeviceMessage
 import org.junit.Test
 
 private val A_SENDER = UserId("@alice:example.org")
@@ -132,7 +132,7 @@ private val A_KEY_CONTENT = """
     }
 """.trimIndent()
 
-private fun anEncryptionInfo() = MatrixRtcEventEncryptionInfo(
+private fun anEncryptionInfo() = ElementCallEventEncryptionInfo(
     senderId = A_SENDER,
     senderDeviceId = DeviceId("ADEVICE"),
     senderCurve25519Key = "aCurveKey",
@@ -141,9 +141,9 @@ private fun anEncryptionInfo() = MatrixRtcEventEncryptionInfo(
 
 private fun aKeyMessage(
     claimedSender: UserId = A_SENDER,
-    encryptionInfo: MatrixRtcEventEncryptionInfo? = anEncryptionInfo(),
+    encryptionInfo: ElementCallEventEncryptionInfo? = anEncryptionInfo(),
     content: String = A_KEY_CONTENT,
-) = MatrixRtcToDeviceMessage(
+) = ElementCallToDeviceMessage(
     eventType = MatrixRtcEventTypes.ENCRYPTION_KEY,
     senderId = claimedSender,
     content = content,

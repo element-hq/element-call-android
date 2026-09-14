@@ -5,12 +5,12 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.features.callnative.impl.ui
+package io.element.android.call.ui
 
-import io.element.android.libraries.matrix.api.core.UserId
+import io.element.android.call.api.rtc.id.UserId
 import io.element.android.libraries.matrix.api.room.RoomMember
-import io.element.android.libraries.matrixrtc.api.MatrixRtcParticipant
-import io.element.android.libraries.matrixrtc.api.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcParticipant
+import io.element.android.call.api.rtc.MatrixRtcStreamKind
 
 /**
  * One member of the call, as a tile needs to draw them.

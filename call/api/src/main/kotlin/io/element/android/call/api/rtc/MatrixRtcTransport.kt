@@ -5,7 +5,7 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.api
+package io.element.android.call.api.rtc
 
 /**
  * A transport a MatrixRTC session can be carried over (MSC4195).

@@ -5,9 +5,9 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.features.callnative.impl
+package io.element.android.call.impl
 
-import io.element.android.libraries.matrixrtc.api.MatrixRtcVideoFrame
+import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow

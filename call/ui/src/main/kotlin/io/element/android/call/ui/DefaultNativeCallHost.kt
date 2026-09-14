@@ -5,7 +5,7 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.features.callnative.impl.ui
+package io.element.android.call.ui
 
 import android.Manifest
 import android.app.Activity
@@ -48,14 +48,14 @@ import dev.zacsweers.metro.ContributesBinding
 import io.element.android.compound.colors.SemanticColorsLightDark
 import io.element.android.compound.theme.ForcedDarkElementTheme
 import io.element.android.features.callnative.api.NativeCallHost
-import io.element.android.features.callnative.impl.NativeCallConnection
-import io.element.android.features.callnative.impl.NativeCallController
-import io.element.android.features.callnative.impl.NativeCallSnapshot
+import io.element.android.call.impl.NativeCallConnection
+import io.element.android.call.impl.NativeCallController
+import io.element.android.call.impl.NativeCallSnapshot
 import io.element.android.libraries.designsystem.utils.KeepScreenOn
 import io.element.android.libraries.designsystem.utils.scaffoldScrollableContentInsets
-import io.element.android.libraries.matrixrtc.api.MatrixRtcScreenCaptureToken
-import io.element.android.libraries.matrixrtc.api.MatrixRtcStreamKind
-import io.element.android.libraries.matrixrtc.api.MatrixRtcVideoFrame
+import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
+import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.libraries.preferences.api.store.AppPreferencesStore
 import kotlinx.coroutines.flow.Flow
 import timber.log.Timber

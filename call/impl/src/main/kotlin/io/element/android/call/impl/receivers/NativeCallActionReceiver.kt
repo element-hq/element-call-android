@@ -5,14 +5,14 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.features.callnative.impl.receivers
+package io.element.android.call.impl.receivers
 
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import dev.zacsweers.metro.Inject
-import io.element.android.features.callnative.impl.NativeCallController
-import io.element.android.features.callnative.impl.di.NativeCallBindings
+import io.element.android.call.impl.NativeCallController
+import io.element.android.call.impl.di.NativeCallBindings
 import io.element.android.libraries.architecture.bindings
 import timber.log.Timber
 

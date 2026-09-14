@@ -5,7 +5,7 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.api
+package io.element.android.call.api.rtc
 
 /**
  * What a receiver needs of one video stream: whether it is on screen, and how big it is drawn.

@@ -5,11 +5,11 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.mediaplayer.test
+package io.element.android.call.test.audio
 
-import io.element.android.libraries.audio.api.CallAudioDevice
-import io.element.android.libraries.audio.api.CallAudioDeviceController
-import io.element.android.libraries.audio.api.CallAudioDeviceType
+import io.element.android.call.api.audio.CallAudioDevice
+import io.element.android.call.api.audio.CallAudioDeviceController
+import io.element.android.call.api.audio.CallAudioDeviceType
 import kotlinx.coroutines.flow.MutableStateFlow
 
 class FakeCallAudioDeviceController(

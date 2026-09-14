@@ -5,7 +5,7 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.features.callnative.impl.ui
+package io.element.android.call.ui
 
 import android.content.Intent
 import app.cash.molecule.RecompositionMode
@@ -13,15 +13,15 @@ import app.cash.molecule.moleculeFlow
 import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import io.element.android.features.call.api.CallData
-import io.element.android.features.callnative.impl.NativeCallConnection
-import io.element.android.features.callnative.impl.NativeCallController
-import io.element.android.features.callnative.impl.fake.FakeCurrentCallTracker
-import io.element.android.features.callnative.impl.fake.FakeMatrixRtcService
-import io.element.android.features.callnative.impl.fake.FakeMatrixRtcServiceProvider
-import io.element.android.features.callnative.impl.fake.FakeNativeCallPlatform
-import io.element.android.features.callnative.impl.fake.FakeRingingCallTracker
-import io.element.android.libraries.matrix.api.core.RoomId
-import io.element.android.libraries.matrix.api.core.UserId
+import io.element.android.call.impl.NativeCallConnection
+import io.element.android.call.impl.NativeCallController
+import io.element.android.call.test.FakeCurrentCallTracker
+import io.element.android.call.test.FakeMatrixRtcService
+import io.element.android.call.test.FakeMatrixRtcServiceProvider
+import io.element.android.call.test.FakeNativeCallPlatform
+import io.element.android.call.test.FakeRingingCallTracker
+import io.element.android.call.api.rtc.id.RoomId
+import io.element.android.call.api.rtc.id.UserId
 import io.element.android.libraries.matrix.api.notification.CallIntent
 import io.element.android.libraries.matrix.api.notification.RtcNotificationType
 import io.element.android.libraries.matrix.test.A_SESSION_ID
@@ -30,23 +30,23 @@ import io.element.android.libraries.matrix.test.FakeMatrixClientProvider
 import io.element.android.libraries.matrix.test.room.FakeBaseRoom
 import io.element.android.libraries.matrix.test.room.FakeJoinedRoom
 import io.element.android.libraries.matrix.test.room.aRoomInfo
-import io.element.android.libraries.matrixrtc.api.MatrixRtcAudioLevel
-import io.element.android.libraries.matrixrtc.api.MatrixRtcCallEvent
-import io.element.android.libraries.matrixrtc.api.MatrixRtcElementCallCompat
-import io.element.android.libraries.matrixrtc.api.MatrixRtcFrameEncryptionDiagnostic
-import io.element.android.libraries.matrixrtc.api.MatrixRtcFrameEncryptionState
-import io.element.android.libraries.matrixrtc.api.MatrixRtcMembership
-import io.element.android.libraries.matrixrtc.api.MatrixRtcParticipant
-import io.element.android.libraries.matrixrtc.api.MatrixRtcScreenCaptureToken
-import io.element.android.libraries.matrixrtc.api.MatrixRtcSpeakingMember
-import io.element.android.libraries.matrixrtc.api.MatrixRtcStreamKind
-import io.element.android.libraries.matrixrtc.api.MatrixRtcStreamState
-import io.element.android.libraries.matrixrtc.api.MatrixRtcTransport
-import io.element.android.libraries.mediaplayer.test.FakeAudioFocus
-import io.element.android.libraries.mediaplayer.test.FakeCallAudioDeviceController
-import io.element.android.libraries.mediaplayer.test.aBluetoothHeadset
-import io.element.android.libraries.mediaplayer.test.aSpeaker
-import io.element.android.libraries.mediaplayer.test.anEarpiece
+import io.element.android.call.api.rtc.MatrixRtcAudioLevel
+import io.element.android.call.api.rtc.MatrixRtcCallEvent
+import io.element.android.call.api.rtc.MatrixRtcElementCallCompat
+import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionDiagnostic
+import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
+import io.element.android.call.api.rtc.MatrixRtcMembership
+import io.element.android.call.api.rtc.MatrixRtcParticipant
+import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
+import io.element.android.call.api.rtc.MatrixRtcSpeakingMember
+import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcStreamState
+import io.element.android.call.api.rtc.MatrixRtcTransport
+import io.element.android.call.test.audio.FakeAudioFocus
+import io.element.android.call.test.audio.FakeCallAudioDeviceController
+import io.element.android.call.test.audio.aBluetoothHeadset
+import io.element.android.call.test.audio.aSpeaker
+import io.element.android.call.test.audio.anEarpiece
 import io.element.android.libraries.preferences.test.InMemoryAppPreferencesStore
 import io.element.android.services.appnavstate.test.FakeAppForegroundStateService
 import io.element.android.tests.testutils.WarmUpRule

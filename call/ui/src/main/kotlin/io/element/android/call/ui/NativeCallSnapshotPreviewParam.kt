@@ -5,13 +5,13 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.features.callnative.impl.ui
+package io.element.android.call.ui
 
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import io.element.android.features.call.api.CallData
-import io.element.android.features.callnative.impl.NativeCallConnection
-import io.element.android.features.callnative.impl.NativeCallSnapshot
-import io.element.android.libraries.matrix.api.core.RoomId
+import io.element.android.call.impl.NativeCallConnection
+import io.element.android.call.impl.NativeCallSnapshot
+import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.libraries.matrix.api.core.SessionId
 
 open class NativeCallSnapshotPreviewParam : PreviewParameterProvider<NativeCallSnapshot> {

@@ -5,13 +5,13 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrix.api.auth
+package io.element.android.call.api.matrix
 
 /**
  * An OpenID token used to prove our Matrix identity to a third party service, such as a MatrixRTC
  * transport authorising us against a SFU.
  */
-data class MatrixOpenIdToken(
+data class ElementCallOpenIdToken(
     val accessToken: String,
     val tokenType: String,
     val matrixServerName: String,

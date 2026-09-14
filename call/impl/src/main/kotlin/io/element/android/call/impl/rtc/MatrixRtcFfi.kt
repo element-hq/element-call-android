@@ -5,11 +5,11 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.impl
+package io.element.android.call.impl.rtc
 
-import io.element.android.libraries.core.extensions.runCatchingExceptions
+import io.element.android.call.impl.util.runCatchingExceptions
 import io.element.android.libraries.matrix.api.tracing.LogLevel
-import io.element.android.libraries.matrixrtc.api.MatrixRtcLoggingConfiguration
+import io.element.android.call.api.rtc.MatrixRtcLoggingConfiguration
 import org.matrix.rtc.MatrixRtc
 import org.matrix.rtc.RtcLogging
 import timber.log.Timber

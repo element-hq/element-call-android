@@ -5,7 +5,7 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.features.callnative.impl
+package io.element.android.call.impl
 
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
@@ -14,28 +14,28 @@ import io.element.android.features.call.api.CallData
 import io.element.android.features.call.api.CurrentCall
 import io.element.android.features.call.api.CurrentCallTracker
 import io.element.android.features.call.api.RingingCallTracker
-import io.element.android.libraries.audio.api.AudioFocus
-import io.element.android.libraries.audio.api.AudioFocusRequester
-import io.element.android.libraries.audio.api.CallAudioDevice
-import io.element.android.libraries.audio.api.CallAudioDeviceController
+import io.element.android.call.api.audio.AudioFocus
+import io.element.android.call.api.audio.AudioFocusRequester
+import io.element.android.call.api.audio.CallAudioDevice
+import io.element.android.call.api.audio.CallAudioDeviceController
 import io.element.android.libraries.di.annotations.AppCoroutineScope
 import io.element.android.libraries.matrix.api.MatrixClient
 import io.element.android.libraries.matrix.api.MatrixClientProvider
 import io.element.android.libraries.matrix.api.notification.CallIntent
 import io.element.android.libraries.matrix.api.notification.RtcNotificationType
 import io.element.android.libraries.matrix.api.room.roomMembers
-import io.element.android.libraries.matrixrtc.api.MatrixRtcCall
-import io.element.android.libraries.matrixrtc.api.MatrixRtcCallEvent
-import io.element.android.libraries.matrixrtc.api.MatrixRtcElementCallCompat
-import io.element.android.libraries.matrixrtc.api.MatrixRtcLeaveReason
-import io.element.android.libraries.matrixrtc.api.MatrixRtcNotify
-import io.element.android.libraries.matrixrtc.api.MatrixRtcScreenCaptureToken
-import io.element.android.libraries.matrixrtc.api.MatrixRtcServiceProvider
-import io.element.android.libraries.matrixrtc.api.MatrixRtcSession
-import io.element.android.libraries.matrixrtc.api.MatrixRtcStreamKind
-import io.element.android.libraries.matrixrtc.api.MatrixRtcTransport
-import io.element.android.libraries.matrixrtc.api.MatrixRtcVideoConstraints
-import io.element.android.libraries.matrixrtc.api.MatrixRtcVideoFrame
+import io.element.android.call.api.rtc.MatrixRtcCall
+import io.element.android.call.api.rtc.MatrixRtcCallEvent
+import io.element.android.call.api.rtc.MatrixRtcElementCallCompat
+import io.element.android.call.api.rtc.MatrixRtcLeaveReason
+import io.element.android.call.api.rtc.MatrixRtcNotify
+import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
+import io.element.android.call.api.rtc.MatrixRtcServiceProvider
+import io.element.android.call.api.rtc.MatrixRtcSession
+import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcTransport
+import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
+import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.libraries.preferences.api.store.AppPreferencesStore
 import io.element.android.services.appnavstate.api.AppForegroundStateService
 import kotlinx.collections.immutable.toImmutableList

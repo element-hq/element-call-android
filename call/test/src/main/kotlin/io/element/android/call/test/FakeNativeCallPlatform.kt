@@ -5,9 +5,9 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.features.callnative.impl.fake
+package io.element.android.call.test
 
-import io.element.android.features.callnative.impl.NativeCallPlatform
+import io.element.android.call.impl.NativeCallPlatform
 
 class FakeNativeCallPlatform(
     private var elapsedRealtimeMs: Long = 0L,

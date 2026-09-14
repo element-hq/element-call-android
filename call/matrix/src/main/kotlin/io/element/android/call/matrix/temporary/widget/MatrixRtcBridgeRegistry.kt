@@ -7,10 +7,10 @@
 
 // Temporary: widget-driver stopgap, see `libraries/rustrtc/FEEDBACK.md`, "Widget-driver stopgap".
 
-package io.element.android.libraries.matrixrtc.impl.bridge.widget
+package io.element.android.call.matrix.temporary.widget
 
-import io.element.android.libraries.matrix.api.core.RoomId
-import io.element.android.libraries.matrixrtc.impl.bridge.MatrixRtcRoomBridge
+import io.element.android.call.api.rtc.id.RoomId
+import io.element.android.call.api.matrix.ElementCallMatrixRoom
 import timber.log.Timber
 import java.util.concurrent.ConcurrentHashMap
 
@@ -21,24 +21,24 @@ import java.util.concurrent.ConcurrentHashMap
  * the room's bridge up here. An SDK-backed bridge would be session-wide and need no registry.
  */
 internal class MatrixRtcBridgeRegistry {
-    private val bridges = ConcurrentHashMap<RoomId, MatrixRtcRoomBridge>()
+    private val bridges = ConcurrentHashMap<RoomId, ElementCallMatrixRoom>()
 
-    fun register(bridge: MatrixRtcRoomBridge) {
+    fun register(bridge: ElementCallMatrixRoom) {
         bridges.put(bridge.roomId, bridge)?.let {
             Timber.w("MatrixRTC: replacing the live bridge for ${bridge.roomId}")
         }
     }
 
-    fun unregister(roomId: RoomId): MatrixRtcRoomBridge? = bridges.remove(roomId)
+    fun unregister(roomId: RoomId): ElementCallMatrixRoom? = bridges.remove(roomId)
 
-    operator fun get(roomId: RoomId): MatrixRtcRoomBridge? = bridges[roomId]
+    operator fun get(roomId: RoomId): ElementCallMatrixRoom? = bridges[roomId]
 
     /**
      * Any live bridge, for the operations the core does not scope to a room: a to-device message can
      * go through whichever driver is running. Warns when there is a choice, since a message sent through
      * a room's driver is encrypted according to that room.
      */
-    fun any(): MatrixRtcRoomBridge? {
+    fun any(): ElementCallMatrixRoom? {
         val live = bridges.values.toList()
         if (live.size > 1) {
             Timber.w("MatrixRTC: ${live.size} bridges live, using the one for ${live.first().roomId}")

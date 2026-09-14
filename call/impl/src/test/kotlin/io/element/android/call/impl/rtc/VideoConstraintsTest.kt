@@ -5,10 +5,10 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.impl
+package io.element.android.call.impl.rtc
 
 import com.google.common.truth.Truth.assertThat
-import io.element.android.libraries.matrixrtc.api.MatrixRtcVideoConstraints
+import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import org.junit.Test
 
 /**

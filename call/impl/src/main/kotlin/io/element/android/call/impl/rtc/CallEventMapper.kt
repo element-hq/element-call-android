@@ -5,20 +5,20 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.impl
+package io.element.android.call.impl.rtc
 
-import io.element.android.libraries.matrix.api.core.UserId
-import io.element.android.libraries.matrixrtc.api.MatrixRtcCallEvent
-import io.element.android.libraries.matrixrtc.api.MatrixRtcEndReason
-import io.element.android.libraries.matrixrtc.api.MatrixRtcFrameEncryptionDiagnostic
-import io.element.android.libraries.matrixrtc.api.MatrixRtcFrameEncryptionState
-import io.element.android.libraries.matrixrtc.api.MatrixRtcKeyRejection
-import io.element.android.libraries.matrixrtc.api.MatrixRtcMembership
-import io.element.android.libraries.matrixrtc.api.MatrixRtcParticipant
-import io.element.android.libraries.matrixrtc.api.MatrixRtcReceiveStats
-import io.element.android.libraries.matrixrtc.api.MatrixRtcSpeakingMember
-import io.element.android.libraries.matrixrtc.api.MatrixRtcStreamKind
-import io.element.android.libraries.matrixrtc.api.MatrixRtcStreamState
+import io.element.android.call.api.rtc.id.UserId
+import io.element.android.call.api.rtc.MatrixRtcCallEvent
+import io.element.android.call.api.rtc.MatrixRtcEndReason
+import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionDiagnostic
+import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
+import io.element.android.call.api.rtc.MatrixRtcKeyRejection
+import io.element.android.call.api.rtc.MatrixRtcMembership
+import io.element.android.call.api.rtc.MatrixRtcParticipant
+import io.element.android.call.api.rtc.MatrixRtcReceiveStats
+import io.element.android.call.api.rtc.MatrixRtcSpeakingMember
+import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcStreamState
 import uniffi.matrix_rtc_ffi.FfiCallEvent
 import uniffi.matrix_rtc_ffi.FfiEndedReason
 import uniffi.matrix_rtc_ffi.FfiFrameEncryptionDiagnostic

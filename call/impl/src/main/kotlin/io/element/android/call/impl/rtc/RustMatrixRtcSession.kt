@@ -5,19 +5,19 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.impl
+package io.element.android.call.impl.rtc
 
 import android.content.Context
-import io.element.android.libraries.core.coroutine.CoroutineDispatchers
-import io.element.android.libraries.core.coroutine.childScope
-import io.element.android.libraries.core.extensions.runCatchingExceptions
+import io.element.android.call.api.ElementCallDispatchers
+import io.element.android.call.impl.util.childScope
+import io.element.android.call.impl.util.runCatchingExceptions
 import io.element.android.libraries.matrix.api.MatrixClient
-import io.element.android.libraries.matrix.api.core.RoomId
-import io.element.android.libraries.matrixrtc.api.MatrixRtcCall
-import io.element.android.libraries.matrixrtc.api.MatrixRtcLeaveReason
-import io.element.android.libraries.matrixrtc.api.MatrixRtcMembership
-import io.element.android.libraries.matrixrtc.api.MatrixRtcSession
-import io.element.android.libraries.matrixrtc.api.MatrixRtcTransport
+import io.element.android.call.api.rtc.id.RoomId
+import io.element.android.call.api.rtc.MatrixRtcCall
+import io.element.android.call.api.rtc.MatrixRtcLeaveReason
+import io.element.android.call.api.rtc.MatrixRtcMembership
+import io.element.android.call.api.rtc.MatrixRtcSession
+import io.element.android.call.api.rtc.MatrixRtcTransport
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
@@ -42,7 +42,7 @@ internal class RustMatrixRtcSession(
     private val manager: RtcSessionManagerHandle,
     private val client: MatrixClient,
     private val sessionScope: CoroutineScope,
-    private val dispatchers: CoroutineDispatchers,
+    private val dispatchers: ElementCallDispatchers,
     private val ffiDispatcher: CoroutineDispatcher,
     /** Passed straight to the call, which needs one to open the camera. */
     private val context: Context,

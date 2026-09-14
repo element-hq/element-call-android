@@ -5,7 +5,7 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.impl.media
+package io.element.android.call.impl.rtc.media
 
 import android.content.Context
 import android.content.Intent
@@ -13,7 +13,7 @@ import android.media.projection.MediaProjection
 import android.os.Build
 import android.util.DisplayMetrics
 import android.view.WindowManager
-import io.element.android.libraries.core.extensions.runCatchingExceptions
+import io.element.android.call.impl.util.runCatchingExceptions
 import livekit.org.webrtc.CapturerObserver
 import livekit.org.webrtc.EglBase
 import livekit.org.webrtc.ScreenCapturerAndroid

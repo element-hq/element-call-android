@@ -5,10 +5,10 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.impl
+package io.element.android.call.impl.rtc
 
-import io.element.android.libraries.matrix.api.core.RoomId
-import io.element.android.libraries.matrixrtc.impl.bridge.MatrixRtcStickyEvent
+import io.element.android.call.api.rtc.id.RoomId
+import io.element.android.call.api.matrix.ElementCallStickyEvent
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -19,7 +19,7 @@ import uniffi.matrix_rtc_ffi.RawMemberEvent as FfiRawMemberEvent
 import uniffi.matrix_rtc_ffi.StickyEvent as FfiStickyEvent
 
 /**
- * Turns the SDK's [MatrixRtcStickyEvent] into the flat record the RTC core expects.
+ * Turns the SDK's [ElementCallStickyEvent] into the flat record the RTC core expects.
  *
  * The SDK hands us the whole `m.rtc.member` event as JSON plus its decryption metadata; the FFI
  * wants the MSC4143 content fields pulled apart. Everything except `slot_id` is optional per the
@@ -38,7 +38,7 @@ internal object StickyEventMapper {
      * @return the mapped event, or null if it is unusable: unparseable JSON, no `slot_id`, or no
      * sticky key.
      */
-    fun map(roomId: RoomId, event: MatrixRtcStickyEvent): FfiStickyEvent? {
+    fun map(roomId: RoomId, event: ElementCallStickyEvent): FfiStickyEvent? {
         val content = parseContent(event) ?: return null
 
         val slotId = content.string("slot_id")
@@ -107,7 +107,7 @@ internal object StickyEventMapper {
      *
      * @return the mapped event, or null if the content cannot be read at all.
      */
-    fun mapRaw(event: MatrixRtcStickyEvent): FfiRawMemberEvent? {
+    fun mapRaw(event: ElementCallStickyEvent): FfiRawMemberEvent? {
         val content = parseContent(event) ?: return null
 
         // Same narrow workaround as [map], for the same Rust SDK bug: the dead man's switch leave is
@@ -146,9 +146,9 @@ internal object StickyEventMapper {
      * slot. That reads exactly like a membership we never received, which is why the value is worth
      * a log line even though nothing reads it.
      */
-    fun slotIdOf(event: MatrixRtcStickyEvent): String? = parseContent(event)?.string("slot_id")
+    fun slotIdOf(event: ElementCallStickyEvent): String? = parseContent(event)?.string("slot_id")
 
-    private fun parseContent(event: MatrixRtcStickyEvent): JsonObject? {
+    private fun parseContent(event: ElementCallStickyEvent): JsonObject? {
         return try {
             json.parseToJsonElement(event.eventJson).let { it as? JsonObject }?.obj("content")
         } catch (throwable: Throwable) {

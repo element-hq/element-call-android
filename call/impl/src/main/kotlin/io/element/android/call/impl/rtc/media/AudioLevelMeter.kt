@@ -5,9 +5,9 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.impl.media
+package io.element.android.call.impl.rtc.media
 
-import io.element.android.libraries.matrixrtc.api.MatrixRtcAudioLevel
+import io.element.android.call.api.rtc.MatrixRtcAudioLevel
 import timber.log.Timber
 import kotlin.math.log10
 import kotlin.math.sqrt

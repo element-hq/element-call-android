@@ -7,11 +7,11 @@
 
 // Temporary: widget-driver stopgap, see `libraries/rustrtc/FEEDBACK.md`, "Widget-driver stopgap".
 
-package io.element.android.libraries.matrixrtc.impl.bridge.widget
+package io.element.android.call.matrix.temporary.widget
 
 import io.element.android.libraries.matrix.api.widget.MatrixWidgetCapabilities
 import io.element.android.libraries.matrix.api.widget.MatrixWidgetEventFilter
-import io.element.android.libraries.matrixrtc.api.MatrixRtcEventTypes
+import io.element.android.call.api.rtc.MatrixRtcEventTypes
 
 /**
  * The capabilities the bridge grants itself: only what the RTC core needs.

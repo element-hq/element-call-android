@@ -9,24 +9,24 @@
 // and to-device messaging, but their widget driver implements all of them for Element Call web. This
 // speaks the widget API to that driver in-process, with no web view. Delete this package once the
 // bindings gain the entry points listed in `libraries/rustrtc/FEEDBACK.md`, "Widget-driver stopgap",
-// and give the consumers an SDK-backed `MatrixRtcRoomBridge`.
+// and give the consumers an SDK-backed `ElementCallMatrixRoom`.
 
-package io.element.android.libraries.matrixrtc.impl.bridge.widget
+package io.element.android.call.matrix.temporary.widget
 
-import io.element.android.libraries.core.extensions.runCatchingExceptions
-import io.element.android.libraries.matrix.api.core.DeviceId
-import io.element.android.libraries.matrix.api.core.EventId
-import io.element.android.libraries.matrix.api.core.RoomId
-import io.element.android.libraries.matrix.api.core.UserId
+import io.element.android.call.matrix.util.runCatchingExceptions
+import io.element.android.call.api.rtc.id.DeviceId
+import io.element.android.call.api.rtc.id.EventId
+import io.element.android.call.api.rtc.id.RoomId
+import io.element.android.call.api.rtc.id.UserId
 import io.element.android.libraries.matrix.api.widget.MatrixWidgetDriver
-import io.element.android.libraries.matrixrtc.api.MatrixRtcEventTypes
-import io.element.android.libraries.matrixrtc.impl.bridge.MatrixRtcBridgeException
-import io.element.android.libraries.matrixrtc.impl.bridge.MatrixRtcDelayedEventAction
-import io.element.android.libraries.matrixrtc.impl.bridge.MatrixRtcEventEncryptionInfo
-import io.element.android.libraries.matrixrtc.impl.bridge.MatrixRtcRoomBridge
-import io.element.android.libraries.matrixrtc.impl.bridge.MatrixRtcRoomStateEvent
-import io.element.android.libraries.matrixrtc.impl.bridge.MatrixRtcStickyEvent
-import io.element.android.libraries.matrixrtc.impl.bridge.MatrixRtcToDeviceMessage
+import io.element.android.call.api.rtc.MatrixRtcEventTypes
+import io.element.android.call.api.matrix.ElementCallMatrixException
+import io.element.android.call.api.matrix.ElementCallDelayedEventAction
+import io.element.android.call.api.matrix.ElementCallEventEncryptionInfo
+import io.element.android.call.api.matrix.ElementCallMatrixRoom
+import io.element.android.call.api.matrix.ElementCallRoomStateEvent
+import io.element.android.call.api.matrix.ElementCallStickyEvent
+import io.element.android.call.api.matrix.ElementCallToDeviceMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -90,7 +90,7 @@ internal class WidgetMatrixBridge(
     private val driver: MatrixWidgetDriver,
     parentScope: CoroutineScope,
     private val requestTimeout: Duration = 30.seconds,
-) : MatrixRtcRoomBridge {
+) : ElementCallMatrixRoom {
     private enum class Phase { IDLE, NEGOTIATING, READY, STOPPED }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -105,9 +105,9 @@ internal class WidgetMatrixBridge(
     private val pending = ConcurrentHashMap<String, CompletableDeferred<JsonObject>>()
 
     /** Canonical event type -> state key -> latest event: the current state of every type we receive. */
-    private val stateByType = ConcurrentHashMap<String, MutableStateFlow<Map<String, MatrixRtcRoomStateEvent>>>()
+    private val stateByType = ConcurrentHashMap<String, MutableStateFlow<Map<String, ElementCallRoomStateEvent>>>()
 
-    private val toDevice = MutableSharedFlow<MatrixRtcToDeviceMessage>(extraBufferCapacity = 64)
+    private val toDevice = MutableSharedFlow<ElementCallToDeviceMessage>(extraBufferCapacity = 64)
 
     /** Completed once and for all by [tearDown]; the feeds end on it. */
     private val stopped = CompletableDeferred<Unit>()
@@ -123,7 +123,7 @@ internal class WidgetMatrixBridge(
                 true
             }
         }
-        if (!started) return Result.failure(MatrixRtcBridgeException.NotRunning(roomId))
+        if (!started) return Result.failure(ElementCallMatrixException.NotRunning(roomId))
         Timber.i("WidgetBridge: starting for $roomId")
 
         // Receiving must be under way before the driver runs: its first request times out after 10 s,
@@ -145,9 +145,9 @@ internal class WidgetMatrixBridge(
             null -> {
                 Timber.e("WidgetBridge: negotiation timed out for $roomId")
                 lifecycleMutex.withLock { tearDown() }
-                Result.failure(MatrixRtcBridgeException.Timeout("negotiation"))
+                Result.failure(ElementCallMatrixException.Timeout("negotiation"))
             }
-            else -> Result.failure(MatrixRtcBridgeException.NotRunning(roomId))
+            else -> Result.failure(ElementCallMatrixException.NotRunning(roomId))
         }
     }
 
@@ -175,7 +175,7 @@ internal class WidgetMatrixBridge(
 
     override suspend fun sendDelayedEvent(eventType: String, stateKey: String?, contentJson: String, delayMs: ULong): Result<String> {
         val content = parseObject(contentJson)
-            ?: return Result.failure(MatrixRtcBridgeException.InvalidResponse("content is not a JSON object"))
+            ?: return Result.failure(ElementCallMatrixException.InvalidResponse("content is not a JSON object"))
         val data = buildJsonObject {
             put("type", eventType)
             if (stateKey != null) put("state_key", stateKey)
@@ -185,14 +185,14 @@ internal class WidgetMatrixBridge(
         }
         return request(SEND_EVENT, data).mapCatching { response ->
             response.string("delay_id")
-                ?: throw MatrixRtcBridgeException.InvalidResponse("no delay_id in the send_event response")
+                ?: throw ElementCallMatrixException.InvalidResponse("no delay_id in the send_event response")
         }
     }
 
-    override suspend fun updateDelayedEvent(delayId: String, action: MatrixRtcDelayedEventAction): Result<Unit> {
+    override suspend fun updateDelayedEvent(delayId: String, action: ElementCallDelayedEventAction): Result<Unit> {
         val wireAction = when (action) {
-            MatrixRtcDelayedEventAction.CANCEL -> "cancel"
-            MatrixRtcDelayedEventAction.RESTART -> "restart"
+            ElementCallDelayedEventAction.CANCEL -> "cancel"
+            ElementCallDelayedEventAction.RESTART -> "restart"
         }
         val data = buildJsonObject {
             put("delay_id", delayId)
@@ -209,7 +209,7 @@ internal class WidgetMatrixBridge(
                     buildJsonObject {
                         for ((deviceId, contentJson) in devices) {
                             val content = parseObject(contentJson)
-                                ?: return Result.failure(MatrixRtcBridgeException.InvalidResponse("content is not a JSON object"))
+                                ?: return Result.failure(ElementCallMatrixException.InvalidResponse("content is not a JSON object"))
                             put(deviceId.value, content)
                         }
                     },
@@ -231,17 +231,17 @@ internal class WidgetMatrixBridge(
     }
 
     override suspend fun sendStickyEvent(eventType: String, contentJson: String, durationMs: ULong): Result<String> {
-        return Result.failure(MatrixRtcBridgeException.NotSupported("MSC4354 sticky event $eventType"))
+        return Result.failure(ElementCallMatrixException.NotSupported("MSC4354 sticky event $eventType"))
     }
 
     // Feeds
 
-    override fun stickyEvents(): Flow<List<MatrixRtcStickyEvent>> {
+    override fun stickyEvents(): Flow<List<ElementCallStickyEvent>> {
         Timber.w("WidgetBridge: sticky events are not available through the widget driver, no sticky snapshot will be fed for $roomId")
         return emptyFlow()
     }
 
-    override fun stateEvents(eventType: String): Flow<List<MatrixRtcRoomStateEvent>> {
+    override fun stateEvents(eventType: String): Flow<List<ElementCallRoomStateEvent>> {
         return stateFlow(canonicalType(eventType))
             // Never an empty list: the feeder reads that as "not synced".
             .filter { it.isNotEmpty() }
@@ -249,7 +249,7 @@ internal class WidgetMatrixBridge(
             .untilStopped()
     }
 
-    override fun toDeviceMessages(): Flow<MatrixRtcToDeviceMessage> = toDevice.untilStopped()
+    override fun toDeviceMessages(): Flow<ElementCallToDeviceMessage> = toDevice.untilStopped()
 
     /** Ends when the bridge does, so a collector is not left waiting on a driver that is gone. */
     private fun <T> Flow<T>.untilStopped(): Flow<T> = channelFlow {
@@ -272,20 +272,20 @@ internal class WidgetMatrixBridge(
                 false
             }
         }
-        if (!registered) return Result.failure(MatrixRtcBridgeException.NotRunning(roomId))
+        if (!registered) return Result.failure(ElementCallMatrixException.NotRunning(roomId))
         Timber.v("WidgetBridge: → $action $requestId")
         try {
             if (!driver.send(envelope(requestId, action, data))) {
                 driverStopped()
-                return Result.failure(MatrixRtcBridgeException.NotRunning(roomId))
+                return Result.failure(ElementCallMatrixException.NotRunning(roomId))
             }
             return withTimeoutOrNull(requestTimeout) {
                 try {
                     Result.success(reply.await())
-                } catch (exception: MatrixRtcBridgeException) {
+                } catch (exception: ElementCallMatrixException) {
                     Result.failure(exception)
                 }
-            } ?: Result.failure(MatrixRtcBridgeException.Timeout(action))
+            } ?: Result.failure(ElementCallMatrixException.Timeout(action))
         } finally {
             pending.remove(requestId)
         }
@@ -358,7 +358,7 @@ internal class WidgetMatrixBridge(
             return
         }
         val body = response as? JsonObject ?: run {
-            reply.completeExceptionally(MatrixRtcBridgeException.InvalidResponse("the $action response is not a JSON object"))
+            reply.completeExceptionally(ElementCallMatrixException.InvalidResponse("the $action response is not a JSON object"))
             return
         }
         val error = body["error"] as? JsonObject
@@ -368,7 +368,7 @@ internal class WidgetMatrixBridge(
             val errorBody = matrixError?.get("response") as? JsonObject
             Timber.w("WidgetBridge: $action $requestId failed: $message")
             reply.completeExceptionally(
-                MatrixRtcBridgeException.MatrixApi(
+                ElementCallMatrixException.MatrixApi(
                     errcode = errorBody?.string("errcode"),
                     httpStatus = matrixError?.int("http_status"),
                     message = message,
@@ -399,7 +399,7 @@ internal class WidgetMatrixBridge(
     private fun tearDown() {
         phase.value = Phase.STOPPED
         for (requestId in pending.keys.toList()) {
-            pending.remove(requestId)?.completeExceptionally(MatrixRtcBridgeException.NotRunning(roomId))
+            pending.remove(requestId)?.completeExceptionally(ElementCallMatrixException.NotRunning(roomId))
         }
         stopped.complete(Unit)
     }
@@ -412,7 +412,7 @@ internal class WidgetMatrixBridge(
      * batch held. Emitting per event made the first tick show one member instead of two.
      */
     private fun applyStateEvents(events: List<JsonObject>) {
-        val changes = mutableMapOf<String, MutableMap<String, MatrixRtcRoomStateEvent>>()
+        val changes = mutableMapOf<String, MutableMap<String, ElementCallRoomStateEvent>>()
         for (event in events) {
             val mapped = event.toStateEvent() ?: continue
             val type = canonicalType(mapped.eventType)
@@ -438,7 +438,7 @@ internal class WidgetMatrixBridge(
         else -> eventType
     }
 
-    private fun JsonObject.toStateEvent(): MatrixRtcRoomStateEvent? {
+    private fun JsonObject.toStateEvent(): ElementCallRoomStateEvent? {
         val eventType = string("type")
         val stateKey = string("state_key")
         val sender = string("sender")?.let { runCatchingExceptions { UserId(it) }.getOrNull() }
@@ -447,7 +447,7 @@ internal class WidgetMatrixBridge(
             Timber.w("WidgetBridge: ignoring a malformed state event")
             return null
         }
-        return MatrixRtcRoomStateEvent(
+        return ElementCallRoomStateEvent(
             eventType = eventType,
             stateKey = stateKey,
             sender = sender,
@@ -483,12 +483,12 @@ internal class WidgetMatrixBridge(
             Timber.i("WidgetBridge: $eventType from $sender names no device (fields: ${content.keys.sorted()}), inferred ${deviceId ?: "none"}")
         }
         toDevice.emit(
-            MatrixRtcToDeviceMessage(
+            ElementCallToDeviceMessage(
                 eventType = eventType,
                 senderId = sender,
                 content = encode(content),
                 encryptionInfo = if (wasEncrypted) {
-                    MatrixRtcEventEncryptionInfo(
+                    ElementCallEventEncryptionInfo(
                         senderId = sender,
                         senderDeviceId = deviceId?.let(::DeviceId),
                         senderCurve25519Key = null,

@@ -5,10 +5,10 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.mediaplayer.test
+package io.element.android.call.test.audio
 
-import io.element.android.libraries.audio.api.AudioFocus
-import io.element.android.libraries.audio.api.AudioFocusRequester
+import io.element.android.call.api.audio.AudioFocus
+import io.element.android.call.api.audio.AudioFocusRequester
 import io.element.android.tests.testutils.lambda.lambdaError
 
 class FakeAudioFocus(

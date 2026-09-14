@@ -5,11 +5,11 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.features.callnative.impl.ui
+package io.element.android.call.ui
 
-import io.element.android.libraries.audio.api.CallAudioDevice
-import io.element.android.libraries.matrixrtc.api.MatrixRtcStreamKind
-import io.element.android.libraries.matrixrtc.api.MatrixRtcVideoConstraints
+import io.element.android.call.api.audio.CallAudioDevice
+import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 
 sealed interface NativeCallEvent {
     data class SetMicrophonePermissionGranted(val granted: Boolean) : NativeCallEvent

@@ -5,11 +5,11 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.impl
+package io.element.android.call.impl.rtc
 
-import io.element.android.libraries.core.extensions.runCatchingExceptions
-import io.element.android.libraries.matrixrtc.api.MatrixRtcEventTypes
-import io.element.android.libraries.matrixrtc.impl.bridge.widget.ToDeviceRelay
+import io.element.android.call.impl.util.runCatchingExceptions
+import io.element.android.call.api.rtc.MatrixRtcEventTypes
+import io.element.android.call.matrix.temporary.widget.ToDeviceRelay
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach

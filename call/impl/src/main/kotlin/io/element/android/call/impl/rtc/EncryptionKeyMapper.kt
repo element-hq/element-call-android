@@ -5,9 +5,9 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.impl
+package io.element.android.call.impl.rtc
 
-import io.element.android.libraries.matrixrtc.impl.bridge.MatrixRtcToDeviceMessage
+import io.element.android.call.api.matrix.ElementCallToDeviceMessage
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -25,7 +25,7 @@ internal object EncryptionKeyMapper {
     /**
      * @return the key, or null if the message is untrusted or unusable.
      */
-    fun map(message: MatrixRtcToDeviceMessage): FfiReceivedEncryptionKey? {
+    fun map(message: ElementCallToDeviceMessage): FfiReceivedEncryptionKey? {
         // A cleartext to-device message has no attested sender, so anyone could claim to be a
         // participant and inject a media key. Never accept one.
         val encryptionInfo = message.encryptionInfo ?: run {

@@ -5,11 +5,11 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.features.callnative.impl.ui
+package io.element.android.call.ui
 
 import com.google.common.truth.Truth.assertThat
-import io.element.android.libraries.matrixrtc.api.MatrixRtcStreamKind
-import io.element.android.libraries.matrixrtc.api.MatrixRtcStreamState
+import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcStreamState
 import kotlinx.collections.immutable.persistentListOf
 import org.junit.Test
 
@@ -76,6 +76,6 @@ class CallParticipantTest {
         assertThat(tiles.single { !it.isScreenShare }.hasMicrophone).isFalse()
     }
 
-    private fun io.element.android.libraries.matrixrtc.api.MatrixRtcParticipant.toParticipant() =
+    private fun io.element.android.call.api.rtc.MatrixRtcParticipant.toParticipant() =
         toCallParticipant(roomMembers = emptyMap(), activeSpeakerIds = emptySet(), isFrontCamera = false)
 }

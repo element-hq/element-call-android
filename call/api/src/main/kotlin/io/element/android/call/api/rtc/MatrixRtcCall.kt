@@ -5,9 +5,9 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.api
+package io.element.android.call.api.rtc
 
-import io.element.android.libraries.matrix.api.core.UserId
+import io.element.android.call.api.rtc.id.UserId
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -209,7 +209,7 @@ data class MatrixRtcStreamState(
  * and [frameCount] is how much of it we handed over.
  *
  * On a remote member they are weaker evidence than they appear. The receive side pulls a frame every
- * [io.element.android.libraries.matrixrtc.api.MatrixRtcStreamKind.MICROPHONE] tick whether or not
+ * [io.element.android.call.api.rtc.MatrixRtcStreamKind.MICROPHONE] tick whether or not
  * anything arrived - a jitter buffer with nothing to play emits silence rather than nothing - so a
  * counter rising at exactly real time only proves the stream is open. A [frameCount] that *stops*
  * still means the stream died, and a non-zero [level] still means real audio decoded; but zeros at a

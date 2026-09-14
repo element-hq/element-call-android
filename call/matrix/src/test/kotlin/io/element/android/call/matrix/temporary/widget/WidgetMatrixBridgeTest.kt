@@ -5,18 +5,18 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.impl.bridge.widget
+package io.element.android.call.matrix.temporary.widget
 
 import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
-import io.element.android.libraries.matrix.api.core.DeviceId
-import io.element.android.libraries.matrix.api.core.EventId
-import io.element.android.libraries.matrix.api.core.UserId
+import io.element.android.call.api.rtc.id.DeviceId
+import io.element.android.call.api.rtc.id.EventId
+import io.element.android.call.api.rtc.id.UserId
 import io.element.android.libraries.matrix.test.A_ROOM_ID
 import io.element.android.libraries.matrix.test.widget.FakeMatrixWidgetDriver
-import io.element.android.libraries.matrixrtc.api.MatrixRtcEventTypes
-import io.element.android.libraries.matrixrtc.impl.bridge.MatrixRtcBridgeException
-import io.element.android.libraries.matrixrtc.impl.bridge.MatrixRtcDelayedEventAction
+import io.element.android.call.api.rtc.MatrixRtcEventTypes
+import io.element.android.call.api.matrix.ElementCallMatrixException
+import io.element.android.call.api.matrix.ElementCallDelayedEventAction
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
@@ -51,7 +51,7 @@ class WidgetMatrixBridgeTest {
 
         // Nothing goes out before the machine has confirmed our capabilities: it would be dropped unanswered.
         val early = bridge.sendDelayedEvent(A_MEMBER_TYPE, A_STATE_KEY, A_CONTENT, 8_000uL)
-        assertThat(early.exceptionOrNull()).isInstanceOf(MatrixRtcBridgeException.NotRunning::class.java)
+        assertThat(early.exceptionOrNull()).isInstanceOf(ElementCallMatrixException.NotRunning::class.java)
 
         val capabilitiesReply = driver.deliver(toWidget(CAPABILITIES, "cap-1"))
         assertThat(capabilitiesReply.string("requestId")).isEqualTo("cap-1")
@@ -79,7 +79,7 @@ class WidgetMatrixBridgeTest {
 
         driver.givenDriverStopped()
 
-        assertThat(start.await().exceptionOrNull()).isInstanceOf(MatrixRtcBridgeException.NotRunning::class.java)
+        assertThat(start.await().exceptionOrNull()).isInstanceOf(ElementCallMatrixException.NotRunning::class.java)
     }
 
     @Test
@@ -89,10 +89,10 @@ class WidgetMatrixBridgeTest {
 
         val result = bridge.start()
 
-        assertThat(result.exceptionOrNull()).isInstanceOf(MatrixRtcBridgeException.Timeout::class.java)
+        assertThat(result.exceptionOrNull()).isInstanceOf(ElementCallMatrixException.Timeout::class.java)
         // Torn down: nothing will be carried from now on.
         val late = bridge.sendDelayedEvent(A_MEMBER_TYPE, A_STATE_KEY, A_CONTENT, 8_000uL)
-        assertThat(late.exceptionOrNull()).isInstanceOf(MatrixRtcBridgeException.NotRunning::class.java)
+        assertThat(late.exceptionOrNull()).isInstanceOf(ElementCallMatrixException.NotRunning::class.java)
     }
 
     @Test
@@ -100,7 +100,7 @@ class WidgetMatrixBridgeTest {
         val driver = FakeMatrixWidgetDriver()
         val bridge = negotiatedBridge(driver)
 
-        assertThat(bridge.start().exceptionOrNull()).isInstanceOf(MatrixRtcBridgeException.NotRunning::class.java)
+        assertThat(bridge.start().exceptionOrNull()).isInstanceOf(ElementCallMatrixException.NotRunning::class.java)
     }
 
     // The driver's own requests
@@ -380,7 +380,7 @@ class WidgetMatrixBridgeTest {
         val result = async { bridge.sendDelayedEvent(A_MEMBER_TYPE, A_STATE_KEY, A_CONTENT, 8_000uL) }
         driver.givenIncomingMessage(responseTo(driver.awaitSent(), buildJsonObject { put("event_id", "\$sentAnyway") }))
 
-        assertThat(result.await().exceptionOrNull()).isInstanceOf(MatrixRtcBridgeException.InvalidResponse::class.java)
+        assertThat(result.await().exceptionOrNull()).isInstanceOf(ElementCallMatrixException.InvalidResponse::class.java)
     }
 
     @Test
@@ -391,7 +391,7 @@ class WidgetMatrixBridgeTest {
 
         val result = bridge.sendDelayedEvent(A_MEMBER_TYPE, A_STATE_KEY, "\"a string\"", 8_000uL)
 
-        assertThat(result.exceptionOrNull()).isInstanceOf(MatrixRtcBridgeException.InvalidResponse::class.java)
+        assertThat(result.exceptionOrNull()).isInstanceOf(ElementCallMatrixException.InvalidResponse::class.java)
         assertThat(driver.sentMessages.size).isEqualTo(sentBefore)
     }
 
@@ -404,7 +404,7 @@ class WidgetMatrixBridgeTest {
         val driver = FakeMatrixWidgetDriver()
         val bridge = negotiatedBridge(driver)
 
-        listOf(MatrixRtcDelayedEventAction.CANCEL to "cancel", MatrixRtcDelayedEventAction.RESTART to "restart").forEach { (action, wire) ->
+        listOf(ElementCallDelayedEventAction.CANCEL to "cancel", ElementCallDelayedEventAction.RESTART to "restart").forEach { (action, wire) ->
             val result = async { bridge.updateDelayedEvent("syd_abc", action) }
             val sent = driver.awaitSent()
             assertThat(sent.string("action")).isEqualTo("org.matrix.msc4157.update_delayed_event")
@@ -483,7 +483,7 @@ class WidgetMatrixBridgeTest {
             )
         )
 
-        val error = result.await().exceptionOrNull() as MatrixRtcBridgeException.MatrixApi
+        val error = result.await().exceptionOrNull() as ElementCallMatrixException.MatrixApi
         assertThat(error.errcode).isEqualTo("M_FORBIDDEN")
         assertThat(error.httpStatus).isEqualTo(403)
         assertThat(error.message).isEqualTo("Sending delayed events has been disallowed")
@@ -494,12 +494,12 @@ class WidgetMatrixBridgeTest {
         val driver = FakeMatrixWidgetDriver()
         val bridge = negotiatedBridge(driver)
 
-        val result = async { bridge.updateDelayedEvent("syd_abc", MatrixRtcDelayedEventAction.CANCEL) }
+        val result = async { bridge.updateDelayedEvent("syd_abc", ElementCallDelayedEventAction.CANCEL) }
         driver.givenIncomingMessage(
             responseTo(driver.awaitSent(), buildJsonObject { putJsonObject("error") { put("message", "Not enough permissions") } })
         )
 
-        val error = result.await().exceptionOrNull() as MatrixRtcBridgeException.MatrixApi
+        val error = result.await().exceptionOrNull() as ElementCallMatrixException.MatrixApi
         assertThat(error.errcode).isNull()
         assertThat(error.httpStatus).isNull()
         assertThat(error.message).isEqualTo("Not enough permissions")
@@ -513,10 +513,10 @@ class WidgetMatrixBridgeTest {
         val result = async { bridge.sendDelayedEvent(A_MEMBER_TYPE, A_STATE_KEY, A_CONTENT, 8_000uL) }
         val sent = driver.awaitSent()
 
-        assertThat(result.await().exceptionOrNull()).isInstanceOf(MatrixRtcBridgeException.Timeout::class.java)
+        assertThat(result.await().exceptionOrNull()).isInstanceOf(ElementCallMatrixException.Timeout::class.java)
         // A late answer is not mistaken for anyone else's, and the bridge carries on.
         driver.givenIncomingMessage(responseTo(sent, buildJsonObject { put("delay_id", "late") }))
-        val next = async { bridge.updateDelayedEvent("late", MatrixRtcDelayedEventAction.CANCEL) }
+        val next = async { bridge.updateDelayedEvent("late", ElementCallDelayedEventAction.CANCEL) }
         driver.givenIncomingMessage(responseTo(driver.awaitSent(), buildJsonObject {}))
         assertThat(next.await().isSuccess).isTrue()
     }
@@ -532,7 +532,7 @@ class WidgetMatrixBridgeTest {
 
             driver.givenDriverStopped()
 
-            assertThat(result.await().exceptionOrNull()).isInstanceOf(MatrixRtcBridgeException.NotRunning::class.java)
+            assertThat(result.await().exceptionOrNull()).isInstanceOf(ElementCallMatrixException.NotRunning::class.java)
             awaitComplete()
         }
     }
@@ -545,7 +545,7 @@ class WidgetMatrixBridgeTest {
 
         val result = bridge.sendDelayedEvent(A_MEMBER_TYPE, A_STATE_KEY, A_CONTENT, 8_000uL)
 
-        assertThat(result.exceptionOrNull()).isInstanceOf(MatrixRtcBridgeException.NotRunning::class.java)
+        assertThat(result.exceptionOrNull()).isInstanceOf(ElementCallMatrixException.NotRunning::class.java)
         bridge.toDeviceMessages().test { awaitComplete() }
     }
 
@@ -562,8 +562,8 @@ class WidgetMatrixBridgeTest {
         assertThat(poke.string("api")).isEqualTo("fromWidget")
         assertThat(poke.string("action")).isEqualTo("supported_api_versions")
         assertThat(driver.closeCalledCount).isEqualTo(1)
-        val late = bridge.updateDelayedEvent("syd_abc", MatrixRtcDelayedEventAction.CANCEL)
-        assertThat(late.exceptionOrNull()).isInstanceOf(MatrixRtcBridgeException.NotRunning::class.java)
+        val late = bridge.updateDelayedEvent("syd_abc", ElementCallDelayedEventAction.CANCEL)
+        assertThat(late.exceptionOrNull()).isInstanceOf(ElementCallMatrixException.NotRunning::class.java)
 
         bridge.stop()
         assertThat(driver.closeCalledCount).isEqualTo(1)
@@ -579,7 +579,7 @@ class WidgetMatrixBridgeTest {
 
         val result = bridge.sendStickyEvent(MatrixRtcEventTypes.MEMBER_UNSTABLE, A_CONTENT, 60_000uL)
 
-        assertThat(result.exceptionOrNull()).isInstanceOf(MatrixRtcBridgeException.NotSupported::class.java)
+        assertThat(result.exceptionOrNull()).isInstanceOf(ElementCallMatrixException.NotSupported::class.java)
         assertThat(driver.sentMessages.size).isEqualTo(sentBefore)
         bridge.stickyEvents().test { awaitComplete() }
     }

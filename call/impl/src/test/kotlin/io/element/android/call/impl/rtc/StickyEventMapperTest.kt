@@ -5,15 +5,15 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.impl
+package io.element.android.call.impl.rtc
 
 import com.google.common.truth.Truth.assertThat
-import io.element.android.libraries.matrix.api.core.DeviceId
-import io.element.android.libraries.matrix.api.core.EventId
-import io.element.android.libraries.matrix.api.core.RoomId
-import io.element.android.libraries.matrix.api.core.UserId
-import io.element.android.libraries.matrixrtc.impl.bridge.MatrixRtcEventEncryptionInfo
-import io.element.android.libraries.matrixrtc.impl.bridge.MatrixRtcStickyEvent
+import io.element.android.call.api.rtc.id.DeviceId
+import io.element.android.call.api.rtc.id.EventId
+import io.element.android.call.api.rtc.id.RoomId
+import io.element.android.call.api.rtc.id.UserId
+import io.element.android.call.api.matrix.ElementCallEventEncryptionInfo
+import io.element.android.call.api.matrix.ElementCallStickyEvent
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
@@ -55,7 +55,7 @@ class StickyEventMapperTest {
         val result = StickyEventMapper.map(
             A_ROOM_ID,
             aStickyEvent(
-                encryptionInfo = MatrixRtcEventEncryptionInfo(
+                encryptionInfo = ElementCallEventEncryptionInfo(
                     senderId = A_USER_ID,
                     senderDeviceId = DeviceId("ADEVICE"),
                     senderCurve25519Key = "aKey",
@@ -136,7 +136,7 @@ class StickyEventMapperTest {
         val result = StickyEventMapper.map(
             A_ROOM_ID,
             aStickyEvent(
-                encryptionInfo = MatrixRtcEventEncryptionInfo(
+                encryptionInfo = ElementCallEventEncryptionInfo(
                     senderId = A_USER_ID,
                     senderDeviceId = DeviceId("ADEVICE"),
                     senderCurve25519Key = "aKey",
@@ -205,7 +205,7 @@ class StickyEventMapperTest {
 
 private fun aStickyEvent(
     stickyKey: String? = "aStickyKey",
-    encryptionInfo: MatrixRtcEventEncryptionInfo? = null,
+    encryptionInfo: ElementCallEventEncryptionInfo? = null,
     content: String = """
         {
           "slot_id": "aSlot",
@@ -218,7 +218,7 @@ private fun aStickyEvent(
           }
         }
     """.trimIndent(),
-) = MatrixRtcStickyEvent(
+) = ElementCallStickyEvent(
     sender = A_USER_ID,
     eventType = "m.rtc.member",
     stickyKey = stickyKey,

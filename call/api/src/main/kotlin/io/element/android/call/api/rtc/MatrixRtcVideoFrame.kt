@@ -5,7 +5,7 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.api
+package io.element.android.call.api.rtc
 
 import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicInteger

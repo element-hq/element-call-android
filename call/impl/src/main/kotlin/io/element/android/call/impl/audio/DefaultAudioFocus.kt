@@ -5,7 +5,7 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.audio.impl
+package io.element.android.call.impl.audio
 
 import android.content.Context
 import android.media.AudioAttributes
@@ -15,8 +15,8 @@ import android.os.Build
 import androidx.core.content.getSystemService
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesBinding
-import io.element.android.libraries.audio.api.AudioFocus
-import io.element.android.libraries.audio.api.AudioFocusRequester
+import io.element.android.call.api.audio.AudioFocus
+import io.element.android.call.api.audio.AudioFocusRequester
 import io.element.android.libraries.di.annotations.ApplicationContext
 import timber.log.Timber
 

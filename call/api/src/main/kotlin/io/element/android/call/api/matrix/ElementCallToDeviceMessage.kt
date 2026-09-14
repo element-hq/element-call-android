@@ -5,24 +5,24 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.impl.bridge
+package io.element.android.call.api.matrix
 
-import io.element.android.libraries.matrix.api.core.UserId
+import io.element.android.call.api.rtc.id.UserId
 
 /**
  * A to-device message received from another device.
  */
-internal data class MatrixRtcToDeviceMessage(
+data class ElementCallToDeviceMessage(
     val eventType: String,
     /**
      * The user id that *claims* to have sent this message.
      *
      * Unauthenticated on its own. Anything security-relevant must use [encryptionInfo] and its attested
-     * [MatrixRtcEventEncryptionInfo.senderId] instead, and treat a null [encryptionInfo] as untrusted.
+     * [ElementCallEventEncryptionInfo.senderId] instead, and treat a null [encryptionInfo] as untrusted.
      */
     val senderId: UserId,
     /** The message content, as a JSON string. */
     val content: String,
     /** Encryption data, or null if the message arrived in the clear. */
-    val encryptionInfo: MatrixRtcEventEncryptionInfo?,
+    val encryptionInfo: ElementCallEventEncryptionInfo?,
 )

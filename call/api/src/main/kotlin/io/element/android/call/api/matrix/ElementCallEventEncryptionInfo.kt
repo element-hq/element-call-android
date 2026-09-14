@@ -5,17 +5,17 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.impl.bridge
+package io.element.android.call.api.matrix
 
-import io.element.android.libraries.matrix.api.core.DeviceId
-import io.element.android.libraries.matrix.api.core.UserId
+import io.element.android.call.api.rtc.id.DeviceId
+import io.element.android.call.api.rtc.id.UserId
 
 /**
  * Cryptographic provenance of an event that arrived encrypted.
  *
  * Prefer [senderId] over any sender claimed in the event JSON: this one is attested, the other is not.
  */
-internal data class MatrixRtcEventEncryptionInfo(
+data class ElementCallEventEncryptionInfo(
     /** The user id this event is cryptographically attested to come from. */
     val senderId: UserId,
     /** The device the event was sent from, as claimed by the sender. */

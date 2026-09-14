@@ -5,11 +5,11 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.impl
+package io.element.android.call.impl.rtc
 
 import com.google.common.truth.Truth.assertThat
 import io.element.android.libraries.matrix.test.FakeMatrixClient
-import io.element.android.libraries.matrixrtc.api.MatrixRtcTransport
+import io.element.android.call.api.rtc.MatrixRtcTransport
 import org.junit.Test
 
 private const val A_SERVICE_URL = "https://sfu.example.org/jwt"

@@ -5,10 +5,10 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.impl.bridge
+package io.element.android.call.api.matrix
 
-import io.element.android.libraries.matrix.api.core.EventId
-import io.element.android.libraries.matrix.api.core.UserId
+import io.element.android.call.api.rtc.id.EventId
+import io.element.android.call.api.rtc.id.UserId
 
 /**
  * One room state event, with its content left as raw JSON.
@@ -17,7 +17,7 @@ import io.element.android.libraries.matrix.api.core.UserId
  * treats state as a membership has to read the lifetime out of [contentJson] - and a departure arrives
  * as a *present* event with empty content rather than as a shorter list.
  */
-internal data class MatrixRtcRoomStateEvent(
+data class ElementCallRoomStateEvent(
     /** The event type as it was on the wire, which for an unstable type may be either spelling. */
     val eventType: String,
     /** The state key the event is stored under, often the empty string. */

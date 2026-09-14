@@ -5,17 +5,17 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.impl
+package io.element.android.call.impl.rtc
 
-import io.element.android.libraries.core.extensions.runCatchingExceptions
-import io.element.android.libraries.matrix.api.core.RoomId
+import io.element.android.call.impl.util.runCatchingExceptions
+import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.libraries.matrix.api.room.JoinedRoom
 import io.element.android.libraries.matrix.api.room.RoomMembershipState
 import io.element.android.libraries.matrix.api.room.roomMembers
-import io.element.android.libraries.matrixrtc.api.MatrixRtcElementCallCompat
-import io.element.android.libraries.matrixrtc.api.MatrixRtcEventTypes
-import io.element.android.libraries.matrixrtc.impl.bridge.MatrixRtcRoomBridge
-import io.element.android.libraries.matrixrtc.impl.bridge.MatrixRtcRoomStateEvent
+import io.element.android.call.api.rtc.MatrixRtcElementCallCompat
+import io.element.android.call.api.rtc.MatrixRtcEventTypes
+import io.element.android.call.api.matrix.ElementCallMatrixRoom
+import io.element.android.call.api.matrix.ElementCallRoomStateEvent
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -46,14 +46,14 @@ import uniffi.matrix_rtc_ffi.LegacyStateMemberEvent as FfiLegacyStateMemberEvent
 internal class RoomStateFeeder(
     private val manager: RtcSessionManagerHandleInterface,
     private val room: JoinedRoom,
-    private val bridge: MatrixRtcRoomBridge,
+    private val bridge: ElementCallMatrixRoom,
     private val scope: CoroutineScope,
     private val elementCallCompat: MatrixRtcElementCallCompat,
     /** The slot we joined, for [updateMemberCount] only. Defaulted for tests; joining always passes it. */
     private val slotId: String? = null,
     /**
      * Where [updateMemberCount] publishes what the core answered, for
-     * [io.element.android.libraries.matrixrtc.api.MatrixRtcSession.memberCount] to expose.
+     * [io.element.android.call.api.rtc.MatrixRtcSession.memberCount] to expose.
      *
      * Here rather than in the session because this is the only place that knows *when* the membership
      * changed: every change we can act on arrives as a feed, and the count is already read once after
@@ -276,7 +276,7 @@ internal class RoomStateFeeder(
      * timestamp for the stripped state of a room we are merely invited to, which we cannot be in
      * while joined to a call in it, so seeing one falsifies an assumption this whole feed rests on.
      */
-    private fun MatrixRtcRoomStateEvent.toLegacyStateMemberEvent(): FfiLegacyStateMemberEvent {
+    private fun ElementCallRoomStateEvent.toLegacyStateMemberEvent(): FfiLegacyStateMemberEvent {
         if (timestampMs == null) {
             Timber.w("MatrixRTC: state membership $stateKey in $roomId has no timestamp, treating it as long expired")
         }

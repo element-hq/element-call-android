@@ -5,27 +5,27 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.impl
+package io.element.android.call.impl.rtc
 
 import android.content.Context
-import io.element.android.libraries.core.coroutine.CoroutineDispatchers
-import io.element.android.libraries.core.coroutine.childScope
-import io.element.android.libraries.core.extensions.runCatchingExceptions
+import io.element.android.call.api.ElementCallDispatchers
+import io.element.android.call.impl.util.childScope
+import io.element.android.call.impl.util.runCatchingExceptions
 import io.element.android.libraries.matrix.api.MatrixClient
-import io.element.android.libraries.matrix.api.core.RoomId
+import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.libraries.matrix.api.notification.RtcNotificationType
 import io.element.android.libraries.matrix.api.room.JoinedRoom
 import io.element.android.libraries.matrix.api.widget.MatrixWidgetSettings
-import io.element.android.libraries.matrixrtc.api.MatrixRtcElementCallCompat
-import io.element.android.libraries.matrixrtc.api.MatrixRtcNotify
-import io.element.android.libraries.matrixrtc.api.MatrixRtcService
-import io.element.android.libraries.matrixrtc.api.MatrixRtcSession
-import io.element.android.libraries.matrixrtc.api.MatrixRtcTransport
-import io.element.android.libraries.matrixrtc.impl.bridge.MatrixRtcRoomBridge
-import io.element.android.libraries.matrixrtc.impl.bridge.widget.MatrixRtcBridgeRegistry
-import io.element.android.libraries.matrixrtc.impl.bridge.widget.ToDeviceRelay
-import io.element.android.libraries.matrixrtc.impl.bridge.widget.WidgetCapabilityGrant
-import io.element.android.libraries.matrixrtc.impl.bridge.widget.WidgetMatrixBridge
+import io.element.android.call.api.rtc.MatrixRtcElementCallCompat
+import io.element.android.call.api.rtc.MatrixRtcNotify
+import io.element.android.call.api.rtc.MatrixRtcService
+import io.element.android.call.api.rtc.MatrixRtcSession
+import io.element.android.call.api.rtc.MatrixRtcTransport
+import io.element.android.call.api.matrix.ElementCallMatrixRoom
+import io.element.android.call.matrix.temporary.widget.MatrixRtcBridgeRegistry
+import io.element.android.call.matrix.temporary.widget.ToDeviceRelay
+import io.element.android.call.matrix.temporary.widget.WidgetCapabilityGrant
+import io.element.android.call.matrix.temporary.widget.WidgetMatrixBridge
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.launchIn
@@ -45,7 +45,7 @@ import java.util.UUID
 
 internal class RustMatrixRtcService(
     private val client: MatrixClient,
-    private val dispatchers: CoroutineDispatchers,
+    private val dispatchers: ElementCallDispatchers,
     /** Only reaches as far as the camera, via the session and then the call. */
     private val context: Context,
     private val sessionCoroutineScope: CoroutineScope = client.sessionCoroutineScope,
@@ -79,7 +79,7 @@ internal class RustMatrixRtcService(
 
     /**
      * The Matrix operations the released SDK does not expose go through one bridge per room in a call
-     * (see [MatrixRtcRoomBridge]). The registry is how the session-long command sender finds the bridge
+     * (see [ElementCallMatrixRoom]). The registry is how the session-long command sender finds the bridge
      * of the room a command is for, and the relay is how the session-long to-device feed hears from
      * whichever bridge is live. Both are part of the widget-driver stopgap.
      */
@@ -154,7 +154,7 @@ internal class RustMatrixRtcService(
     private suspend fun joinWithBridge(
         manager: RtcSessionManagerHandle,
         room: JoinedRoom,
-        bridge: MatrixRtcRoomBridge,
+        bridge: ElementCallMatrixRoom,
         slotId: String,
         application: String,
         transport: MatrixRtcTransport?,
@@ -257,10 +257,10 @@ internal class RustMatrixRtcService(
      * until it has negotiated its capabilities, so that the join finds a bridge ready to carry the
      * delayed event.
      *
-     * The only place a bridge is made, and the one seam to unpick: an SDK-backed [MatrixRtcRoomBridge]
+     * The only place a bridge is made, and the one seam to unpick: an SDK-backed [ElementCallMatrixRoom]
      * replaces the body of this function and nothing else in the service changes.
      */
-    private suspend fun openBridge(room: JoinedRoom): MatrixRtcRoomBridge {
+    private suspend fun openBridge(room: JoinedRoom): ElementCallMatrixRoom {
         val widgetId = "matrixrtc-${UUID.randomUUID()}"
         val driver = room.getWidgetDriver(
             widgetSettings = MatrixWidgetSettings(

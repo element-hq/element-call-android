@@ -5,7 +5,7 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.api
+package io.element.android.call.api.rtc
 
 /**
  * Matrix event types used by MatrixRTC.
@@ -40,7 +40,7 @@ object MatrixRtcEventTypes {
      * this name *instead of* [ENCRYPTION_KEY] - which is why we subscribe to both regardless of the
      * compatibility mode. The content shapes are not interchangeable and the library parses this one
      * itself, so it is handed over raw rather than through
-     * [io.element.android.libraries.matrixrtc.impl.EncryptionKeyMapper].
+     * [io.element.android.call.impl.rtc.EncryptionKeyMapper].
      */
     const val ENCRYPTION_KEY_ELEMENT_CALL = "io.element.call.encryption_keys"
 

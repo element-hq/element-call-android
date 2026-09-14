@@ -5,12 +5,12 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.impl.bridge
+package io.element.android.call.api.matrix
 
 /**
  * What to do with a delayed event the homeserver is still holding on to (MSC4140).
  */
-internal enum class MatrixRtcDelayedEventAction {
+enum class ElementCallDelayedEventAction {
     /** Cancel the delayed event: it will never be sent to the room. */
     CANCEL,
 

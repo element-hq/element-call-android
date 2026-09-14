@@ -5,7 +5,7 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.features.callnative.impl.services
+package io.element.android.call.impl.services
 
 import android.Manifest
 import android.app.Notification
@@ -26,9 +26,9 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
 import dev.zacsweers.metro.Inject
-import io.element.android.features.callnative.impl.NativeCallController
-import io.element.android.features.callnative.impl.di.NativeCallBindings
-import io.element.android.features.callnative.impl.receivers.NativeCallActionReceiver
+import io.element.android.call.impl.NativeCallController
+import io.element.android.call.impl.di.NativeCallBindings
+import io.element.android.call.impl.receivers.NativeCallActionReceiver
 import io.element.android.libraries.architecture.bindings
 import io.element.android.libraries.designsystem.icons.CompoundDrawables
 import io.element.android.libraries.push.api.notifications.ForegroundServiceType

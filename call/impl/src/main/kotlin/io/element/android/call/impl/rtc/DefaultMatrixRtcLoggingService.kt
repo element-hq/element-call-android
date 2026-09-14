@@ -5,13 +5,13 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrixrtc.impl
+package io.element.android.call.impl.rtc
 
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesBinding
 import dev.zacsweers.metro.SingleIn
-import io.element.android.libraries.matrixrtc.api.MatrixRtcLoggingConfiguration
-import io.element.android.libraries.matrixrtc.api.MatrixRtcLoggingService
+import io.element.android.call.api.rtc.MatrixRtcLoggingConfiguration
+import io.element.android.call.api.rtc.MatrixRtcLoggingService
 
 @SingleIn(AppScope::class)
 @ContributesBinding(AppScope::class)

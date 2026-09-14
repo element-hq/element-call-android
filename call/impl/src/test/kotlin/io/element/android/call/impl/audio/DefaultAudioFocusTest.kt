@@ -5,13 +5,13 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.audio.impl
+package io.element.android.call.impl.audio
 
 import android.media.AudioAttributes
 import android.media.AudioManager
 import androidx.core.content.getSystemService
 import com.google.common.truth.Truth.assertThat
-import io.element.android.libraries.audio.api.AudioFocusRequester
+import io.element.android.call.api.audio.AudioFocusRequester
 import io.element.android.tests.testutils.robolectric.RobolectricTest
 import org.junit.Test
 import org.robolectric.RuntimeEnvironment
