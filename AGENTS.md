@@ -18,6 +18,7 @@
   * [No DI framework, no Appyx, no Activity](#no-di-framework-no-appyx-no-activity)
 * [What is temporary](#what-is-temporary)
 * [The SDK edge](#the-sdk-edge)
+* [Releasing](#releasing)
 * [Pull requests](#pull-requests)
 * [Keep this file current](#keep-this-file-current)
 
@@ -40,7 +41,9 @@ The host decides where those composables sit. The plan this repository follows i
 | `call/ui` | `element-call-ui` | the ONLY Compose module: screen, tiles, bar, floating tile, PiP content, `ElementCallStyle`, previews | `call/api`; libwebrtc only in `…ui.video` |
 | `call/matrix` | `element-call-matrix` | the ONLY module importing `org.matrix.rustcomponents.sdk`: `ElementCallSdkTransport` and the `temporary/` widget-driver stopgap | `call/api`, the SDK |
 | `call/test` | `element-call-test` | fakes for every port and for the RTC service, fixtures, test-pattern frames | `call/api` |
-| `rtc/local` | not published | the locally built `matrixrtc-release.aar` (gitignored) | |
+| `rtc/local` | local Maven only | the locally built `matrixrtc-release.aar` (gitignored), published to `~/.m2` as `org.matrix.rtc:matrixrtc-android` so the POMs resolve | |
+| `bom` | `element-call-bom` | one version for the five artifacts | |
+| `tests/consumer` | not published | a separate Gradle build: a minified app over the published artifacts from `mavenLocal()` | the artifacts |
 | `sample` | not published | the harness: a Compose app over the fakes, the only Activity, the instrumented tests | `call/ui`, `call/impl`, `call/test`; never `call/matrix` |
 | `tests/konsist`, `tests/testutils`, `tests/uitests` | not published | the rules below, test helpers, the Paparazzi screenshot tests | |
 
@@ -137,6 +140,13 @@ Anything that exists because the SDK or the core does not yet expose what the ca
 and publishes it as a plain `require`. Element X pins its own SDK `strictly`, so a newer host SDK wins and the
 library runs on it; an older one fails at configuration time. When bumping the SDK here, run the tests and check
 `SdkSurfaceBinaryCompatibilityTest` (arrives with `call/matrix`'s code).
+
+## Releasing
+
+`VERSION_NAME` in `gradle.properties` is the version; semver `0.x`, minor for an API or SDK-pin change, patch otherwise.
+`./scripts/release.sh v<version>` rehearses a release without touching any remote; `release.yml` runs it on a `v*` tag
+and publishes only behind the `MAVEN_CENTRAL_PUBLISH` gate. `./gradlew publishToMavenLocal -PVERSION_NAME=0.0.0-local`
+is how a host consumes an unreleased build. Details, prerequisites and what must never be published: `RELEASING.md`.
 
 ## Pull requests
 

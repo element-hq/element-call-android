@@ -19,7 +19,7 @@ harness exist. Nothing is published yet.
 
 ## Modules
 
-Five published artifacts under `io.element.android`, one version:
+Five published artifacts under `io.element.android`, one version, plus `element-call-bom` to pin them together:
 
 | Artifact | Project | What it is |
 | :--- | :--- | :--- |
@@ -79,6 +79,9 @@ code lands.
 
 - [AGENTS.md](AGENTS.md): boundaries, commands, conventions.
 - [docs/local_stack.md](docs/local_stack.md): the local development stack.
+- [docs/screenshot_testing.md](docs/screenshot_testing.md): the Paparazzi screenshot tests.
+- [RELEASING.md](RELEASING.md): versioning, cutting a release, and what must never be published.
+- [CHANGES.md](CHANGES.md): the changelog.
 - [CONTRIBUTING.md](CONTRIBUTING.md): how to submit a change.
 
 ## Copyright & License
