@@ -8,12 +8,12 @@
 package io.element.android.call.impl.rtc
 
 import com.google.common.truth.Truth.assertThat
+import io.element.android.call.api.matrix.ElementCallEventEncryptionInfo
+import io.element.android.call.api.matrix.ElementCallStickyEvent
 import io.element.android.call.api.rtc.id.DeviceId
 import io.element.android.call.api.rtc.id.EventId
 import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.call.api.rtc.id.UserId
-import io.element.android.call.api.matrix.ElementCallEventEncryptionInfo
-import io.element.android.call.api.matrix.ElementCallStickyEvent
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray

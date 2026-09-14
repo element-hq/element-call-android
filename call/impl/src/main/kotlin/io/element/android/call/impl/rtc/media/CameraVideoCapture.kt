@@ -8,8 +8,8 @@
 package io.element.android.call.impl.rtc.media
 
 import android.content.Context
-import io.element.android.call.impl.util.runCatchingExceptions
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
+import io.element.android.call.impl.util.runCatchingExceptions
 import livekit.org.webrtc.Camera2Enumerator
 import livekit.org.webrtc.CameraVideoCapturer
 import livekit.org.webrtc.CapturerObserver
@@ -37,8 +37,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * the indicator light staying on while the UI says the camera is off is not a thing worth being
  * clever about. `MatrixRtcCall.setCameraEnabled` mutes the track at the transport instead.
  *
- * @param onFrame receives a copy of every captured frame, for a self view. Called on a camera
- * thread.
+ * [onFrame] receives a copy of every captured frame, for a self view. Called on a camera thread.
  */
 internal class CameraVideoCapture(
     private val context: Context,

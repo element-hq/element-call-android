@@ -39,9 +39,11 @@ import java.util.UUID
  * One per Matrix session, alive between calls. Element X builds it from `RustMatrixClient.innerClient`
  * in its session scope; the sample app has none and runs on fakes.
  *
+ * @param client the logged-in SDK client the session runs on.
  * @param sessionScope lives as long as the Matrix session. The per-room widget-driver bridges hang off
  * it as siblings of the call, because the leave still goes through the bridge after the call scope is
  * cancelled.
+ * @param dispatchers where SDK calls run; the default is fine for anything but a test.
  */
 class ElementCallSdkTransport(
     private val client: Client,

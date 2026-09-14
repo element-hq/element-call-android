@@ -7,9 +7,9 @@
 
 package io.element.android.call.impl.rtc
 
-import io.element.android.call.impl.util.runCatchingExceptions
 import io.element.android.call.api.rtc.MatrixRtcLogLevel
 import io.element.android.call.api.rtc.MatrixRtcLoggingConfiguration
+import io.element.android.call.impl.util.runCatchingExceptions
 import org.matrix.rtc.MatrixRtc
 import org.matrix.rtc.RtcLogging
 import timber.log.Timber

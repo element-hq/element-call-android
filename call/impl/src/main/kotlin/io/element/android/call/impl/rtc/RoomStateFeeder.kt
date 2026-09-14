@@ -39,7 +39,7 @@ import uniffi.matrix_rtc_ffi.LegacyStateMemberEvent as FfiLegacyStateMemberEvent
  * Everything comes through [room]: members and encryption from whatever the transport has, memberships
  * from whatever carries them for the released SDK (today, the widget-driver stopgap).
  *
- * @param ownUserId the session's own user, for the log line that says whether our own membership has
+ * [ownUserId] is the session's own user, for the log line that says whether our own membership has
  * echoed back yet.
  */
 internal class RoomStateFeeder(

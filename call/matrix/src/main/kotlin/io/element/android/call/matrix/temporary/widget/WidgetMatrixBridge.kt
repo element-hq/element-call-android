@@ -13,19 +13,19 @@
 
 package io.element.android.call.matrix.temporary.widget
 
-import io.element.android.call.matrix.util.runCatchingExceptions
+import io.element.android.call.api.matrix.ElementCallDelayedEventAction
+import io.element.android.call.api.matrix.ElementCallEventEncryptionInfo
+import io.element.android.call.api.matrix.ElementCallMatrixException
+import io.element.android.call.api.matrix.ElementCallRoomStateEvent
+import io.element.android.call.api.matrix.ElementCallStickyEvent
+import io.element.android.call.api.matrix.ElementCallToDeviceMessage
+import io.element.android.call.api.rtc.MatrixRtcEventTypes
 import io.element.android.call.api.rtc.id.DeviceId
 import io.element.android.call.api.rtc.id.EventId
 import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.call.api.rtc.id.UserId
-import io.element.android.call.api.rtc.MatrixRtcEventTypes
-import io.element.android.call.api.matrix.ElementCallMatrixException
-import io.element.android.call.api.matrix.ElementCallDelayedEventAction
-import io.element.android.call.api.matrix.ElementCallEventEncryptionInfo
-import io.element.android.call.api.matrix.ElementCallRoomStateEvent
 import io.element.android.call.matrix.ElementCallTemporaryApi
-import io.element.android.call.api.matrix.ElementCallStickyEvent
-import io.element.android.call.api.matrix.ElementCallToDeviceMessage
+import io.element.android.call.matrix.util.runCatchingExceptions
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -79,7 +79,7 @@ import kotlin.time.Duration.Companion.seconds
  * core wants the full state on every tick. Room state is replace-only, a leave being a present `{}`
  * event, so the latest event per state key *is* the full state and the map below re-emits it whole.
  *
- * @param parentScope where the driver's loops and the feeds run. The bridge makes its own child of it
+ * [parentScope] is where the driver's loops and the feeds run. The bridge makes its own child of it
  * so [stop] can cancel the loops without cancelling the caller; a child of the client session scope
  * rather than of the call's, because the leave itself still goes through the bridge.
  */
@@ -230,6 +230,8 @@ internal class WidgetMatrixBridge(
         }
     }
 
+    // The signature mirrors the port's; the widget API has no sticky events to send them through.
+    @Suppress("UnusedParameter")
     suspend fun sendStickyEvent(eventType: String, contentJson: String, durationMs: ULong): Result<String> {
         return Result.failure(ElementCallMatrixException.NotSupported("MSC4354 sticky event $eventType"))
     }
@@ -413,8 +415,7 @@ internal class WidgetMatrixBridge(
      */
     private fun applyStateEvents(events: List<JsonObject>) {
         val changes = mutableMapOf<String, MutableMap<String, ElementCallRoomStateEvent>>()
-        for (event in events) {
-            val mapped = event.toStateEvent() ?: continue
+        for (mapped in events.mapNotNull { it.toStateEvent() }) {
             val type = canonicalType(mapped.eventType)
             val held = stateByType[type]?.value?.get(mapped.stateKey)
             // The same change through both doors.
@@ -438,15 +439,16 @@ internal class WidgetMatrixBridge(
         else -> eventType
     }
 
+    private fun malformedStateEvent(): ElementCallRoomStateEvent? {
+        Timber.w("WidgetBridge: ignoring a malformed state event")
+        return null
+    }
+
     private fun JsonObject.toStateEvent(): ElementCallRoomStateEvent? {
-        val eventType = string("type")
-        val stateKey = string("state_key")
-        val sender = string("sender")?.let { runCatchingExceptions { UserId(it) }.getOrNull() }
-        val content = this["content"] as? JsonObject
-        if (eventType == null || stateKey == null || sender == null || content == null) {
-            Timber.w("WidgetBridge: ignoring a malformed state event")
-            return null
-        }
+        val eventType = string("type") ?: return malformedStateEvent()
+        val stateKey = string("state_key") ?: return malformedStateEvent()
+        val sender = string("sender")?.let { runCatchingExceptions { UserId(it) }.getOrNull() } ?: return malformedStateEvent()
+        val content = this["content"] as? JsonObject ?: return malformedStateEvent()
         return ElementCallRoomStateEvent(
             eventType = eventType,
             stateKey = stateKey,

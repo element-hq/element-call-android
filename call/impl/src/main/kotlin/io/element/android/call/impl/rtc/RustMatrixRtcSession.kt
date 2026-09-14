@@ -9,15 +9,15 @@ package io.element.android.call.impl.rtc
 
 import android.content.Context
 import io.element.android.call.api.ElementCallDispatchers
-import io.element.android.call.impl.util.childScope
-import io.element.android.call.impl.util.runCatchingExceptions
 import io.element.android.call.api.matrix.ElementCallMatrixTransport
-import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.call.api.rtc.MatrixRtcCall
 import io.element.android.call.api.rtc.MatrixRtcLeaveReason
 import io.element.android.call.api.rtc.MatrixRtcMembership
 import io.element.android.call.api.rtc.MatrixRtcSession
 import io.element.android.call.api.rtc.MatrixRtcTransport
+import io.element.android.call.api.rtc.id.RoomId
+import io.element.android.call.impl.util.childScope
+import io.element.android.call.impl.util.runCatchingExceptions
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel

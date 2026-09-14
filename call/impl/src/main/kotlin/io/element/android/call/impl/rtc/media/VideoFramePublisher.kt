@@ -7,8 +7,8 @@
 
 package io.element.android.call.impl.rtc.media
 
-import io.element.android.call.impl.util.runCatchingExceptions
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
+import io.element.android.call.impl.util.runCatchingExceptions
 import livekit.org.webrtc.VideoFrame
 import timber.log.Timber
 import uniffi.matrix_rtc_ffi.FfiLocalTrack
@@ -30,6 +30,7 @@ import uniffi.matrix_rtc_ffi.FfiVideoRotation
  * @param label what this is capturing, for the log line. "camera" or "screen".
  * @param framesPerLog how many frames between log lines, so a 30fps camera and a 5fps screen share
  * both report about as often.
+ * @param onFrame receives a copy of every published frame, for a self view. Called on the capture thread.
  */
 internal class VideoFramePublisher(
     private val label: String,

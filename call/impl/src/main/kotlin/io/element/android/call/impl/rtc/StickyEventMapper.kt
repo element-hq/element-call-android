@@ -7,8 +7,8 @@
 
 package io.element.android.call.impl.rtc
 
-import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.call.api.matrix.ElementCallStickyEvent
+import io.element.android.call.api.rtc.id.RoomId
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive

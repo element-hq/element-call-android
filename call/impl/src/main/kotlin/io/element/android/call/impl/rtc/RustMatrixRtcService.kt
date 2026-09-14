@@ -39,7 +39,7 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * The RTC core for one Matrix session, bridged to Matrix through an [ElementCallMatrixTransport].
  *
- * @param sessionCoroutineScope lives as long as the Matrix session: the core, its session-long feeds and
+ * [sessionCoroutineScope] lives as long as the Matrix session: the core, its session-long feeds and
  * the rooms open for a call all hang off it.
  */
 internal class RustMatrixRtcService(

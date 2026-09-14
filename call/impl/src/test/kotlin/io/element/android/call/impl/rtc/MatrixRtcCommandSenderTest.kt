@@ -15,6 +15,7 @@ import io.element.android.call.api.matrix.ElementCallMatrixTransport
 import io.element.android.call.api.rtc.id.DeviceId
 import io.element.android.call.api.rtc.id.EventId
 import io.element.android.call.api.rtc.id.UserId
+import io.element.android.call.impl.util.runCatchingExceptions
 import io.element.android.call.test.A_DEVICE_ID
 import io.element.android.call.test.A_ROOM_ID
 import io.element.android.call.test.A_USER_ID
@@ -145,7 +146,7 @@ class MatrixRtcCommandSenderTest {
             sendToDeviceMessageResult = { _, _ -> Result.failure(IllegalStateException("boom")) },
         )
 
-        val thrown = runCatching {
+        val thrown = runCatchingExceptions {
             createSender(transport = transport).sendToDeviceMessage(
                 recipients = listOf(FfiToDeviceRecipient(A_REMOTE_USER_ID.value, A_REMOTE_DEVICE_ID)),
                 messageType = AN_EVENT_TYPE,
@@ -166,7 +167,7 @@ class MatrixRtcCommandSenderTest {
             sendStickyEventResult = { _, _, _ -> Result.failure(ElementCallMatrixException.NotSupported("sticky")) },
         )
 
-        val thrown = runCatching {
+        val thrown = runCatchingExceptions {
             createSender(room = room).sendStickyEvent(A_ROOM_ID.value, AN_EVENT_TYPE, A_CONTENT, durationMs = 60_000uL)
         }.exceptionOrNull()
 
@@ -213,7 +214,7 @@ class MatrixRtcCommandSenderTest {
             sendDelayedEventResult = { _, _, _, _ -> Result.failure(matrixApiError("M_UNRECOGNIZED", 404, "Unrecognized request")) },
         )
 
-        val thrown = runCatching {
+        val thrown = runCatchingExceptions {
             createSender(room = room).sendDelayedEvent(A_ROOM_ID.value, AN_EVENT_TYPE, A_CONTENT, delayMs = 8_000uL)
         }.exceptionOrNull()
 
@@ -232,7 +233,7 @@ class MatrixRtcCommandSenderTest {
             },
         )
 
-        val thrown = runCatching { createSender(room = room).restartDelayedEvent(A_ROOM_ID.value, A_DELAY_ID) }.exceptionOrNull()
+        val thrown = runCatchingExceptions { createSender(room = room).restartDelayedEvent(A_ROOM_ID.value, A_DELAY_ID) }.exceptionOrNull()
 
         assertThat(thrown).isInstanceOf(CommandSenderException.NotSupported::class.java)
     }
@@ -250,7 +251,7 @@ class MatrixRtcCommandSenderTest {
             },
         )
 
-        val thrown = runCatching {
+        val thrown = runCatchingExceptions {
             createSender(room = room).sendDelayedStateEvent(A_ROOM_ID.value, A_LEGACY_MEMBER_EVENT_TYPE, A_STATE_KEY, A_CONTENT, delayMs = 8_000uL)
         }.exceptionOrNull()
 
@@ -261,7 +262,7 @@ class MatrixRtcCommandSenderTest {
     fun `a delayed event that fails for any other reason stays a retryable send failure`() = runTest {
         val room = FakeElementCallMatrixRoom(sendDelayedEventResult = { _, _, _, _ -> Result.failure(IllegalStateException("boom")) })
 
-        val thrown = runCatching {
+        val thrown = runCatchingExceptions {
             createSender(room = room).sendDelayedEvent(A_ROOM_ID.value, AN_EVENT_TYPE, A_CONTENT, delayMs = 8_000uL)
         }.exceptionOrNull()
 
@@ -280,7 +281,7 @@ class MatrixRtcCommandSenderTest {
         ).forEach { failure ->
             val room = FakeElementCallMatrixRoom(sendDelayedEventResult = { _, _, _, _ -> Result.failure(failure) })
 
-            val thrown = runCatching {
+            val thrown = runCatchingExceptions {
                 createSender(room = room).sendDelayedEvent(A_ROOM_ID.value, AN_EVENT_TYPE, A_CONTENT, delayMs = 8_000uL)
             }.exceptionOrNull()
 
@@ -331,7 +332,7 @@ class MatrixRtcCommandSenderTest {
             { sender.cancelDelayedEvent(A_ROOM_ID.value, A_DELAY_ID) },
             { sender.sendStateEvent(A_ROOM_ID.value, AN_EVENT_TYPE, A_STATE_KEY, A_CONTENT) },
         ).forEach { command ->
-            val thrown = runCatching { command() }.exceptionOrNull()
+            val thrown = runCatchingExceptions { command() }.exceptionOrNull()
             assertThat(thrown).isInstanceOf(CommandSenderException.SendException::class.java)
         }
     }

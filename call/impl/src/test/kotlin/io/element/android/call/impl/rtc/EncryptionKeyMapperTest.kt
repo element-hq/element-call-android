@@ -8,11 +8,11 @@
 package io.element.android.call.impl.rtc
 
 import com.google.common.truth.Truth.assertThat
-import io.element.android.call.api.rtc.id.DeviceId
-import io.element.android.call.api.rtc.id.UserId
-import io.element.android.call.api.rtc.MatrixRtcEventTypes
 import io.element.android.call.api.matrix.ElementCallEventEncryptionInfo
 import io.element.android.call.api.matrix.ElementCallToDeviceMessage
+import io.element.android.call.api.rtc.MatrixRtcEventTypes
+import io.element.android.call.api.rtc.id.DeviceId
+import io.element.android.call.api.rtc.id.UserId
 import org.junit.Test
 
 private val A_SENDER = UserId("@alice:example.org")

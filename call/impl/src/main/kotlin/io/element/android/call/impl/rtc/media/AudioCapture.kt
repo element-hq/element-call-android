@@ -10,8 +10,8 @@ package io.element.android.call.impl.rtc.media
 import android.annotation.SuppressLint
 import android.media.AudioRecord
 import android.media.MediaRecorder
-import io.element.android.call.impl.util.runCatchingExceptions
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
+import io.element.android.call.impl.util.runCatchingExceptions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -59,6 +59,9 @@ internal class AudioCapture(
      * @throws SecurityException if [android.Manifest.permission.RECORD_AUDIO] has not been granted.
      */
     @SuppressLint("MissingPermission")
+    // The read loop has three ways out - a released recorder, a read error and an empty read while
+    // the tone is off - and each is its own exit on purpose, so the log can say which.
+    @Suppress("LoopWithTooManyJumpStatements")
     fun start(track: FfiLocalTrack) {
         if (recorder != null) return
 
@@ -213,14 +216,16 @@ internal class AudioCapture(
                 .getOrDefault(RELEASED)
         }
 
-        fun release(): Unit = synchronized(lock) {
-            if (isReleased) return
-            isReleased = true
-            job?.cancel()
-            if (record.state == AudioRecord.STATE_INITIALIZED) {
-                record.stop()
+        fun release() {
+            synchronized(lock) {
+                if (isReleased) return
+                isReleased = true
+                job?.cancel()
+                if (record.state == AudioRecord.STATE_INITIALIZED) {
+                    record.stop()
+                }
+                record.release()
             }
-            record.release()
         }
 
         companion object {

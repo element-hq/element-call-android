@@ -64,6 +64,7 @@ interface ElementCallMatrixTransport {
     /**
      * Send an encrypted to-device message to every listed device.
      *
+     * @param eventType the to-device event type, for instance `io.element.call.encryption_keys`.
      * @param messages user id -> device id -> JSON content.
      * @return the recipients that were *not* served, user id -> device ids; empty means everyone was.
      */

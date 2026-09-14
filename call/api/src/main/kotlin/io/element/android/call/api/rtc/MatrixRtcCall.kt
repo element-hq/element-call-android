@@ -103,6 +103,7 @@ interface MatrixRtcCall : AutoCloseable {
      * this does not wait around for a stream that does not exist yet, so drive it from
      * [participants] and the [MatrixRtcCallEvent.StreamStarted] events that change it.
      *
+     * @param memberId whose stream, as [participants] names them.
      * @param kind which of the member's video streams. A member can publish a camera and a screen at
      * once, and they are two independent streams that happen to share a member id.
      */
@@ -176,6 +177,7 @@ interface MatrixRtcCall : AutoCloseable {
      * being shared is not a state at all, and every client draws a tile for a screen-share stream
      * that exists, so a muted one leaves receivers showing an empty tile for a share that ended.
      *
+     * @param enabled whether to start or stop sharing.
      * @param token the user's grant, required when enabling and ignored when disabling.
      */
     suspend fun setScreenShareEnabled(enabled: Boolean, token: MatrixRtcScreenCaptureToken? = null): Result<Unit>

@@ -156,7 +156,7 @@ class SharedFrameStreamTest {
         return TestUpstream(frames) { repeat(count) { gate.trySend(Unit) } }
     }
 
-    private class TestUpstream(val frames: Flow<MatrixRtcVideoFrame>, val emitAll: () -> Unit)
+    private data class TestUpstream(val frames: Flow<MatrixRtcVideoFrame>, val emitAll: () -> Unit)
 
     private fun aFrame(onRelease: () -> Unit) = MatrixRtcVideoFrame(
         width = 2,

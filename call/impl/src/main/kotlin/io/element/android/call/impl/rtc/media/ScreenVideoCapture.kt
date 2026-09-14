@@ -57,6 +57,7 @@ internal class ScreenVideoCapture(private val context: Context) {
     /**
      * Claim the projection and start publishing to [track].
      *
+     * @param track the published screen-share track the captured frames go to.
      * @param permissionData the `Intent` an Activity got back from
      * `MediaProjectionManager.createScreenCaptureIntent()`.
      * @param onStopped called if the projection ends without us asking - the user stopping it from
@@ -183,7 +184,7 @@ internal class ScreenVideoCapture(private val context: Context) {
         }
     }
 
-    private fun makeEven(value: Int) = (value / 2) * 2
+    private fun makeEven(value: Int) = value / 2 * 2
 
     private companion object {
         /** Five seconds at the requested frame rate. */

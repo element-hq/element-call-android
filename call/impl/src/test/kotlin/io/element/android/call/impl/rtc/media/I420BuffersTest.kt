@@ -8,6 +8,7 @@
 package io.element.android.call.impl.rtc.media
 
 import com.google.common.truth.Truth.assertThat
+import io.element.android.call.impl.util.runCatchingExceptions
 import org.junit.Test
 import java.nio.ByteBuffer
 
@@ -67,7 +68,7 @@ class I420BuffersTest {
     fun `a buffer too small for the plane described is refused`() {
         val plane = ByteBuffer.allocate(5)
 
-        runCatching { I420Buffers.packPlane(plane, stride = 4, rowWidth = 4, rowCount = 3) }
+        runCatchingExceptions { I420Buffers.packPlane(plane, stride = 4, rowWidth = 4, rowCount = 3) }
             .onSuccess { error("expected a plane that does not fit to be refused") }
             .onFailure { assertThat(it).isInstanceOf(IllegalArgumentException::class.java) }
     }

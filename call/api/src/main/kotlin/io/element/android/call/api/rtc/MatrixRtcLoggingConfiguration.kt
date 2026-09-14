@@ -17,13 +17,13 @@ package io.element.android.call.api.rtc
  * not replace it.
  *
  * @param logLevel baseline level, applied to every target with no override in [filter].
+ * @param writesToLogcat when true, the core writes to logcat itself under the `matrix-rtc` tag
+ * (`adb logcat -s matrix-rtc`), with the Rust module path prepended to each message. When false,
+ * core logging stays off entirely.
  * @param filter `RUST_LOG` style per-target overrides, comma separated. Targets are Rust module
  * paths matched by prefix; the roots are `matrix_rtc_core`, `matrix_rtc_media`,
  * `matrix_rtc_livekit` and `matrix_rtc_ffi`, plus `livekit`, `libwebrtc` and `webrtc_sys` from the
  * SFU and WebRTC stacks.
- * @param writesToLogcat when true, the core writes to logcat itself under the `matrix-rtc` tag
- * (`adb logcat -s matrix-rtc`), with the Rust module path prepended to each message. When false,
- * core logging stays off entirely.
  */
 data class MatrixRtcLoggingConfiguration(
     val logLevel: MatrixRtcLogLevel,

@@ -39,6 +39,8 @@ interface MatrixRtcService {
     /**
      * Join the RTC session identified by [roomId] and [slotId].
      *
+     * @param roomId the room the session lives in.
+     * @param slotId the slot within the room, for instance `m.call#ROOM`.
      * @param application the MSC4143 application type, for instance `m.call`.
      * @param transport the transport to publish on, usually discovered with [discoverTransports].
      * @param elementCallCompat which generation of Element Call this call should be reachable by. Not

@@ -47,8 +47,10 @@ import java.util.concurrent.CopyOnWriteArrayList
  * Collectors are called inline from their own channel loop, with no dispatcher change in between,
  * which is what makes "release after emit" a fact rather than a hope.
  *
- * @param linger how long the upstream stays open after the last collector leaves, so a tile that is
- * destroyed and immediately rebuilt does not close and reopen the stream underneath the core.
+ * @param upstream the cold, one-stream-per-collector flow being shared.
+ * @param scope where the single upstream collection runs; cancelling it closes the stream.
+ * @param lingerMillis how long the upstream stays open after the last collector leaves, so a tile that
+ * is destroyed and immediately rebuilt does not close and reopen the stream underneath the core.
  */
 internal class SharedFrameStream(
     private val upstream: Flow<MatrixRtcVideoFrame>,

@@ -7,7 +7,6 @@
 
 package io.element.android.call.impl.rtc
 
-import io.element.android.call.api.rtc.id.UserId
 import io.element.android.call.api.rtc.MatrixRtcCallEvent
 import io.element.android.call.api.rtc.MatrixRtcEndReason
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionDiagnostic
@@ -19,6 +18,7 @@ import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcSpeakingMember
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamState
+import io.element.android.call.api.rtc.id.UserId
 import uniffi.matrix_rtc_ffi.FfiCallEvent
 import uniffi.matrix_rtc_ffi.FfiEndedReason
 import uniffi.matrix_rtc_ffi.FfiFrameEncryptionDiagnostic

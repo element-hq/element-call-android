@@ -26,7 +26,7 @@ import kotlin.math.sqrt
  *
  * Not thread safe - each stream has its own meter, fed from that stream's single reader loop.
  *
- * @param nanoTime injectable so the realtime ratio can be tested without waiting in real time.
+ * [nanoTime] is injectable so the realtime ratio can be tested without waiting in real time.
  */
 internal class AudioLevelMeter(
     private val label: String,
@@ -104,7 +104,7 @@ internal class AudioLevelMeter(
             // frame needs no wrapper. The low byte is unsigned, the high byte carries the sign.
             val low = frame[index * 2].toInt() and 0xFF
             val high = frame[index * 2 + 1].toInt()
-            val sample = ((high shl 8) or low) / FULL_SCALE
+            val sample = (high shl 8 or low) / FULL_SCALE
             sumOfSquares += sample * sample
         }
         val rms = sqrt(sumOfSquares / sampleCount)

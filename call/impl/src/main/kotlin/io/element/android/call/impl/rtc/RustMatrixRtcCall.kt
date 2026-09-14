@@ -9,7 +9,6 @@ package io.element.android.call.impl.rtc
 
 import android.content.Context
 import io.element.android.call.api.ElementCallDispatchers
-import io.element.android.call.impl.util.runCatchingExceptions
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
 import io.element.android.call.api.rtc.MatrixRtcCall
 import io.element.android.call.api.rtc.MatrixRtcCallEvent
@@ -27,6 +26,7 @@ import io.element.android.call.impl.rtc.media.AudioPlayback
 import io.element.android.call.impl.rtc.media.CameraVideoCapture
 import io.element.android.call.impl.rtc.media.ScreenVideoCapture
 import io.element.android.call.impl.rtc.media.VideoFormat
+import io.element.android.call.impl.util.runCatchingExceptions
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel

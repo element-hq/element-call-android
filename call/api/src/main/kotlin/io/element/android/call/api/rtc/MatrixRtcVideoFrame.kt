@@ -34,14 +34,13 @@ import java.util.concurrent.atomic.AtomicInteger
  * dropped frame, never a corrupted one. Reads may happen on any thread, unsynchronised, and release
  * may happen on any thread - the single rule is that every read happens before the release.
  *
- * @param rotationDegrees how far the frame must be rotated clockwise to be displayed upright. The
+ * [rotationDegrees] is how far the frame must be rotated clockwise to be displayed upright. The
  * capture device reports this rather than rotating pixels, so a renderer that ignores it shows a
- * sideways picture on a phone held upright.
- * @param timestampUs the capture timestamp in microseconds, on the sender's clock. Only useful for
- * ordering and for spotting a stalled stream; it is not comparable to anything local.
- * @param onRelease frees whatever backs the planes. Called at most once, by [release]. Absent for a
- * frame whose planes are ordinary heap buffers - locally captured ones - where releasing is nothing
- * but bookkeeping and the garbage collector does the rest.
+ * sideways picture on a phone held upright. [timestampUs] is the capture timestamp in microseconds,
+ * on the sender's clock: only useful for ordering and for spotting a stalled stream, it is not
+ * comparable to anything local. `onRelease` frees whatever backs the planes; it is called at most
+ * once, by [release], and is absent for a frame whose planes are ordinary heap buffers - locally
+ * captured ones - where releasing is nothing but bookkeeping and the garbage collector does the rest.
  */
 class MatrixRtcVideoFrame(
     val width: Int,

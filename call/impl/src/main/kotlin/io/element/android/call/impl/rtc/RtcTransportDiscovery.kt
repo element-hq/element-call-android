@@ -7,9 +7,9 @@
 
 package io.element.android.call.impl.rtc
 
-import io.element.android.call.impl.util.runCatchingExceptions
 import io.element.android.call.api.matrix.ElementCallMatrixTransport
 import io.element.android.call.api.rtc.MatrixRtcTransport
+import io.element.android.call.impl.util.runCatchingExceptions
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject

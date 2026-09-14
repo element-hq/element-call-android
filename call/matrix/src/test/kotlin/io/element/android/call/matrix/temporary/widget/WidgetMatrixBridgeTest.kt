@@ -9,14 +9,13 @@ package io.element.android.call.matrix.temporary.widget
 
 import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
+import io.element.android.call.api.matrix.ElementCallDelayedEventAction
+import io.element.android.call.api.matrix.ElementCallMatrixException
+import io.element.android.call.api.rtc.MatrixRtcEventTypes
 import io.element.android.call.api.rtc.id.DeviceId
 import io.element.android.call.api.rtc.id.EventId
 import io.element.android.call.api.rtc.id.UserId
-import io.element.android.call.api.rtc.MatrixRtcEventTypes
-import io.element.android.call.matrix.ElementCallTemporaryApi
 import io.element.android.call.test.A_ROOM_ID
-import io.element.android.call.api.matrix.ElementCallMatrixException
-import io.element.android.call.api.matrix.ElementCallDelayedEventAction
 import kotlinx.coroutines.async
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent

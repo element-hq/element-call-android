@@ -322,7 +322,7 @@ class RoomStateFeederTest {
     }
 
     /**
-     * @param joinedMemberIds who the room holds. Defaults to a loaded list because a membership feed waits
+     * [joinedMemberIds] is who the room holds. Defaults to a loaded list because a membership feed waits
      * for one - see [RoomStateFeeder.awaitRoomMembers] - so a flow that never emits feeds nothing at all,
      * which is a distinct scenario rather than the neutral one.
      */

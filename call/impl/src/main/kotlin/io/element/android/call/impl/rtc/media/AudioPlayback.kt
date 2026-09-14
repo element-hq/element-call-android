@@ -9,8 +9,8 @@ package io.element.android.call.impl.rtc.media
 
 import android.media.AudioAttributes
 import android.media.AudioTrack
-import io.element.android.call.impl.util.runCatchingExceptions
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
+import io.element.android.call.impl.util.runCatchingExceptions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
@@ -32,6 +32,9 @@ internal class AudioPlayback(
 ) {
     private val players = ConcurrentHashMap<String, Player>()
 
+    // The loop leaves on either side going away - the stream ending or the track being released -
+    // and each is its own exit on purpose, so the log can say which.
+    @Suppress("LoopWithTooManyJumpStatements")
     fun start(memberId: String, stream: AudioFrameStream) {
         if (players.containsKey(memberId)) return
 
@@ -164,14 +167,16 @@ internal class AudioPlayback(
                 .isSuccess
         }
 
-        fun release(): Unit = synchronized(lock) {
-            if (isReleased) return
-            isReleased = true
-            job?.cancel()
-            if (track.state == AudioTrack.STATE_INITIALIZED) {
-                track.stop()
+        fun release() {
+            synchronized(lock) {
+                if (isReleased) return
+                isReleased = true
+                job?.cancel()
+                if (track.state == AudioTrack.STATE_INITIALIZED) {
+                    track.stop()
+                }
+                track.release()
             }
-            track.release()
         }
     }
 }

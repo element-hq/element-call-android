@@ -9,8 +9,8 @@ package io.element.android.call.matrix.temporary.widget
 
 import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
-import io.element.android.call.api.rtc.id.UserId
 import io.element.android.call.api.matrix.ElementCallToDeviceMessage
+import io.element.android.call.api.rtc.id.UserId
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 
