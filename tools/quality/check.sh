@@ -21,7 +21,19 @@ if git grep -n -E 'elementCallAndroidDir|elementCallLocalVersion' -- '*.properti
     exit 1
 fi
 
-# Check ktlint, detekt, Konsist, the ABI dumps and the boundaries first
+# Every source file carries the one-line 2026 notice and nobody else's. Konsist checks the Kotlin files;
+# this covers the XML resources, the scripts and the rules files too. `tools/quality/fix_headers.py` fixes a file.
+if git grep -l "New Vector" -- . ':!tools/quality/check.sh' ':!tools/quality/fix_headers.py' ':!tests/konsist/**/KonsistLicenseTest.kt' >/dev/null; then
+    echo "❌ A file names another copyright holder. Run tools/quality/fix_headers.py." >&2
+    git grep -l "New Vector" -- . ':!tools/quality/check.sh' ':!tools/quality/fix_headers.py' ':!tests/konsist/**/KonsistLicenseTest.kt' >&2
+    exit 1
+fi
+if git ls-files '*.kt' '*.kts' '*.xml' '*.sh' '*.py' '*.pro' | xargs grep -L "Copyright (c) 2026 Element Creations Ltd." | grep . ; then
+    echo "❌ The files above lack the copyright notice. Run tools/quality/fix_headers.py." >&2
+    exit 1
+fi
+
+# Check ktlint, detekt, Konsist and the boundaries first
 ./gradlew runQualityChecks
 
 # Build, test and check the project, with warning as errors

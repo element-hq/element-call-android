@@ -79,7 +79,10 @@ until one does.
 ### Code style
 
 - Style enforced by `.editorconfig` (Element X's). Hard wrap at 160 chars.
-- Every source file carries the licence header (checked by `KonsistLicenseTest`):
+- Every source file - Kotlin, Gradle scripts, XML resources, shell and Python scripts, ProGuard rules - carries
+  exactly this header, with `Copyright (c) 2026 Element Creations Ltd.` as its only copyright line. Checked by
+  `KonsistLicenseTest` for Kotlin and by `tools/quality/check.sh` for the rest; `python3 tools/quality/fix_headers.py`
+  puts a file right.
 
 ```kotlin
 /*
