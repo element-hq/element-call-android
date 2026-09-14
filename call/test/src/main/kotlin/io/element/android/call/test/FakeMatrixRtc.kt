@@ -7,7 +7,6 @@
 
 package io.element.android.call.test
 
-import io.element.android.libraries.matrix.api.MatrixClient
 import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
 import io.element.android.call.api.rtc.MatrixRtcCall
@@ -20,7 +19,6 @@ import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcService
-import io.element.android.call.api.rtc.MatrixRtcServiceProvider
 import io.element.android.call.api.rtc.MatrixRtcSession
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTransport
@@ -32,12 +30,6 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flow
-
-class FakeMatrixRtcServiceProvider(
-    private val service: MatrixRtcService,
-) : MatrixRtcServiceProvider {
-    override fun provide(client: MatrixClient): MatrixRtcService = service
-}
 
 class FakeMatrixRtcService(
     private val transports: List<MatrixRtcTransport> = emptyList(),

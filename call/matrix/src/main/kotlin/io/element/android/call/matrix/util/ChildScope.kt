@@ -5,7 +5,7 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.call.impl.util
+package io.element.android.call.matrix.util
 
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineName
@@ -18,8 +18,7 @@ import kotlinx.coroutines.plus
  * A child scope of this one: its own [SupervisorJob] under the parent's job, the given dispatcher and a
  * name, so that cancelling the parent cancels the child and a failure in the child stays there.
  *
- * Copied from Element X's `libraries/core`, minus its special case for `TestScope`: tests here pass a
- * scope they control instead.
+ * Copied from Element X's `libraries/core`; every module that needs it carries its own internal copy.
  */
 internal fun CoroutineScope.childScope(
     dispatcher: CoroutineDispatcher,

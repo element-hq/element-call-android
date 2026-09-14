@@ -27,5 +27,9 @@ dependencies {
     // uniffi bindings runtime.
     implementation(variantOf(libs.jna) { artifactType("aar") })
 
+    implementation(libs.coroutines.core)
+    implementation(libs.serialization.json)
+
     testCommonDependencies(libs)
+    testImplementation(projects.call.test)
 }

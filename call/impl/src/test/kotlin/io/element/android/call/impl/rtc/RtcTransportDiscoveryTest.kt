@@ -8,14 +8,14 @@
 package io.element.android.call.impl.rtc
 
 import com.google.common.truth.Truth.assertThat
-import io.element.android.libraries.matrix.test.FakeMatrixClient
 import io.element.android.call.api.rtc.MatrixRtcTransport
+import io.element.android.call.test.FakeElementCallMatrixTransport
 import org.junit.Test
 
 private const val A_SERVICE_URL = "https://sfu.example.org/jwt"
 
 class RtcTransportDiscoveryTest {
-    private val sut = RtcTransportDiscovery(FakeMatrixClient())
+    private val sut = RtcTransportDiscovery(FakeElementCallMatrixTransport())
 
     @Test
     fun `parses the MSC4143 discovery response`() {

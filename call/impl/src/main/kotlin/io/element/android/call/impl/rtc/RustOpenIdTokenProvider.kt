@@ -7,7 +7,7 @@
 
 package io.element.android.call.impl.rtc
 
-import io.element.android.libraries.matrix.api.MatrixClient
+import io.element.android.call.api.matrix.ElementCallMatrixTransport
 import uniffi.matrix_rtc_ffi.FfiOpenIdToken
 import uniffi.matrix_rtc_ffi.OpenIdTokenProvider
 
@@ -16,10 +16,10 @@ import uniffi.matrix_rtc_ffi.OpenIdTokenProvider
  * for SFU credentials.
  */
 internal class RustOpenIdTokenProvider(
-    private val client: MatrixClient,
+    private val transport: ElementCallMatrixTransport,
 ) : OpenIdTokenProvider {
     override suspend fun getOpenIdToken(): FfiOpenIdToken {
-        val token = client.getOpenIdToken().getOrThrow()
+        val token = transport.getOpenIdToken().getOrThrow()
         return FfiOpenIdToken(
             accessToken = token.accessToken,
             tokenType = token.tokenType,

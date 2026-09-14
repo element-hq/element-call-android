@@ -11,7 +11,7 @@ import android.content.Context
 import io.element.android.call.api.ElementCallDispatchers
 import io.element.android.call.impl.util.childScope
 import io.element.android.call.impl.util.runCatchingExceptions
-import io.element.android.libraries.matrix.api.MatrixClient
+import io.element.android.call.api.matrix.ElementCallMatrixTransport
 import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.call.api.rtc.MatrixRtcCall
 import io.element.android.call.api.rtc.MatrixRtcLeaveReason
@@ -40,7 +40,7 @@ internal class RustMatrixRtcSession(
     override val slotId: String,
     private val localMemberId: String,
     private val manager: RtcSessionManagerHandle,
-    private val client: MatrixClient,
+    private val transport: ElementCallMatrixTransport,
     private val sessionScope: CoroutineScope,
     private val dispatchers: ElementCallDispatchers,
     private val ffiDispatcher: CoroutineDispatcher,
@@ -145,11 +145,11 @@ internal class RustMatrixRtcSession(
                 MediaSessionConfig(
                     roomId = roomId.value,
                     slotId = slotId,
-                    userId = client.sessionId.value,
-                    deviceId = client.deviceId.value,
+                    userId = this@RustMatrixRtcSession.transport.userId.value,
+                    deviceId = this@RustMatrixRtcSession.transport.deviceId.value,
                     livekitServiceUrl = transport.serviceUrl,
                 ),
-                RustOpenIdTokenProvider(client),
+                RustOpenIdTokenProvider(this@RustMatrixRtcSession.transport),
             )
         }
 

@@ -12,9 +12,9 @@ import com.google.common.truth.Truth.assertThat
 import io.element.android.call.api.rtc.id.DeviceId
 import io.element.android.call.api.rtc.id.EventId
 import io.element.android.call.api.rtc.id.UserId
-import io.element.android.libraries.matrix.test.A_ROOM_ID
-import io.element.android.libraries.matrix.test.widget.FakeMatrixWidgetDriver
 import io.element.android.call.api.rtc.MatrixRtcEventTypes
+import io.element.android.call.matrix.ElementCallTemporaryApi
+import io.element.android.call.test.A_ROOM_ID
 import io.element.android.call.api.matrix.ElementCallMatrixException
 import io.element.android.call.api.matrix.ElementCallDelayedEventAction
 import kotlinx.coroutines.async
@@ -43,7 +43,7 @@ class WidgetMatrixBridgeTest {
 
     @Test
     fun `negotiation answers the capability strings and resolves start`() = runTest {
-        val driver = FakeMatrixWidgetDriver()
+        val driver = FakeWidgetDriver()
         val bridge = createBridge(driver)
         val start = backgroundScope.async { bridge.start() }
         runCurrent()
@@ -72,7 +72,7 @@ class WidgetMatrixBridgeTest {
 
     @Test
     fun `start fails when the driver stops before negotiating`() = runTest {
-        val driver = FakeMatrixWidgetDriver()
+        val driver = FakeWidgetDriver()
         val bridge = createBridge(driver)
         val start = backgroundScope.async { bridge.start() }
         runCurrent()
@@ -84,7 +84,7 @@ class WidgetMatrixBridgeTest {
 
     @Test
     fun `start times out when nothing negotiates`() = runTest {
-        val driver = FakeMatrixWidgetDriver()
+        val driver = FakeWidgetDriver()
         val bridge = createBridge(driver, requestTimeout = 5.seconds)
 
         val result = bridge.start()
@@ -97,7 +97,7 @@ class WidgetMatrixBridgeTest {
 
     @Test
     fun `start is refused a second time`() = runTest {
-        val driver = FakeMatrixWidgetDriver()
+        val driver = FakeWidgetDriver()
         val bridge = negotiatedBridge(driver)
 
         assertThat(bridge.start().exceptionOrNull()).isInstanceOf(ElementCallMatrixException.NotRunning::class.java)
@@ -111,7 +111,7 @@ class WidgetMatrixBridgeTest {
      */
     @Test
     fun `every driver request is echoed exactly once, unknown actions included`() = runTest {
-        val driver = FakeMatrixWidgetDriver()
+        val driver = FakeWidgetDriver()
         negotiatedBridge(driver)
         val sentBefore = driver.sentMessages.size
 
@@ -127,7 +127,7 @@ class WidgetMatrixBridgeTest {
 
     @Test
     fun `messages for another widget and malformed messages are ignored without stopping the bridge`() = runTest {
-        val driver = FakeMatrixWidgetDriver()
+        val driver = FakeWidgetDriver()
         negotiatedBridge(driver)
         val sentBefore = driver.sentMessages.size
 
@@ -145,7 +145,7 @@ class WidgetMatrixBridgeTest {
 
     @Test
     fun `state deltas become whole snapshots, through both doors, without duplicates`() = runTest {
-        val driver = FakeMatrixWidgetDriver()
+        val driver = FakeWidgetDriver()
         val bridge = negotiatedBridge(driver)
 
         bridge.stateEvents(A_MEMBER_TYPE).test {
@@ -185,7 +185,7 @@ class WidgetMatrixBridgeTest {
 
     @Test
     fun `a late subscriber gets the current state at once, and nothing for a type with none`() = runTest {
-        val driver = FakeMatrixWidgetDriver()
+        val driver = FakeWidgetDriver()
         val bridge = negotiatedBridge(driver)
         driver.deliver(toWidget(UPDATE_STATE, "s-1", stateBatch(stateEvent(ALICE_KEY, "\$alice1", ALICE, aMembership("ALICEDEV")))))
 
@@ -206,7 +206,7 @@ class WidgetMatrixBridgeTest {
      */
     @Test
     fun `both spellings of the member type share one bucket and other types stay out of it`() = runTest {
-        val driver = FakeMatrixWidgetDriver()
+        val driver = FakeWidgetDriver()
         val bridge = negotiatedBridge(driver)
 
         bridge.stateEvents(A_MEMBER_TYPE).test {
@@ -229,7 +229,7 @@ class WidgetMatrixBridgeTest {
 
     @Test
     fun `feeds complete when the bridge stops`() = runTest {
-        val driver = FakeMatrixWidgetDriver()
+        val driver = FakeWidgetDriver()
         val bridge = negotiatedBridge(driver)
 
         bridge.stateEvents(A_MEMBER_TYPE).test {
@@ -245,7 +245,7 @@ class WidgetMatrixBridgeTest {
 
     @Test
     fun `an encrypted to-device message is trusted and names its device from the content`() = runTest {
-        val driver = FakeMatrixWidgetDriver()
+        val driver = FakeWidgetDriver()
         val bridge = negotiatedBridge(driver)
 
         bridge.toDeviceMessages().test {
@@ -267,7 +267,7 @@ class WidgetMatrixBridgeTest {
 
     @Test
     fun `a cleartext to-device message carries no encryption info`() = runTest {
-        val driver = FakeMatrixWidgetDriver()
+        val driver = FakeWidgetDriver()
         val bridge = negotiatedBridge(driver)
 
         bridge.toDeviceMessages().test {
@@ -287,7 +287,7 @@ class WidgetMatrixBridgeTest {
      */
     @Test
     fun `the sender device is inferred from the membership when the key names none`() = runTest {
-        val driver = FakeMatrixWidgetDriver()
+        val driver = FakeWidgetDriver()
         val bridge = negotiatedBridge(driver)
         driver.deliver(
             toWidget(
@@ -327,7 +327,7 @@ class WidgetMatrixBridgeTest {
      */
     @Test
     fun `requests put action before data`() = runTest {
-        val driver = FakeMatrixWidgetDriver()
+        val driver = FakeWidgetDriver()
         val bridge = negotiatedBridge(driver)
 
         backgroundScope.async { bridge.sendDelayedEvent(A_MEMBER_TYPE, A_STATE_KEY, A_CONTENT, 8_000uL) }
@@ -339,7 +339,7 @@ class WidgetMatrixBridgeTest {
 
     @Test
     fun `a delayed state event is a send_event with a state key and a numeric delay, answered by a delay id`() = runTest {
-        val driver = FakeMatrixWidgetDriver()
+        val driver = FakeWidgetDriver()
         val bridge = negotiatedBridge(driver)
 
         val result = async { bridge.sendDelayedEvent(A_MEMBER_TYPE, A_STATE_KEY, A_CONTENT, 8_000uL) }
@@ -360,7 +360,7 @@ class WidgetMatrixBridgeTest {
 
     @Test
     fun `a delayed message-like event sends no state key`() = runTest {
-        val driver = FakeMatrixWidgetDriver()
+        val driver = FakeWidgetDriver()
         val bridge = negotiatedBridge(driver)
 
         val result = async { bridge.sendDelayedEvent("m.rtc.notification", null, A_CONTENT, 8_000uL) }
@@ -374,7 +374,7 @@ class WidgetMatrixBridgeTest {
     /** An event id back means the machine sent it right away, which is not what was asked. */
     @Test
     fun `a delayed event answered with an event id is an invalid response`() = runTest {
-        val driver = FakeMatrixWidgetDriver()
+        val driver = FakeWidgetDriver()
         val bridge = negotiatedBridge(driver)
 
         val result = async { bridge.sendDelayedEvent(A_MEMBER_TYPE, A_STATE_KEY, A_CONTENT, 8_000uL) }
@@ -385,7 +385,7 @@ class WidgetMatrixBridgeTest {
 
     @Test
     fun `content that is not a JSON object is refused before anything is sent`() = runTest {
-        val driver = FakeMatrixWidgetDriver()
+        val driver = FakeWidgetDriver()
         val bridge = negotiatedBridge(driver)
         val sentBefore = driver.sentMessages.size
 
@@ -401,7 +401,7 @@ class WidgetMatrixBridgeTest {
      */
     @Test
     fun `updateDelayedEvent sends cancel and restart under their own names`() = runTest {
-        val driver = FakeMatrixWidgetDriver()
+        val driver = FakeWidgetDriver()
         val bridge = negotiatedBridge(driver)
 
         listOf(ElementCallDelayedEventAction.CANCEL to "cancel", ElementCallDelayedEventAction.RESTART to "restart").forEach { (action, wire) ->
@@ -418,7 +418,7 @@ class WidgetMatrixBridgeTest {
 
     @Test
     fun `a to-device send nests user, device and content, and reports the failures per recipient`() = runTest {
-        val driver = FakeMatrixWidgetDriver()
+        val driver = FakeWidgetDriver()
         val bridge = negotiatedBridge(driver)
         val messages = mapOf(
             BOB to mapOf(DeviceId("BOBDEV") to A_CONTENT, DeviceId("BOBDEV2") to A_CONTENT),
@@ -450,7 +450,7 @@ class WidgetMatrixBridgeTest {
     /** The machine omits `failures` entirely when everyone was served. */
     @Test
     fun `a to-device send with no failures reports none`() = runTest {
-        val driver = FakeMatrixWidgetDriver()
+        val driver = FakeWidgetDriver()
         val bridge = negotiatedBridge(driver)
 
         val result = async { bridge.sendToDeviceMessage(MatrixRtcEventTypes.ENCRYPTION_KEY_ELEMENT_CALL, mapOf(BOB to mapOf(DeviceId("BOBDEV") to A_CONTENT))) }
@@ -461,7 +461,7 @@ class WidgetMatrixBridgeTest {
 
     @Test
     fun `a homeserver error carries its errcode, status and message`() = runTest {
-        val driver = FakeMatrixWidgetDriver()
+        val driver = FakeWidgetDriver()
         val bridge = negotiatedBridge(driver)
 
         val result = async { bridge.sendDelayedEvent(A_MEMBER_TYPE, A_STATE_KEY, A_CONTENT, 8_000uL) }
@@ -491,7 +491,7 @@ class WidgetMatrixBridgeTest {
 
     @Test
     fun `an error without a Matrix body has no errcode`() = runTest {
-        val driver = FakeMatrixWidgetDriver()
+        val driver = FakeWidgetDriver()
         val bridge = negotiatedBridge(driver)
 
         val result = async { bridge.updateDelayedEvent("syd_abc", ElementCallDelayedEventAction.CANCEL) }
@@ -507,7 +507,7 @@ class WidgetMatrixBridgeTest {
 
     @Test
     fun `an unanswered request times out`() = runTest {
-        val driver = FakeMatrixWidgetDriver()
+        val driver = FakeWidgetDriver()
         val bridge = negotiatedBridge(driver, requestTimeout = 5.seconds)
 
         val result = async { bridge.sendDelayedEvent(A_MEMBER_TYPE, A_STATE_KEY, A_CONTENT, 8_000uL) }
@@ -523,7 +523,7 @@ class WidgetMatrixBridgeTest {
 
     @Test
     fun `a dying driver fails what is in flight and ends the feeds`() = runTest {
-        val driver = FakeMatrixWidgetDriver()
+        val driver = FakeWidgetDriver()
         val bridge = negotiatedBridge(driver)
 
         bridge.stateEvents(A_MEMBER_TYPE).test {
@@ -539,7 +539,7 @@ class WidgetMatrixBridgeTest {
 
     @Test
     fun `a send the driver refuses stops the bridge`() = runTest {
-        val driver = FakeMatrixWidgetDriver()
+        val driver = FakeWidgetDriver()
         val bridge = negotiatedBridge(driver)
         driver.givenDriverStopped(keepIncomingOpen = true)
 
@@ -553,7 +553,7 @@ class WidgetMatrixBridgeTest {
 
     @Test
     fun `stop pokes the driver, closes it, refuses further requests, and is idempotent`() = runTest {
-        val driver = FakeMatrixWidgetDriver()
+        val driver = FakeWidgetDriver()
         val bridge = negotiatedBridge(driver)
 
         bridge.stop()
@@ -573,7 +573,7 @@ class WidgetMatrixBridgeTest {
 
     @Test
     fun `sticky events are not bridged`() = runTest {
-        val driver = FakeMatrixWidgetDriver()
+        val driver = FakeWidgetDriver()
         val bridge = negotiatedBridge(driver)
         val sentBefore = driver.sentMessages.size
 
@@ -586,7 +586,7 @@ class WidgetMatrixBridgeTest {
 
     // Helpers
 
-    private fun TestScope.createBridge(driver: FakeMatrixWidgetDriver, requestTimeout: Duration = 30.seconds) = WidgetMatrixBridge(
+    private fun TestScope.createBridge(driver: FakeWidgetDriver, requestTimeout: Duration = 30.seconds) = WidgetMatrixBridge(
         roomId = A_ROOM_ID,
         widgetId = WIDGET_ID,
         driver = driver,
@@ -595,7 +595,7 @@ class WidgetMatrixBridgeTest {
     )
 
     /** A bridge past its handshake, as the driver runs it: capabilities asked, granted, confirmed. */
-    private suspend fun TestScope.negotiatedBridge(driver: FakeMatrixWidgetDriver, requestTimeout: Duration = 30.seconds): WidgetMatrixBridge {
+    private suspend fun TestScope.negotiatedBridge(driver: FakeWidgetDriver, requestTimeout: Duration = 30.seconds): WidgetMatrixBridge {
         val bridge = createBridge(driver, requestTimeout)
         val start = backgroundScope.async { bridge.start() }
         driver.deliver(toWidget(CAPABILITIES, "cap-1"))
@@ -605,12 +605,12 @@ class WidgetMatrixBridgeTest {
     }
 
     /** Hands the bridge a driver message and returns the bridge's answer to it. */
-    private suspend fun FakeMatrixWidgetDriver.deliver(message: String): JsonObject {
+    private suspend fun FakeWidgetDriver.deliver(message: String): JsonObject {
         givenIncomingMessage(message)
         return json.parseToJsonElement(awaitSentMessage()).jsonObject
     }
 
-    private suspend fun FakeMatrixWidgetDriver.awaitSent(): JsonObject = json.parseToJsonElement(awaitSentMessage()).jsonObject
+    private suspend fun FakeWidgetDriver.awaitSent(): JsonObject = json.parseToJsonElement(awaitSentMessage()).jsonObject
 
     private fun toWidget(action: String, requestId: String, data: JsonObject = buildJsonObject {}, widgetId: String = WIDGET_ID): String {
         return json.encodeToString(

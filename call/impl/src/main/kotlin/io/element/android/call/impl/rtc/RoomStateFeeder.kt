@@ -7,15 +7,13 @@
 
 package io.element.android.call.impl.rtc
 
-import io.element.android.call.impl.util.runCatchingExceptions
-import io.element.android.call.api.rtc.id.RoomId
-import io.element.android.libraries.matrix.api.room.JoinedRoom
-import io.element.android.libraries.matrix.api.room.RoomMembershipState
-import io.element.android.libraries.matrix.api.room.roomMembers
-import io.element.android.call.api.rtc.MatrixRtcElementCallCompat
-import io.element.android.call.api.rtc.MatrixRtcEventTypes
 import io.element.android.call.api.matrix.ElementCallMatrixRoom
 import io.element.android.call.api.matrix.ElementCallRoomStateEvent
+import io.element.android.call.api.rtc.MatrixRtcElementCallCompat
+import io.element.android.call.api.rtc.MatrixRtcEventTypes
+import io.element.android.call.api.rtc.id.RoomId
+import io.element.android.call.api.rtc.id.UserId
+import io.element.android.call.impl.util.runCatchingExceptions
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,10 +21,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
-import kotlinx.coroutines.launch
 import timber.log.Timber
 import uniffi.matrix_rtc_ffi.RtcSessionManagerHandleInterface
 import uniffi.matrix_rtc_ffi.LegacyStateMemberEvent as FfiLegacyStateMemberEvent
@@ -40,13 +36,16 @@ import uniffi.matrix_rtc_ffi.LegacyStateMemberEvent as FfiLegacyStateMemberEvent
  * starting at join time loses nothing. [SessionStateFeeder] holds the feed that does not have that
  * property.
  *
- * Members and encryption come from the SDK through [room]; memberships, which the released SDK has
- * no feed for, come through [bridge].
+ * Everything comes through [room]: members and encryption from whatever the transport has, memberships
+ * from whatever carries them for the released SDK (today, the widget-driver stopgap).
+ *
+ * @param ownUserId the session's own user, for the log line that says whether our own membership has
+ * echoed back yet.
  */
 internal class RoomStateFeeder(
     private val manager: RtcSessionManagerHandleInterface,
-    private val room: JoinedRoom,
-    private val bridge: ElementCallMatrixRoom,
+    private val room: ElementCallMatrixRoom,
+    private val ownUserId: UserId,
     private val scope: CoroutineScope,
     private val elementCallCompat: MatrixRtcElementCallCompat,
     /** The slot we joined, for [updateMemberCount] only. Defaulted for tests; joining always passes it. */
@@ -181,7 +180,7 @@ internal class RoomStateFeeder(
      * types that were present but rejected are logged, or a peer publishing under a third spelling
      * would be indistinguishable from one that never published at all.
      */
-    private fun memberStickyEvents() = bridge.stickyEvents()
+    private fun memberStickyEvents() = room.stickyEvents()
         .map { events ->
             val (members, others) = events.partition { it.eventType in MatrixRtcEventTypes.MEMBER_TYPES }
             if (others.isNotEmpty()) {
@@ -235,7 +234,7 @@ internal class RoomStateFeeder(
                 // Whether our own membership has echoed back yet goes in the line: "the peer is here
                 // and we are not" and "nobody is here" are different faults, and a count cannot tell
                 // them apart. Same for the departures, which are the entries the core will remove.
-                val ownStateKey = events.count { it.stateKey.contains(room.sessionId.value) }
+                val ownStateKey = events.count { it.stateKey.contains(ownUserId.value) }
                 val departures = events.count { it.contentJson.isBlank() || it.contentJson == "{}" }
                 Timber.i(
                     "MatrixRTC: feeding ${events.size} state membership(s) for $roomId " +
@@ -255,7 +254,7 @@ internal class RoomStateFeeder(
      * the type that comes back is the raw one from the wire, so this is also where a bucket that
      * turned out to hold something else would show up rather than silently becoming a membership.
      */
-    private fun memberStateEvents() = bridge.stateEvents(MatrixRtcEventTypes.MEMBER_ELEMENT_CALL_STATE_UNSTABLE)
+    private fun memberStateEvents() = room.stateEvents(MatrixRtcEventTypes.MEMBER_ELEMENT_CALL_STATE_UNSTABLE)
         .map { events ->
             val (members, others) = events.partition { it.eventType in MatrixRtcEventTypes.MEMBER_ELEMENT_CALL_STATE_TYPES }
             if (others.isNotEmpty()) {
@@ -293,22 +292,12 @@ internal class RoomStateFeeder(
      * is excluded from the session as `SenderNotInRoom`.
      */
     private fun feedRoomMembers() {
-        scope.launch {
-            // membersStateFlow stays at Unknown until this is called, so without it we would never
-            // have anyone to feed and every membership candidate would stay excluded.
-            room.updateMembers()
-        }
-        room.membersStateFlow
-            .mapNotNull { it.roomMembers() }
-            .map { members ->
-                members
-                    .filter { it.membership == RoomMembershipState.JOIN }
-                    .map { it.userId.value }
-            }
+        room.joinedMemberIds
+            .map { members -> members.map { it.value } }
             // A room we are joined to always contains us, so an empty list is never the truth - it is
-            // Pending handing back its empty `prevRoomMembers` before the first load finishes. Feeding
-            // it tells the core the room is deserted, which excludes every membership as
-            // `SenderNotInRoom` and rotates the media key on the way out and again on the way back in.
+            // a transport handing back a list it has not loaded yet. Feeding it tells the core the room
+            // is deserted, which excludes every membership as `SenderNotInRoom` and rotates the media
+            // key on the way out and again on the way back in.
             .filter { it.isNotEmpty() }
             .distinctUntilChanged()
             .onEach { userIds ->
@@ -339,16 +328,13 @@ internal class RoomStateFeeder(
     private suspend fun awaitRoomMembers() = roomMembersFed.await()
 
     private fun feedRoomEncryption() {
-        room.roomInfoFlow
-            .map { it.isEncrypted }
+        // The transport only emits once it knows: reporting false while unsure would let the core
+        // treat cleartext membership as valid in a room that is actually encrypted.
+        room.isEncrypted
             .distinctUntilChanged()
             .onEach { isEncrypted ->
-                // Null means the SDK does not know yet; reporting false would let the core treat
-                // cleartext membership as valid in a room that is actually encrypted.
-                if (isEncrypted != null) {
-                    Timber.i("MatrixRTC: feeding encryption=$isEncrypted for $roomId")
-                    feed("room encryption") { manager.onRoomEncryptionReceived(roomId.value, isEncrypted) }
-                }
+                Timber.i("MatrixRTC: feeding encryption=$isEncrypted for $roomId")
+                feed("room encryption") { manager.onRoomEncryptionReceived(roomId.value, isEncrypted) }
             }
             .launchIn(scope)
     }

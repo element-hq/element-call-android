@@ -8,8 +8,8 @@
 // Temporary: widget-driver stopgap. The released SDK bindings lack delayed events, a room-state feed
 // and to-device messaging, but their widget driver implements all of them for Element Call web. This
 // speaks the widget API to that driver in-process, with no web view. Delete this package once the
-// bindings gain the entry points listed in `libraries/rustrtc/FEEDBACK.md`, "Widget-driver stopgap",
-// and give the consumers an SDK-backed `ElementCallMatrixRoom`.
+// bindings gain the entry points listed in `docs/FEEDBACK.md`, "Widget-driver stopgap", and have
+// `SdkElementCallMatrixRoom` call them directly.
 
 package io.element.android.call.matrix.temporary.widget
 
@@ -18,13 +18,12 @@ import io.element.android.call.api.rtc.id.DeviceId
 import io.element.android.call.api.rtc.id.EventId
 import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.call.api.rtc.id.UserId
-import io.element.android.libraries.matrix.api.widget.MatrixWidgetDriver
 import io.element.android.call.api.rtc.MatrixRtcEventTypes
 import io.element.android.call.api.matrix.ElementCallMatrixException
 import io.element.android.call.api.matrix.ElementCallDelayedEventAction
 import io.element.android.call.api.matrix.ElementCallEventEncryptionInfo
-import io.element.android.call.api.matrix.ElementCallMatrixRoom
 import io.element.android.call.api.matrix.ElementCallRoomStateEvent
+import io.element.android.call.matrix.ElementCallTemporaryApi
 import io.element.android.call.api.matrix.ElementCallStickyEvent
 import io.element.android.call.api.matrix.ElementCallToDeviceMessage
 import kotlinx.coroutines.CancellationException
@@ -84,13 +83,14 @@ import kotlin.time.Duration.Companion.seconds
  * so [stop] can cancel the loops without cancelling the caller; a child of the client session scope
  * rather than of the call's, because the leave itself still goes through the bridge.
  */
+@ElementCallTemporaryApi
 internal class WidgetMatrixBridge(
-    override val roomId: RoomId,
+    val roomId: RoomId,
     private val widgetId: String,
-    private val driver: MatrixWidgetDriver,
+    private val driver: WidgetDriver,
     parentScope: CoroutineScope,
     private val requestTimeout: Duration = 30.seconds,
-) : ElementCallMatrixRoom {
+) {
     private enum class Phase { IDLE, NEGOTIATING, READY, STOPPED }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -114,7 +114,7 @@ internal class WidgetMatrixBridge(
 
     // Lifecycle
 
-    override suspend fun start(): Result<Unit> {
+    suspend fun start(): Result<Unit> {
         val started = lifecycleMutex.withLock {
             if (phase.value != Phase.IDLE) {
                 false
@@ -151,7 +151,7 @@ internal class WidgetMatrixBridge(
         }
     }
 
-    override suspend fun stop() {
+    suspend fun stop() {
         val wasRunning = lifecycleMutex.withLock {
             if (phase.value == Phase.STOPPED) {
                 false
@@ -173,7 +173,7 @@ internal class WidgetMatrixBridge(
 
     // Sends
 
-    override suspend fun sendDelayedEvent(eventType: String, stateKey: String?, contentJson: String, delayMs: ULong): Result<String> {
+    suspend fun sendDelayedEvent(eventType: String, stateKey: String?, contentJson: String, delayMs: ULong): Result<String> {
         val content = parseObject(contentJson)
             ?: return Result.failure(ElementCallMatrixException.InvalidResponse("content is not a JSON object"))
         val data = buildJsonObject {
@@ -189,7 +189,7 @@ internal class WidgetMatrixBridge(
         }
     }
 
-    override suspend fun updateDelayedEvent(delayId: String, action: ElementCallDelayedEventAction): Result<Unit> {
+    suspend fun updateDelayedEvent(delayId: String, action: ElementCallDelayedEventAction): Result<Unit> {
         val wireAction = when (action) {
             ElementCallDelayedEventAction.CANCEL -> "cancel"
             ElementCallDelayedEventAction.RESTART -> "restart"
@@ -201,7 +201,7 @@ internal class WidgetMatrixBridge(
         return request(UPDATE_DELAYED_EVENT, data).map { }
     }
 
-    override suspend fun sendToDeviceMessage(eventType: String, messages: Map<UserId, Map<DeviceId, String>>): Result<Map<UserId, List<DeviceId>>> {
+    suspend fun sendToDeviceMessage(eventType: String, messages: Map<UserId, Map<DeviceId, String>>): Result<Map<UserId, List<DeviceId>>> {
         val wireMessages = buildJsonObject {
             for ((userId, devices) in messages) {
                 put(
@@ -230,18 +230,18 @@ internal class WidgetMatrixBridge(
         }
     }
 
-    override suspend fun sendStickyEvent(eventType: String, contentJson: String, durationMs: ULong): Result<String> {
+    suspend fun sendStickyEvent(eventType: String, contentJson: String, durationMs: ULong): Result<String> {
         return Result.failure(ElementCallMatrixException.NotSupported("MSC4354 sticky event $eventType"))
     }
 
     // Feeds
 
-    override fun stickyEvents(): Flow<List<ElementCallStickyEvent>> {
+    fun stickyEvents(): Flow<List<ElementCallStickyEvent>> {
         Timber.w("WidgetBridge: sticky events are not available through the widget driver, no sticky snapshot will be fed for $roomId")
         return emptyFlow()
     }
 
-    override fun stateEvents(eventType: String): Flow<List<ElementCallRoomStateEvent>> {
+    fun stateEvents(eventType: String): Flow<List<ElementCallRoomStateEvent>> {
         return stateFlow(canonicalType(eventType))
             // Never an empty list: the feeder reads that as "not synced".
             .filter { it.isNotEmpty() }
@@ -249,7 +249,7 @@ internal class WidgetMatrixBridge(
             .untilStopped()
     }
 
-    override fun toDeviceMessages(): Flow<ElementCallToDeviceMessage> = toDevice.untilStopped()
+    fun toDeviceMessages(): Flow<ElementCallToDeviceMessage> = toDevice.untilStopped()
 
     /** Ends when the bridge does, so a collector is not left waiting on a driver that is gone. */
     private fun <T> Flow<T>.untilStopped(): Flow<T> = channelFlow {

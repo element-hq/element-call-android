@@ -7,17 +7,13 @@
 
 package io.element.android.call.impl.rtc
 
-import io.element.android.libraries.matrix.api.MatrixClient
+import io.element.android.call.api.matrix.ElementCallDelayedEventAction
+import io.element.android.call.api.matrix.ElementCallMatrixException
+import io.element.android.call.api.matrix.ElementCallMatrixRoom
+import io.element.android.call.api.matrix.ElementCallMatrixTransport
 import io.element.android.call.api.rtc.id.DeviceId
 import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.call.api.rtc.id.UserId
-import io.element.android.libraries.matrix.api.exception.ClientException
-import io.element.android.libraries.matrix.api.exception.ErrorKind
-import io.element.android.libraries.matrix.api.room.JoinedRoom
-import io.element.android.call.api.matrix.ElementCallMatrixException
-import io.element.android.call.api.matrix.ElementCallDelayedEventAction
-import io.element.android.call.api.matrix.ElementCallMatrixRoom
-import io.element.android.call.matrix.temporary.widget.MatrixRtcBridgeRegistry
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
@@ -30,10 +26,10 @@ import uniffi.matrix_rtc_ffi.FfiToDeviceRecipient
 /**
  * The outbound half of the bridge: everything the RTC core wants to put on the wire.
  *
- * Two destinations. What the released SDK exposes goes straight to it: the state event through
- * [JoinedRoom.sendRawStateEvent]. What it does not - delayed events, sticky events, to-device - goes
- * through the room's [ElementCallMatrixRoom], looked up in [bridges] because a bridge lives as long as a
- * call in its room while this sender lives as long as the session.
+ * Room-scoped commands - the state event, the delayed events, the sticky event - go to the
+ * [ElementCallMatrixRoom] open for the room, looked up through [roomProvider] because a room is open
+ * for as long as a call while this sender lives as long as the session. To-device messages are not
+ * scoped to a room and go straight to the [transport].
  *
  * Every callback suspends, so each one maps straight onto the suspending call it needs, with no
  * blocking bridge in between. They still run on [commandDispatcher] rather than on whichever thread
@@ -42,24 +38,23 @@ import uniffi.matrix_rtc_ffi.FfiToDeviceRecipient
  * crash cross the FFI boundary.
  */
 internal class MatrixRtcCommandSender(
-    private val client: MatrixClient,
+    private val transport: ElementCallMatrixTransport,
     private val commandDispatcher: CoroutineDispatcher,
-    private val roomProvider: suspend (RoomId) -> JoinedRoom?,
-    private val bridges: MatrixRtcBridgeRegistry,
+    private val roomProvider: (RoomId) -> ElementCallMatrixRoom?,
 ) : CommandSenderCallback {
     /**
      * @return the event id the homeserver assigned, which the core relates an MSC4075 notification to - or
-     * whatever the bridge can report in its place. Through the widget driver this whole call is refused as
+     * whatever the transport can report in its place. Through the widget driver this whole call is refused as
      * [CommandSenderException.NotSupported]: MSC4354 has no widget API, so only the state-event compat mode
-     * works until the SDK exposes sticky events (`FEEDBACK.md`, "Widget-driver stopgap").
+     * works until the SDK exposes sticky events (`docs/FEEDBACK.md`, "Widget-driver stopgap").
      */
     override suspend fun sendStickyEvent(roomId: String, eventType: String, contentJson: String, durationMs: ULong): String {
         // The core emits the unstable membership type itself, so the string goes out verbatim, and the
         // lifetime is the core's to choose, not ours: it is the side that knows when it will next
         // refresh the membership, and a duration picked here could expire first and drop us out of a
         // session we are still in.
-        return command("sendStickyEvent($eventType, ${durationMs}ms)", classify = ::bridgeFailure) {
-            bridge(roomId).sendStickyEvent(eventType, contentJson, durationMs).getOrThrow()
+        return command("sendStickyEvent($eventType, ${durationMs}ms)", classify = ::transportFailure) {
+            room(roomId).sendStickyEvent(eventType, contentJson, durationMs).getOrThrow()
         }
     }
 
@@ -70,7 +65,7 @@ internal class MatrixRtcCommandSender(
      */
     override suspend fun sendStateEvent(roomId: String, eventType: String, stateKey: String, contentJson: String): String {
         return command("sendStateEvent($eventType)") {
-            room(roomId).sendRawStateEvent(eventType, stateKey, contentJson).getOrThrow().value
+            room(roomId).sendStateEvent(eventType, stateKey, contentJson).getOrThrow().value
         }
     }
 
@@ -84,7 +79,7 @@ internal class MatrixRtcCommandSender(
      */
     override suspend fun sendDelayedEvent(roomId: String, eventType: String, contentJson: String, delayMs: ULong): String {
         return command("sendDelayedEvent($eventType)", classify = ::delayedEventFailure) {
-            bridge(roomId).sendDelayedEvent(eventType, stateKey = null, contentJson, delayMs).getOrThrow()
+            room(roomId).sendDelayedEvent(eventType, stateKey = null, contentJson, delayMs).getOrThrow()
         }
     }
 
@@ -105,13 +100,13 @@ internal class MatrixRtcCommandSender(
         delayMs: ULong,
     ): String {
         return command("sendDelayedStateEvent($eventType)", classify = ::delayedEventFailure) {
-            bridge(roomId).sendDelayedEvent(eventType, stateKey, contentJson, delayMs).getOrThrow()
+            room(roomId).sendDelayedEvent(eventType, stateKey, contentJson, delayMs).getOrThrow()
         }
     }
 
     override suspend fun cancelDelayedEvent(roomId: String, delayId: String) {
         command("cancelDelayedEvent", classify = ::delayedEventFailure) {
-            bridge(roomId).updateDelayedEvent(delayId, ElementCallDelayedEventAction.CANCEL).getOrThrow()
+            room(roomId).updateDelayedEvent(delayId, ElementCallDelayedEventAction.CANCEL).getOrThrow()
         }
     }
 
@@ -121,7 +116,7 @@ internal class MatrixRtcCommandSender(
         // dropping us out of a call we are still in, minutes later, with nothing in the log to connect
         // cause to effect. Hence the test that pins each one to its action.
         command("restartDelayedEvent", classify = ::delayedEventFailure) {
-            bridge(roomId).updateDelayedEvent(delayId, ElementCallDelayedEventAction.RESTART).getOrThrow()
+            room(roomId).updateDelayedEvent(delayId, ElementCallDelayedEventAction.RESTART).getOrThrow()
         }
     }
 
@@ -145,17 +140,14 @@ internal class MatrixRtcCommandSender(
         // than tolerated because it is a regression signal, not a case to handle: the homeserver drops
         // a to-device message a device addresses to itself, so such a recipient can only ever fail.
         recipients
-            .filter { it.userId == client.sessionId.value && it.deviceId == client.deviceId.value }
+            .filter { it.userId == transport.userId.value && it.deviceId == transport.deviceId.value }
             .forEach { Timber.w("MatrixRTC: to-device $messageType addressed to ourselves (${it.userId}/${it.deviceId})") }
 
-        return command("sendToDeviceMessage($messageType$describedIndex to [$describedRecipients])", classify = ::bridgeFailure) {
-            // The core does not say which room a key belongs to, and a to-device message is not scoped to
-            // one anyway: any live bridge carries it. None live means no call, and no call has no keys to send.
-            val bridge = bridges.any() ?: throw CommandSenderException.SendException("No live bridge to send $messageType through")
-            // One send for the whole batch rather than one per recipient: the bridge takes the same
+        return command("sendToDeviceMessage($messageType$describedIndex to [$describedRecipients])", classify = ::transportFailure) {
+            // One send for the whole batch rather than one per recipient: the transport takes the same
             // recipient map the core hands us, and reports back exactly who it could not serve. The
-            // bridge encrypts: RTC media keys must never go out in the clear.
-            val failures = bridge.sendToDeviceMessage(
+            // transport encrypts: RTC media keys must never go out in the clear.
+            val failures = transport.sendToDeviceMessage(
                 eventType = messageType,
                 messages = recipients
                     .groupBy { UserId(it.userId) }
@@ -181,14 +173,9 @@ internal class MatrixRtcCommandSender(
         }
     }
 
-    private suspend fun room(roomId: String): JoinedRoom {
+    private fun room(roomId: String): ElementCallMatrixRoom {
         return roomProvider(RoomId(roomId))
-            ?: throw CommandSenderException.SendException("Not a joined room: $roomId")
-    }
-
-    private fun bridge(roomId: String): ElementCallMatrixRoom {
-        return bridges[RoomId(roomId)]
-            ?: throw CommandSenderException.SendException("No live bridge for $roomId")
+            ?: throw CommandSenderException.SendException("No open room for $roomId")
     }
 
     private suspend fun <T> command(
@@ -221,10 +208,10 @@ private fun sendFailure(throwable: Throwable, description: String): CommandSende
 }
 
 /**
- * A bridge that cannot do something at all says so, and the core should hear the same: `NotSupported`
+ * A transport that cannot do something at all says so, and the core should hear the same: `NotSupported`
  * retires the operation for the session rather than retrying it. Anything else is a plain send failure.
  */
-private fun bridgeFailure(throwable: Throwable, description: String): CommandSenderException {
+private fun transportFailure(throwable: Throwable, description: String): CommandSenderException {
     return when (throwable) {
         is ElementCallMatrixException.NotSupported -> CommandSenderException.NotSupported("$description: ${throwable.message}")
         else -> sendFailure(throwable, description)
@@ -239,14 +226,15 @@ private fun bridgeFailure(throwable: Throwable, description: String): CommandSen
  * re-probes periodically. So the cost of getting this wrong is only wasted requests in one direction - and in the
  * other, a homeserver that recovers is never asked again, which is why a transient failure must not land here.
  *
- * The verdict is read off the Matrix error code, whichever transport carried it: the bridge's own error for
- * the widget driver, the SDK's mapped `ClientException` for a future SDK-backed bridge. A bridge that is not
- * running, or that timed out, is a transient failure - the next attempt may well have a bridge.
+ * The verdict is read off the Matrix error code, whichever transport carried it: the implementations map their
+ * own errors to [ElementCallMatrixException.MatrixApi]. A room that is not open, or that timed out, is a transient
+ * failure - the next attempt may well have one.
  */
 private fun delayedEventFailure(throwable: Throwable, description: String): CommandSenderException {
-    if (throwable is ElementCallMatrixException.NotSupported) return bridgeFailure(throwable, description)
-    val (errcode, message) = throwable.matrixError() ?: return sendFailure(throwable, description)
-    val neverSupported = when (errcode) {
+    if (throwable is ElementCallMatrixException.NotSupported) return transportFailure(throwable, description)
+    val matrixError = throwable as? ElementCallMatrixException.MatrixApi ?: return sendFailure(throwable, description)
+    val message = matrixError.message
+    val neverSupported = when (matrixError.errcode) {
         // 404 M_UNRECOGNIZED: the endpoint is not implemented at all.
         ERRCODE_UNRECOGNIZED -> true
         // matrix.org answers 403 M_FORBIDDEN "Sending delayed events has been disallowed". Forbidden also covers a
@@ -257,21 +245,8 @@ private fun delayedEventFailure(throwable: Throwable, description: String): Comm
         else -> false
     }
     if (!neverSupported) return sendFailure(throwable, description)
-    Timber.w("MatrixRTC: homeserver does not support MSC4140 ($errcode), no dead man's switch this session")
+    Timber.w("MatrixRTC: homeserver does not support MSC4140 (${matrixError.errcode}), no dead man's switch this session")
     return CommandSenderException.NotSupported("$description refused by the homeserver: $message")
-}
-
-/** The Matrix error code and message a homeserver answered with, from either transport. */
-private fun Throwable.matrixError(): Pair<String?, String?>? = when (this) {
-    is ElementCallMatrixException.MatrixApi -> errcode to message
-    is ClientException.MatrixApi -> kind.toErrcode() to message
-    else -> null
-}
-
-private fun ErrorKind.toErrcode(): String? = when (this) {
-    ErrorKind.Unrecognized -> ERRCODE_UNRECOGNIZED
-    ErrorKind.Forbidden -> ERRCODE_FORBIDDEN
-    else -> null
 }
 
 private const val ERRCODE_UNRECOGNIZED = "M_UNRECOGNIZED"

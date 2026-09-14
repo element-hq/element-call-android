@@ -8,20 +8,19 @@
 package io.element.android.call.impl.rtc
 
 import com.google.common.truth.Truth.assertThat
-import io.element.android.call.api.rtc.id.EventId
-import io.element.android.libraries.matrix.api.room.RoomMembersState
-import io.element.android.libraries.matrix.test.A_ROOM_ID
-import io.element.android.libraries.matrix.test.A_USER_ID
-import io.element.android.libraries.matrix.test.room.FakeBaseRoom
-import io.element.android.libraries.matrix.test.room.FakeJoinedRoom
-import io.element.android.libraries.matrix.test.room.aRoomMember
-import io.element.android.call.api.rtc.MatrixRtcElementCallCompat
-import io.element.android.call.api.rtc.MatrixRtcEventTypes
-import io.element.android.call.api.matrix.FakeMatrixRtcRoomBridge
 import io.element.android.call.api.matrix.ElementCallRoomStateEvent
 import io.element.android.call.api.matrix.ElementCallStickyEvent
-import kotlinx.collections.immutable.persistentListOf
+import io.element.android.call.api.rtc.MatrixRtcElementCallCompat
+import io.element.android.call.api.rtc.MatrixRtcEventTypes
+import io.element.android.call.api.rtc.id.EventId
+import io.element.android.call.api.rtc.id.UserId
+import io.element.android.call.test.A_ROOM_ID
+import io.element.android.call.test.A_USER_ID
+import io.element.android.call.test.FakeElementCallMatrixRoom
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -249,7 +248,7 @@ class RoomStateFeederTest {
             manager,
             stateEvents = stateEvents,
             elementCallCompat = MatrixRtcElementCallCompat.STATE_EVENTS,
-            roomMembers = RoomMembersState.Unknown,
+            joinedMemberIds = emptyFlow(),
         )
 
         assertThat(manager.memberships).isEmpty()
@@ -323,8 +322,8 @@ class RoomStateFeederTest {
     }
 
     /**
-     * @param roomMembers who the room holds. Defaults to a loaded list because a membership feed waits
-     * for one - see [RoomStateFeeder.awaitRoomMembers] - so leaving it Unknown feeds nothing at all,
+     * @param joinedMemberIds who the room holds. Defaults to a loaded list because a membership feed waits
+     * for one - see [RoomStateFeeder.awaitRoomMembers] - so a flow that never emits feeds nothing at all,
      * which is a distinct scenario rather than the neutral one.
      */
     private fun TestScope.startFeeder(
@@ -332,22 +331,18 @@ class RoomStateFeederTest {
         stickyEvents: MutableStateFlow<List<ElementCallStickyEvent>> = MutableStateFlow(emptyList()),
         stateEvents: MutableStateFlow<List<ElementCallRoomStateEvent>> = MutableStateFlow(emptyList()),
         elementCallCompat: MatrixRtcElementCallCompat = MatrixRtcElementCallCompat.OFF,
-        roomMembers: RoomMembersState = RoomMembersState.Ready(persistentListOf(aRoomMember(A_USER_ID))),
+        joinedMemberIds: Flow<List<UserId>> = flowOf(listOf(A_USER_ID)),
         slotId: String? = A_SLOT_ID,
         memberCount: MutableStateFlow<Int> = MutableStateFlow(0),
     ) {
-        val baseRoom = FakeBaseRoom().apply {
-            // The feeder asks for members on start, because membersStateFlow stays Unknown until it does.
-            givenUpdateMembersResult { }
-            membersStateFlow.value = roomMembers
-        }
         RoomStateFeeder(
             manager = manager,
-            room = FakeJoinedRoom(baseRoom = baseRoom),
-            bridge = FakeMatrixRtcRoomBridge(
+            room = FakeElementCallMatrixRoom(
+                joinedMemberIds = joinedMemberIds,
                 stickyEvents = stickyEvents,
                 stateEventsResult = { stateEvents },
             ),
+            ownUserId = A_USER_ID,
             scope = backgroundScope,
             elementCallCompat = elementCallCompat,
             slotId = slotId,

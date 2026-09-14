@@ -8,24 +8,20 @@
 package io.element.android.call.impl.rtc
 
 import com.google.common.truth.Truth.assertThat
+import io.element.android.call.api.matrix.ElementCallDelayedEventAction
+import io.element.android.call.api.matrix.ElementCallMatrixException
+import io.element.android.call.api.matrix.ElementCallMatrixRoom
+import io.element.android.call.api.matrix.ElementCallMatrixTransport
 import io.element.android.call.api.rtc.id.DeviceId
 import io.element.android.call.api.rtc.id.EventId
 import io.element.android.call.api.rtc.id.UserId
-import io.element.android.libraries.matrix.api.exception.ClientException
-import io.element.android.libraries.matrix.api.exception.ErrorKind
-import io.element.android.libraries.matrix.api.room.JoinedRoom
-import io.element.android.libraries.matrix.test.A_DEVICE_ID
-import io.element.android.libraries.matrix.test.A_ROOM_ID
-import io.element.android.libraries.matrix.test.A_SESSION_ID
-import io.element.android.libraries.matrix.test.FakeMatrixClient
-import io.element.android.libraries.matrix.test.room.FakeJoinedRoom
-import io.element.android.call.api.matrix.FakeMatrixRtcRoomBridge
-import io.element.android.call.api.matrix.ElementCallMatrixException
-import io.element.android.call.api.matrix.ElementCallDelayedEventAction
-import io.element.android.call.api.matrix.ElementCallMatrixRoom
-import io.element.android.call.matrix.temporary.widget.MatrixRtcBridgeRegistry
-import io.element.android.tests.testutils.lambda.lambdaRecorder
-import io.element.android.tests.testutils.lambda.value
+import io.element.android.call.test.A_DEVICE_ID
+import io.element.android.call.test.A_ROOM_ID
+import io.element.android.call.test.A_USER_ID
+import io.element.android.call.test.FakeElementCallMatrixRoom
+import io.element.android.call.test.FakeElementCallMatrixTransport
+import io.element.android.call.tests.testutils.lambda.lambdaRecorder
+import io.element.android.call.tests.testutils.lambda.value
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
@@ -36,7 +32,7 @@ class MatrixRtcCommandSenderTest {
     @Test
     fun `restartDelayedEvent restarts the delay`() = runTest {
         val updateDelayedEvent = lambdaRecorder { _: String, _: ElementCallDelayedEventAction -> Result.success(Unit) }
-        val sender = createSender(bridge = FakeMatrixRtcRoomBridge(updateDelayedEventResult = updateDelayedEvent))
+        val sender = createSender(room = FakeElementCallMatrixRoom(updateDelayedEventResult = updateDelayedEvent))
 
         sender.restartDelayedEvent(A_ROOM_ID.value, A_DELAY_ID)
 
@@ -52,7 +48,7 @@ class MatrixRtcCommandSenderTest {
     @Test
     fun `cancelDelayedEvent cancels the delay`() = runTest {
         val updateDelayedEvent = lambdaRecorder { _: String, _: ElementCallDelayedEventAction -> Result.success(Unit) }
-        val sender = createSender(bridge = FakeMatrixRtcRoomBridge(updateDelayedEventResult = updateDelayedEvent))
+        val sender = createSender(room = FakeElementCallMatrixRoom(updateDelayedEventResult = updateDelayedEvent))
 
         sender.cancelDelayedEvent(A_ROOM_ID.value, A_DELAY_ID)
 
@@ -65,7 +61,7 @@ class MatrixRtcCommandSenderTest {
         val sendToDevice = lambdaRecorder { _: String, _: Map<UserId, Map<DeviceId, String>> ->
             Result.success(emptyMap<UserId, List<DeviceId>>())
         }
-        val sender = createSender(bridge = FakeMatrixRtcRoomBridge(sendToDeviceMessageResult = sendToDevice))
+        val sender = createSender(transport = FakeElementCallMatrixTransport(sendToDeviceMessageResult = sendToDevice))
 
         val deliveries = sender.sendToDeviceMessage(
             recipients = listOf(
@@ -76,7 +72,7 @@ class MatrixRtcCommandSenderTest {
             contentJson = A_CONTENT,
         )
 
-        // One call, both devices of the user in it. The bridge encrypts: RTC media keys must never go out in the clear.
+        // One call, both devices of the user in it. The transport encrypts: RTC media keys must never go out in the clear.
         sendToDevice.assertions().isCalledOnce()
             .with(
                 value(AN_EVENT_TYPE),
@@ -100,13 +96,13 @@ class MatrixRtcCommandSenderTest {
      */
     @Test
     fun `sendToDeviceMessage reports the recipient that could not be served`() = runTest {
-        val bridge = FakeMatrixRtcRoomBridge(
+        val transport = FakeElementCallMatrixTransport(
             sendToDeviceMessageResult = { _, _ ->
                 Result.success(mapOf(A_REMOTE_USER_ID to listOf(DeviceId(ANOTHER_REMOTE_DEVICE_ID))))
             },
         )
 
-        val deliveries = createSender(bridge = bridge).sendToDeviceMessage(
+        val deliveries = createSender(transport = transport).sendToDeviceMessage(
             recipients = listOf(
                 FfiToDeviceRecipient(A_REMOTE_USER_ID.value, A_REMOTE_DEVICE_ID),
                 FfiToDeviceRecipient(A_REMOTE_USER_ID.value, ANOTHER_REMOTE_DEVICE_ID),
@@ -126,12 +122,12 @@ class MatrixRtcCommandSenderTest {
      */
     @Test
     fun `a key the core addresses to our own device is reported as undelivered`() = runTest {
-        val bridge = FakeMatrixRtcRoomBridge(
-            sendToDeviceMessageResult = { _, _ -> Result.success(mapOf(A_SESSION_ID to listOf(A_DEVICE_ID))) },
+        val transport = FakeElementCallMatrixTransport(
+            sendToDeviceMessageResult = { _, _ -> Result.success(mapOf(A_USER_ID to listOf(A_DEVICE_ID))) },
         )
 
-        val deliveries = createSender(bridge = bridge).sendToDeviceMessage(
-            recipients = listOf(FfiToDeviceRecipient(A_SESSION_ID.value, A_DEVICE_ID.value)),
+        val deliveries = createSender(transport = transport).sendToDeviceMessage(
+            recipients = listOf(FfiToDeviceRecipient(A_USER_ID.value, A_DEVICE_ID.value)),
             messageType = AN_EVENT_TYPE,
             contentJson = A_CONTENT,
         )
@@ -145,12 +141,12 @@ class MatrixRtcCommandSenderTest {
      */
     @Test
     fun `sendToDeviceMessage fails when the send itself fails`() = runTest {
-        val bridge = FakeMatrixRtcRoomBridge(
+        val transport = FakeElementCallMatrixTransport(
             sendToDeviceMessageResult = { _, _ -> Result.failure(IllegalStateException("boom")) },
         )
 
         val thrown = runCatching {
-            createSender(bridge = bridge).sendToDeviceMessage(
+            createSender(transport = transport).sendToDeviceMessage(
                 recipients = listOf(FfiToDeviceRecipient(A_REMOTE_USER_ID.value, A_REMOTE_DEVICE_ID)),
                 messageType = AN_EVENT_TYPE,
                 contentJson = A_CONTENT,
@@ -161,36 +157,17 @@ class MatrixRtcCommandSenderTest {
     }
 
     /**
-     * A to-device message is not scoped to a room, so it goes through whichever bridge is live. None live
-     * means no call is up, and that has to reach the core as a send failure rather than a crash.
-     */
-    @Test
-    fun `sendToDeviceMessage fails when no bridge is live`() = runTest {
-        val sender = createSender(bridges = MatrixRtcBridgeRegistry())
-
-        val thrown = runCatching {
-            sender.sendToDeviceMessage(
-                recipients = listOf(FfiToDeviceRecipient(A_REMOTE_USER_ID.value, A_REMOTE_DEVICE_ID)),
-                messageType = AN_EVENT_TYPE,
-                contentJson = A_CONTENT,
-            )
-        }.exceptionOrNull()
-
-        assertThat(thrown).isInstanceOf(CommandSenderException.SendException::class.java)
-    }
-
-    /**
-     * The widget-driver bridge cannot send sticky events at all, and the core should hear exactly that: a
+     * The widget-driver transport cannot send sticky events at all, and the core should hear exactly that: a
      * `NotSupported` retires the operation, where a send failure would have it retried for the whole call.
      */
     @Test
-    fun `a sticky event the bridge cannot send is reported as unsupported`() = runTest {
-        val bridge = FakeMatrixRtcRoomBridge(
+    fun `a sticky event the transport cannot send is reported as unsupported`() = runTest {
+        val room = FakeElementCallMatrixRoom(
             sendStickyEventResult = { _, _, _ -> Result.failure(ElementCallMatrixException.NotSupported("sticky")) },
         )
 
         val thrown = runCatching {
-            createSender(bridge = bridge).sendStickyEvent(A_ROOM_ID.value, AN_EVENT_TYPE, A_CONTENT, durationMs = 60_000uL)
+            createSender(room = room).sendStickyEvent(A_ROOM_ID.value, AN_EVENT_TYPE, A_CONTENT, durationMs = 60_000uL)
         }.exceptionOrNull()
 
         assertThat(thrown).isInstanceOf(CommandSenderException.NotSupported::class.java)
@@ -198,12 +175,12 @@ class MatrixRtcCommandSenderTest {
 
     /**
      * The lifetime is the core's to choose: it knows when it will next refresh the membership, so the
-     * duration it hands over reaches the bridge untouched.
+     * duration it hands over reaches the room untouched.
      */
     @Test
     fun `sendStickyEvent passes the core's duration through and reports the event id`() = runTest {
         val sendStickyEvent = lambdaRecorder { _: String, _: String, _: ULong -> Result.success(AN_EVENT_ID.value) }
-        val sender = createSender(bridge = FakeMatrixRtcRoomBridge(sendStickyEventResult = sendStickyEvent))
+        val sender = createSender(room = FakeElementCallMatrixRoom(sendStickyEventResult = sendStickyEvent))
 
         val eventId = sender.sendStickyEvent(A_ROOM_ID.value, AN_EVENT_TYPE, A_CONTENT, durationMs = 60_000uL)
 
@@ -214,11 +191,11 @@ class MatrixRtcCommandSenderTest {
 
     /**
      * In STATE_EVENTS compatibility the membership is sent through here, and its event id is what an MSC4075
-     * notification relates to. This one stays on the SDK: the released bindings do report the id.
+     * notification relates to.
      */
     @Test
     fun `sendStateEvent reports the event id the homeserver assigned`() = runTest {
-        val room = FakeJoinedRoom(sendRawStateEventResult = { _, _, _ -> Result.success(AN_EVENT_ID) })
+        val room = FakeElementCallMatrixRoom(sendStateEventResult = { _, _, _ -> Result.success(AN_EVENT_ID) })
 
         val eventId = createSender(room = room).sendStateEvent(A_ROOM_ID.value, AN_EVENT_TYPE, A_STATE_KEY, A_CONTENT)
 
@@ -232,12 +209,12 @@ class MatrixRtcCommandSenderTest {
      */
     @Test
     fun `a homeserver that does not implement delayed events is reported as unsupported`() = runTest {
-        val bridge = FakeMatrixRtcRoomBridge(
-            sendDelayedEventResult = { _, _, _, _ -> Result.failure(bridgeApiError("M_UNRECOGNIZED", 404, "Unrecognized request")) },
+        val room = FakeElementCallMatrixRoom(
+            sendDelayedEventResult = { _, _, _, _ -> Result.failure(matrixApiError("M_UNRECOGNIZED", 404, "Unrecognized request")) },
         )
 
         val thrown = runCatching {
-            createSender(bridge = bridge).sendDelayedEvent(A_ROOM_ID.value, AN_EVENT_TYPE, A_CONTENT, delayMs = 8_000uL)
+            createSender(room = room).sendDelayedEvent(A_ROOM_ID.value, AN_EVENT_TYPE, A_CONTENT, delayMs = 8_000uL)
         }.exceptionOrNull()
 
         assertThat(thrown).isInstanceOf(CommandSenderException.NotSupported::class.java)
@@ -249,32 +226,13 @@ class MatrixRtcCommandSenderTest {
      */
     @Test
     fun `a homeserver that has disallowed delayed events is reported as unsupported`() = runTest {
-        val bridge = FakeMatrixRtcRoomBridge(
+        val room = FakeElementCallMatrixRoom(
             updateDelayedEventResult = { _, _ ->
-                Result.failure(bridgeApiError("M_FORBIDDEN", 403, "Sending delayed events has been disallowed"))
+                Result.failure(matrixApiError("M_FORBIDDEN", 403, "Sending delayed events has been disallowed"))
             },
         )
 
-        val thrown = runCatching { createSender(bridge = bridge).restartDelayedEvent(A_ROOM_ID.value, A_DELAY_ID) }.exceptionOrNull()
-
-        assertThat(thrown).isInstanceOf(CommandSenderException.NotSupported::class.java)
-    }
-
-    /**
-     * The same verdict must come out of the SDK's own error type: the classifier reads the Matrix error code,
-     * whichever transport carried it, so an SDK-backed bridge needs no change here.
-     */
-    @Test
-    fun `the verdict is read off an SDK error the same way`() = runTest {
-        val bridge = FakeMatrixRtcRoomBridge(
-            sendDelayedEventResult = { _, _, _, _ ->
-                Result.failure(matrixApiException(ErrorKind.Forbidden, "M_FORBIDDEN", "Sending delayed events has been disallowed"))
-            },
-        )
-
-        val thrown = runCatching {
-            createSender(bridge = bridge).sendDelayedEvent(A_ROOM_ID.value, AN_EVENT_TYPE, A_CONTENT, delayMs = 8_000uL)
-        }.exceptionOrNull()
+        val thrown = runCatching { createSender(room = room).restartDelayedEvent(A_ROOM_ID.value, A_DELAY_ID) }.exceptionOrNull()
 
         assertThat(thrown).isInstanceOf(CommandSenderException.NotSupported::class.java)
     }
@@ -286,14 +244,14 @@ class MatrixRtcCommandSenderTest {
      */
     @Test
     fun `a delayed state event refused on power levels stays a retryable send failure`() = runTest {
-        val bridge = FakeMatrixRtcRoomBridge(
+        val room = FakeElementCallMatrixRoom(
             sendDelayedEventResult = { _, _, _, _ ->
-                Result.failure(bridgeApiError("M_FORBIDDEN", 403, "You don't have permission to post that to the room"))
+                Result.failure(matrixApiError("M_FORBIDDEN", 403, "You don't have permission to post that to the room"))
             },
         )
 
         val thrown = runCatching {
-            createSender(bridge = bridge).sendDelayedStateEvent(A_ROOM_ID.value, A_LEGACY_MEMBER_EVENT_TYPE, A_STATE_KEY, A_CONTENT, delayMs = 8_000uL)
+            createSender(room = room).sendDelayedStateEvent(A_ROOM_ID.value, A_LEGACY_MEMBER_EVENT_TYPE, A_STATE_KEY, A_CONTENT, delayMs = 8_000uL)
         }.exceptionOrNull()
 
         assertThat(thrown).isInstanceOf(CommandSenderException.SendException::class.java)
@@ -301,29 +259,29 @@ class MatrixRtcCommandSenderTest {
 
     @Test
     fun `a delayed event that fails for any other reason stays a retryable send failure`() = runTest {
-        val bridge = FakeMatrixRtcRoomBridge(sendDelayedEventResult = { _, _, _, _ -> Result.failure(IllegalStateException("boom")) })
+        val room = FakeElementCallMatrixRoom(sendDelayedEventResult = { _, _, _, _ -> Result.failure(IllegalStateException("boom")) })
 
         val thrown = runCatching {
-            createSender(bridge = bridge).sendDelayedEvent(A_ROOM_ID.value, AN_EVENT_TYPE, A_CONTENT, delayMs = 8_000uL)
+            createSender(room = room).sendDelayedEvent(A_ROOM_ID.value, AN_EVENT_TYPE, A_CONTENT, delayMs = 8_000uL)
         }.exceptionOrNull()
 
         assertThat(thrown).isInstanceOf(CommandSenderException.SendException::class.java)
     }
 
     /**
-     * A bridge that is not running, or that heard nothing back, has said nothing about the homeserver: the next
-     * attempt may well have a bridge, so the dead man's switch is not retired over it.
+     * A room that is not open, or that heard nothing back, has said nothing about the homeserver: the next
+     * attempt may well have one, so the dead man's switch is not retired over it.
      */
     @Test
-    fun `a bridge that is not running or timed out stays a retryable send failure`() = runTest {
+    fun `a room that is not open or timed out stays a retryable send failure`() = runTest {
         listOf(
             ElementCallMatrixException.NotRunning(A_ROOM_ID),
             ElementCallMatrixException.Timeout("send_event"),
         ).forEach { failure ->
-            val bridge = FakeMatrixRtcRoomBridge(sendDelayedEventResult = { _, _, _, _ -> Result.failure(failure) })
+            val room = FakeElementCallMatrixRoom(sendDelayedEventResult = { _, _, _, _ -> Result.failure(failure) })
 
             val thrown = runCatching {
-                createSender(bridge = bridge).sendDelayedEvent(A_ROOM_ID.value, AN_EVENT_TYPE, A_CONTENT, delayMs = 8_000uL)
+                createSender(room = room).sendDelayedEvent(A_ROOM_ID.value, AN_EVENT_TYPE, A_CONTENT, delayMs = 8_000uL)
             }.exceptionOrNull()
 
             assertThat(thrown).isInstanceOf(CommandSenderException.SendException::class.java)
@@ -338,7 +296,7 @@ class MatrixRtcCommandSenderTest {
     @Test
     fun `sendDelayedStateEvent schedules the leave under its state key`() = runTest {
         val sendDelayedEvent = lambdaRecorder { _: String, _: String?, _: String, _: ULong -> Result.success(A_DELAY_ID) }
-        val sender = createSender(bridge = FakeMatrixRtcRoomBridge(sendDelayedEventResult = sendDelayedEvent))
+        val sender = createSender(room = FakeElementCallMatrixRoom(sendDelayedEventResult = sendDelayedEvent))
 
         val delayId = sender.sendDelayedStateEvent(
             roomId = A_ROOM_ID.value,
@@ -356,7 +314,7 @@ class MatrixRtcCommandSenderTest {
     @Test
     fun `sendDelayedEvent sends a message-like event, with no state key`() = runTest {
         val sendDelayedEvent = lambdaRecorder { _: String, _: String?, _: String, _: ULong -> Result.success(A_DELAY_ID) }
-        val sender = createSender(bridge = FakeMatrixRtcRoomBridge(sendDelayedEventResult = sendDelayedEvent))
+        val sender = createSender(room = FakeElementCallMatrixRoom(sendDelayedEventResult = sendDelayedEvent))
 
         val delayId = sender.sendDelayedEvent(A_ROOM_ID.value, AN_EVENT_TYPE, A_CONTENT, delayMs = 8_000uL)
 
@@ -366,51 +324,31 @@ class MatrixRtcCommandSenderTest {
     }
 
     @Test
-    fun `a command for a room with no live bridge fails rather than crossing the FFI`() = runTest {
-        val sender = createSender(bridges = MatrixRtcBridgeRegistry())
+    fun `a command for a room that is not open fails rather than crossing the FFI`() = runTest {
+        val sender = createSender(room = null)
 
-        val thrown = runCatching { sender.cancelDelayedEvent(A_ROOM_ID.value, A_DELAY_ID) }.exceptionOrNull()
-
-        assertThat(thrown).isInstanceOf(CommandSenderException.SendException::class.java)
+        listOf<suspend () -> Any>(
+            { sender.cancelDelayedEvent(A_ROOM_ID.value, A_DELAY_ID) },
+            { sender.sendStateEvent(A_ROOM_ID.value, AN_EVENT_TYPE, A_STATE_KEY, A_CONTENT) },
+        ).forEach { command ->
+            val thrown = runCatching { command() }.exceptionOrNull()
+            assertThat(thrown).isInstanceOf(CommandSenderException.SendException::class.java)
+        }
     }
 
-    @Test
-    fun `a command for a room we are not joined to fails rather than crossing the FFI`() = runTest {
-        val sender = MatrixRtcCommandSender(
-            client = FakeMatrixClient(),
-            commandDispatcher = Dispatchers.Unconfined,
-            roomProvider = { null },
-            bridges = MatrixRtcBridgeRegistry(),
-        )
-
-        val thrown = runCatching { sender.sendStateEvent(A_ROOM_ID.value, AN_EVENT_TYPE, A_STATE_KEY, A_CONTENT) }.exceptionOrNull()
-
-        assertThat(thrown).isInstanceOf(CommandSenderException::class.java)
-    }
-
-    private fun bridgeApiError(errcode: String, httpStatus: Int, message: String) = ElementCallMatrixException.MatrixApi(
+    private fun matrixApiError(errcode: String, httpStatus: Int, message: String) = ElementCallMatrixException.MatrixApi(
         errcode = errcode,
         httpStatus = httpStatus,
         message = message,
     )
 
-    private fun matrixApiException(kind: ErrorKind, code: String, message: String) = ClientException.MatrixApi(
-        kind = kind,
-        code = code,
-        message = message,
-        details = null,
-    )
-
     private fun createSender(
-        client: FakeMatrixClient = FakeMatrixClient(),
-        room: JoinedRoom = FakeJoinedRoom(),
-        bridge: ElementCallMatrixRoom = FakeMatrixRtcRoomBridge(),
-        bridges: MatrixRtcBridgeRegistry = MatrixRtcBridgeRegistry().apply { register(bridge) },
+        transport: ElementCallMatrixTransport = FakeElementCallMatrixTransport(),
+        room: ElementCallMatrixRoom? = FakeElementCallMatrixRoom(),
     ) = MatrixRtcCommandSender(
-        client = client,
+        transport = transport,
         commandDispatcher = Dispatchers.Unconfined,
         roomProvider = { room },
-        bridges = bridges,
     )
 
     private companion object {
@@ -424,7 +362,7 @@ class MatrixRtcCommandSenderTest {
         const val A_LEGACY_MEMBER_EVENT_TYPE = "org.matrix.msc3401.call.member"
         const val A_STATE_KEY = "_@alice:example.org_ADEVICEID_m.call"
 
-        // Distinct from the A_DEVICE_ID / A_SESSION_ID that FakeMatrixClient uses for our own identity,
+        // Distinct from the A_DEVICE_ID / A_USER_ID the fake transport uses for our own identity,
         // so that "a remote recipient" and "ourselves" are never accidentally the same device.
         const val A_REMOTE_DEVICE_ID = "AREMOTEDEVICEID"
         const val ANOTHER_REMOTE_DEVICE_ID = "ANOTHERREMOTEDEVICEID"

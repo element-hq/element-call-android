@@ -8,7 +8,7 @@
 package io.element.android.call.impl.rtc
 
 import io.element.android.call.impl.util.runCatchingExceptions
-import io.element.android.libraries.matrix.api.MatrixClient
+import io.element.android.call.api.matrix.ElementCallMatrixTransport
 import io.element.android.call.api.rtc.MatrixRtcTransport
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -31,7 +31,7 @@ import timber.log.Timber
  * is - that also gets the deprecated path retired on the SDK's schedule rather than ours.
  */
 internal class RtcTransportDiscovery(
-    private val client: MatrixClient,
+    private val transport: ElementCallMatrixTransport,
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -44,10 +44,10 @@ internal class RtcTransportDiscovery(
      * caller should fall back.
      */
     private suspend fun fromEndpoint(): List<MatrixRtcTransport>? {
-        val url = "${client.homeserverUrl.trimEnd('/')}$TRANSPORTS_PATH"
-        return client.getUrl(url).fold(
+        val url = "${transport.homeserverUrl.trimEnd('/')}$TRANSPORTS_PATH"
+        return transport.getUrl(url).fold(
             onSuccess = { body ->
-                parseTransports(body.decodeToString(), TRANSPORTS_KEY).also {
+                parseTransports(body, TRANSPORTS_KEY).also {
                     Timber.i("MatrixRTC: discovery endpoint advertises $it")
                 }
             },
@@ -61,12 +61,11 @@ internal class RtcTransportDiscovery(
 
     private suspend fun fromWellKnown(): List<MatrixRtcTransport> {
         // Well-known is served from the server name, which is usually not the homeserver URL.
-        val url = "https://${client.userIdServerName()}$WELL_KNOWN_PATH"
-        return client.getUrl(url).fold(
+        val url = "https://${transport.userIdServerName()}$WELL_KNOWN_PATH"
+        return transport.getUrl(url).fold(
             onSuccess = { body ->
-                val content = body.decodeToString()
-                val transports = parseTransports(content, RTC_FOCI_KEY)
-                    .ifEmpty { parseTransports(content, RTC_FOCI_KEY_ALIAS) }
+                val transports = parseTransports(body, RTC_FOCI_KEY)
+                    .ifEmpty { parseTransports(body, RTC_FOCI_KEY_ALIAS) }
                 Timber.i("MatrixRTC: well-known advertises $transports")
                 transports
             },

@@ -8,26 +8,26 @@
 package io.element.android.call.impl.rtc
 
 import com.google.common.truth.Truth.assertThat
-import io.element.android.call.api.rtc.id.DeviceId
-import io.element.android.call.api.rtc.id.UserId
-import io.element.android.libraries.matrix.test.A_ROOM_ID
-import io.element.android.call.api.rtc.MatrixRtcEventTypes
 import io.element.android.call.api.matrix.ElementCallEventEncryptionInfo
 import io.element.android.call.api.matrix.ElementCallToDeviceMessage
-import io.element.android.call.matrix.temporary.widget.ToDeviceRelay
+import io.element.android.call.api.rtc.MatrixRtcEventTypes
+import io.element.android.call.api.rtc.id.DeviceId
+import io.element.android.call.api.rtc.id.UserId
+import io.element.android.call.test.A_ROOM_ID
+import io.element.android.call.test.FakeElementCallMatrixTransport
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 
 class SessionStateFeederTest {
     @Test
-    fun `a spec media key published on the relay reaches the core`() = runTest {
+    fun `a spec media key delivered by the transport reaches the core`() = runTest {
         val manager = RecordingSessionManager()
-        val relay = ToDeviceRelay()
-        SessionStateFeeder(manager, relay, backgroundScope).start()
+        val transport = FakeElementCallMatrixTransport()
+        SessionStateFeeder(manager, transport, backgroundScope).start()
         runCurrent()
 
-        relay.publish(aSpecKeyMessage())
+        transport.givenToDeviceMessage(aSpecKeyMessage())
         runCurrent()
 
         val key = manager.receivedKeys.single()
@@ -40,11 +40,11 @@ class SessionStateFeederTest {
     @Test
     fun `an Element Call media key reaches the core raw, under its attested sender`() = runTest {
         val manager = RecordingSessionManager()
-        val relay = ToDeviceRelay()
-        SessionStateFeeder(manager, relay, backgroundScope).start()
+        val transport = FakeElementCallMatrixTransport()
+        SessionStateFeeder(manager, transport, backgroundScope).start()
         runCurrent()
 
-        relay.publish(aLegacyKeyMessage())
+        transport.givenToDeviceMessage(aLegacyKeyMessage())
         runCurrent()
 
         val key = manager.receivedLegacyKeys.single()
@@ -63,12 +63,12 @@ class SessionStateFeederTest {
     @Test
     fun `a cleartext key of either dialect is dropped`() = runTest {
         val manager = RecordingSessionManager()
-        val relay = ToDeviceRelay()
-        SessionStateFeeder(manager, relay, backgroundScope).start()
+        val transport = FakeElementCallMatrixTransport()
+        SessionStateFeeder(manager, transport, backgroundScope).start()
         runCurrent()
 
-        relay.publish(aSpecKeyMessage(encryptionInfo = null))
-        relay.publish(aLegacyKeyMessage(encryptionInfo = null))
+        transport.givenToDeviceMessage(aSpecKeyMessage(encryptionInfo = null))
+        transport.givenToDeviceMessage(aLegacyKeyMessage(encryptionInfo = null))
         runCurrent()
 
         assertThat(manager.receivedKeys).isEmpty()
@@ -76,17 +76,17 @@ class SessionStateFeederTest {
     }
 
     /**
-     * What the stopgap costs, pinned so it is not mistaken for a bug: the relay carries what a live bridge
-     * hears, and nothing is replayed to a feeder that subscribes later. In production the feeder is the
-     * one subscribed for the whole session; the bridges come and go.
+     * A to-device message goes to whoever is subscribed when it arrives and is then forgotten: nothing
+     * is replayed to a feeder that subscribes later. That is why the feeder subscribes for the whole
+     * session, and why a key sent while nothing was subscribed is gone.
      */
     @Test
-    fun `a key published before the feeder subscribes is not replayed`() = runTest {
+    fun `a key delivered before the feeder subscribes is not replayed`() = runTest {
         val manager = RecordingSessionManager()
-        val relay = ToDeviceRelay()
-        relay.publish(aSpecKeyMessage())
+        val transport = FakeElementCallMatrixTransport()
+        transport.givenToDeviceMessage(aSpecKeyMessage())
 
-        SessionStateFeeder(manager, relay, backgroundScope).start()
+        SessionStateFeeder(manager, transport, backgroundScope).start()
         runCurrent()
 
         assertThat(manager.receivedKeys).isEmpty()

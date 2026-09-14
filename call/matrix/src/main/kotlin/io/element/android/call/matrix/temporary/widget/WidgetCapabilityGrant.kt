@@ -5,13 +5,15 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-// Temporary: widget-driver stopgap, see `libraries/rustrtc/FEEDBACK.md`, "Widget-driver stopgap".
+// Temporary: widget-driver stopgap, see `docs/FEEDBACK.md`, "Widget-driver stopgap".
 
 package io.element.android.call.matrix.temporary.widget
 
-import io.element.android.libraries.matrix.api.widget.MatrixWidgetCapabilities
-import io.element.android.libraries.matrix.api.widget.MatrixWidgetEventFilter
 import io.element.android.call.api.rtc.MatrixRtcEventTypes
+import io.element.android.call.matrix.ElementCallTemporaryApi
+import org.matrix.rustcomponents.sdk.WidgetCapabilities
+import org.matrix.rustcomponents.sdk.WidgetCapabilitiesProvider
+import org.matrix.rustcomponents.sdk.WidgetEventFilter
 
 /**
  * The capabilities the bridge grants itself: only what the RTC core needs.
@@ -19,10 +21,12 @@ import io.element.android.call.api.rtc.MatrixRtcEventTypes
  * Not Element Call's set (`getElementCallRequiredPermissions`), which also reads `m.room.member` and would
  * push the whole member list through the pipe on every change.
  *
- * The widget machine stores whatever `acquireCapabilities` returns, so [capabilityStrings], answered to the
- * `capabilities` request, and [capabilities], returned from the provider, describe the same set.
+ * The widget machine stores whatever [acquireCapabilities] returns, without intersecting it with what the
+ * widget asked for, so [capabilityStrings], answered to the `capabilities` request, and the grant describe
+ * the same set.
  */
-internal object WidgetCapabilityGrant {
+@ElementCallTemporaryApi
+internal object WidgetCapabilityGrant : WidgetCapabilitiesProvider {
     /** Element Call's pre-MSC4354 membership, the one state type the bridge feeds and publishes. */
     val stateEventTypes = listOf(MatrixRtcEventTypes.MEMBER_ELEMENT_CALL_STATE_UNSTABLE)
 
@@ -38,20 +42,24 @@ internal object WidgetCapabilityGrant {
         "m.reaction",
     )
 
-    /** MSC2762 / MSC3819 / MSC4157 capability strings for the same set as [capabilities]. */
+    /** MSC2762 / MSC3819 / MSC4157 capability strings for the same set as the grant. */
     val capabilityStrings: List<String> =
         stateEventTypes.flatMap { listOf("$RECEIVE_STATE:$it", "$SEND_STATE:$it") } +
             toDeviceEventTypes.flatMap { listOf("$RECEIVE_TO_DEVICE:$it", "$SEND_TO_DEVICE:$it") } +
             roomEventTypes.map { "$SEND_EVENT:$it" } +
             listOf(SEND_DELAYED_EVENT, UPDATE_DELAYED_EVENT)
 
-    /** What the capabilities provider hands the machine, granted verbatim. */
-    val capabilities: MatrixWidgetCapabilities = run {
-        val stateFilters = stateEventTypes.map { MatrixWidgetEventFilter.StateWithType(it) }
-        val toDeviceFilters = toDeviceEventTypes.map { MatrixWidgetEventFilter.ToDevice(it) }
-        MatrixWidgetCapabilities(
+    /**
+     * Built by copying [requested] rather than from scratch, so that the fields this grant does not name
+     * keep whatever the SDK parsed from the widget's own `capabilities` answer, and so that this code
+     * names no field whose presence differs between SDK releases.
+     */
+    override fun acquireCapabilities(requested: WidgetCapabilities): WidgetCapabilities {
+        val stateFilters = stateEventTypes.map { WidgetEventFilter.StateWithType(it) }
+        val toDeviceFilters = toDeviceEventTypes.map { WidgetEventFilter.ToDevice(it) }
+        return requested.copy(
             read = stateFilters + toDeviceFilters,
-            send = stateFilters + toDeviceFilters + roomEventTypes.map { MatrixWidgetEventFilter.MessageLikeWithType(it) },
+            send = stateFilters + toDeviceFilters + roomEventTypes.map { WidgetEventFilter.MessageLikeWithType(it) },
             requiresClient = false,
             updateDelayedEvent = true,
             sendDelayedEvent = true,

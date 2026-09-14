@@ -7,9 +7,9 @@
 
 package io.element.android.call.impl.rtc
 
-import io.element.android.call.impl.util.runCatchingExceptions
+import io.element.android.call.api.matrix.ElementCallMatrixTransport
 import io.element.android.call.api.rtc.MatrixRtcEventTypes
-import io.element.android.call.matrix.temporary.widget.ToDeviceRelay
+import io.element.android.call.impl.util.runCatchingExceptions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -27,14 +27,15 @@ import uniffi.matrix_rtc_ffi.RtcSessionManagerHandleInterface
  * Subscribing per call would silently discard every key sent while we were between calls, including
  * the rotation another member performs the moment they see us join.
  *
- * The subscription is session-long, but what feeds it is not: the [relay] carries messages from
- * whichever room bridge is live, and the widget-driver bridge only runs during a call. A key sent while
- * no call is up is lost; peers re-send on join, which is why this is acceptable for the stopgap. An
- * SDK-backed to-device subscription would restore the full guarantee without touching this class.
+ * The subscription is session-long. Whether what feeds it is depends on the [transport]: the SDK-backed
+ * one carries messages from whichever room's widget-driver bridge is live, and that only runs during a
+ * call, so a key sent while no call is up is lost; peers re-send on join, which is why this is acceptable
+ * for the stopgap. An SDK-backed to-device subscription would restore the full guarantee without touching
+ * this class.
  */
 internal class SessionStateFeeder(
     private val manager: RtcSessionManagerHandleInterface,
-    private val relay: ToDeviceRelay,
+    private val transport: ElementCallMatrixTransport,
     private val scope: CoroutineScope,
 ) {
     fun start() {
@@ -48,7 +49,7 @@ internal class SessionStateFeeder(
      * let anyone inject a media key.
      */
     private fun feedEncryptionKeys() {
-        relay.subscribe(listOf(MatrixRtcEventTypes.ENCRYPTION_KEY))
+        transport.toDeviceMessages(setOf(MatrixRtcEventTypes.ENCRYPTION_KEY))
             .onEach { message ->
                 val key = EncryptionKeyMapper.map(message)
                 if (key == null) {
@@ -83,7 +84,7 @@ internal class SessionStateFeeder(
      * to put it.
      */
     private fun feedElementCallEncryptionKeys() {
-        relay.subscribe(listOf(MatrixRtcEventTypes.ENCRYPTION_KEY_ELEMENT_CALL))
+        transport.toDeviceMessages(setOf(MatrixRtcEventTypes.ENCRYPTION_KEY_ELEMENT_CALL))
             .onEach { message ->
                 // Same rule as the spec type: a cleartext to-device message has no attested sender, so
                 // anyone could claim to be a participant and inject a media key. The device is passed

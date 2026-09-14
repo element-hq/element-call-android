@@ -9,7 +9,7 @@ package io.element.android.call.test.audio
 
 import io.element.android.call.api.audio.AudioFocus
 import io.element.android.call.api.audio.AudioFocusRequester
-import io.element.android.tests.testutils.lambda.lambdaError
+import io.element.android.call.test.lambdaError
 
 class FakeAudioFocus(
     private val requestAudioFocusResult: (AudioFocusRequester, () -> Unit) -> Unit = { _, _ -> lambdaError() },

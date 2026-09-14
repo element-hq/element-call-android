@@ -9,27 +9,20 @@ package io.element.android.call.impl.rtc
 
 import android.content.Context
 import io.element.android.call.api.ElementCallDispatchers
-import io.element.android.call.impl.util.childScope
-import io.element.android.call.impl.util.runCatchingExceptions
-import io.element.android.libraries.matrix.api.MatrixClient
-import io.element.android.call.api.rtc.id.RoomId
-import io.element.android.libraries.matrix.api.notification.RtcNotificationType
-import io.element.android.libraries.matrix.api.room.JoinedRoom
-import io.element.android.libraries.matrix.api.widget.MatrixWidgetSettings
+import io.element.android.call.api.matrix.ElementCallMatrixRoom
+import io.element.android.call.api.matrix.ElementCallMatrixTransport
+import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.MatrixRtcElementCallCompat
+import io.element.android.call.api.rtc.MatrixRtcNotificationType
 import io.element.android.call.api.rtc.MatrixRtcNotify
 import io.element.android.call.api.rtc.MatrixRtcService
 import io.element.android.call.api.rtc.MatrixRtcSession
 import io.element.android.call.api.rtc.MatrixRtcTransport
-import io.element.android.call.api.matrix.ElementCallMatrixRoom
-import io.element.android.call.matrix.temporary.widget.MatrixRtcBridgeRegistry
-import io.element.android.call.matrix.temporary.widget.ToDeviceRelay
-import io.element.android.call.matrix.temporary.widget.WidgetCapabilityGrant
-import io.element.android.call.matrix.temporary.widget.WidgetMatrixBridge
+import io.element.android.call.api.rtc.id.RoomId
+import io.element.android.call.impl.util.childScope
+import io.element.android.call.impl.util.runCatchingExceptions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -41,14 +34,20 @@ import uniffi.matrix_rtc_ffi.FfiNotificationType
 import uniffi.matrix_rtc_ffi.FfiNotifyConfig
 import uniffi.matrix_rtc_ffi.FfiTransportConfig
 import uniffi.matrix_rtc_ffi.RtcSessionManagerHandle
-import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
+/**
+ * The RTC core for one Matrix session, bridged to Matrix through an [ElementCallMatrixTransport].
+ *
+ * @param sessionCoroutineScope lives as long as the Matrix session: the core, its session-long feeds and
+ * the rooms open for a call all hang off it.
+ */
 internal class RustMatrixRtcService(
-    private val client: MatrixClient,
+    private val transport: ElementCallMatrixTransport,
     private val dispatchers: ElementCallDispatchers,
     /** Only reaches as far as the camera, via the session and then the call. */
     private val context: Context,
-    private val sessionCoroutineScope: CoroutineScope = client.sessionCoroutineScope,
+    private val sessionCoroutineScope: CoroutineScope,
 ) : MatrixRtcService {
     /**
      * FFI calls are *started* on a single thread. The core is internally synchronised and its
@@ -75,16 +74,13 @@ internal class RustMatrixRtcService(
         return checkNotNull(managerOrNull)
     }
 
-    private val transportDiscovery = RtcTransportDiscovery(client)
+    private val transportDiscovery = RtcTransportDiscovery(transport)
 
     /**
-     * The Matrix operations the released SDK does not expose go through one bridge per room in a call
-     * (see [ElementCallMatrixRoom]). The registry is how the session-long command sender finds the bridge
-     * of the room a command is for, and the relay is how the session-long to-device feed hears from
-     * whichever bridge is live. Both are part of the widget-driver stopgap.
+     * The rooms currently open for a call, by id. A room is opened per call while the command sender
+     * lives as long as the session, so the sender looks the room a command is for up here.
      */
-    private val bridges = MatrixRtcBridgeRegistry()
-    private val toDeviceRelay = ToDeviceRelay()
+    private val openRooms = ConcurrentHashMap<RoomId, ElementCallMatrixRoom>()
 
     override suspend fun start() {
         // Mutually excluded rather than lazy because the side effects matter as much as the value: the
@@ -98,10 +94,9 @@ internal class RustMatrixRtcService(
                 RtcSessionManagerHandle().apply {
                     setCommandSender(
                         MatrixRtcCommandSender(
-                            client = client,
+                            transport = transport,
                             commandDispatcher = dispatchers.io,
-                            roomProvider = { roomId -> client.getJoinedRoom(roomId) },
-                            bridges = bridges,
+                            roomProvider = { roomId -> openRooms[roomId] },
                         )
                     )
                 }
@@ -109,12 +104,12 @@ internal class RustMatrixRtcService(
             managerOrNull = newManager
             SessionStateFeeder(
                 manager = newManager,
-                relay = toDeviceRelay,
+                transport = transport,
                 // The session scope, not a call scope: the whole point is to be subscribed between
                 // calls, so this must outlive every join and leave.
                 scope = sessionCoroutineScope,
             ).start()
-            Timber.i("MatrixRTC: core started for ${client.sessionId}")
+            Timber.i("MatrixRTC: core started for ${transport.userId}")
         }
     }
 
@@ -133,28 +128,27 @@ internal class RustMatrixRtcService(
         // It keeps a caller that forgot from getting a call with no core at all, and being idempotent
         // it costs nothing when start() already ran.
         val manager = manager()
-        val room = client.getJoinedRoom(roomId) ?: error("Not a joined room: $roomId")
         warnIfSlotIdIsMalformed(slotId, application)
 
-        // The bridge comes up before anything is fed or joined: the join arms the delayed event through
+        // The room is opened before anything is fed or joined: the join arms the delayed event through
         // it, and the membership feed reads from it. It is the last thing to go down too, after the
-        // leave - see RustMatrixRtcSession.onSessionEnded - so its scope is a sibling of the call's,
-        // not a child.
-        val bridge = openBridge(room)
-        bridges.register(bridge)
+        // leave - see RustMatrixRtcSession.onSessionEnded.
+        val room = this.transport.openRoom(roomId).getOrThrow()
+        openRooms.put(roomId, room)?.let {
+            Timber.w("MatrixRTC: replacing the open room for $roomId")
+        }
 
         return@runCatchingExceptions runCatchingExceptions {
-            joinWithBridge(manager, room, bridge, slotId, application, transport, elementCallCompat, notify)
+            joinWithRoom(manager, room, slotId, application, transport, elementCallCompat, notify)
         }.onFailure {
-            bridges.unregister(roomId)
-            bridge.stop()
+            openRooms.remove(roomId, room)
+            room.close()
         }.getOrThrow()
     }
 
-    private suspend fun joinWithBridge(
+    private suspend fun joinWithRoom(
         manager: RtcSessionManagerHandle,
-        room: JoinedRoom,
-        bridge: ElementCallMatrixRoom,
+        room: ElementCallMatrixRoom,
         slotId: String,
         application: String,
         transport: MatrixRtcTransport?,
@@ -174,7 +168,7 @@ internal class RustMatrixRtcService(
         val feeder = RoomStateFeeder(
             manager = manager,
             room = room,
-            bridge = bridge,
+            ownUserId = this.transport.userId,
             scope = scope,
             // Passed in rather than read later, because it decides how a membership is parsed on the
             // way in. Feeding one dialect and joining in another is not an error but a silence: a
@@ -197,8 +191,8 @@ internal class RustMatrixRtcService(
             // last place a host could get that wrong.
             manager.join(
                 FfiJoinSessionParams(
-                    userId = client.sessionId.value,
-                    deviceId = client.deviceId.value,
+                    userId = this@RustMatrixRtcService.transport.userId.value,
+                    deviceId = this@RustMatrixRtcService.transport.deviceId.value,
                     roomId = roomId.value,
                     slotId = slotId,
                     application = application,
@@ -229,17 +223,17 @@ internal class RustMatrixRtcService(
             slotId = slotId,
             localMemberId = memberId,
             manager = manager,
-            client = client,
+            transport = this.transport,
             sessionScope = scope,
             dispatchers = dispatchers,
             ffiDispatcher = ffiDispatcher,
             context = context,
             memberCount = memberCount,
             onSessionEnded = {
-                // Only the bridge registered for this join: a later join in the same room has its own.
-                if (bridges[roomId] === bridge) bridges.unregister(roomId)
+                // Only the room opened for this join: a later join in the same room has its own.
+                openRooms.remove(roomId, room)
                 // Not on the call scope, which is already cancelled by the time the session ends.
-                sessionCoroutineScope.launch { bridge.stop() }
+                sessionCoroutineScope.launch { room.close() }
             },
         ).also {
             // Subscribed before a single membership is fed, and `start` suspends until it is: the
@@ -249,48 +243,6 @@ internal class RustMatrixRtcService(
             it.start()
             feeder.startMemberships()
         }
-    }
-
-    /**
-     * Temporary: the widget-driver stopgap (`FEEDBACK.md`, "Widget-driver stopgap"). Drives the SDK's
-     * widget machine in-process for the operations the released bindings do not expose, and suspends
-     * until it has negotiated its capabilities, so that the join finds a bridge ready to carry the
-     * delayed event.
-     *
-     * The only place a bridge is made, and the one seam to unpick: an SDK-backed [ElementCallMatrixRoom]
-     * replaces the body of this function and nothing else in the service changes.
-     */
-    private suspend fun openBridge(room: JoinedRoom): ElementCallMatrixRoom {
-        val widgetId = "matrixrtc-${UUID.randomUUID()}"
-        val driver = room.getWidgetDriver(
-            widgetSettings = MatrixWidgetSettings(
-                id = widgetId,
-                // Off, so the machine opens with its `capabilities` request as soon as it runs rather
-                // than waiting for a `content_loaded` that no web view will ever send.
-                initAfterContentLoad = false,
-                // Only has to parse: nothing is ever loaded from it.
-                rawUrl = WIDGET_URL,
-            ),
-            capabilities = WidgetCapabilityGrant.capabilities,
-        ).getOrThrow()
-        // A sibling of the call scope, never its child: the leave cancels the call scope before it
-        // reaches the core, and the core cancels the delayed event through the bridge from inside it.
-        val bridgeScope = sessionCoroutineScope.childScope(dispatchers.io, "MatrixRtcBridge-${room.roomId}")
-        val bridge = WidgetMatrixBridge(
-            roomId = room.roomId,
-            widgetId = widgetId,
-            driver = driver,
-            parentScope = bridgeScope,
-        )
-        // Before start(): a key arriving during negotiation must not find nobody listening.
-        bridge.toDeviceMessages()
-            .onEach { toDeviceRelay.publish(it) }
-            .launchIn(bridgeScope)
-        bridge.start().onFailure {
-            bridge.stop()
-            driver.close()
-        }.getOrThrow()
-        return bridge
     }
 
     /**
@@ -330,13 +282,13 @@ internal class RustMatrixRtcService(
 
     private fun MatrixRtcNotify.toFfi(): FfiNotifyConfig = FfiNotifyConfig(
         notificationType = when (type) {
-            RtcNotificationType.RING -> FfiNotificationType.RING
+            MatrixRtcNotificationType.RING -> FfiNotificationType.RING
             // The core spells the silent one NOTIFICATION where the receive side says NOTIFY; the two
             // enums mean the same thing, which is the whole reason this mapper exists.
-            RtcNotificationType.NOTIFY -> FfiNotificationType.NOTIFICATION
+            MatrixRtcNotificationType.NOTIFY -> FfiNotificationType.NOTIFICATION
         },
         // Lowercase because the wire value is, and it goes out verbatim as `m.call.intent`.
-        intent = intent?.name?.lowercase(),
+        intent = intent?.toWire(),
         // Null leaves the core's default in place rather than restating it here, so its cap and its
         // idea of how long a phone should ring stay in one place.
         lifetimeMs = lifetimeMs,
@@ -344,12 +296,14 @@ internal class RustMatrixRtcService(
         mentionRoom = mentionRoom,
     )
 
+    private fun MatrixRtcCallIntent.toWire(): String = when (this) {
+        MatrixRtcCallIntent.AUDIO -> "audio"
+        MatrixRtcCallIntent.VIDEO -> "video"
+    }
+
     private companion object {
         const val LIVEKIT = "livekit"
         val CAN_SUBSCRIBE = listOf(LIVEKIT)
-
-        /** The widget driver needs a URL that parses; it never loads it. */
-        const val WIDGET_URL = "https://call.element.io/"
 
         /** How long the core waits before considering a silent member gone. */
         const val KEEP_ALIVE_TIMEOUT_MS = 20_000uL

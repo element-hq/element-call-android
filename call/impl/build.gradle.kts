@@ -27,5 +27,10 @@ dependencies {
     // uniffi bindings runtime.
     implementation(variantOf(libs.jna) { artifactType("aar") })
 
+    implementation(libs.androidx.corektx)
+    implementation(libs.kotlinx.collections.immutable)
+    implementation(libs.serialization.json)
+
     testCommonDependencies(libs)
+    testImplementation(projects.call.test)
 }

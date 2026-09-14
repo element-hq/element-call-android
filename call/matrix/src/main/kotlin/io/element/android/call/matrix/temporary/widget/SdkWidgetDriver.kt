@@ -5,10 +5,11 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-package io.element.android.libraries.matrix.impl.widget
+// Temporary: widget-driver stopgap, see `docs/FEEDBACK.md`, "Widget-driver stopgap".
 
-import io.element.android.libraries.matrix.api.widget.MatrixWidgetDriver
-import io.element.android.libraries.matrix.api.widget.MatrixWidgetSettings
+package io.element.android.call.matrix.temporary.widget
+
+import io.element.android.call.matrix.ElementCallTemporaryApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -19,26 +20,31 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.matrix.rustcomponents.sdk.Room
 import org.matrix.rustcomponents.sdk.WidgetCapabilitiesProvider
+import org.matrix.rustcomponents.sdk.WidgetSettings
 import org.matrix.rustcomponents.sdk.makeWidgetDriver
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.coroutineContext
 
-class RustWidgetDriver(
-    widgetSettings: MatrixWidgetSettings,
+/**
+ * The SDK's widget driver behind [WidgetDriver]. Element X's `RustWidgetDriver` with the recv-loop
+ * hardening the spike gave it: a channel rather than a shared flow, so nothing is dropped before a
+ * collector arrives and closing it tells the collector the driver is gone.
+ */
+@ElementCallTemporaryApi
+internal class SdkWidgetDriver(
+    widgetSettings: WidgetSettings,
     private val room: Room,
     private val widgetCapabilitiesProvider: WidgetCapabilitiesProvider,
-) : MatrixWidgetDriver {
-    // A channel rather than a shared flow: nothing is dropped while no one collects yet, and closing it
-    // is how a collector learns the driver has stopped. One collector at a time.
+) : WidgetDriver {
     private val incoming = Channel<String>(Channel.UNLIMITED)
     override val incomingMessages: Flow<String> = incoming.receiveAsFlow()
 
-    private val driverAndHandle = makeWidgetDriver(widgetSettings.toRustWidgetSettings())
+    private val driverAndHandle = makeWidgetDriver(widgetSettings)
     private var receiveMessageJob: Job? = null
 
     private var isRunning = AtomicBoolean(false)
 
-    override val id: String = widgetSettings.id
+    override val id: String = widgetSettings.widgetId
 
     override suspend fun run() {
         // Don't run the driver if it's already running

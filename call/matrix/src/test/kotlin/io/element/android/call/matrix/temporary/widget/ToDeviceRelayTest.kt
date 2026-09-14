@@ -19,7 +19,7 @@ class ToDeviceRelayTest {
     fun `a subscriber only hears the types it asked for`() = runTest {
         val relay = ToDeviceRelay()
 
-        relay.subscribe(listOf("a.type")).test {
+        relay.subscribe(setOf("a.type")).test {
             relay.publish(aMessage("another.type"))
             relay.publish(aMessage("a.type"))
 
@@ -32,9 +32,9 @@ class ToDeviceRelayTest {
     fun `every subscriber of a type hears each message once`() = runTest {
         val relay = ToDeviceRelay()
 
-        relay.subscribe(listOf("a.type")).test {
+        relay.subscribe(setOf("a.type")).test {
             val first = this
-            relay.subscribe(listOf("a.type", "another.type")).test {
+            relay.subscribe(setOf("a.type", "another.type")).test {
                 relay.publish(aMessage("a.type"))
 
                 assertThat(first.awaitItem().eventType).isEqualTo("a.type")

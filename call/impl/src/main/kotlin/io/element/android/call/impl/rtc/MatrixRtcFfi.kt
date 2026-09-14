@@ -8,7 +8,7 @@
 package io.element.android.call.impl.rtc
 
 import io.element.android.call.impl.util.runCatchingExceptions
-import io.element.android.libraries.matrix.api.tracing.LogLevel
+import io.element.android.call.api.rtc.MatrixRtcLogLevel
 import io.element.android.call.api.rtc.MatrixRtcLoggingConfiguration
 import org.matrix.rtc.MatrixRtc
 import org.matrix.rtc.RtcLogging
@@ -75,10 +75,10 @@ internal object MatrixRtcFfi {
     }
 }
 
-private fun LogLevel.map(): RtcLogLevel = when (this) {
-    LogLevel.ERROR -> RtcLogLevel.ERROR
-    LogLevel.WARN -> RtcLogLevel.WARN
-    LogLevel.INFO -> RtcLogLevel.INFO
-    LogLevel.DEBUG -> RtcLogLevel.DEBUG
-    LogLevel.TRACE -> RtcLogLevel.TRACE
+private fun MatrixRtcLogLevel.map(): RtcLogLevel = when (this) {
+    MatrixRtcLogLevel.ERROR -> RtcLogLevel.ERROR
+    MatrixRtcLogLevel.WARN -> RtcLogLevel.WARN
+    MatrixRtcLogLevel.INFO -> RtcLogLevel.INFO
+    MatrixRtcLogLevel.DEBUG -> RtcLogLevel.DEBUG
+    MatrixRtcLogLevel.TRACE -> RtcLogLevel.TRACE
 }
