@@ -41,3 +41,6 @@ include(":rtc:local")
 include(":tests:konsist")
 include(":tests:testutils")
 include(":tests:uitests")
+
+// The harness: a Compose app over the fakes (docs/README.md). Not published.
+include(":sample")
