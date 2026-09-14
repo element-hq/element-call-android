@@ -331,6 +331,14 @@ fun aRemoteParticipant(isReachable: Boolean = true, isMuted: Boolean = false) = 
     streams = persistentListOf(MatrixRtcStreamState(MatrixRtcStreamKind.MICROPHONE, isMuted = isMuted)),
 )
 
+/** The remote member with their camera on: what gives the floating tile and picture-in-picture something to draw. */
+fun aRemoteCameraParticipant() = aRemoteParticipant().copy(
+    streams = persistentListOf(
+        MatrixRtcStreamState(MatrixRtcStreamKind.MICROPHONE, isMuted = false),
+        MatrixRtcStreamState(MatrixRtcStreamKind.CAMERA, isMuted = false),
+    ),
+)
+
 /** One of a crowd: distinct id and name, microphone only, every third one muted. */
 fun aCrowdParticipant(index: Int) = MatrixRtcParticipant(
     memberId = aCrowdMemberId(index),

@@ -10,6 +10,7 @@ package io.element.android.call.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -18,14 +19,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.tooling.preview.PreviewParameter
+import androidx.compose.ui.unit.dp
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
+import io.element.android.call.ui.preview.ElementCallPreview
+import io.element.android.call.ui.preview.PreviewsDayNight
 import io.element.android.call.ui.theme.ElementCallAvatar
 import io.element.android.call.ui.theme.ElementCallAvatarSize
 import io.element.android.call.ui.theme.ElementCallTheme
 import io.element.android.call.ui.video.CallVideoRenderer
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 /**
  * The call as a floating window: one tile, no chrome.
@@ -104,4 +110,17 @@ fun ElementCallPictureInPictureView(
             }
         }
     }
+}
+
+// At the size Android gives a picture-in-picture window, which is the only size this is ever drawn at.
+@PreviewsDayNight
+@Composable
+internal fun ElementCallPictureInPictureViewPreview(
+    @PreviewParameter(MinimizedElementCallSnapshotPreviewParam::class) call: ElementCallSnapshot,
+) = ElementCallPreview {
+    ElementCallPictureInPictureView(
+        call = call,
+        videoFrames = { _, _ -> emptyFlow() },
+        modifier = Modifier.size(width = 240.dp, height = 135.dp),
+    )
 }

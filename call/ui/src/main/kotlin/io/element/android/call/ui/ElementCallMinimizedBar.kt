@@ -184,7 +184,7 @@ internal val MINIMIZED_CALL_BAR_HEIGHT = 56.dp
 
 @PreviewsDayNight
 @Composable
-internal fun MinimizedCallBarPreview(@PreviewParameter(ElementCallSnapshotPreviewParam::class) call: ElementCallSnapshot) = ElementCallPreview {
+internal fun ElementCallMinimizedBarPreview(@PreviewParameter(ElementCallSnapshotPreviewParam::class) call: ElementCallSnapshot) = ElementCallPreview {
     ElementCallMinimizedBar(
         call = call,
         onToggleMicrophone = {},

@@ -29,15 +29,19 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.dp
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
+import io.element.android.call.ui.preview.ElementCallPreview
+import io.element.android.call.ui.preview.PreviewsDayNight
 import io.element.android.call.ui.theme.ElementCallAvatar
 import io.element.android.call.ui.theme.ElementCallAvatarSize
 import io.element.android.call.ui.theme.ElementCallTheme
 import io.element.android.call.ui.video.CallVideoRenderer
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 /**
  * One member of the call: their video if they are sending any, their avatar if not.
@@ -256,3 +260,14 @@ private fun MutedBadge(modifier: Modifier = Modifier) {
 
 private val TILE_CORNER = 12.dp
 private val BADGE_SIZE = 28.dp
+
+@PreviewsDayNight
+@Composable
+internal fun CallParticipantTilePreview(@PreviewParameter(CallParticipantPreviewParam::class) participant: CallParticipant) = ElementCallPreview {
+    CallParticipantTile(
+        participant = participant,
+        videoFrames = if (participant.hasVideo) emptyFlow() else null,
+        isSpotlight = participant.isScreenShare,
+        modifier = Modifier.size(width = 160.dp, height = 200.dp),
+    )
+}

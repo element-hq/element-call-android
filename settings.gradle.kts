@@ -40,3 +40,4 @@ include(":rtc:local")
 // Not published.
 include(":tests:konsist")
 include(":tests:testutils")
+include(":tests:uitests")

@@ -53,6 +53,11 @@ jobs:
       - name: ⚙️ Run unit tests
         run: ./gradlew testDebugUnitTest -x :tests:konsist:testDebugUnitTest $CI_GRADLE_ARG_PROPERTIES
 
+      - name: ⚙️ Run screenshot tests
+        # Compares against the PNGs committed in tests/uitests/src/test/snapshots (Git LFS). Recording is
+        # done by the "Record screenshots" workflow, never locally. See docs/screenshot_testing.md.
+        run: ./gradlew :tests:uitests:verifyPaparazziDebug $CI_GRADLE_ARG_PROPERTIES
+
       - name: ⚙️ Generate kover coverage report
         run: ./gradlew :koverXmlReportMerged :koverHtmlReportMerged :koverVerifyAll -x testDebugUnitTest $CI_GRADLE_ARG_PROPERTIES
 

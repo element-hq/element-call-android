@@ -29,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import io.element.android.call.api.ElementCallRoomMember
@@ -36,11 +37,14 @@ import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.api.rtc.id.UserId
+import io.element.android.call.ui.preview.ElementCallPreview
+import io.element.android.call.ui.preview.PreviewsDayNight
 import io.element.android.call.ui.theme.ElementCallAvatar
 import io.element.android.call.ui.theme.ElementCallAvatarSize
 import io.element.android.call.ui.theme.ElementCallTheme
 import io.element.android.call.ui.video.CallVideoRenderer
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -190,3 +194,15 @@ private val SNAP_SPEC = spring<Float>(
     dampingRatio = Spring.DampingRatioLowBouncy,
     stiffness = Spring.StiffnessMediumLow,
 )
+
+@PreviewsDayNight
+@Composable
+internal fun ElementCallFloatingTilePreview(
+    @PreviewParameter(MinimizedElementCallSnapshotPreviewParam::class) call: ElementCallSnapshot,
+) = ElementCallPreview(fillMaxSize = true) {
+    ElementCallFloatingTile(
+        call = call,
+        videoFrames = { _, _ -> emptyFlow() },
+        onClick = {},
+    )
+}

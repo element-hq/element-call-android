@@ -8,7 +8,10 @@
 package io.element.android.call.ui.theme
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Text
@@ -20,7 +23,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.element.android.call.ui.preview.ElementCallPreview
+import io.element.android.call.ui.preview.PreviewsDayNight
 
 /**
  * The default avatar: a coloured disc with the first letter of the name, or of the user id's localpart.
@@ -64,3 +70,14 @@ private val AVATAR_COLORS = listOf(
     Color(0xFF8A1C3F),
     Color(0xFF2F4FA3),
 )
+
+@PreviewsDayNight
+@Composable
+internal fun DefaultElementCallAvatarPreview() = ElementCallPreview {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(8.dp)) {
+        // A name, a bare user id, and nothing usable at all.
+        DefaultElementCallAvatar(data = ElementCallAvatarData(id = "@alice:example.org", name = "Alice", url = null), size = ElementCallAvatarSize.Tile)
+        DefaultElementCallAvatar(data = ElementCallAvatarData(id = "@bob:example.org", name = null, url = null), size = ElementCallAvatarSize.Tile)
+        DefaultElementCallAvatar(data = ElementCallAvatarData(id = "@:example.org", name = " ", url = null), size = ElementCallAvatarSize.Spotlight)
+    }
+}

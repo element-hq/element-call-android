@@ -424,6 +424,6 @@ private val TOP_BAR_BUTTON_ROOM = 52.dp
 
 @PreviewsDayNight
 @Composable
-internal fun CallScreenViewPreview(@PreviewParameter(ElementCallScreenStatePreviewParam::class) state: ElementCallScreenState) = ElementCallPreview {
+internal fun ElementCallScreenPreview(@PreviewParameter(ElementCallScreenStatePreviewParam::class) state: ElementCallScreenState) = ElementCallPreview {
     ElementCallScreen(state = state)
 }
