@@ -41,7 +41,8 @@ The host decides where those composables sit. The plan this repository follows i
 | `call/matrix` | `element-call-matrix` | the ONLY module importing `org.matrix.rustcomponents.sdk`: `ElementCallSdkTransport` and the `temporary/` widget-driver stopgap | `call/api`, the SDK |
 | `call/test` | `element-call-test` | fakes for every port and for the RTC service, fixtures, test-pattern frames | `call/api` |
 | `rtc/local` | not published | the locally built `matrixrtc-release.aar` (gitignored) | |
-| `tests/konsist`, `tests/testutils` | not published | the rules below, test helpers | |
+| `sample` | not published | the harness: a Compose app over the fakes, the only Activity, the instrumented tests | `call/ui`, `call/impl`, `call/test`; never `call/matrix` |
+| `tests/konsist`, `tests/testutils`, `tests/uitests` | not published | the rules below, test helpers, the Paparazzi screenshot tests | |
 
 Everything in `call/impl` and `call/matrix` is `internal` unless it is on the allowlist in `KonsistBoundaryTest`.
 The rules are enforced by `tests/konsist` (`KonsistBoundaryTest`, one assertion per rule) and by Gradle:
@@ -59,6 +60,8 @@ for the three layers (local core, library from source inside Element X, library 
 
 - Build everything: `./gradlew assemble`
 - Unit tests: `./gradlew test`
+- Screenshot tests: `./gradlew :tests:uitests:verifyPaparazziDebug` (recording is CI's job, see `docs/screenshot_testing.md`)
+- The sample on a device: `./gradlew :sample:installDebug`; its gesture and pixel tests: `./gradlew :sample:connectedDebugAndroidTest`
 - Konsist, lint, detekt, ktlint, no-Compose check, docs TOC: `./gradlew runQualityChecks`
 - Everything CI runs, before a PR: `./tools/quality/check.sh`
 - Format: `./gradlew ktlintFormat`

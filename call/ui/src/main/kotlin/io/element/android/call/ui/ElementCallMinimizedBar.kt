@@ -73,7 +73,7 @@ fun ElementCallMinimizedBar(
         ) {
             CircularCallButton(
                 onClick = onToggleMicrophone,
-                background = Color.White,
+                background = ElementCallTheme.colors.controlActiveBackground,
                 contentDescription = stringResource(
                     if (call.isMicrophoneMuted) R.string.element_call_a11y_unmute_microphone else R.string.element_call_a11y_mute_microphone
                 ),
@@ -81,7 +81,7 @@ fun ElementCallMinimizedBar(
                 Icon(
                     imageVector = if (call.isMicrophoneMuted) ElementCallTheme.icons.microphoneOff else ElementCallTheme.icons.microphoneOn,
                     contentDescription = null,
-                    tint = Color.Black,
+                    tint = ElementCallTheme.colors.controlActiveContent,
                     modifier = Modifier.size(20.dp),
                 )
             }
@@ -93,7 +93,7 @@ fun ElementCallMinimizedBar(
                 Text(
                     text = call.roomName.orEmpty(),
                     style = ElementCallTheme.typography.bodyMdMedium,
-                    color = Color.White,
+                    color = ElementCallTheme.colors.onOverlay,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     textAlign = TextAlign.Center,
@@ -117,7 +117,7 @@ fun ElementCallMinimizedBar(
                     Text(
                         text = call.subtitle(),
                         style = ElementCallTheme.typography.bodySmRegular,
-                        color = Color.White.copy(alpha = 0.7f),
+                        color = ElementCallTheme.colors.onOverlay.copy(alpha = 0.7f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         textAlign = TextAlign.Center,
@@ -133,7 +133,7 @@ fun ElementCallMinimizedBar(
                 Icon(
                     imageVector = ElementCallTheme.icons.endCall,
                     contentDescription = null,
-                    tint = Color.White,
+                    tint = ElementCallTheme.colors.onOverlay,
                     modifier = Modifier.size(20.dp),
                 )
             }

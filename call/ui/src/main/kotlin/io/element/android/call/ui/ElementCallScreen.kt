@@ -190,7 +190,7 @@ private fun CallDurationLabel(state: ElementCallScreenState, modifier: Modifier 
     Text(
         text = rememberCallDuration(state.connectedAtElapsedMs),
         style = ElementCallTheme.typography.bodyMdMedium,
-        color = Color.White,
+        color = ElementCallTheme.colors.onOverlay,
         modifier = modifier
             .clip(RoundedCornerShape(percent = 50))
             .background(ElementCallTheme.colors.overlayScrim)
@@ -230,13 +230,13 @@ private fun ScreenShareBanner(state: ElementCallScreenState, modifier: Modifier 
             Icon(
                 imageVector = ElementCallTheme.icons.shareScreenActive,
                 contentDescription = null,
-                tint = Color.White,
+                tint = ElementCallTheme.colors.onOverlay,
                 modifier = Modifier.size(16.dp),
             )
             Text(
                 text = stringResource(R.string.element_call_sharing_your_screen),
                 style = ElementCallTheme.typography.bodySmMedium,
-                color = Color.White,
+                color = ElementCallTheme.colors.onOverlay,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -336,7 +336,7 @@ private fun CallControlsBar(state: ElementCallScreenState, modifier: Modifier = 
             contentDescription = stringResource(R.string.element_call_a11y_hang_up),
             isActive = false,
             background = ElementCallTheme.colors.hangUp,
-            tint = Color.White,
+            tint = ElementCallTheme.colors.onOverlay,
         )
     }
 }
@@ -377,9 +377,9 @@ private fun RoundCallButton(
     tint: Color? = null,
 ) {
     val resolvedBackground = background
-        ?: if (isActive) Color.White else ElementCallTheme.colors.bgSubtleSecondary
+        ?: if (isActive) ElementCallTheme.colors.controlActiveBackground else ElementCallTheme.colors.bgSubtleSecondary
     val resolvedTint = tint
-        ?: if (isActive) Color.Black else ElementCallTheme.colors.iconPrimary
+        ?: if (isActive) ElementCallTheme.colors.controlActiveContent else ElementCallTheme.colors.iconPrimary
     IconButton(
         onClick = onClick,
         enabled = enabled,

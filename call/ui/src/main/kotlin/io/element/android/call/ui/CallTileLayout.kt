@@ -56,13 +56,13 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
@@ -395,12 +395,12 @@ private fun SwitchCameraButton(onClick: () -> Unit, modifier: Modifier = Modifie
     IconButton(
         onClick = onClick,
         modifier = modifier,
-        colors = IconButtonDefaults.iconButtonColors(containerColor = ElementCallTheme.colors.overlayScrim, contentColor = Color.White),
+        colors = IconButtonDefaults.iconButtonColors(containerColor = ElementCallTheme.colors.overlayScrim, contentColor = ElementCallTheme.colors.onOverlay),
     ) {
         Icon(
             imageVector = ElementCallTheme.icons.switchCamera,
             contentDescription = stringResource(R.string.element_call_a11y_switch_camera),
-            tint = Color.White,
+            tint = ElementCallTheme.colors.onOverlay,
             modifier = Modifier.size(20.dp),
         )
     }
@@ -534,6 +534,7 @@ private fun CallTile(
         appearance = appearance,
         stats = stats,
         modifier = Modifier
+            .testTag(ElementCallTestTags.tile(participant.tileId))
             .animatedSlot(slot, inStrip = inStrip, scroll = stripScroll)
             // We are always drawn on top. The one-to-one thumbnail overlaps the other person, and
             // the tiles are composed in arrival order, so without this whoever joined first would
@@ -587,7 +588,7 @@ private fun PageIndicator(pageCount: Int, currentPage: Int, modifier: Modifier =
         Text(
             text = "${currentPage + 1} / $pageCount",
             style = ElementCallTheme.typography.bodySmMedium,
-            color = Color.White,
+            color = ElementCallTheme.colors.onOverlay,
             modifier = modifier,
         )
         return
@@ -603,7 +604,7 @@ private fun PageIndicator(pageCount: Int, currentPage: Int, modifier: Modifier =
                 modifier = Modifier
                     .size(if (isCurrent) 8.dp else 6.dp)
                     .clip(CircleShape)
-                    .background(if (isCurrent) Color.White else ElementCallTheme.colors.pageDotInactive),
+                    .background(if (isCurrent) ElementCallTheme.colors.onOverlay else ElementCallTheme.colors.pageDotInactive),
             )
         }
     }
@@ -649,13 +650,13 @@ private fun MemberCountPill(count: Int, modifier: Modifier = Modifier) {
         Icon(
             imageVector = ElementCallTheme.icons.participants,
             contentDescription = null,
-            tint = Color.White,
+            tint = ElementCallTheme.colors.onOverlay,
             modifier = Modifier.size(14.dp),
         )
         Text(
             text = count.toString(),
             style = ElementCallTheme.typography.bodySmMedium,
-            color = Color.White,
+            color = ElementCallTheme.colors.onOverlay,
         )
     }
 }

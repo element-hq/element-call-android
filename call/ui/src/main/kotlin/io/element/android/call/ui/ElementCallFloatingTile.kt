@@ -29,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -78,7 +79,8 @@ fun ElementCallFloatingTile(
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val density = LocalDensity.current
         val margin = with(density) { TILE_MARGIN.toPx() }
-        val maxX = (constraints.maxWidth - with(density) { TILE_WIDTH.toPx() } - margin).coerceAtLeast(margin)
+        val containerWidth = constraints.maxWidth
+        val maxX = (containerWidth - with(density) { TILE_WIDTH.toPx() } - margin).coerceAtLeast(margin)
         val maxY = (constraints.maxHeight - with(density) { TILE_HEIGHT.toPx() } - margin).coerceAtLeast(margin)
 
         // Top right to start with: the bottom of a screen is where the composer and the navigation
@@ -112,13 +114,19 @@ fun ElementCallFloatingTile(
                         },
                         // Snapped to whichever side is nearer rather than left where it was dropped,
                         // so the tile always ends up flush and never half over the content.
+                        //
+                        // Measured against the *container's* width, not `size.width`: inside this
+                        // scope `size` is the tile's own, and a tile compared with itself is never
+                        // past the middle, so it always snapped back to the right. The instrumented
+                        // drag test is what found that.
                         onDragEnd = {
-                            val nearestEdge = if (offsetX.value + TILE_WIDTH.toPx() / 2 < size.width / 2) margin else maxX
+                            val nearestEdge = if (offsetX.value + TILE_WIDTH.toPx() / 2 < containerWidth / 2) margin else maxX
                             scope.launch { offsetX.animateTo(nearestEdge, SNAP_SPEC) }
                         },
                     )
                 }
-                .clickable(onClick = onClick),
+                .clickable(onClick = onClick)
+                .testTag(ElementCallTestTags.FLOATING_TILE),
         ) {
             val frames = tile.memberId?.let { videoFrames(it, tile.kind) }
             if (frames != null) {

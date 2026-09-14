@@ -104,7 +104,7 @@ fun ElementCallPictureInPictureView(
                 Text(
                     text = stringResource(R.string.element_call_sharing_your_screen),
                     style = ElementCallTheme.typography.bodyXsMedium,
-                    color = Color.White,
+                    color = ElementCallTheme.colors.onOverlay,
                     modifier = Modifier.align(Alignment.BottomCenter),
                 )
             }

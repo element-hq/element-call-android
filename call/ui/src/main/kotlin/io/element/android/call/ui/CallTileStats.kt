@@ -21,7 +21,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -145,7 +144,7 @@ internal fun CallTileStatsOverlay(
 private fun StatLine(text: String) {
     Text(
         text = text,
-        color = Color.White,
+        color = ElementCallTheme.colors.onOverlay,
         // Monospaced so the numbers do not dance as they change, which is most of what makes a live
         // readout hard to read. Smaller than any product type scale on purpose: this has to fit over
         // a 100dp thumbnail without covering the person in it.

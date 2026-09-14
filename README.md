@@ -3,13 +3,14 @@
 The native MatrixRTC call component for Android: a library a Matrix client embeds to place and receive calls
 without a WebView. Extracted from the Element X Android spike; consumed by Element X Android behind a feature flag.
 
-**Status: pre-release.** The repository skeleton is in place; the code is being imported module by module. Nothing is
-published yet.
+**Status: pre-release.** The code is imported from the spike and severed from Element X; the sample app and the test
+harness exist. Nothing is published yet.
 
 <!--- TOC -->
 
 * [Modules](#modules)
 * [Building](#building)
+* [The sample app](#the-sample-app)
 * [Host requirements](#host-requirements)
 * [Documentation](#documentation)
 * [Copyright & License](#copyright-license)
@@ -26,7 +27,8 @@ Five published artifacts under `io.element.android`, one version:
 | `element-call` | `call/impl` | the stack, the controller, the foreground service, the Rust core wrapper; no Compose |
 | `element-call-ui` | `call/ui` | the composables: screen, minimized bar, floating tile, picture-in-picture, style port |
 | `element-call-matrix` | `call/matrix` | the turnkey Matrix transport over the Rust SDK |
-| `element-call-test` | `call/test` | fakes and fixtures for hosts' tests |
+| `element-call-test` | `call/test` | fakes and fixtures for hosts' tests, and the colour-bar test pattern |
+| not published | `sample` | the harness: a Compose app over the fakes, with the only Activity and the instrumented tests |
 
 See [AGENTS.md](AGENTS.md) for the boundaries between them.
 
@@ -40,6 +42,21 @@ The build needs the `matrix-rust-rtc` core as an Android AAR at `rtc/local/matri
 ```
 
 [docs/local_stack.md](docs/local_stack.md) explains how to work on the core, this library and Element X at once.
+
+## The sample app
+
+`sample/` is how the UI is developed without Element X: a Compose app over the fakes, with no server, no login and
+no camera. Every row of its picker opens a call over the sample's own screen - one to one, a group with a spotlight,
+nine people with a paging strip, a shared screen, the minimized bar, the floating tile, and the connecting, failed
+and permission states - with colour bars where a camera would be, drawn through the real renderer. Its controls do
+what they say (mute mutes, minimize minimizes), a switch overrides the style with a deliberately loud one, and
+leaving the app enters picture-in-picture.
+
+```
+./gradlew :sample:installDebug
+adb shell am start -n io.element.android.call.sample/.SampleActivity --es fixture group   # or any SampleFixture key
+./gradlew :sample:connectedDebugAndroidTest                                                # the gesture and pixel tests
+```
 
 ## Host requirements
 

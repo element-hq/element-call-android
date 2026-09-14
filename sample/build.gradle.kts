@@ -34,4 +34,13 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime)
     implementation(libs.kotlinx.collections.immutable)
     implementation(libs.coroutines.core)
+
+    // The instrumented tests (plan §7.2): the gestures and the pixels only a real device can answer for.
+    androidTestImplementation(libs.androidx.compose.ui.test.junit)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.test.core)
+    androidTestImplementation(libs.test.runner)
+    // Compose's test artifact pulls Espresso 3.5, whose idling breaks on API 36+ (InputManager.getInstance is gone).
+    androidTestImplementation(libs.test.espresso.core)
+    androidTestImplementation(libs.test.truth)
 }
