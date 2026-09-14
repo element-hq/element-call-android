@@ -17,6 +17,7 @@ import io.element.android.call.api.rtc.id.UserId
 import io.element.android.call.test.A_ROOM_ID
 import io.element.android.call.test.A_USER_ID
 import io.element.android.call.test.FakeElementCallMatrixRoom
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
@@ -27,6 +28,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Test
 import uniffi.matrix_rtc_ffi.RtcSessionManagerHandleInterface
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class RoomStateFeederTest {
     @Test
     fun `a sticky membership reaches the core as the room's current state`() = runTest {

@@ -23,12 +23,12 @@ data class ElementCallNotificationConfig(
     val channelId: String = DEFAULT_CHANNEL_ID,
     /** The channel's user-visible name, created on first use on Android O and above. Null uses the library's string. */
     val channelName: CharSequence? = null,
-    /** The status bar icon. */
-    @DrawableRes val smallIcon: Int = android.R.drawable.stat_sys_phone_call,
-    /** The icon of the notification's mute action while the microphone is on. */
-    @DrawableRes val muteIcon: Int = android.R.drawable.ic_lock_silent_mode,
-    /** The icon of the notification's unmute action while the microphone is muted. */
-    @DrawableRes val unmuteIcon: Int = android.R.drawable.ic_lock_silent_mode_off,
+    /** The status bar icon. Null uses the library's handset glyph. */
+    @DrawableRes val smallIcon: Int? = null,
+    /** The icon of the notification's mute action while the microphone is on. Null uses the library's glyph. */
+    @DrawableRes val muteIcon: Int? = null,
+    /** The icon of the notification's unmute action while the microphone is muted. Null uses the library's glyph. */
+    @DrawableRes val unmuteIcon: Int? = null,
     /**
      * What tapping the notification opens: the way back into the running call. Null falls back to the
      * app's launch intent, which is right for a host that draws the call in its main Activity.

@@ -100,7 +100,7 @@ class ElementCallForegroundService : Service() {
         val muteIntent = broadcast(ElementCallActionReceiver.ACTION_TOGGLE_MUTE, TOGGLE_MUTE_REQUEST_CODE)
 
         return NotificationCompat.Builder(this, config.channelId)
-            .setSmallIcon(config.smallIcon)
+            .setSmallIcon(config.smallIcon ?: R.drawable.ic_element_call_notification)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .setCategory(NotificationCompat.CATEGORY_CALL)
@@ -112,7 +112,11 @@ class ElementCallForegroundService : Service() {
             .setContentIntent(config.contentIntent?.invoke(this) ?: returnToAppIntent())
             .addAction(
                 NotificationCompat.Action.Builder(
-                    if (isMuted) config.unmuteIcon else config.muteIcon,
+                    if (isMuted) {
+                        config.unmuteIcon ?: R.drawable.ic_element_call_notification_mic_off
+                    } else {
+                        config.muteIcon ?: R.drawable.ic_element_call_notification_mic_on
+                    },
                     getString(if (isMuted) R.string.element_call_notification_unmute_microphone else R.string.element_call_notification_mute_microphone),
                     muteIntent,
                 ).build()

@@ -69,7 +69,7 @@ internal object StickyEventMapper {
         // go out encrypted.
         val isUnvouchedDeparture = event.encryptionInfo == null && membership == LEAVE_MEMBERSHIP
         if (isUnvouchedDeparture) {
-            Timber.w("MatrixRTC: vouching for a cleartext departure of ${member?.string("id")}, delayed events are not encrypted yet")
+            Timber.w("MatrixRTC: vouching for a cleartext departure of ${member.string("id")}, delayed events are not encrypted yet")
         }
 
         return FfiStickyEvent(

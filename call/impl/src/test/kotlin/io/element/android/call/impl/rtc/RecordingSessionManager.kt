@@ -53,9 +53,9 @@ internal class RecordingSessionManager(
         memberships += Triple(roomId, memberEvents, legacyStateEvents)
     }
 
-    override suspend fun onRoomMembersReceived(roomId: String, userIds: List<String>) = Unit
+    override suspend fun onRoomMembersReceived(roomId: String, joinedUserIds: List<String>) = Unit
 
-    override suspend fun onRoomEncryptionReceived(roomId: String, isEncrypted: Boolean) = Unit
+    override suspend fun onRoomEncryptionReceived(roomId: String, encrypted: Boolean) = Unit
 
     override suspend fun onRoomSlotsReceived(roomId: String, slots: List<SlotEvent>) = Unit
 
@@ -91,11 +91,11 @@ internal class RecordingSessionManager(
 
     override suspend fun sessionCount(): ULong = 0uL
 
-    override suspend fun setCommandSender(sender: CommandSenderCallback) = Unit
+    override suspend fun setCommandSender(callback: CommandSenderCallback) = Unit
 
     override fun startHeartbeat(roomId: String, slotId: String) = Unit
 
-    override fun startHeartbeatEvery(roomId: String, slotId: String, period: Duration) = Unit
+    override fun startHeartbeatEvery(roomId: String, slotId: String, interval: Duration) = Unit
 
     override fun stopHeartbeat(roomId: String, slotId: String) = Unit
 

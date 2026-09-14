@@ -50,14 +50,14 @@ internal object WidgetCapabilityGrant : WidgetCapabilitiesProvider {
             listOf(SEND_DELAYED_EVENT, UPDATE_DELAYED_EVENT)
 
     /**
-     * Built by copying [requested] rather than from scratch, so that the fields this grant does not name
-     * keep whatever the SDK parsed from the widget's own `capabilities` answer, and so that this code
-     * names no field whose presence differs between SDK releases.
+     * Built by copying the requested [capabilities] rather than from scratch, so that the fields this grant
+     * does not name keep whatever the SDK parsed from the widget's own `capabilities` answer, and so that
+     * this code names no field whose presence differs between SDK releases.
      */
-    override fun acquireCapabilities(requested: WidgetCapabilities): WidgetCapabilities {
+    override fun acquireCapabilities(capabilities: WidgetCapabilities): WidgetCapabilities {
         val stateFilters = stateEventTypes.map { WidgetEventFilter.StateWithType(it) }
         val toDeviceFilters = toDeviceEventTypes.map { WidgetEventFilter.ToDevice(it) }
-        return requested.copy(
+        return capabilities.copy(
             read = stateFilters + toDeviceFilters,
             send = stateFilters + toDeviceFilters + roomEventTypes.map { WidgetEventFilter.MessageLikeWithType(it) },
             requiresClient = false,

@@ -72,6 +72,7 @@ private val A_RECEIVE_STATS = MatrixRtcReceiveStats(
  * `ElementCallScreenStateTest`, in the ui module, against a fake of this.
  */
 @Suppress("LargeClass")
+@OptIn(ExperimentalCoroutinesApi::class)
 class DefaultElementCallControllerTest {
     @get:Rule val warmUpRule = WarmUpRule()
 
@@ -1119,7 +1120,6 @@ class DefaultElementCallControllerTest {
      * [roomIsDm] is what the host says about the room, or null for a host that never answers - which
      * is what the notification timeout is for.
      */
-    @OptIn(ExperimentalCoroutinesApi::class)
     private fun TestScope.createController(
         rtcService: FakeMatrixRtcService = FakeMatrixRtcService(),
         audioDeviceController: FakeCallAudioDeviceController = FakeCallAudioDeviceController(),

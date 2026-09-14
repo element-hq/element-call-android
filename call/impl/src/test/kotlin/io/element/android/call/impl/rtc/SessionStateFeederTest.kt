@@ -15,10 +15,12 @@ import io.element.android.call.api.rtc.id.DeviceId
 import io.element.android.call.api.rtc.id.UserId
 import io.element.android.call.test.A_ROOM_ID
 import io.element.android.call.test.FakeElementCallMatrixTransport
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class SessionStateFeederTest {
     @Test
     fun `a spec media key delivered by the transport reaches the core`() = runTest {
