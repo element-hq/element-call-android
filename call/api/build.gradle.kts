@@ -10,6 +10,7 @@
 plugins {
     id("io.element.call.android-library")
     id("io.element.call.no-compose")
+    id("io.element.call.publish")
 }
 
 android {

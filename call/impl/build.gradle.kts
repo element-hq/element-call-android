@@ -13,10 +13,16 @@ import extension.testCommonDependencies
 plugins {
     id("io.element.call.android-library")
     id("io.element.call.no-compose")
+    id("io.element.call.publish")
 }
 
 android {
     namespace = "io.element.android.call.impl"
+
+    defaultConfig {
+        // What a minifying host must keep: JNA, the uniffi bindings, libwebrtc's JNI entry points (§8.3).
+        consumerProguardFiles("consumer-rules.pro")
+    }
 }
 
 dependencies {

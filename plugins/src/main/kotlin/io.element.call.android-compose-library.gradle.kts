@@ -25,9 +25,7 @@ plugins {
 android {
     androidLibraryConfig(project)
     composeLibraryConfig()
-    compileOptions {
-        isCoreLibraryDesugaringEnabled = true
-    }
+    // No core library desugaring: see io.element.call.android-library.
 }
 
 kotlin {
@@ -44,5 +42,4 @@ setupKover()
 dependencies {
     commonDependencies(libs)
     composeDependencies(libs)
-    coreLibraryDesugaring(libs.android.desugar)
 }

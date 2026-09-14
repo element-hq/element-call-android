@@ -9,6 +9,7 @@
 // Published, like Element X's `*/test` modules, so a host's tests need no host.
 plugins {
     id("io.element.call.android-library")
+    id("io.element.call.publish")
 }
 
 android {

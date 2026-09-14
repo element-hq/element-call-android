@@ -11,6 +11,7 @@ import extension.testCommonDependencies
 // picture-in-picture content, the style port and the previews.
 plugins {
     id("io.element.call.android-compose-library")
+    id("io.element.call.publish")
 }
 
 android {

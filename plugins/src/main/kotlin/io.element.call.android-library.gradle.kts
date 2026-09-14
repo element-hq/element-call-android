@@ -21,9 +21,9 @@ plugins {
 
 android {
     androidLibraryConfig(project)
-    compileOptions {
-        isCoreLibraryDesugaringEnabled = true
-    }
+    // No core library desugaring, unlike Element X's library plugin: a published AAR built with it
+    // requires every host to enable it (AGP checks the AAR metadata), and nothing here needs java.time
+    // or streams on minSdk 24. tests/consumer is what caught this.
 }
 
 kotlin {
@@ -39,5 +39,4 @@ setupKover()
 
 dependencies {
     commonDependencies(libs)
-    coreLibraryDesugaring(libs.android.desugar)
 }

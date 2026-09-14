@@ -22,6 +22,7 @@ import java.io.File
  */
 val excludedKoverSubProjects = listOf(
     ":rtc:local",
+    ":bom",
     ":tests:konsist",
     ":tests:testutils",
     ":tests:uitests",

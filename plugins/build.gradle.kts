@@ -21,4 +21,5 @@ dependencies {
     implementation(files(libs.javaClass.superclass.protectionDomain.codeSource.location))
     implementation(libs.autonomousapps.dependencyanalysis.plugin)
     implementation(libs.compose.compiler.plugin)
+    implementation(libs.vanniktech.maven.publish.plugin)
 }

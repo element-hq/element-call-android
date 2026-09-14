@@ -37,6 +37,9 @@ include(":call:test")
 // The locally built matrix-rust-rtc AAR (see docs/local_stack.md, layer 1).
 include(":rtc:local")
 
+// One version for the five artifacts.
+include(":bom")
+
 // Not published.
 include(":tests:konsist")
 include(":tests:testutils")
