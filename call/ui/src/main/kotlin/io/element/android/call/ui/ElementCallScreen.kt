@@ -68,7 +68,13 @@ fun ElementCallScreen(
     state: ElementCallScreenState,
     modifier: Modifier = Modifier,
 ) {
-    Surface(modifier = modifier.fillMaxSize()) {
+    // Painted from this component's palette, not Material's default, which comes from the host's
+    // theme: in a light-themed app the call screen would otherwise be white wherever the tiles do not
+    // cover it - the connecting placeholder, and the letterboxing around a portrait video.
+    Surface(
+        modifier = modifier.fillMaxSize(),
+        color = ElementCallTheme.colors.bgCanvas,
+    ) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val isLandscape = maxWidth > maxHeight
             val tiles = @Composable { tilesModifier: Modifier, pipInsets: PaddingValues ->

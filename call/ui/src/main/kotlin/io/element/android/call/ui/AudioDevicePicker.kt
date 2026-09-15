@@ -54,6 +54,11 @@ fun AudioDevicePicker(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberBottomSheetState(initialValue = SheetValue.Hidden),
+        // The one surface here that Material would otherwise paint from the *host's* theme. Everything
+        // drawn on it uses this component's palette, so a host with a light theme got the call's
+        // near-white text on a white sheet. The sample never showed it: its MaterialTheme is dark.
+        containerColor = ElementCallTheme.colors.bgSubtlePrimary,
+        contentColor = ElementCallTheme.colors.textPrimary,
     ) {
         Column(modifier = Modifier.navigationBarsPadding()) {
             Text(
