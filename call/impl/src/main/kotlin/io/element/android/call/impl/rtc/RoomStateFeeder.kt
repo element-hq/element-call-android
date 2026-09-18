@@ -23,9 +23,9 @@ import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
+import org.matrix.rtc.RtcSessionManagerHandleInterface
 import timber.log.Timber
-import uniffi.matrix_rtc_ffi.RtcSessionManagerHandleInterface
-import uniffi.matrix_rtc_ffi.LegacyStateMemberEvent as FfiLegacyStateMemberEvent
+import org.matrix.rtc.LegacyStateMemberEvent as FfiLegacyStateMemberEvent
 
 /**
  * The room-scoped half of the inbound bridge: keeps the RTC core's view of one room up to date.

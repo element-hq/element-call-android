@@ -2,7 +2,7 @@
 
 How to put `matrix-rust-rtc` into a Matrix client, written from the integration in this repository. The
 `element-call-android` library is the worked example throughout, and every file reference points at code you can
-read: the wrapper lives in `call/impl/…/rtc` (the only package that imports `uniffi.matrix_rtc_ffi`), the call —
+read: the wrapper lives in `call/impl/…/rtc` (the only package that imports `org.matrix.rtc`), the call —
 capture, playback, controller — in the rest of `call/impl`, and the UI in `call/ui`.
 
 The companion document is [`FEEDBACK.md`](FEEDBACK.md), which records what is still missing or wrong in the library.
@@ -45,7 +45,7 @@ The AAR (`matrixrtc-release.aar`) contains four things, and you will end up depe
 | Piece | What it is |
 | :--- | :--- |
 | `libmatrix_rtc_ffi.so` | the Rust core, LiveKit client and a statically linked libwebrtc |
-| `uniffi.matrix_rtc_ffi` | the generated Kotlin bindings |
+| `org.matrix.rtc` | the generated Kotlin bindings (`uniffi.matrix_rtc_ffi` before v0.2.0-rc.1) |
 | `org.matrix.rtc.MatrixRtc` | the loader that runs `JNI_OnLoad` — see §2 |
 | `libs/libwebrtc.jar` | libwebrtc's Java classes: camera and screen capture, I420 conversion, GL renderer |
 
@@ -64,7 +64,7 @@ implementation(projects.rtc.local)
 implementation(variantOf(libs.jna) { artifactType("aar") })
 ```
 
-**Confine the FFI to one package.** Nothing outside `call/impl/…/rtc` imports `uniffi.matrix_rtc_ffi`. The
+**Confine the FFI to one package.** Nothing outside `call/impl/…/rtc` imports `org.matrix.rtc`. The
 `call/api` module exposes only your own types — `MatrixRtcCall`, `MatrixRtcVideoFrame`, `MatrixRtcStreamKind`. This is
 worth the boilerplate: the FFI surface changes between library versions, and the UI should not.
 

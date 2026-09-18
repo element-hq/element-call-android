@@ -37,7 +37,8 @@ See [AGENTS.md](AGENTS.md) for the boundaries between them.
 The build needs the `matrix-rust-rtc` core as an Android AAR at `rtc/local/matrixrtc-release.aar` (not committed):
 
 ```
-./tools/rtc/build-rust-rtc            # builds ../matrix-rust-rtc and drops the AAR in place
+./tools/rtc/fetch-rust-rtc            # fetches the release pinned in gradle.properties and checks its sha256
+./tools/rtc/build-rust-rtc            # or builds ../matrix-rust-rtc and drops the AAR in place, to work on the core
 ./gradlew assemble test runQualityChecks
 ```
 

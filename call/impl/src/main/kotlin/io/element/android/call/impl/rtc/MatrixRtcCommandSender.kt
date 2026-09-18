@@ -17,11 +17,11 @@ import io.element.android.call.api.rtc.id.UserId
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
+import org.matrix.rtc.CommandSenderCallback
+import org.matrix.rtc.CommandSenderException
+import org.matrix.rtc.FfiToDeviceDelivery
+import org.matrix.rtc.FfiToDeviceRecipient
 import timber.log.Timber
-import uniffi.matrix_rtc_ffi.CommandSenderCallback
-import uniffi.matrix_rtc_ffi.CommandSenderException
-import uniffi.matrix_rtc_ffi.FfiToDeviceDelivery
-import uniffi.matrix_rtc_ffi.FfiToDeviceRecipient
 
 /**
  * The outbound half of the bridge: everything the RTC core wants to put on the wire.
@@ -118,6 +118,22 @@ internal class MatrixRtcCommandSender(
         command("restartDelayedEvent", classify = ::delayedEventFailure) {
             room(roomId).updateDelayedEvent(delayId, ElementCallDelayedEventAction.RESTART).getOrThrow()
         }
+    }
+
+    /**
+     * Message-like room events: the core sends reactions and raised hands this way. No port carries them
+     * yet - they arrive with the roster media model (plan 002) - so the core is told, in its own terms,
+     * that the transport cannot do it, and nothing the UI can trigger today reaches here.
+     */
+    override suspend fun sendRoomEvent(roomId: String, eventType: String, contentJson: String): String {
+        Timber.i("MatrixRTC command: sendRoomEvent($eventType)")
+        throw CommandSenderException.NotSupported("sendRoomEvent($eventType): room events are not carried by this library yet")
+    }
+
+    /** Redactions undo a reaction or a raised hand; see [sendRoomEvent]. */
+    override suspend fun redactEvent(roomId: String, eventId: String, reason: String?) {
+        Timber.i("MatrixRTC command: redactEvent")
+        throw CommandSenderException.NotSupported("redactEvent: redactions are not carried by this library yet")
     }
 
     override suspend fun sendToDeviceMessage(

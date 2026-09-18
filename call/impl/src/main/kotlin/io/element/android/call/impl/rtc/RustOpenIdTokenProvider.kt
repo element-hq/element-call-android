@@ -8,8 +8,8 @@
 package io.element.android.call.impl.rtc
 
 import io.element.android.call.api.matrix.ElementCallMatrixTransport
-import uniffi.matrix_rtc_ffi.FfiOpenIdToken
-import uniffi.matrix_rtc_ffi.OpenIdTokenProvider
+import org.matrix.rtc.FfiOpenIdToken
+import org.matrix.rtc.OpenIdTokenProvider
 
 /**
  * Proves our Matrix identity to the transport's authorisation service, which exchanges the token

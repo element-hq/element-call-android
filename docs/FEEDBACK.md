@@ -2,7 +2,7 @@
 
 Notes from integrating the prebuilt `matrixrtc-release.aar` — first as a spike inside Element X Android, now as this
 library — to validate the architecture of a frame-in / frame-out RTC library on Android. The integration lives in
-`call/impl` (`…impl.rtc` is the only package importing `uniffi.matrix_rtc_ffi`; capture and playback are in
+`call/impl` (`…impl.rtc` is the only package importing `org.matrix.rtc`; capture and playback are in
 `…impl.rtc.media`) and `call/ui`.
 
 Feedback is a first-class output of that work, not a by-product — this file is the deliverable.
@@ -114,15 +114,16 @@ between entries.
     comments, so R8 stops the host's release build at "Compilation failed to complete, position: offset: 0,
     line: 1, column: 1, origin: … proguard.txt" the moment the AAR is on its classpath - Element X's release
     build included, the day it consumes this library as an artifact. Found by `tests/consumer`, the minified
-    consumer build; until the core ships a valid file, `rtc/local` repackages the AAR without it and
-    `call/impl` carries the rules the core actually needs (`consumer-rules.pro`: JNA, `uniffi.matrix_rtc_ffi`,
-    `org.matrix.rtc`, `livekit.org.webrtc`, `livekit.org.jni_zero`). Those rules, or real ones, belong in the AAR.
+    consumer build; until the core shipped a valid file, `rtc/local` repackaged the AAR without it and
+    `call/impl` carries the rules the core actually needs (`consumer-rules.pro`: JNA, `org.matrix.rtc`,
+    `livekit.org.webrtc`, `livekit.org.jni_zero`). **Fixed in v0.2.0-rc.1**, which ships real rules for JNA,
+    `org.matrix.rtc` and libwebrtc; `consumer-rules.pro` stays for jni_zero and the serialization rules.
 27. **`libmatrix_rtc_ffi.so` is not 16 KB page aligned.** Android 16 shows the user an "Android App
     Compatibility" dialog on install naming the library ("LOAD segment not aligned") and runs the app in
     compatibility mode; Play requires 16 KB support for new apps and updates targeting Android 15+. Build the
     `.so` with the NDK's 16 KB flags (`-Wl,-z,max-page-size=16384`) and check it with `check_elf_alignment.sh`
     in the release pipeline. Seen on the Android 16 emulator; also flagged by lint's `Aligned16KB` on every
-    build of `call/ui`.
+    build of `call/ui`. **Fixed in v0.2.0-rc.1**: every `PT_LOAD` segment of the three `.so` files is 16 KB aligned.
 
 ### Deployment
 

@@ -26,7 +26,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
-import uniffi.matrix_rtc_ffi.RtcSessionManagerHandleInterface
+import org.matrix.rtc.RtcSessionManagerHandleInterface
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class RoomStateFeederTest {

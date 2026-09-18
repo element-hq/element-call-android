@@ -68,8 +68,9 @@ Central release is immutable and public and three things have to be in place fir
 - **A signing key**, as `MAVEN_SIGNING_KEY` (the armoured private key) and `MAVEN_SIGNING_KEY_PASSWORD`.
   Signing is off by default so a local publish needs no key; `-PRELEASE_SIGNING_ENABLED=true` turns it on.
 - **A core artifact the POMs can name.** The `element-call` POM depends on `org.matrix.rtc:matrixrtc-android`.
-  Today that coordinate exists only in the local Maven repository, published from `rtc/local` (below),
-  so a Central release of `element-call` would be unresolvable for every host. Until `matrix-rust-rtc`
+  Today that coordinate exists only in the local Maven repository, published from `rtc/local` (below)
+  out of the release asset `gradle.properties` pins, so a Central release of `element-call` would be
+  unresolvable for every host. Until `matrix-rust-rtc`
   publishes to Maven (the core feedback in the plan's §14), or an interim artifact is decided, the gate
   stays closed and the exit condition of the plan's L4 - "resolves from Maven Central in a clean
   project" - is not met.

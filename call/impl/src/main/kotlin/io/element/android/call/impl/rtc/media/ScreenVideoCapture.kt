@@ -19,8 +19,8 @@ import livekit.org.webrtc.EglBase
 import livekit.org.webrtc.ScreenCapturerAndroid
 import livekit.org.webrtc.SurfaceTextureHelper
 import livekit.org.webrtc.VideoFrame
+import org.matrix.rtc.FfiLocalTrack
 import timber.log.Timber
-import uniffi.matrix_rtc_ffi.FfiLocalTrack
 
 /**
  * Captures the screen and feeds it to a published RTC track, mirroring [CameraVideoCapture].

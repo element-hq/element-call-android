@@ -34,7 +34,7 @@ if ! grep -q "^## $VERSION" CHANGES.md; then
   exit 1
 fi
 if [[ ! -f rtc/local/matrixrtc-release.aar ]]; then
-  echo >&2 "No core AAR at rtc/local/matrixrtc-release.aar (docs/local_stack.md, layer 1)."
+  echo >&2 "No core AAR at rtc/local/matrixrtc-release.aar. Run ./tools/rtc/fetch-rust-rtc (docs/local_stack.md, layer 1)."
   exit 1
 fi
 

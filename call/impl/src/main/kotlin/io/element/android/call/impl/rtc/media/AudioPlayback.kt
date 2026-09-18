@@ -15,8 +15,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import org.matrix.rtc.AudioFrameStream
 import timber.log.Timber
-import uniffi.matrix_rtc_ffi.AudioFrameStream
 import java.util.concurrent.ConcurrentHashMap
 import android.media.AudioFormat as AndroidAudioFormat
 

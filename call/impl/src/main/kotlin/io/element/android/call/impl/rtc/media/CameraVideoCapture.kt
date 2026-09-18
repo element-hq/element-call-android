@@ -16,8 +16,8 @@ import livekit.org.webrtc.CapturerObserver
 import livekit.org.webrtc.EglBase
 import livekit.org.webrtc.SurfaceTextureHelper
 import livekit.org.webrtc.VideoFrame
+import org.matrix.rtc.FfiLocalTrack
 import timber.log.Timber
-import uniffi.matrix_rtc_ffi.FfiLocalTrack
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**

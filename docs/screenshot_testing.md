@@ -40,8 +40,8 @@ If installed correctly, `git push` and `git pull` will now include LFS content.
 Recording is done by the GitHub action "Record screenshots" (`.github/workflows/recordScreenshots.yml`), to avoid
 differences in the generated PNGs between developers' machines. Either add the `Record-Screenshots` label to the
 pull request, or run the workflow by hand on a branch. The action records, commits `Update screenshots` to the
-branch and removes the label. The workflow needs the `MATRIX_RTC_AAR_URL` repository variable, like every other
-one: the previews render `call/ui`, which links the RTC AAR for its video renderer.
+branch and removes the label. The workflow fetches the pinned RTC AAR with `tools/rtc/fetch-rust-rtc`, like every
+other one: the previews render `call/ui`, which links the RTC AAR for its video renderer.
 
 You can still record locally to look at the result, but do not commit what it produces:
 

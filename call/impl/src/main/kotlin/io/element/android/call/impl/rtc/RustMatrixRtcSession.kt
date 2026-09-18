@@ -26,13 +26,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.matrix.rtc.FfiLeaveReason
+import org.matrix.rtc.FfiLeaveSessionParams
+import org.matrix.rtc.MediaSessionConfig
+import org.matrix.rtc.MembershipSnapshotSubscription
+import org.matrix.rtc.RtcSessionManagerHandle
+import org.matrix.rtc.connectMediaSession
 import timber.log.Timber
-import uniffi.matrix_rtc_ffi.FfiLeaveReason
-import uniffi.matrix_rtc_ffi.FfiLeaveSessionParams
-import uniffi.matrix_rtc_ffi.MediaSessionConfig
-import uniffi.matrix_rtc_ffi.MembershipSnapshotSubscription
-import uniffi.matrix_rtc_ffi.RtcSessionManagerHandle
-import uniffi.matrix_rtc_ffi.connectMediaSession
 import java.util.concurrent.atomic.AtomicBoolean
 
 internal class RustMatrixRtcSession(

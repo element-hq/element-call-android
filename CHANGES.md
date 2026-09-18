@@ -20,5 +20,9 @@ Everything so far: the first extraction of the native call from the Element X An
 - `element-call-matrix`: `ElementCallSdkTransport` and `SdkElementCallRoomContext` over the Matrix Rust
   SDK, with the widget-driver stopgap for what the released bindings do not expose (`docs/FEEDBACK.md`).
 - `element-call-test`: fakes for every port, the RTC service fakes, fixtures, and `ElementCallTestPattern`.
+- The core is matrix-rust-rtc v0.2.0-rc.1, fetched from its release asset by `tools/rtc/fetch-rust-rtc`
+  against the sha256 pinned in `gradle.properties`; its bindings live in `org.matrix.rtc`.
 - Known limits of this first version: the Element Call compatibility is pinned to the state-event
-  generation; the core AAR is a local build with no Maven coordinate of its own and is not 16 KB aligned.
+  generation; the core AAR has no Maven coordinate of its own; the core's raised hands and reactions are
+  read and dropped, and the room events they send are refused as unsupported, until the roster media model
+  (plan 002) carries them.

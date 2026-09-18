@@ -41,7 +41,7 @@ The host decides where those composables sit. The plan this repository follows i
 | `call/ui` | `element-call-ui` | the ONLY Compose module: screen, tiles, bar, floating tile, PiP content, `ElementCallStyle`, previews | `call/api`; libwebrtc only in `…ui.video` |
 | `call/matrix` | `element-call-matrix` | the ONLY module importing `org.matrix.rustcomponents.sdk`: `ElementCallSdkTransport` and the `temporary/` widget-driver stopgap | `call/api`, the SDK |
 | `call/test` | `element-call-test` | fakes for every port and for the RTC service, fixtures, test-pattern frames | `call/api` |
-| `rtc/local` | local Maven only | the locally built `matrixrtc-release.aar` (gitignored), published to `~/.m2` as `org.matrix.rtc:matrixrtc-android` so the POMs resolve | |
+| `rtc/local` | local Maven only | `matrixrtc-release.aar` (gitignored): the pinned core release, or a local build; published to `~/.m2` as `org.matrix.rtc:matrixrtc-android` so the POMs resolve | |
 | `bom` | `element-call-bom` | one version for the five artifacts | |
 | `tests/consumer` | not published | a separate Gradle build: a minified app over the published artifacts from `mavenLocal()` | the artifacts |
 | `sample` | not published | the harness: a Compose app over the fakes, the only Activity, the instrumented tests | `call/ui`, `call/impl`, `call/test`; never `call/matrix` |
@@ -57,8 +57,9 @@ Package root: `io.element.android.call`. Distinct from Element X's packages so b
 
 ## Build and check
 
-The build needs the `matrix-rust-rtc` AAR at `rtc/local/matrixrtc-release.aar`. Build it with
-`./tools/rtc/build-rust-rtc` from a sibling checkout, or copy one in. See [docs/local_stack.md](docs/local_stack.md)
+The build needs the `matrix-rust-rtc` AAR at `rtc/local/matrixrtc-release.aar`. `./tools/rtc/fetch-rust-rtc` fetches
+the release pinned in `gradle.properties` (`MATRIX_RTC_AAR_URL`, `MATRIX_RTC_AAR_SHA256`) and checks its sha256; CI
+does the same. `./tools/rtc/build-rust-rtc` builds one from a sibling checkout instead. See [docs/local_stack.md](docs/local_stack.md)
 for the three layers (local core, library from source inside Element X, library as an AAR inside Element X).
 
 - Build everything: `./gradlew assemble`
@@ -134,7 +135,7 @@ until one does.
 Anything that exists because the SDK or the core does not yet expose what the call needs lives in a folder named
 `temporary/`, is annotated `@ElementCallTemporaryApi`, and has its removal recipe in `docs/FEEDBACK.md`. Today:
 
-- `rtc/local`: the core has no Maven coordinate, so the AAR is a local file.
+- `rtc/local`: the core has no Maven coordinate, so the AAR is a local file, fetched from a pinned release asset.
 - `call/matrix/…/temporary/widget/`: the widget-driver stopgap for membership, delayed events and to-device keys.
 
 ## The SDK edge

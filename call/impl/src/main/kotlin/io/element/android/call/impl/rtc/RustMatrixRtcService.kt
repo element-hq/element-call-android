@@ -27,13 +27,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import org.matrix.rtc.FfiElementCallCompat
+import org.matrix.rtc.FfiJoinSessionParams
+import org.matrix.rtc.FfiNotificationType
+import org.matrix.rtc.FfiNotifyConfig
+import org.matrix.rtc.FfiTransportConfig
+import org.matrix.rtc.RtcSessionManagerHandle
 import timber.log.Timber
-import uniffi.matrix_rtc_ffi.FfiElementCallCompat
-import uniffi.matrix_rtc_ffi.FfiJoinSessionParams
-import uniffi.matrix_rtc_ffi.FfiNotificationType
-import uniffi.matrix_rtc_ffi.FfiNotifyConfig
-import uniffi.matrix_rtc_ffi.FfiTransportConfig
-import uniffi.matrix_rtc_ffi.RtcSessionManagerHandle
 import java.util.concurrent.ConcurrentHashMap
 
 /**

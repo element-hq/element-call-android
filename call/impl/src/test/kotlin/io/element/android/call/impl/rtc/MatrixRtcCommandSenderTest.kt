@@ -26,8 +26,8 @@ import io.element.android.call.tests.testutils.lambda.value
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
-import uniffi.matrix_rtc_ffi.CommandSenderException
-import uniffi.matrix_rtc_ffi.FfiToDeviceRecipient
+import org.matrix.rtc.CommandSenderException
+import org.matrix.rtc.FfiToDeviceRecipient
 
 class MatrixRtcCommandSenderTest {
     @Test
@@ -334,6 +334,23 @@ class MatrixRtcCommandSenderTest {
         ).forEach { command ->
             val thrown = runCatchingExceptions { command() }.exceptionOrNull()
             assertThat(thrown).isInstanceOf(CommandSenderException.SendException::class.java)
+        }
+    }
+
+    /**
+     * Until a port carries message-like room events and redactions (plan 002), the core must learn that
+     * they are unsupported rather than see a send failure it would retry.
+     */
+    @Test
+    fun `room events and redactions are reported as unsupported`() = runTest {
+        val sender = createSender()
+
+        listOf<suspend () -> Any>(
+            { sender.sendRoomEvent(A_ROOM_ID.value, "m.reaction", A_CONTENT) },
+            { sender.redactEvent(A_ROOM_ID.value, AN_EVENT_ID.value, reason = null) },
+        ).forEach { command ->
+            val thrown = runCatchingExceptions { command() }.exceptionOrNull()
+            assertThat(thrown).isInstanceOf(CommandSenderException.NotSupported::class.java)
         }
     }
 

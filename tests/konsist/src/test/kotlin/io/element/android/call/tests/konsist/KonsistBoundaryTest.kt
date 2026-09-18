@@ -30,9 +30,9 @@ class KonsistBoundaryTest {
     private val composeModules = setOf("call/ui", "call/test", "sample")
 
     @Test
-    fun `uniffi and org_matrix_rtc are imported only by the core wrapper in call impl`() {
+    fun `org_matrix_rtc is imported only by the core wrapper in call impl`() {
         files
-            .filter { file -> file.imports.any { it.name.startsWith("uniffi.matrix_rtc_ffi") || it.name.startsWith("org.matrix.rtc.") } }
+            .filter { file -> file.imports.any { it.name.startsWith("org.matrix.rtc.") } }
             .filterNot { it.moduleName == "call/impl" && it.hasPackageStartingWith("io.element.android.call.impl.rtc") }
             .assertNoOffender("Only io.element.android.call.impl.rtc may import the matrix-rust-rtc bindings")
     }

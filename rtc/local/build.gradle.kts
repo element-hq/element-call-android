@@ -5,9 +5,12 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-// The matrix-rust-rtc core, as a locally built AAR: `./tools/rtc/build-rust-rtc` drops it here
-// (gitignored), and this bare project publishes it on its `default` configuration so that call/impl
-// and call/ui resolve the same file. See docs/local_stack.md, layer 1.
+import java.security.MessageDigest
+
+// The matrix-rust-rtc core as an AAR file: `./tools/rtc/fetch-rust-rtc` drops the pinned release here and
+// `./tools/rtc/build-rust-rtc` a local build (both gitignored), and this bare project publishes the file on
+// its `default` configuration so that call/impl and call/ui resolve the same one. See docs/local_stack.md,
+// layer 1.
 //
 // Temporary: the core has no Maven coordinate yet. When it publishes one, this project goes and the
 // consumers switch to a catalog entry.
@@ -19,25 +22,25 @@ val aar = file("matrixrtc-release.aar")
 if (!aar.exists()) {
     logger.warn(
         "\nNote: rtc/local/matrixrtc-release.aar is missing; call/impl and call/ui will not build. " +
-            "Run ./tools/rtc/build-rust-rtc or copy an AAR in place (docs/local_stack.md, layer 1).\n"
+            "Run ./tools/rtc/fetch-rust-rtc, or build the core with ./tools/rtc/build-rust-rtc (docs/local_stack.md, layer 1).\n"
     )
-}
-// The AAR's `proguard.txt` is a C-style `/* ... */` comment, which ProGuard syntax does not have, and R8
-// refuses the whole build of any minified host that consumes it (tests/consumer found this; it is core
-// feedback in docs/FEEDBACK.md). Repackaged without it, for the local build and the publication alike;
-// call/impl and call/matrix ship the consumer rules the core needs.
-val usableAar = tasks.register<Zip>("stripInvalidProguardRules") {
-    from(zipTree(aar)) {
-        exclude("proguard.txt")
+} else {
+    // Rule 2 of docs/local_stack.md, made automatic: say which core is live when it is not the pinned release.
+    val pinned = providers.gradleProperty("MATRIX_RTC_AAR_SHA256").get()
+    val actual = MessageDigest.getInstance("SHA-256").digest(aar.readBytes()).joinToString("") { "%02x".format(it) }
+    if (actual != pinned) {
+        logger.warn(
+            "\nNote: rtc/local/matrixrtc-release.aar is not the pinned matrix-rust-rtc release (sha256 $actual): " +
+                "a local build is live. ./tools/rtc/fetch-rust-rtc restores the pinned one (docs/local_stack.md, layer 1).\n"
+        )
     }
-    // The extension is what tells AGP this is an AAR, not a zip; archiveFileName alone leaves it "zip".
-    archiveBaseName.set("matrixrtc-android")
-    archiveExtension.set("aar")
-    destinationDirectory.set(layout.buildDirectory.dir("aar"))
 }
 
 configurations.maybeCreate("default")
-artifacts.add("default", usableAar)
+artifacts.add("default", aar) {
+    type = "aar"
+    extension = "aar"
+}
 
 // The AAR under the coordinate the plan reserves for the core's own publication (§2.3), so that the
 // published POMs of call/impl and call/ui name a real dependency rather than this project. Reaches the
@@ -50,13 +53,13 @@ publishing {
     publications {
         create<MavenPublication>("aar") {
             artifactId = "matrixrtc-android"
-            artifact(usableAar) {
+            artifact(aar) {
                 extension = "aar"
             }
             pom {
                 name.set("matrix-rust-rtc for Android (local build)")
                 description.set(
-                    "A locally built matrix-rust-rtc AAR, published to the local Maven repository by element-call-android " +
+                    "The matrix-rust-rtc AAR in rtc/local, published to the local Maven repository by element-call-android " +
                         "until the core publishes its own artifact. Not for distribution."
                 )
                 packaging = "aar"

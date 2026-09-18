@@ -4,8 +4,9 @@
 # Please see LICENSE files in the repository root for full details.
 
 # Consumer rules for element-call: what a minifying host has to keep for the matrix-rust-rtc core to
-# work. Shipped here because nobody else does (plan §8.3): the RTC AAR's own proguard.txt is a
-# placeholder and the SDK AAR carries none. tests/consumer minifies against these on every change.
+# work (plan §8.3). The RTC AAR ships its own rules since v0.2.0-rc.1 (JNA, org.matrix.rtc, libwebrtc);
+# these overlap them on purpose and add what it does not cover: jni_zero and the serialization rules.
+# tests/consumer minifies against these on every change.
 
 # JNA: uniffi's FFI layer reaches native code through it by name, and libjnidispatch calls back into
 # com.sun.jna by reflection.
@@ -15,7 +16,6 @@
 
 # The uniffi bindings of matrix-rust-rtc: callback interfaces, records and enums are looked up by name
 # from the Rust side, and the generated Kotlin has no @Keep of its own.
--keep class uniffi.matrix_rtc_ffi.** { *; }
 -keep class org.matrix.rtc.** { *; }
 
 # libwebrtc's Java half, bundled in the RTC AAR: its JNI entry points are resolved by name from native

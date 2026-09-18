@@ -43,15 +43,15 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.matrix.rtc.FfiAudioSourceConfig
+import org.matrix.rtc.FfiLocalTrack
+import org.matrix.rtc.FfiMediaConstraints
+import org.matrix.rtc.FfiPublishOptions
+import org.matrix.rtc.FfiStreamKind
+import org.matrix.rtc.FfiVideoDetail
+import org.matrix.rtc.FfiVideoSourceConfig
+import org.matrix.rtc.MediaSession
 import timber.log.Timber
-import uniffi.matrix_rtc_ffi.FfiAudioSourceConfig
-import uniffi.matrix_rtc_ffi.FfiLocalTrack
-import uniffi.matrix_rtc_ffi.FfiMediaConstraints
-import uniffi.matrix_rtc_ffi.FfiPublishOptions
-import uniffi.matrix_rtc_ffi.FfiStreamKind
-import uniffi.matrix_rtc_ffi.FfiVideoDetail
-import uniffi.matrix_rtc_ffi.FfiVideoSourceConfig
-import uniffi.matrix_rtc_ffi.MediaSession
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.seconds
@@ -276,9 +276,13 @@ internal class RustMatrixRtcCall(
                     ?: break
 
                 val mapped = event.map()
-                handleInternally(mapped)
-                _events.emit(mapped)
-                refreshParticipants()
+                if (mapped != null) {
+                    handleInternally(mapped)
+                    _events.emit(mapped)
+                    refreshParticipants()
+                } else {
+                    Timber.d("MatrixRTC: ignoring ${event::class.simpleName}, not carried by this library yet")
+                }
             }
         }
     }

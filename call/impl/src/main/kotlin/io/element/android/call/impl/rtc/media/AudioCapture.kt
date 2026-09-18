@@ -17,9 +17,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import org.matrix.rtc.FfiAudioFrame
+import org.matrix.rtc.FfiLocalTrack
 import timber.log.Timber
-import uniffi.matrix_rtc_ffi.FfiAudioFrame
-import uniffi.matrix_rtc_ffi.FfiLocalTrack
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.ShortBuffer

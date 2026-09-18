@@ -10,10 +10,10 @@ package io.element.android.call.impl.rtc.media
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.impl.util.runCatchingExceptions
 import livekit.org.webrtc.VideoFrame
+import org.matrix.rtc.FfiLocalTrack
+import org.matrix.rtc.FfiVideoFrameData
+import org.matrix.rtc.FfiVideoRotation
 import timber.log.Timber
-import uniffi.matrix_rtc_ffi.FfiLocalTrack
-import uniffi.matrix_rtc_ffi.FfiVideoFrameData
-import uniffi.matrix_rtc_ffi.FfiVideoRotation
 
 /**
  * Turns a captured frame into a published one: repack the planes, hand them to the FFI, and pass a

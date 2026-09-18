@@ -9,9 +9,9 @@ package io.element.android.call.impl.rtc
 
 import com.sun.jna.Pointer
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
-import uniffi.matrix_rtc_ffi.FfiVideoPlane
-import uniffi.matrix_rtc_ffi.FfiVideoRotation
-import uniffi.matrix_rtc_ffi.VideoFrameRef
+import org.matrix.rtc.FfiVideoPlane
+import org.matrix.rtc.FfiVideoRotation
+import org.matrix.rtc.VideoFrameRef
 
 /**
  * Wrap a decoded frame's planes where they already are, without copying a pixel.

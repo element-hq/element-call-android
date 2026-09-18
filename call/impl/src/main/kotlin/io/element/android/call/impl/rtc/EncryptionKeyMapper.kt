@@ -13,8 +13,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
+import org.matrix.rtc.FfiReceivedEncryptionKey
 import timber.log.Timber
-import uniffi.matrix_rtc_ffi.FfiReceivedEncryptionKey
 
 /**
  * Turns an incoming media-key to-device message into the record the RTC core expects.

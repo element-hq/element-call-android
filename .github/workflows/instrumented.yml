@@ -28,17 +28,10 @@ jobs:
           ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.ref }}
           persist-credentials: false
       - name: Fetch the matrix-rust-rtc AAR
-        # See docs/local_stack.md, layer 1, and .github/workflows/build.yml. The AAR ships x86_64, which is
+        # The core has no Maven coordinate yet: gradle.properties pins the release asset and its sha256,
+        # and the script fetches it into rtc/local (docs/local_stack.md, layer 1). The AAR ships x86_64, which is
         # what the emulator below runs.
-        env:
-          MATRIX_RTC_AAR_URL: ${{ vars.MATRIX_RTC_AAR_URL }}
-        run: |
-          if [ -z "$MATRIX_RTC_AAR_URL" ]; then
-            echo "::error::Set the repository variable MATRIX_RTC_AAR_URL to a URL of matrixrtc-release.aar (see docs/local_stack.md)."
-            exit 1
-          fi
-          curl --fail --location --silent --show-error "$MATRIX_RTC_AAR_URL" -o rtc/local/matrixrtc-release.aar
-          shasum -a 256 rtc/local/matrixrtc-release.aar
+        run: ./tools/rtc/fetch-rust-rtc
       - name: Enable KVM
         # Hardware acceleration for the emulator on the hosted runners.
         run: |

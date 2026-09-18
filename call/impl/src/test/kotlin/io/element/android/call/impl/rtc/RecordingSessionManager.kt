@@ -7,17 +7,20 @@
 
 package io.element.android.call.impl.rtc
 
-import uniffi.matrix_rtc_ffi.CommandSenderCallback
-import uniffi.matrix_rtc_ffi.FfiJoinSessionParams
-import uniffi.matrix_rtc_ffi.FfiLeaveSessionParams
-import uniffi.matrix_rtc_ffi.FfiReceivedEncryptionKey
-import uniffi.matrix_rtc_ffi.FfiSlotEncryption
-import uniffi.matrix_rtc_ffi.LegacyStateMemberEvent
-import uniffi.matrix_rtc_ffi.MembershipSnapshotSubscription
-import uniffi.matrix_rtc_ffi.RawMemberEvent
-import uniffi.matrix_rtc_ffi.RtcSessionManagerHandleInterface
-import uniffi.matrix_rtc_ffi.SlotEvent
-import uniffi.matrix_rtc_ffi.StickyEvent
+import org.matrix.rtc.CommandSenderCallback
+import org.matrix.rtc.FfiJoinSessionParams
+import org.matrix.rtc.FfiLeaveSessionParams
+import org.matrix.rtc.FfiRaisedHand
+import org.matrix.rtc.FfiReceivedEncryptionKey
+import org.matrix.rtc.FfiRelationLookup
+import org.matrix.rtc.FfiSlotEncryption
+import org.matrix.rtc.FfiTimelineEvent
+import org.matrix.rtc.LegacyStateMemberEvent
+import org.matrix.rtc.MembershipSnapshotSubscription
+import org.matrix.rtc.RawMemberEvent
+import org.matrix.rtc.RtcSessionManagerHandleInterface
+import org.matrix.rtc.SlotEvent
+import org.matrix.rtc.StickyEvent
 import java.time.Duration
 
 /**
@@ -100,4 +103,23 @@ internal class RecordingSessionManager(
     override fun stopHeartbeat(roomId: String, slotId: String) = Unit
 
     override suspend fun subscribeMembershipSnapshots(roomId: String, slotId: String): MembershipSnapshotSubscription? = null
+
+    // Raised hands and reactions (plan 002): nothing under test reaches them yet.
+    override suspend fun raiseHand(roomId: String, slotId: String) = Unit
+
+    override suspend fun lowerHand(roomId: String, slotId: String) = Unit
+
+    override suspend fun raisedHands(roomId: String, slotId: String): List<FfiRaisedHand> = emptyList()
+
+    override suspend fun sendReaction(roomId: String, slotId: String, emoji: String, name: String): String = ""
+
+    override suspend fun ownMembershipEventId(roomId: String, slotId: String): String? = null
+
+    override suspend fun pendingRelationLookups(roomId: String): List<FfiRelationLookup> = emptyList()
+
+    override suspend fun onRelationsReceived(roomId: String, targetEventId: String, events: List<FfiTimelineEvent>) = Unit
+
+    override suspend fun onRoomTimelineEvents(roomId: String, events: List<FfiTimelineEvent>) = Unit
+
+    override suspend fun onEventRedacted(roomId: String, eventId: String) = Unit
 }

@@ -13,8 +13,8 @@ import io.element.android.call.impl.util.runCatchingExceptions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
+import org.matrix.rtc.RtcSessionManagerHandleInterface
 import timber.log.Timber
-import uniffi.matrix_rtc_ffi.RtcSessionManagerHandleInterface
 
 /**
  * The part of the inbound bridge that is not tied to a call: it runs for as long as the Matrix

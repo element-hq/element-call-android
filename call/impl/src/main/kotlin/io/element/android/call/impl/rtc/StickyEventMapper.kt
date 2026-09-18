@@ -13,10 +13,10 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import org.matrix.rtc.FfiLeaveReason
 import timber.log.Timber
-import uniffi.matrix_rtc_ffi.FfiLeaveReason
-import uniffi.matrix_rtc_ffi.RawMemberEvent as FfiRawMemberEvent
-import uniffi.matrix_rtc_ffi.StickyEvent as FfiStickyEvent
+import org.matrix.rtc.RawMemberEvent as FfiRawMemberEvent
+import org.matrix.rtc.StickyEvent as FfiStickyEvent
 
 /**
  * Turns the SDK's [ElementCallStickyEvent] into the flat record the RTC core expects.

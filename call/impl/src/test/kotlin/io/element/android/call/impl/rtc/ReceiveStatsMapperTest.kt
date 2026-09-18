@@ -9,7 +9,7 @@ package io.element.android.call.impl.rtc
 
 import com.google.common.truth.Truth.assertThat
 import org.junit.Test
-import uniffi.matrix_rtc_ffi.FfiReceiveStats
+import org.matrix.rtc.FfiReceiveStats
 
 class ReceiveStatsMapperTest {
     @Test

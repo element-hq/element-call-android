@@ -9,7 +9,7 @@ import extension.testCommonDependencies
 
 // element-call: the stack, the controller, the foreground service, the receiver, audio routing, and
 // the Rust core wrapper (package io.element.android.call.impl.rtc), which is the ONLY place that
-// imports uniffi.matrix_rtc_ffi. No Compose.
+// imports org.matrix.rtc. No Compose.
 plugins {
     id("io.element.call.android-library")
     id("io.element.call.no-compose")

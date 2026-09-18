@@ -25,8 +25,22 @@ Gradle project that publishes `rtc/local/matrixrtc-release.aar` (gitignored) on 
 `call/impl` and `call/ui` depend on that project. There is no fallback: without the file the build fails at
 configuration with a message pointing here.
 
-**Build the core and drop it in place** (from a sibling checkout of `matrix-rust-rtc`; prerequisites are listed in
-the script and in the core's `mobile/PACKAGING.md`):
+**Fetch the pinned release** (what CI does in every workflow, and what a developer who is not changing the core
+does). `gradle.properties` pins the release asset and its checksum, `MATRIX_RTC_AAR_URL` and
+`MATRIX_RTC_AAR_SHA256`; the script downloads it, verifies the sha256 and drops it in place. It is idempotent, and a
+mismatch leaves nothing behind:
+
+```
+./tools/rtc/fetch-rust-rtc                        # the pinned release
+./tools/rtc/fetch-rust-rtc --url URL --sha256 SUM # another build, without editing gradle.properties
+```
+
+Bumping the core is a pull request that changes those two lines; CI validates it. The asset lives on the core's
+repository (the fork's releases until the code moves to `element-hq/matrix-rust-rtc`, then that one), never here:
+a `.aar` tracked by this repository is refused by `tools/quality/check.sh`.
+
+**Or build the core and drop it in place**, to work on the core itself (from a sibling checkout of
+`matrix-rust-rtc`; prerequisites are listed in the script and in the core's `mobile/PACKAGING.md`):
 
 ```
 ./tools/rtc/build-rust-rtc                 # ../matrix-rust-rtc, full media build
@@ -37,12 +51,14 @@ the script and in the core's `mobile/PACKAGING.md`):
 The script also keeps a dated copy in `rtc/local/sdks/`, so a previous core can be restored by copying it back over
 `matrixrtc-release.aar` without rebuilding.
 
-**Check which core is live:** `shasum -a 256 rtc/local/matrixrtc-release.aar` and compare with the dated copies.
-The unit test `MatrixRtcAarClasspathTest` in `call/impl` proves the AAR resolves and that its nested
-`libwebrtc.jar` is on the classpath.
+**Check which core is live:** Gradle prints `Note: rtc/local/matrixrtc-release.aar is not the pinned matrix-rust-rtc
+release` at configuration whenever the file's sha256 differs from `MATRIX_RTC_AAR_SHA256`; otherwise
+`shasum -a 256 rtc/local/matrixrtc-release.aar` and compare with the dated copies. The unit test
+`MatrixRtcAarClasspathTest` in `call/impl` proves the AAR resolves and that its nested `libwebrtc.jar` is on the
+classpath.
 
-**Switch back:** there is nothing to switch back to yet. When the core publishes to Maven, `rtc/local` goes away
-and this section becomes a substitution over the catalog entry.
+**Switch back:** `./tools/rtc/fetch-rust-rtc` puts the pinned release back over a local build. When the core
+publishes to Maven, `rtc/local` goes away and this section becomes a substitution over the catalog entry.
 
 ## Layer 2: the library from source in Element X
 

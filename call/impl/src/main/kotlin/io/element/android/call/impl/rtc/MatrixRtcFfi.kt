@@ -11,10 +11,10 @@ import io.element.android.call.api.rtc.MatrixRtcLogLevel
 import io.element.android.call.api.rtc.MatrixRtcLoggingConfiguration
 import io.element.android.call.impl.util.runCatchingExceptions
 import org.matrix.rtc.MatrixRtc
+import org.matrix.rtc.RtcLogLevel
 import org.matrix.rtc.RtcLogging
+import org.matrix.rtc.uniffiEnsureInitialized
 import timber.log.Timber
-import uniffi.matrix_rtc_ffi.RtcLogLevel
-import uniffi.matrix_rtc_ffi.uniffiEnsureInitialized
 
 /**
  * Entry point for the `matrix-rust-rtc` native library.

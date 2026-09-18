@@ -19,19 +19,24 @@ import io.element.android.call.api.rtc.MatrixRtcSpeakingMember
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamState
 import io.element.android.call.api.rtc.id.UserId
-import uniffi.matrix_rtc_ffi.FfiCallEvent
-import uniffi.matrix_rtc_ffi.FfiEndedReason
-import uniffi.matrix_rtc_ffi.FfiFrameEncryptionDiagnostic
-import uniffi.matrix_rtc_ffi.FfiFrameEncryptionState
-import uniffi.matrix_rtc_ffi.FfiKeyRejection
-import uniffi.matrix_rtc_ffi.FfiParticipant
-import uniffi.matrix_rtc_ffi.FfiReceiveStats
-import uniffi.matrix_rtc_ffi.FfiSpeakingMember
-import uniffi.matrix_rtc_ffi.FfiStreamKind
-import uniffi.matrix_rtc_ffi.FfiStreamState
-import uniffi.matrix_rtc_ffi.JoinedMembership
+import org.matrix.rtc.FfiCallEvent
+import org.matrix.rtc.FfiEndedReason
+import org.matrix.rtc.FfiFrameEncryptionDiagnostic
+import org.matrix.rtc.FfiFrameEncryptionState
+import org.matrix.rtc.FfiKeyRejection
+import org.matrix.rtc.FfiParticipant
+import org.matrix.rtc.FfiReceiveStats
+import org.matrix.rtc.FfiSpeakingMember
+import org.matrix.rtc.FfiStreamKind
+import org.matrix.rtc.FfiStreamState
+import org.matrix.rtc.JoinedMembership
 
-internal fun FfiCallEvent.map(): MatrixRtcCallEvent = when (this) {
+/**
+ * @return null for an event the library has no type for yet. Raised hands and reactions arrive with the
+ * roster media model (plan 002); until then the core's events for them are read and dropped here rather
+ * than crossing into `call/api`, so that the FFI surface can move without the public API moving with it.
+ */
+internal fun FfiCallEvent.map(): MatrixRtcCallEvent? = when (this) {
     is FfiCallEvent.ParticipantJoined -> MatrixRtcCallEvent.ParticipantJoined(memberId, UserId(userId))
     is FfiCallEvent.ParticipantLeft -> MatrixRtcCallEvent.ParticipantLeft(memberId)
     is FfiCallEvent.StreamStarted -> MatrixRtcCallEvent.StreamStarted(memberId, kind.map())
@@ -51,6 +56,9 @@ internal fun FfiCallEvent.map(): MatrixRtcCallEvent = when (this) {
     is FfiCallEvent.FrameEncryptionState -> MatrixRtcCallEvent.FrameEncryption(memberId, state.map(), diagnostic.map())
     is FfiCallEvent.UnknownParticipant -> MatrixRtcCallEvent.UnknownParticipant(identity)
     is FfiCallEvent.Ended -> MatrixRtcCallEvent.Ended(reason.map())
+    is FfiCallEvent.HandRaised,
+    is FfiCallEvent.HandLowered,
+    is FfiCallEvent.Reaction -> null
 }
 
 internal fun FfiSpeakingMember.map() = MatrixRtcSpeakingMember(
