@@ -1,7 +1,13 @@
 # Element Call Android
 
-The native MatrixRTC call component for Android: a library a Matrix client embeds to place and receive calls
-without a WebView. Extracted from the Element X Android spike; consumed by Element X Android behind a feature flag.
+A native [MatrixRTC](https://github.com/matrix-org/matrix-spec-proposals/blob/main/proposals/4143-matrix-rtc.md)
+call implementation for android: media, session, user interface and the Matrix side, built on
+[matrix-rust-rtc](https://github.com/BillCarsonFr/matrix-rust-rtc).
+
+<p align="center">
+  <img src="docs/call_screen.png" width="320" alt="A group call: one member spotlighted with a speaking outline, four more in a strip below, and the control bar.">
+</p>
+
 
 **Status: pre-release.** The code is imported from the spike and severed from Element X; the sample app and the test
 harness exist. Nothing is published yet.
