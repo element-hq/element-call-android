@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+
+# Copyright (c) 2026 Element Creations Ltd.
+#
+# SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
+# Please see LICENSE files in the repository root for full details.
+
+set -e
+set -u
+
+# Usage:
+#
+# ./tools/rtc/fetch-rust-rtc [--url URL] [--sha256 SUM]
+#
+# Fetches the matrix-rust-rtc release AAR that gradle.properties pins (MATRIX_RTC_AAR_URL and
+# MATRIX_RTC_AAR_SHA256) and drops it at rtc/local/matrixrtc-release.aar, where rtc/local/build.gradle.kts
+# picks it up (see docs/local_stack.md, layer 1). Idempotent: a file already in place with the expected
+# checksum is left alone, so CI and developers can run it every time. A checksum mismatch fails and leaves
+# nothing behind. To work on the core itself, build it with ./tools/rtc/build-rust-rtc instead.
+#
+# --url and --sha256 override the pinned values, to try another build without editing gradle.properties.
+
+repoRoot=$(cd "$(dirname "$0")/../.." && pwd)
+properties="${repoRoot}/gradle.properties"
+target="${repoRoot}/rtc/local/matrixrtc-release.aar"
+
+property() {
+    sed -n "s/^$1=//p" "${properties}" | head -1
+}
+
+url=$(property MATRIX_RTC_AAR_URL)
+sha256=$(property MATRIX_RTC_AAR_SHA256)
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        '--url')
+            url="$2"
+            shift 2
+        ;;
+        '--sha256')
+            sha256="$2"
+            shift 2
+        ;;
+        '-h'|'--help')
+            echo "Usage: $0 [--url URL] [--sha256 SUM]"
+            exit 0
+        ;;
+        *)
+            echo "Unknown argument: $1" >&2
+            exit 1
+        ;;
+    esac
+done
+
+if [ -z "${url}" ] || [ -z "${sha256}" ]; then
+    echo "MATRIX_RTC_AAR_URL and MATRIX_RTC_AAR_SHA256 must be set in gradle.properties, or passed with --url and --sha256." >&2
+    exit 1
+fi
+
+checksum() {
+    if command -v sha256sum > /dev/null; then
+        sha256sum "$1" | cut -d ' ' -f 1
+    else
+        shasum -a 256 "$1" | cut -d ' ' -f 1
+    fi
+}
+
+if [ -f "${target}" ] && [ "$(checksum "${target}")" = "${sha256}" ]; then
+    echo "rtc/local/matrixrtc-release.aar is already the pinned release (${sha256})."
+    exit 0
+fi
+
+download="${target}.download"
+trap 'rm -f "${download}"' EXIT
+
+echo "Fetching ${url}"
+curl --fail --location --silent --show-error "${url}" -o "${download}"
+
+actual=$(checksum "${download}")
+if [ "${actual}" != "${sha256}" ]; then
+    echo "Checksum mismatch for ${url}" >&2
+    echo "  expected ${sha256}" >&2
+    echo "  got      ${actual}" >&2
+    exit 1
+fi
+
+mv "${download}" "${target}"
+echo "Copied the pinned release (${sha256}) to rtc/local/matrixrtc-release.aar"

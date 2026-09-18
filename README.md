@@ -1,5 +1,89 @@
-# element-call-android
-Creating a new native Element Call component to be integrated in EXA
+# Element Call Android
+
+The native MatrixRTC call component for Android: a library a Matrix client embeds to place and receive calls
+without a WebView. Extracted from the Element X Android spike; consumed by Element X Android behind a feature flag.
+
+**Status: pre-release.** The code is imported from the spike and severed from Element X; the sample app and the test
+harness exist. Nothing is published yet.
+
+<!--- TOC -->
+
+* [Modules](#modules)
+* [Building](#building)
+* [The sample app](#the-sample-app)
+* [Host requirements](#host-requirements)
+* [Documentation](#documentation)
+* [Copyright & License](#copyright-license)
+
+<!--- END -->
+
+## Modules
+
+Five published artifacts under `io.element.android`, one version, plus `element-call-bom` to pin them together:
+
+| Artifact | Project | What it is |
+| :--- | :--- | :--- |
+| `element-call-api` | `call/api` | the contract: controller, ports, state types, options |
+| `element-call` | `call/impl` | the stack, the controller, the foreground service, the Rust core wrapper; no Compose |
+| `element-call-ui` | `call/ui` | the composables: screen, minimized bar, floating tile, picture-in-picture, style port |
+| `element-call-matrix` | `call/matrix` | the turnkey Matrix transport over the Rust SDK |
+| `element-call-test` | `call/test` | fakes and fixtures for hosts' tests, and the colour-bar test pattern |
+| not published | `sample` | the harness: a Compose app over the fakes, with the only Activity and the instrumented tests |
+
+See [AGENTS.md](AGENTS.md) for the boundaries between them.
+
+## Building
+
+The build needs the `matrix-rust-rtc` core as an Android AAR at `rtc/local/matrixrtc-release.aar` (not committed):
+
+```
+./tools/rtc/fetch-rust-rtc            # fetches the release pinned in gradle.properties and checks its sha256
+./tools/rtc/build-rust-rtc            # or builds ../matrix-rust-rtc and drops the AAR in place, to work on the core
+./gradlew assemble test runQualityChecks
+```
+
+[docs/local_stack.md](docs/local_stack.md) explains how to work on the core, this library and Element X at once.
+
+## The sample app
+
+`sample/` is how the UI is developed without Element X: a Compose app over the fakes, with no server, no login and
+no camera. Every row of its picker opens a call over the sample's own screen - one to one, a group with a spotlight,
+nine people with a paging strip, a shared screen, the minimized bar, the floating tile, and the connecting, failed
+and permission states - with colour bars where a camera would be, drawn through the real renderer. Its controls do
+what they say (mute mutes, minimize minimizes), a switch overrides the style with a deliberately loud one, and
+leaving the app enters picture-in-picture.
+
+```
+./gradlew :sample:installDebug
+adb shell am start -n io.element.android.call.sample/.SampleActivity --es fixture group   # or any SampleFixture key
+./gradlew :sample:connectedDebugAndroidTest                                                # the gesture and pixel tests
+```
+
+## Host requirements
+
+Numbered so an integration can be checked against them. Items marked *pending* are settled when the corresponding
+code lands.
+
+1. `minSdk` 24 or higher.
+2. ABIs `armeabi-v7a`, `arm64-v8a`, `x86_64`. There is no `x86` build of the core; a host that ships `x86` must
+   exclude it or accept that the call is unavailable there.
+3. The host's Rust SDK version must be at least the one this library was compiled against (see
+   `gradle/libs.versions.toml`, `matrix_sdk`).
+4. Picture-in-picture: `android:supportsPictureInPicture="true"` and `smallestScreenSize` in `configChanges` on
+   the host Activity; `ElementCallPictureInPicture.attach(activity, controller)` from its `onCreate`, and
+   `ElementCallPictureInPicture.onUserLeaveHint(activity, controller)` from its `onUserLeaveHint()` override.
+5. Screen sharing: the library's service declares `microphone|camera`; a host that turns screen sharing on adds
+   `FOREGROUND_SERVICE_MEDIA_PROJECTION` and the `mediaProjection` type to `ElementCallForegroundService` in its
+   own manifest, with `tools:node="merge"`. That type is Play-reviewed, so the library does not declare it.
+
+## Documentation
+
+- [AGENTS.md](AGENTS.md): boundaries, commands, conventions.
+- [docs/local_stack.md](docs/local_stack.md): the local development stack.
+- [docs/screenshot_testing.md](docs/screenshot_testing.md): the Paparazzi screenshot tests.
+- [RELEASING.md](RELEASING.md): versioning, cutting a release, and what must never be published.
+- [CHANGES.md](CHANGES.md): the changelog.
+- [CONTRIBUTING.md](CONTRIBUTING.md): how to submit a change.
 
 ## Copyright & License
 

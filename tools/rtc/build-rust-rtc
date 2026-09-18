@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+
+# Copyright (c) 2026 Element Creations Ltd.
+#
+# SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
+# Please see LICENSE files in the repository root for full details.
+
+set -e
+set -u
+
+# Usage:
+#
+# ./tools/rtc/build-rust-rtc [--rtc PATH] [--slim]
+#
+# Builds matrix-rust-rtc and drops the resulting AAR at rtc/local/matrixrtc-release.aar,
+# where rtc/local/build.gradle.kts picks it up (see docs/local_stack.md, layer 1).
+#
+# Prerequisites (see mobile/PACKAGING.md in matrix-rust-rtc):
+#   cargo install uniffi_bindgen cargo-ndk
+#   rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
+#   ANDROID_NDK_HOME (or ANDROID_HOME/ndk/<version>)
+
+## Defaults
+
+rtcPath="../matrix-rust-rtc"
+media=1
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        '--rtc')
+            rtcPath="$2"
+            shift 2
+        ;;
+        '--slim')
+            # Signalling only: much faster to build, but no frame streams or publishing.
+            media=0
+            shift
+        ;;
+        '-h'|'--help')
+            echo "Usage: $0 [--rtc PATH] [--slim]"
+            exit 0
+        ;;
+        *)
+            echo "Unknown argument: $1" >&2
+            exit 1
+        ;;
+    esac
+done
+
+repoRoot=$(cd "$(dirname "$0")/../.." && pwd)
+
+if [ ! -d "${rtcPath}" ]; then
+    echo "matrix-rust-rtc not found at ${rtcPath}. Clone it or pass --rtc PATH." >&2
+    exit 1
+fi
+
+pushd "${rtcPath}" > /dev/null
+
+if [ "${media}" -eq 1 ]; then
+    make build-android-media
+else
+    ./scripts/build-android-aar.sh
+fi
+
+aar="mobile/android/matrixrtc/build/outputs/aar/matrixrtc-release.aar"
+if [ ! -f "${aar}" ]; then
+    echo "Expected AAR not found at ${rtcPath}/${aar}" >&2
+    exit 1
+fi
+
+cp "${aar}" "${repoRoot}/rtc/local/matrixrtc-release.aar"
+
+popd > /dev/null
+
+# Keep a dated copy around so it is possible to roll back to a previous build.
+date=$(date +%Y%m%d%H%M%S)
+mkdir -p "${repoRoot}/rtc/local/sdks"
+cp "${repoRoot}/rtc/local/matrixrtc-release.aar" "${repoRoot}/rtc/local/sdks/matrixrtc-release-${date}.aar"
+
+echo "Copied matrixrtc-release.aar to rtc/local/"

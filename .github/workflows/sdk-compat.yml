@@ -1,0 +1,67 @@
+name: SDK compatibility
+
+# The SDK edge (AGENTS.md): call/matrix is compiled against one Matrix Rust SDK release, and Element X
+# may run it on a newer one the month after it bumps. Two legs, on the newest SDK on Maven Central:
+# A compiles and tests against it (what the next pin looks like); B keeps the compile pin and forces
+# the newer SDK onto the test runtime classpath (our bytecode, their SDK), which is where
+# SdkSurfaceBinaryCompatibilityTest fails the week the bindings move.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 6 * * *'
+  pull_request:
+    paths:
+      - 'call/matrix/**'
+      - 'gradle/libs.versions.toml'
+      - '.github/workflows/sdk-compat.yml'
+
+permissions: {}
+
+env:
+  GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx6g -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8 -XX:+HeapDumpOnOutOfMemoryError" -Dkotlin.daemon.jvm.options=-Xmx2g -XX:+UseG1GC
+  CI_GRADLE_ARG_PROPERTIES: --stacktrace --no-configuration-cache
+
+jobs:
+  newest-sdk:
+    name: call/matrix against the newest SDK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Fetch the matrix-rust-rtc AAR
+        # The core has no Maven coordinate yet: gradle.properties pins the release asset and its sha256,
+        # and the script fetches it into rtc/local (docs/local_stack.md, layer 1).
+        run: ./tools/rtc/fetch-rust-rtc
+      - name: Find the newest SDK on Maven Central
+        id: sdk
+        run: |
+          PINNED=$(sed -n 's/^matrix_sdk *= *"\(.*\)"/\1/p' gradle/libs.versions.toml | head -1)
+          LATEST=$(curl --fail --silent https://repo1.maven.org/maven2/org/matrix/rustcomponents/sdk-android/maven-metadata.xml | sed -n 's:.*<latest>\(.*\)</latest>.*:\1:p')
+          echo "pinned=$PINNED" >> "$GITHUB_OUTPUT"
+          echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
+          echo "Pinned $PINNED, newest $LATEST"
+      - name: ☕️ Use JDK 21
+        uses: actions/setup-java@dd06d9cba3e5552c54d9f8ea23572deb30010f7c # v6.0.0
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+      - name: Configure gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-read-only: true
+      - name: "Leg A: compile and test against the newest SDK"
+        if: steps.sdk.outputs.latest != steps.sdk.outputs.pinned
+        run: ./gradlew :call:matrix:testDebugUnitTest -PmatrixSdkVersion=${{ steps.sdk.outputs.latest }} $CI_GRADLE_ARG_PROPERTIES
+      - name: "Leg B: our bytecode on the newest SDK at test runtime"
+        if: steps.sdk.outputs.latest != steps.sdk.outputs.pinned
+        run: ./gradlew :call:matrix:testDebugUnitTest -PmatrixSdkTestVersion=${{ steps.sdk.outputs.latest }} $CI_GRADLE_ARG_PROPERTIES
+      - name: Nothing newer than the pin
+        if: steps.sdk.outputs.latest == steps.sdk.outputs.pinned
+        run: echo "The pin ${{ steps.sdk.outputs.pinned }} is the newest SDK; nothing to check."
+      - name: 🚫 Upload test results on error
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sdk-compat-results
+          path: call/matrix/build/reports/tests/
