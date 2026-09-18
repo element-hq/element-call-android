@@ -7,6 +7,8 @@
 
 import com.vanniktech.maven.publish.AndroidSingleVariantLibrary
 import com.vanniktech.maven.publish.JavaPlatform
+import com.vanniktech.maven.publish.JavadocJar
+import com.vanniktech.maven.publish.SourcesJar
 
 /**
  * This will generate the plugin "io.element.call.publish", applied on every published module and on
@@ -31,9 +33,11 @@ mavenPublishing {
     }
 
     // An Android library publishes its release variant with a sources jar and an empty javadoc jar,
-    // which Central requires; the BOM is a Java platform.
+    // which Central requires; the BOM is a Java platform. The javadoc jar is explicitly empty: the
+    // boolean form would apply Dokka and generate documentation for every module in the one daemon,
+    // which exhausted CI's 512 MB metaspace on the fourth module for nothing anyone publishes.
     plugins.withId("com.android.library") {
-        configure(AndroidSingleVariantLibrary(variant = "release", sourcesJar = true, publishJavadocJar = true))
+        configure(AndroidSingleVariantLibrary(javadocJar = JavadocJar.Empty(), sourcesJar = SourcesJar.Sources(), variant = "release"))
     }
     plugins.withId("java-platform") {
         configure(JavaPlatform())
