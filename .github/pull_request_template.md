@@ -3,7 +3,7 @@
 Please read [CONTRIBUTING.md](https://github.com/element-hq/element-call-android/blob/main/CONTRIBUTING.md) before submitting your pull request.
 
 This library is consumed by Element X Android. A change to a public type in call/api, call/impl, call/ui or
-call/matrix is an API change for every host: say so in the description and label the PR `PR-Api`.
+call/matrix is an API change for every host: say so in the description and label the PR `pr-api`.
 
 -->
 
@@ -52,5 +52,5 @@ Note that all the UI composables should be covered by a Composable Preview.
 - [ ] Changes have been tested on an Android device or Android emulator with API 24
 - [ ] Pull request title will be used in the release note, it clearly defines what will change for a host of the library
 - [ ] Pull request includes screenshots or videos if containing UI changes
-- [ ] Public API changes are called out in the description and carry the `PR-Api` label
+- [ ] Public API changes are called out in the description and carry the `pr-api` label
 - [ ] You've made a self review of your PR

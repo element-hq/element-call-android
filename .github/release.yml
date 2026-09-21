@@ -1,39 +1,39 @@
 changelog:
-  # Excluded before anything is categorised, so a PR-Task pull request lands under no heading at all, not
+  # Excluded before anything is categorised, so a pr-task pull request lands under no heading at all, not
   # even the "*" catch-all under Others. This is the label for work that changes nothing a host could
   # observe: CI plumbing, test-only churn, a repository chore. It is deliberately the only way to keep a
   # merged pull request out of the notes, so "no entry" is a labelled decision a reviewer can see rather
   # than the silent result of leaving the label off. Same as element-call-ios.
   exclude:
     labels:
-      - PR-Task
+      - pr-task
 
   categories:
     - title: ✨ Features
       labels:
-        - PR-Feature
+        - pr-feature
     - title: 🙌 Improvements
       labels:
-        - PR-Change
+        - pr-change
     - title: 🐛 Bugfixes
       labels:
-        - PR-Bugfix
+        - pr-bugfix
     - title: ⚠️ API Changes
       labels:
-        - PR-Api
+        - pr-api
     - title: 🧱 Build
       labels:
-        - PR-Build
+        - pr-build
     - title: 📄 Documentation
       labels:
-        - PR-Doc
+        - pr-doc
     - title: 🚧 In development 🚧
       labels:
-        - PR-Wip
+        - pr-wip
     - title: Dependency upgrades
       labels:
-        - PR-Dependencies
+        - pr-dependencies
     - title: Others
       labels:
-        - PR-misc
+        - pr-misc
         - "*"

@@ -153,7 +153,7 @@ library runs on it; an older one fails at configuration time. When bumping the S
 A release is a tag `v<version>` and the GitHub release on it, whose assets a host resolves through an Ivy
 repository until Maven Central (README, "Consuming a release"). Semver `0.x`, minor for an API or SDK-pin change,
 patch otherwise. **Nobody bumps a version in a pull request**: `scripts/release.sh` stamps `VERSION_NAME` and closes
-the `## Unreleased` section of `CHANGES.md` with notes generated from the `PR-` labels, and `release.yml`, dispatched
+the `## Unreleased` section of `CHANGES.md` with notes generated from the `pr-` labels, and `release.yml`, dispatched
 by hand on a `release/<version>` branch, commits that, tags, pushes atomically and creates the release; the changelog
 reaches `main` through an ordinary pull request afterwards, merged with a merge commit. Same process as
 element-call-ios. `./scripts/release.sh <version> --skip-build` rehearses the notes locally (needs `gh auth login`);
@@ -162,8 +162,8 @@ without the flag it also builds and lays out the assets in `build/release-assets
 
 ## Pull requests
 
-- Sentence-style titles; the title is the changelog entry, generated at release time from the `PR-` label (exactly
-  one, see `.github/release.yml`; `PR-Task` keeps a change out of the notes).
+- Sentence-style titles; the title is the changelog entry, generated at release time from the `pr-` label (exactly
+  one, see `.github/release.yml`; `pr-task` keeps a change out of the notes).
 - 500 production lines max; tests can be larger. No history rewrites.
 - Commits have a title and a description of a few lines: what changed and why, the non-obvious decision if there
   was one. No narrative; nobody reads a long one, and the why is what a later reader needs.
