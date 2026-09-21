@@ -78,7 +78,7 @@ changelog reaches `main` afterwards through an ordinary reviewed pull request. T
 
 - **Patch** (`0.2.0` → `0.2.1`) for fixes behind an unchanged API and SDK pin.
 - **Minor** (`0.2.1` → `0.3.0`) for anything else. At `0.x` this is also where breaking changes go, which is why
-  every such pull request wants the `PR-Api` label: `.github/release.yml` gives it its own "⚠️ API Changes"
+  every such pull request wants the `pr-api` label: `.github/release.yml` gives it its own "⚠️ API Changes"
   heading precisely so a host reads it before bumping.
 - **A prerelease** (`0.3.0-rc.1`) when a host should try it first. The core this library pins is itself a
   prerelease (`matrix-rust-rtc` `0.3.0-rc.1`); a stable version here would present that edge as settled, so
@@ -91,14 +91,14 @@ a dry run can be dispatched from any branch because it publishes nothing; it doe
 long as a real run. Dispatch it from the branch you intend to release: `main` for an ordinary release, the release
 branch itself for a hotfix, whose notes are scoped to its own line of history.
 
-Then **read the notes it prints.** They are built from the `PR-` labels on the pull requests merged since the last
+Then **read the notes it prints.** They are built from the `pr-` labels on the pull requests merged since the last
 tag, and this is the moment to check them, because:
 
-> Anything under **Others** is a pull request that was merged without a `PR-` label.
+> Anything under **Others** is a pull request that was merged without a `pr-` label.
 
 Nothing enforces that label at merge time. When one slips through, add the label to the *merged* pull request and
 dry-run again: the notes are generated at release time, not at merge time, so a late label still works. The same
-lateness takes an entry *out*: `PR-Task` on a merged pull request excludes it from the notes entirely.
+lateness takes an entry *out*: `pr-task` on a merged pull request excludes it from the notes entirely.
 
 The run's artifact holds the notes, the two files the release commit will carry, and the release assets exactly as
 the release would attach them. The dry run changes nothing: no commit, no tag, no release, no push.
@@ -164,7 +164,7 @@ the next entry to go.
 **For an ordinary change there is nothing to write.** Label the pull request and give it a title that reads as a
 changelog line; the release generates the list from those.
 
-**For a change no host could observe, label it `PR-Task`**: CI plumbing, test-only churn, a repository chore.
+**For a change no host could observe, label it `pr-task`**: CI plumbing, test-only churn, a repository chore.
 `.github/release.yml` excludes that label before categorising, so the pull request gets no line under any heading,
 not even the *Others* catch-all. An absent entry is then a decision someone made and a reviewer could see.
 
@@ -244,21 +244,21 @@ is on Central, this publication and the Ivy repository in `settings.gradle.kts` 
 One-off, and required before the first release:
 
 ```bash
-# The labels .github/release.yml categorises by, in its order, then PR-Task, which it excludes rather than
+# The labels .github/release.yml categorises by, in its order, then pr-task, which it excludes rather than
 # categorises, plus the screenshot trigger label. --force so this is safe to re-run.
 while read -r label colour; do
     gh label create "$label" --color "$colour" --force
 done <<'LABELS'
-PR-Feature        0E8A16
-PR-Change         1D76DB
-PR-Bugfix         D73A4A
-PR-Api            D93F0B
-PR-Build          C5DEF5
-PR-Doc            0075CA
-PR-Wip            FBCA04
-PR-Dependencies   0366D6
-PR-misc           CFD3D7
-PR-Task           EDEDED
+pr-feature        0E8A16
+pr-change         1D76DB
+pr-bugfix         D73A4A
+pr-api            D93F0B
+pr-build          C5DEF5
+pr-doc            0075CA
+pr-wip            FBCA04
+pr-dependencies   0366D6
+pr-misc           CFD3D7
+pr-task           EDEDED
 Record-Screenshots FEF2C0
 LABELS
 ```

@@ -157,10 +157,10 @@ gh api -X POST "repos/$REPOSITORY/releases/generate-notes" "${BODY_ARGS[@]}" --j
     || fail "Could not generate release notes for $TAG. Locally this needs \`gh auth login\`."
 
 # Not `[ -s ]`: the body always ends with a **Full Changelog** compare link, so a release with nothing in it
-# is one with no list items. Since .github/release.yml excludes PR-Task, this also catches a release whose
+# is one with no list items. Since .github/release.yml excludes pr-task, this also catches a release whose
 # every merged pull request was so labelled.
 if ! grep -qE '^\* ' "$NOTES_OUT"; then
-    fail "GitHub generated no changelog entries for $TAG. Either nothing has merged since ${LATEST_TAG:-the start of the history}, or everything that has is labelled PR-Task and so excluded from the notes."
+    fail "GitHub generated no changelog entries for $TAG. Either nothing has merged since ${LATEST_TAG:-the start of the history}, or everything that has is labelled pr-task and so excluded from the notes."
 fi
 
 echo
@@ -173,7 +173,7 @@ echo
 # enforces the label at merge time, so this is where it gets noticed; the notes are generated now rather
 # than at merge, so relabelling the merged pull request and running again is the whole fix.
 if grep -q '^### Others' "$NOTES_OUT"; then
-    echo "note: there are entries under 'Others'. Those pull requests are missing a PR- label."
+    echo "note: there are entries under 'Others'. Those pull requests are missing a pr- label."
     echo "      Label them and run again; the notes are generated now, so a late label still lands."
     echo
 fi

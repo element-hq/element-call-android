@@ -1,6 +1,6 @@
 # Changes
 
-Entries under a released version are **generated when the release is cut**, from the `PR-` label on each merged
+Entries under a released version are **generated when the release is cut**, from the `pr-` label on each merged
 pull request (`.github/release.yml`), see [RELEASING.md](RELEASING.md). There is nothing to add here for an
 ordinary change: label the pull request and give it a title that reads as a changelog line.
 
