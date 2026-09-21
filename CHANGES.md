@@ -11,9 +11,24 @@ actually read it. The matrix-rust-rtc core's own history is in `docs/CHANGELOG.m
 
 ## Unreleased
 
+_Nothing yet._
+
+## 0.1.0-rc.1 - 2026-09-21
+
 First release, for Element X to integrate behind its `NativeCall` flag. What a host has to know:
 
 - Core: matrix-rust-rtc `0.3.0-rc.1` as `io.element.android:matrix-rtc-android`, resolved from its GitHub release
   through an Ivy repository (README, "Consuming a release"); bindings in `org.matrix.rtc`.
 - Element Call compatibility is pinned to the state-event generation; calls ring in that mode.
 - Raised hands and reactions are read and dropped until plan 002.
+
+
+
+### What's Changed
+
+🧱 Build
+* chore: Update to matrix-rust-rtc v0.3.0-rc.1 by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/5
+
+
+**Full Changelog**: https://github.com/element-hq/element-call-android/commits/v0.1.0-rc.1
+
