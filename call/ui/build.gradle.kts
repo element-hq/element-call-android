@@ -32,7 +32,7 @@ dependencies {
     // For libwebrtc's renderer classes only, in the ui.video package: the texture view draws I420
     // frames with EglRenderer, which ships in the RTC AAR's nested libwebrtc.jar. Nothing here touches
     // the RTC core.
-    implementation(projects.rtc.local)
+    implementation(variantOf(libs.matrix.rtc.android) { artifactType("aar") })
     implementation(libs.androidx.corektx)
 
     testCommonDependencies(libs, includeTestComposeView = true)

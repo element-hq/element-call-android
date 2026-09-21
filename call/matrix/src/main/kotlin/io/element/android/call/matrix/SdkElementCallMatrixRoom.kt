@@ -35,7 +35,10 @@ import uniffi.matrix_sdk_base.EncryptionState
  * What the released bindings expose goes straight to them: the state event, the room info, the members.
  * What they do not - delayed events, sticky events, the room-state feed - goes through the widget-driver
  * [bridge], which is the temporary part; when the bindings catch up the bridge goes and the methods
- * below call the SDK instead, with nothing in `call/impl` learning about it.
+ * below call the SDK instead, with nothing in `call/impl` learning about it. The bridge is for what the
+ * SDK lacks and nothing else. A redaction goes to the SDK; the message-like room event goes through the
+ * bridge only because `Room.sendRaw` returns no event id and the core needs it to lower a raised hand
+ * (`docs/FEEDBACK.md`, matrix-rust-sdk item 9) - it moves to the SDK the day `sendRaw` returns one.
  */
 internal class SdkElementCallMatrixRoom(
     override val roomId: RoomId,
@@ -83,6 +86,14 @@ internal class SdkElementCallMatrixRoom(
 
     override suspend fun sendStateEvent(eventType: String, stateKey: String, contentJson: String): Result<EventId> = withContext(dispatchers.io) {
         runCatchingExceptions { EventId(room.sendStateEventRaw(eventType, stateKey, contentJson)) }.mapSdkFailure()
+    }
+
+    override suspend fun sendRoomEvent(eventType: String, contentJson: String): Result<EventId> {
+        return bridge.sendRoomEvent(eventType, contentJson)
+    }
+
+    override suspend fun redactEvent(eventId: EventId, reason: String?): Result<Unit> = withContext(dispatchers.io) {
+        runCatchingExceptions { room.redact(eventId.value, reason) }.mapSdkFailure()
     }
 
     override suspend fun sendDelayedEvent(eventType: String, stateKey: String?, contentJson: String, delayMs: ULong): Result<String> {

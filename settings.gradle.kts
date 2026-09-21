@@ -18,6 +18,18 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // The matrix-rust-rtc core, io.element.android:matrix-rtc-android, as the file in rtc/local: the
+        // release gradle.properties pins (./tools/rtc/fetch-rust-rtc) or a local build (./tools/rtc/build-rust-rtc).
+        // The pattern names no version on purpose - whatever file is there is the core, and rtc/local
+        // warns when it is not the pinned release. Artifact-only metadata, hence the `aar` selector on
+        // every dependency (the catalog's `matrix_rtc_android`). A host resolves the same coordinate the
+        // same way from the core's GitHub release (README, "Consuming a release"). See docs/local_stack.md.
+        ivy {
+            url = settingsDir.resolve("rtc/local").toURI()
+            patternLayout { artifact("matrixrtc-release.[ext]") }
+            metadataSources { artifact() }
+            content { includeModule("io.element.android", "matrix-rtc-android") }
+        }
     }
 }
 
@@ -34,7 +46,8 @@ include(":call:ui")
 include(":call:matrix")
 include(":call:test")
 
-// The locally built matrix-rust-rtc AAR (see docs/local_stack.md, layer 1).
+// The matrix-rust-rtc AAR: checks the file above and publishes it to the local Maven repository for
+// tests/consumer and a host on layer 3 (see docs/local_stack.md).
 include(":rtc:local")
 
 // One version for the five artifacts.

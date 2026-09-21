@@ -48,6 +48,19 @@ interface ElementCallMatrixRoom {
     suspend fun sendStateEvent(eventType: String, stateKey: String, contentJson: String): Result<EventId>
 
     /**
+     * Send a message-like room event with the given raw JSON content, encrypted like any other event in an
+     * encrypted room. The core sends its MSC4075 notification this way when the membership is room state
+     * ([io.element.android.call.api.rtc.MatrixRtcElementCallCompat.STATE_EVENTS]), so this is what makes a
+     * call ring; it also carries reactions and raised hands, and a raised hand is lowered by redacting the id
+     * returned here.
+     * @return the event id the homeserver assigned.
+     */
+    suspend fun sendRoomEvent(eventType: String, contentJson: String): Result<EventId>
+
+    /** Redact an event this device sent: the core lowers a raised hand by redacting its `m.reaction`. */
+    suspend fun redactEvent(eventId: EventId, reason: String?): Result<Unit>
+
+    /**
      * Send a delayed event (MSC4140). With a [stateKey] it is a state event, without one message-like.
      * @return the `delay_id` the homeserver assigned, for [updateDelayedEvent].
      */

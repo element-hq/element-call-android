@@ -173,6 +173,21 @@ internal class WidgetMatrixBridge(
 
     // Sends
 
+    /** A message-like event: `send_event` with neither state key nor delay, answered by the event id. */
+    suspend fun sendRoomEvent(eventType: String, contentJson: String): Result<EventId> {
+        val content = parseObject(contentJson)
+            ?: return Result.failure(ElementCallMatrixException.InvalidResponse("content is not a JSON object"))
+        val data = buildJsonObject {
+            put("type", eventType)
+            put("content", content)
+        }
+        return request(SEND_EVENT, data).mapCatching { response ->
+            val eventId = response.string("event_id")
+                ?: throw ElementCallMatrixException.InvalidResponse("no event_id in the send_event response")
+            EventId(eventId)
+        }
+    }
+
     suspend fun sendDelayedEvent(eventType: String, stateKey: String?, contentJson: String, delayMs: ULong): Result<String> {
         val content = parseObject(contentJson)
             ?: return Result.failure(ElementCallMatrixException.InvalidResponse("content is not a JSON object"))

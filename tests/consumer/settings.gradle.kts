@@ -28,7 +28,6 @@ dependencyResolutionManagement {
         mavenLocal {
             content {
                 includeGroup("io.element.android")
-                includeGroup("org.matrix.rtc")
             }
         }
         google()

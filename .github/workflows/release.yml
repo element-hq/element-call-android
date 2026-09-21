@@ -26,7 +26,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Fetch the matrix-rust-rtc AAR
-        # The core has no Maven coordinate yet: gradle.properties pins the release asset and its sha256,
+        # The core is not on Maven Central yet: gradle.properties pins its release asset and sha256,
         # and the script fetches it into rtc/local (docs/local_stack.md, layer 1).
         run: ./tools/rtc/fetch-rust-rtc
       - name: ☕️ Use JDK 21

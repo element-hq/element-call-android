@@ -28,8 +28,8 @@ android {
 dependencies {
     api(projects.call.api)
 
-    // The matrix-rust-rtc AAR, built locally until the core is published (see docs/local_stack.md).
-    implementation(projects.rtc.local)
+    // The matrix-rust-rtc core: the file in rtc/local here, the release asset for a host (see docs/local_stack.md).
+    implementation(variantOf(libs.matrix.rtc.android) { artifactType("aar") })
     // uniffi bindings runtime.
     implementation(variantOf(libs.jna) { artifactType("aar") })
 

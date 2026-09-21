@@ -18,6 +18,9 @@ activity = "1.13.0"
 # Compose
 compose_bom = "2026.08.00"
 
+# The matrix-rust-rtc core. Must match MATRIX_RTC_VERSION and MATRIX_RTC_AAR_URL in gradle.properties.
+matrix_rtc = "0.3.0-rc.1"
+
 # Coroutines
 coroutines = "1.11.0"
 
@@ -54,6 +57,10 @@ vanniktech_maven_publish_plugin = { module = "com.vanniktech:gradle-maven-publis
 autonomousapps_dependencyanalysis_plugin = { module = "com.autonomousapps:dependency-analysis-gradle-plugin", version.ref = "dependencyAnalysis" }
 # uniffi bindings runtime, for the Rust SDK and the RTC core alike.
 jna = "net.java.dev.jna:jna:5.19.1"
+# The matrix-rust-rtc core, always with `artifactType("aar")`: the published POMs then name it with an
+# `aar` selector, which is what lets a host resolve the release asset through an Ivy repository (README,
+# "Consuming a release"). Locally it is the file in rtc/local (settings.gradle.kts).
+matrix_rtc_android = { module = "io.element.android:matrix-rtc-android", version.ref = "matrix_rtc" }
 
 # AndroidX
 androidx_core = { module = "androidx.core:core", version.ref = "core" }
