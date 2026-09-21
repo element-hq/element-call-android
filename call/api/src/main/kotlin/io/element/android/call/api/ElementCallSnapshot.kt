@@ -125,6 +125,13 @@ data class ElementCallSnapshot(
      */
     val isCameraPermissionGranted: Boolean = false,
     /**
+     * Whether the host has turned screen sharing on, see `ElementCallOptions.isScreenSharingEnabled`.
+     *
+     * Fixed for the life of the call and carried here rather than read from the options, because the
+     * screen only ever sees snapshots. False hides the share control altogether.
+     */
+    val isScreenShareAvailable: Boolean = false,
+    /**
      * Whether we are capturing and publishing the screen.
      *
      * Can go false without the app asking: the user can end a share from the system's cast

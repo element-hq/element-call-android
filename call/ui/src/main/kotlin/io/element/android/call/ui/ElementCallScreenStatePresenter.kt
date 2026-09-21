@@ -160,6 +160,7 @@ private fun ElementCallSnapshot?.toState(
     isCameraEnabled = this?.isCameraEnabled == true,
     isFrontCamera = this?.isFrontCamera != false,
     isCameraPermissionGranted = this?.isCameraPermissionGranted == true,
+    isScreenShareAvailable = this?.isScreenShareAvailable == true,
     isScreenSharing = this?.isScreenSharing == true,
     isTileStatsVisible = this?.isTileStatsVisible == true,
     videoFrames = videoFrames,

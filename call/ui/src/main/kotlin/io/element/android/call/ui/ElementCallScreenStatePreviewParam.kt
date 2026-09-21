@@ -132,6 +132,22 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
                 audioLevels = mapOf(A_LOCAL_MEMBER_ID to MatrixRtcAudioLevel(level = 0.8f, frameCount = 400)),
                 isAudioTestToneEnabled = true,
             ),
+            // A host that has turned screen sharing on: the sixth button, which is what the bar is sized for.
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
+                memberCount = 2,
+                participants = listOf(aLocalParticipant(), aRemoteParticipant()),
+                isScreenShareAvailable = true,
+            ),
+            // Sharing our screen: the active button and the banner with its stop action. No tile of our
+            // own share, see ScreenShareBanner.
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
+                memberCount = 2,
+                participants = listOf(aLocalParticipant(), aRemoteParticipant()),
+                isScreenShareAvailable = true,
+                isScreenSharing = true,
+            ),
             // On the loudspeaker.
             anElementCallScreenState(
                 connection = ElementCallConnection.Connected,
@@ -236,6 +252,8 @@ fun anElementCallScreenState(
     isCameraEnabled: Boolean = false,
     isFrontCamera: Boolean = true,
     isCameraPermissionGranted: Boolean = false,
+    // Off, like the library's default, so the bulk of the previews show what a host gets out of the box.
+    isScreenShareAvailable: Boolean = false,
     isScreenSharing: Boolean = false,
     isTileStatsVisible: Boolean = false,
     // Never a real stream in a preview: the tile draws a placeholder under LocalInspectionMode and
@@ -267,6 +285,7 @@ fun anElementCallScreenState(
     isCameraEnabled = isCameraEnabled,
     isFrontCamera = isFrontCamera,
     isCameraPermissionGranted = isCameraPermissionGranted,
+    isScreenShareAvailable = isScreenShareAvailable,
     isScreenSharing = isScreenSharing,
     isTileStatsVisible = isTileStatsVisible,
     videoFrames = videoFrames.toImmutableMap(),

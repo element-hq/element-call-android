@@ -31,7 +31,7 @@ class ElementCallScreenTest : RobolectricTest() {
     @Test
     fun `every control sends its event`() = runAndroidComposeUiTest<ComponentActivity> {
         val events = EventsRecorder<ElementCallScreenEvent>()
-        setContent { ElementCallScreen(state = anElementCallScreenState(eventSink = events)) }
+        setContent { ElementCallScreen(state = anElementCallScreenState(isScreenShareAvailable = true, eventSink = events)) }
 
         clickOnContentDescription(R.string.element_call_a11y_mute_microphone)
         clickOnContentDescription(R.string.element_call_a11y_turn_camera_on)
@@ -59,6 +59,7 @@ class ElementCallScreenTest : RobolectricTest() {
                 state = anElementCallScreenState(
                     isMicrophoneMuted = true,
                     isCameraEnabled = true,
+                    isScreenShareAvailable = true,
                     isScreenSharing = true,
                     eventSink = events,
                 ),
@@ -78,6 +79,15 @@ class ElementCallScreenTest : RobolectricTest() {
                 ElementCallScreenEvent.SwitchCamera,
             )
         )
+    }
+
+    /** Screen sharing is opt-in: a host that has not turned it on gets no button, not a dead one. */
+    @Test
+    fun `the screen share button is absent unless the host enabled it`() = runAndroidComposeUiTest<ComponentActivity> {
+        setContent { ElementCallScreen(state = anElementCallScreenState()) }
+
+        onNodeWithContentDescription(activity!!.getString(R.string.element_call_a11y_start_screen_share)).assertDoesNotExist()
+        onNodeWithContentDescription(activity!!.getString(R.string.element_call_a11y_stop_screen_share)).assertDoesNotExist()
     }
 
     /** The overflow menu says which Element Call this is, and asks the controller for nothing. */

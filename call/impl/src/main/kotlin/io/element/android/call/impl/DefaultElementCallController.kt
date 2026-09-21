@@ -205,6 +205,7 @@ internal class DefaultElementCallController(
                 _state.value = ElementCallSnapshot(
                     callData = callData,
                     connection = ElementCallConnection.RequestingPermission,
+                    isScreenShareAvailable = options.isScreenSharingEnabled,
                 )
                 // Reported as soon as the call is requested rather than once it connects, so a host's
                 // Join button hides while we are still joining rather than blinking through an
@@ -367,11 +368,19 @@ internal class DefaultElementCallController(
      * `mediaProjection` type when the projection is claimed, and claiming happens inside
      * `setScreenShareEnabled`. Upgrading the service afterwards, or in parallel, is a
      * `SecurityException` from the platform rather than a warning.
+     *
+     * Refused outright when the host has not turned screen sharing on: the screen offers no button
+     * then, but the controller works with no UI attached, and a host that reaches this without the
+     * manifest half would hit that same `SecurityException`. Stopping is always allowed.
      */
     override fun setScreenShareEnabled(token: MatrixRtcScreenCaptureToken?) {
         scope.launch {
             val currentCall = call ?: return@launch
             if (token != null) {
+                if (!options.isScreenSharingEnabled) {
+                    Timber.w("ElementCall: screen sharing is not enabled in the options, ignoring the share request")
+                    return@launch
+                }
                 platform.startForegroundService(isProjecting = true)
                 currentCall.setScreenShareEnabled(enabled = true, token = token)
             } else {

@@ -979,10 +979,11 @@ class DefaultElementCallControllerTest {
                 }
             },
         )
-        val controller = createController(rtcService = rtcService, platform = platform)
+        val controller = createController(rtcService = rtcService, platform = platform, isScreenSharingEnabled = true)
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
         val call = rtcService.lastSession?.lastCall!!
+        assertThat(controller.state.value?.isScreenShareAvailable).isTrue()
         // Everything the connection itself started, so what is left is what sharing did.
         platform.startForegroundServiceProjecting.clear()
 
@@ -998,12 +999,37 @@ class DefaultElementCallControllerTest {
         assertThat(controller.state.value?.isScreenSharing).isTrue()
     }
 
+    /**
+     * Screen sharing is opt-in, and the reason is the manifest: a host that has not declared the
+     * `mediaProjection` service type would get a `SecurityException` from the very first line of a
+     * share. So with the default options nothing is started - not the service upgrade, not the share -
+     * and the snapshot says the control is unavailable, which is what keeps the button off the bar.
+     */
+    @Test
+    fun `sharing the screen is refused unless the host enabled it`() = runTest {
+        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
+        val platform = FakeElementCallPlatform()
+        val controller = createController(rtcService = rtcService, platform = platform)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+        val call = rtcService.lastSession?.lastCall!!
+        assertThat(controller.state.value?.isScreenShareAvailable).isFalse()
+        platform.startForegroundServiceProjecting.clear()
+
+        controller.setScreenShareEnabled(MatrixRtcScreenCaptureToken(Intent()))
+        runCurrent()
+
+        assertThat(platform.startForegroundServiceProjecting).isEmpty()
+        assertThat(call.screenShareCalls).isEmpty()
+        assertThat(controller.state.value?.isScreenSharing).isFalse()
+    }
+
     /** And the type is given back afterwards, so the screen-recording indicator does not linger. */
     @Test
     fun `stopping the share drops the media projection service type`() = runTest {
         val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
         val platform = FakeElementCallPlatform()
-        val controller = createController(rtcService = rtcService, platform = platform)
+        val controller = createController(rtcService = rtcService, platform = platform, isScreenSharingEnabled = true)
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
         val call = rtcService.lastSession?.lastCall!!
@@ -1026,7 +1052,7 @@ class DefaultElementCallControllerTest {
     @Test
     fun `a share ended from outside the app turns the state off`() = runTest {
         val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService)
+        val controller = createController(rtcService = rtcService, isScreenSharingEnabled = true)
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
         val call = rtcService.lastSession?.lastCall!!
@@ -1132,6 +1158,7 @@ class DefaultElementCallControllerTest {
         roomContextProvider: FakeElementCallRoomContextProvider = FakeElementCallRoomContextProvider(
             roomContext = roomIsDm?.let { ElementCallRoomContext(displayName = "A room", isDm = it, members = emptyMap()) },
         ),
+        isScreenSharingEnabled: Boolean = false,
     ): DefaultElementCallController {
         val controller = DefaultElementCallController(
             scope = backgroundScope,
@@ -1141,7 +1168,7 @@ class DefaultElementCallControllerTest {
             audioFocus = audioFocus,
             lifecycleListener = lifecycleListener,
             roomContextProvider = roomContextProvider,
-            options = ElementCallOptions(elementCallCompat = elementCallCompat),
+            options = ElementCallOptions(elementCallCompat = elementCallCompat, isScreenSharingEnabled = isScreenSharingEnabled),
         )
         controller.startCall(ElementCallData(roomId = A_ROOM_ID, isAudioCall = isAudioCall))
         runCurrent()
