@@ -8,12 +8,13 @@
 import java.security.MessageDigest
 
 // The matrix-rust-rtc core as an AAR file: `./tools/rtc/fetch-rust-rtc` drops the pinned release here and
-// `./tools/rtc/build-rust-rtc` a local build (both gitignored), and this bare project publishes the file on
-// its `default` configuration so that call/impl and call/ui resolve the same one. See docs/local_stack.md,
-// layer 1.
+// `./tools/rtc/build-rust-rtc` a local build (both gitignored). The build resolves the file through the Ivy
+// repository over this directory in settings.gradle.kts; this project checks it and publishes it to the
+// LOCAL Maven repository under the core's coordinate, so that tests/consumer and a host on layer 3 of
+// docs/local_stack.md resolve the dependency the published POMs name.
 //
-// Temporary: the core has no Maven coordinate yet. When it publishes one, this project goes and the
-// consumers switch to a catalog entry.
+// Temporary: the core is on GitHub Packages (token-gated) and not yet on Maven Central. When it is, this
+// project and the Ivy repository go, and the catalog entry resolves from Central like everything else.
 plugins {
     `maven-publish`
 }
@@ -36,31 +37,25 @@ if (!aar.exists()) {
     }
 }
 
-configurations.maybeCreate("default")
-artifacts.add("default", aar) {
-    type = "aar"
-    extension = "aar"
-}
-
-// The AAR under the coordinate the plan reserves for the core's own publication (§2.3), so that the
-// published POMs of call/impl and call/ui name a real dependency rather than this project. Reaches the
-// LOCAL Maven repository only: this project has no remote repository configured, and RELEASING.md says
-// why it never gets one. The day the core publishes, the coordinate stays and this block goes.
-group = "org.matrix.rtc"
+// The core's own coordinate (element-hq/matrix-rust-rtc, mobile/android). Reaches the LOCAL Maven
+// repository only: this project has no remote repository configured, and RELEASING.md says why it never
+// gets one. MATRIX_RTC_VERSION must be the release the pinned URL points at, because the published POMs of
+// call/impl and call/ui name it and a host resolves it from that release.
+group = "io.element.android"
 version = providers.gradleProperty("MATRIX_RTC_VERSION").get()
 
 publishing {
     publications {
         create<MavenPublication>("aar") {
-            artifactId = "matrixrtc-android"
+            artifactId = "matrix-rtc-android"
             artifact(aar) {
                 extension = "aar"
             }
             pom {
-                name.set("matrix-rust-rtc for Android (local build)")
+                name.set("matrix-rust-rtc for Android (local copy)")
                 description.set(
                     "The matrix-rust-rtc AAR in rtc/local, published to the local Maven repository by element-call-android " +
-                        "until the core publishes its own artifact. Not for distribution."
+                        "until the core is on Maven Central. Not for distribution."
                 )
                 packaging = "aar"
             }

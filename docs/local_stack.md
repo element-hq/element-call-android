@@ -20,10 +20,11 @@ matrix-rust-rtc  ──(1)──►  element-call-android  ──(2, 3)──►
 
 ## Layer 1: a locally built core in the library
 
-The `matrix-rust-rtc` core has no Maven coordinate yet, so the library consumes it as a file: `rtc/local` is a bare
-Gradle project that publishes `rtc/local/matrixrtc-release.aar` (gitignored) on its `default` configuration, and
-`call/impl` and `call/ui` depend on that project. There is no fallback: without the file the build fails at
-configuration with a message pointing here.
+The `matrix-rust-rtc` core, `io.element.android:matrix-rtc-android`, is on GitHub Packages (a token even to read)
+and not yet on Maven Central, so the library consumes it as a file: `settings.gradle.kts` declares an Ivy repository
+over `rtc/local` that serves `rtc/local/matrixrtc-release.aar` (gitignored) under that coordinate, whatever version
+the catalog names, and `call/impl` and `call/ui` depend on the catalog entry with an `aar` selector. There is no
+fallback: without the file the build fails at resolution with a message pointing here.
 
 **Fetch the pinned release** (what CI does in every workflow, and what a developer who is not changing the core
 does). `gradle.properties` pins the release asset and its checksum, `MATRIX_RTC_AAR_URL` and
@@ -58,7 +59,7 @@ release` at configuration whenever the file's sha256 differs from `MATRIX_RTC_AA
 classpath.
 
 **Switch back:** `./tools/rtc/fetch-rust-rtc` puts the pinned release back over a local build. When the core
-publishes to Maven, `rtc/local` goes away and this section becomes a substitution over the catalog entry.
+reaches Maven Central, `rtc/local` and the Ivy repository go away and the catalog entry resolves like any other.
 
 ## Layer 2: the library from source in Element X
 
@@ -119,8 +120,8 @@ Element X's settings turn the property into a `mavenLocal()` repository filtered
 **Switch back:** drop the property.
 
 The library side exists: `publishToMavenLocal` publishes the five artifacts and the BOM through the
-`io.element.call.publish` plugin, and, from `rtc/local`, the locally built core as
-`org.matrix.rtc:matrixrtc-android:<MATRIX_RTC_VERSION>` (the coordinate the published POMs name; `RELEASING.md`
+`io.element.call.publish` plugin, and, from `rtc/local`, the core file as
+`io.element.android:matrix-rtc-android:<MATRIX_RTC_VERSION>` (the coordinate the published POMs name; `RELEASING.md`
 says why it goes no further than `~/.m2`). `tests/consumer` is a minified app built this way on every change.
 Element X's `-PelementCallLocalVersion` property arrives with its integration pull requests (plan §10, PR 2).
 

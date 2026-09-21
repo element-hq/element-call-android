@@ -61,9 +61,10 @@ class WidgetMatrixBridgeTest {
         assertThat(granted).containsAtLeast(
             "org.matrix.msc2762.receive.state_event:org.matrix.msc3401.call.member",
             "org.matrix.msc3819.send.to_device:io.element.call.encryption_keys",
+            "org.matrix.msc2762.send.event:org.matrix.msc4075.rtc.notification",
             "org.matrix.msc4157.send.delayed_event",
         )
-        assertThat(granted).hasSize(13)
+        assertThat(granted).hasSize(14)
         assertThat(start.isCompleted).isFalse()
 
         val notifyReply = driver.deliver(toWidget(NOTIFY_CAPABILITIES, "cap-2", approvedCapabilities()))
@@ -357,6 +358,36 @@ class WidgetMatrixBridgeTest {
         driver.givenIncomingMessage(responseTo(sent, buildJsonObject { put("delay_id", "syd_abc") }))
 
         assertThat(result.await().getOrThrow()).isEqualTo("syd_abc")
+    }
+
+    /** The MSC4075 notification in the state-event compat mode: the send that makes a call ring. */
+    @Test
+    fun `a room event is a send_event with neither state key nor delay, answered by an event id`() = runTest {
+        val driver = FakeWidgetDriver()
+        val bridge = negotiatedBridge(driver)
+
+        val result = async { bridge.sendRoomEvent(A_NOTIFICATION_TYPE, A_CONTENT) }
+        val sent = driver.awaitSent()
+        assertThat(sent.string("action")).isEqualTo(SEND_EVENT)
+        val data = sent.data()
+        assertThat(data.string("type")).isEqualTo(A_NOTIFICATION_TYPE)
+        assertThat(data.containsKey("state_key")).isFalse()
+        assertThat(data.containsKey("delay")).isFalse()
+        assertThat(data["content"]!!.jsonObject).isEqualTo(json.parseToJsonElement(A_CONTENT).jsonObject)
+        driver.givenIncomingMessage(responseTo(sent, buildJsonObject { put("event_id", "\$notified") }))
+
+        assertThat(result.await().getOrThrow()).isEqualTo(EventId("\$notified"))
+    }
+
+    @Test
+    fun `a room event answered without an event id is an invalid response`() = runTest {
+        val driver = FakeWidgetDriver()
+        val bridge = negotiatedBridge(driver)
+
+        val result = async { bridge.sendRoomEvent(A_NOTIFICATION_TYPE, A_CONTENT) }
+        driver.givenIncomingMessage(responseTo(driver.awaitSent(), buildJsonObject { put("delay_id", "syd_abc") }))
+
+        assertThat(result.await().exceptionOrNull()).isInstanceOf(ElementCallMatrixException.InvalidResponse::class.java)
     }
 
     @Test
@@ -707,6 +738,7 @@ class WidgetMatrixBridgeTest {
         const val SEND_TO_DEVICE = "send_to_device"
 
         const val A_MEMBER_TYPE = MatrixRtcEventTypes.MEMBER_ELEMENT_CALL_STATE_UNSTABLE
+        const val A_NOTIFICATION_TYPE = "org.matrix.msc4075.rtc.notification"
         const val A_CONTENT = """{"application":"m.call","memberships":[]}"""
         const val A_TIMESTAMP = 1_700_000_000_000L
 

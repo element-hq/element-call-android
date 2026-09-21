@@ -124,18 +124,26 @@ between entries.
     `.so` with the NDK's 16 KB flags (`-Wl,-z,max-page-size=16384`) and check it with `check_elf_alignment.sh`
     in the release pipeline. Seen on the Android 16 emulator; also flagged by lint's `Aligned16KB` on every
     build of `call/ui`. **Fixed in v0.2.0-rc.1**: every `PT_LOAD` segment of the three `.so` files is 16 KB aligned.
-28. **The release this library pins is published from a personal account, and nothing but a checksum vouches
-    for it.** `gradle.properties` fetches `v0.2.0-rc.1` from `BillCarsonFr/matrix-rust-rtc`; `element-hq/matrix-rust-rtc`
-    exists but holds no code yet. The asset is built by the core's own `release.yml` and uploaded by
-    `github-actions[bot]`, and the sha256 in `gradle.properties` matches the digest GitHub recorded for it, so the
-    file cannot be swapped under us - but the checksum only says the bytes did not change, not where they came
-    from, and every audio frame, video frame, media key and OpenID token this library handles ends up inside them.
-    Three things would close the gap, in order: publish releases from `element-hq/matrix-rust-rtc` (the URL in
-    `gradle.properties` is the only line that changes here); pin the actions in the core's `release.yml` by commit
-    SHA the way this repository does, rather than `@v4` and `@stable`; and attest the build with
-    `actions/attest-build-provenance`, so that `tools/rtc/fetch-rust-rtc` can run `gh attestation verify` on the
-    AAR and refuse one that was not built by that workflow from that commit. Found by the security audit of this
-    repository, 2026-09-18.
+28. **~~The release this library pins is published from a personal account, and nothing but a checksum vouches
+    for it.~~ Partly closed by v0.3.0-rc.1, which `element-hq/matrix-rust-rtc` publishes itself.** `gradle.properties`
+    now fetches that release; the URL was the only line that changed. The asset is built by the core's own `release.yml`
+    and the sha256 in `gradle.properties` matches the digest GitHub recorded for it, so the file cannot be swapped under
+    us - but the checksum only says the bytes did not change, not where they came from, and every audio frame, video
+    frame, media key and OpenID token this library handles ends up inside them. Two things would close the rest, in
+    order: pin the actions in the core's `release.yml` by commit SHA the way this repository does, rather than `@v4`
+    and `@v2`; and attest the build with `actions/attest-build-provenance`, so that `tools/rtc/fetch-rust-rtc` can run
+    `gh attestation verify` on the AAR and refuse one that was not built by that workflow from that commit. Found by
+    the security audit of this repository, 2026-09-18.
+29. **The core has a Maven coordinate, `io.element.android:matrix-rtc-android`, but nowhere a host can read it
+    without a token.** v0.3.0-rc.1 publishes to GitHub Packages, which needs a `read:packages` token even for a public
+    package - so Element X's CI, every fork and every F-Droid build would need one - and attaches the bare AAR to the
+    GitHub release, without the `.pom` and `.module` the same publication writes. This library therefore names the
+    coordinate with an `aar` artifact selector and a host resolves the release asset through an Ivy repository with
+    artifact-only metadata (README, "Consuming a release"): it works, but the selector is a wart every host carries,
+    the core's own dependency on JNA is lost (we redeclare it), and the library cannot go to Maven Central until the
+    core does (`RELEASING.md`). Two steps, either of which helps: attach the `.pom` and `.module` next to the AAR on
+    the release, so the Ivy repository can use `gradleMetadata()` and the selector goes; and finish the Maven Central
+    setup the core's `RELEASING.md` already describes, after which the repository block goes too.
 
 ### Deployment
 
@@ -831,14 +839,15 @@ continues from above rather than restarting, because entries elsewhere in this f
     a call in a group room joins with `NOTIFY`. The suppression is the core's too — passing a config on a join into
     a session someone is already in rings nobody, so the host does not have to tell starting from joining apart.
 
-    **One thing left over, and it is ours rather than the core's.** The notification goes out through
-    `sendStickyEvent`, and its `m.relates_to` points at the membership event — which means the relation is only as
-    good as the event id that callback returned. In `StateEvents` compat the membership goes out through
-    `sendStateEvent`, which reports a real id, so the relation is right; that is the mode the device test above ran
-    in. In the sticky dialects the membership goes out through `sendStickyEvent`, where `sendStickyRaw` reports
-    nothing and we answer with an empty string (item 9 below) — so there the notification cannot be related to the
-    membership that justifies it. Untested on device so far, and worth doing before the sticky dialect is the
-    default: it needs the SDK change in item 9, not a core one.
+    **One thing left over, and it is ours rather than the core's.** The notification's `m.relates_to` points at the
+    membership event, so the relation is only as good as the event id the membership's send callback returned. In
+    `StateEvents` compat the membership goes out through `sendStateEvent`, which reports a real id, so the relation
+    is right; that is the mode the device test above ran in. Since core v0.3.0-rc.1 the notification itself goes out
+    through `sendRoomEvent` in that mode (the pre-sticky wire has no sticky map), which
+    `ElementCallMatrixRoom.sendRoomEvent` carries. In the sticky dialects both go through `sendStickyEvent`, where
+    `sendStickyRaw` reports nothing and we answer with an empty string (item 9 below) — so there the notification
+    cannot be related to the membership that justifies it. Untested on device so far, and worth doing before the
+    sticky dialect is the default: it needs the SDK change in item 9, not a core one.
 
 ### Screen sharing
 
@@ -1055,7 +1064,10 @@ kind of thing gets diagnosed.
    an MSC4075 notification to a sticky membership — which is no longer hypothetical, now that the core sends those
    notifications itself and relates them to the membership event (RTC item 17). The value exists on the wire and `StickyEvent`
    already carries an `eventId` when the same event comes *back* through `stickyEvents()`; it is only the send that
-   drops it. Returning the send response's `event_id` from `sendStickyRaw` would close it.
+   drops it. Returning the send response's `event_id` from `sendStickyRaw` would close it. The same for `sendRaw`:
+   the core keeps the id of a raised hand's `m.reaction` to redact it later, so `sendRoomEvent` cannot answer an
+   empty string and goes through the widget machine's `send_event` (which does return the id) until `sendRaw`
+   returns one; a matrix-rust-sdk change to that effect is in progress.
 
 ## Widget-driver stopgap
 
@@ -1092,8 +1104,11 @@ stopgap is:
 - `Client.subscribeToToDeviceMessages(eventTypes)` delivering the **encryption info**: attested sender, sender device
   id and cross-signing status. The widget path delivers `{type, content, sender, encrypted}` only.
 - `Room.sendStickyRaw` (MSC4354) for the sticky-event compat modes; until then calls are pinned to the state-event
-  mode (`DefaultElementCallController`; `ElementCallOptions.elementCallCompat` is read but not obeyed). `Room.sendRaw` returning the event id would
-  also let MSC4075 notifications relate to their membership.
+  mode (`DefaultElementCallController`; `ElementCallOptions.elementCallCompat` is read but not obeyed).
+- `Room.sendRaw` returning the event id (matrix-rust-sdk item 9). It exists and sends, but resolves to unit, and the
+  core keeps the id of a raised hand's `m.reaction` to redact it later - so the message-like room event (the MSC4075
+  notification of the state-event mode too, a plain room event since core v0.3.0-rc.1) goes through the widget
+  machine's `send_event`, which answers with the id, until `sendRaw` does. `Room.redact` already lowers the hand.
 
 **Trust relaxation while the stopgap is in place.** The core drops a media key whose sender is not cross-signed
 and the mapper drops one without a sender device. Through the widget driver neither is knowable, so the bridge

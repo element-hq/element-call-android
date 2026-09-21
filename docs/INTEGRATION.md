@@ -49,17 +49,24 @@ The AAR (`matrixrtc-release.aar`) contains four things, and you will end up depe
 | `org.matrix.rtc.MatrixRtc` | the loader that runs `JNI_OnLoad` — see §2 |
 | `libs/libwebrtc.jar` | libwebrtc's Java classes: camera and screen capture, I420 conversion, GL renderer |
 
-Gradle wiring is a flat file dependency; there is no Maven coordinate yet:
+The Maven coordinate is `io.element.android:matrix-rtc-android`, on GitHub Packages (which needs a token even to
+read) and not yet on Maven Central. So the dependency is declared with an `aar` artifact selector and the AAR is
+served by an Ivy repository - over the local file here, over the core's GitHub release in a host - with
+artifact-only metadata; JNA has to be declared by hand because there is no POM to carry it:
 
 ```kotlin
-// rtc/local/build.gradle.kts
-configurations.maybeCreate("default")
-artifacts.add("default", file("matrixrtc-release.aar"))
+// settings.gradle.kts
+ivy {
+    url = settingsDir.resolve("rtc/local").toURI()
+    patternLayout { artifact("matrixrtc-release.[ext]") }
+    metadataSources { artifact() }
+    content { includeModule("io.element.android", "matrix-rtc-android") }
+}
 ```
 
 ```kotlin
 // call/impl/build.gradle.kts
-implementation(projects.rtc.local)
+implementation(variantOf(libs.matrix.rtc.android) { artifactType("aar") })
 // uniffi bindings runtime
 implementation(variantOf(libs.jna) { artifactType("aar") })
 ```

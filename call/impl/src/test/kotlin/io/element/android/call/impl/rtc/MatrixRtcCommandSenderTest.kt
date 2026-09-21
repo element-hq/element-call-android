@@ -331,6 +331,8 @@ class MatrixRtcCommandSenderTest {
         listOf<suspend () -> Any>(
             { sender.cancelDelayedEvent(A_ROOM_ID.value, A_DELAY_ID) },
             { sender.sendStateEvent(A_ROOM_ID.value, AN_EVENT_TYPE, A_STATE_KEY, A_CONTENT) },
+            { sender.sendRoomEvent(A_ROOM_ID.value, A_NOTIFICATION_EVENT_TYPE, A_CONTENT) },
+            { sender.redactEvent(A_ROOM_ID.value, AN_EVENT_ID.value, reason = null) },
         ).forEach { command ->
             val thrown = runCatchingExceptions { command() }.exceptionOrNull()
             assertThat(thrown).isInstanceOf(CommandSenderException.SendException::class.java)
@@ -338,20 +340,41 @@ class MatrixRtcCommandSenderTest {
     }
 
     /**
-     * Until a port carries message-like room events and redactions (plan 002), the core must learn that
-     * they are unsupported rather than see a send failure it would retry.
+     * In the state-event compat mode the MSC4075 notification is an ordinary room event, so this is the send
+     * that makes a call ring.
      */
     @Test
-    fun `room events and redactions are reported as unsupported`() = runTest {
-        val sender = createSender()
+    fun `sendRoomEvent sends the event to the room and returns its id`() = runTest {
+        val sendRoomEvent = lambdaRecorder { _: String, _: String -> Result.success(AN_EVENT_ID) }
+        val sender = createSender(room = FakeElementCallMatrixRoom(sendRoomEventResult = sendRoomEvent))
 
-        listOf<suspend () -> Any>(
-            { sender.sendRoomEvent(A_ROOM_ID.value, "m.reaction", A_CONTENT) },
-            { sender.redactEvent(A_ROOM_ID.value, AN_EVENT_ID.value, reason = null) },
-        ).forEach { command ->
-            val thrown = runCatchingExceptions { command() }.exceptionOrNull()
-            assertThat(thrown).isInstanceOf(CommandSenderException.NotSupported::class.java)
-        }
+        val eventId = sender.sendRoomEvent(A_ROOM_ID.value, A_NOTIFICATION_EVENT_TYPE, A_CONTENT)
+
+        assertThat(eventId).isEqualTo(AN_EVENT_ID.value)
+        sendRoomEvent.assertions().isCalledOnce().with(value(A_NOTIFICATION_EVENT_TYPE), value(A_CONTENT))
+    }
+
+    @Test
+    fun `a room event the homeserver refuses is a send failure`() = runTest {
+        val sender = createSender(
+            room = FakeElementCallMatrixRoom(
+                sendRoomEventResult = { _, _ -> Result.failure(matrixApiError("M_FORBIDDEN", 403, "You cannot send this event")) },
+            ),
+        )
+
+        val thrown = runCatchingExceptions { sender.sendRoomEvent(A_ROOM_ID.value, A_NOTIFICATION_EVENT_TYPE, A_CONTENT) }.exceptionOrNull()
+
+        assertThat(thrown).isInstanceOf(CommandSenderException.SendException::class.java)
+    }
+
+    @Test
+    fun `redactEvent redacts the event in the room`() = runTest {
+        val redactEvent = lambdaRecorder { _: EventId, _: String? -> Result.success(Unit) }
+        val sender = createSender(room = FakeElementCallMatrixRoom(redactEventResult = redactEvent))
+
+        sender.redactEvent(A_ROOM_ID.value, AN_EVENT_ID.value, reason = "hand lowered")
+
+        redactEvent.assertions().isCalledOnce().with(value(AN_EVENT_ID), value("hand lowered"))
     }
 
     private fun matrixApiError(errcode: String, httpStatus: Int, message: String) = ElementCallMatrixException.MatrixApi(
@@ -373,6 +396,7 @@ class MatrixRtcCommandSenderTest {
         const val A_DELAY_ID = "aDelayId"
         val AN_EVENT_ID = EventId("\$anEventId")
         const val AN_EVENT_TYPE = "org.matrix.msc4143.rtc.member"
+        const val A_NOTIFICATION_EVENT_TYPE = "org.matrix.msc4075.rtc.notification"
         const val A_CONTENT = """{"application":"m.call"}"""
 
         // Only ever sent in STATE_EVENTS compatibility, where the membership is room state keyed by

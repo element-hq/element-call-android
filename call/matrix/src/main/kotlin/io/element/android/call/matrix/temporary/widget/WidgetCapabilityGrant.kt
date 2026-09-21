@@ -33,8 +33,13 @@ internal object WidgetCapabilityGrant : WidgetCapabilitiesProvider {
     /** Both media-key dialects, sent and received. */
     val toDeviceEventTypes = listOf(MatrixRtcEventTypes.ENCRYPTION_KEY, MatrixRtcEventTypes.ENCRYPTION_KEY_ELEMENT_CALL)
 
-    /** Message-like events the core may send: MSC4075 notifications and reactions. */
+    /**
+     * Message-like events the core may send: MSC4075 notifications and reactions. The notification goes out
+     * under `org.matrix.msc4075.rtc.notification` (the core's wire id for `m.rtc.notification`, and what
+     * makes a call ring in the state-event compat mode); the other spellings are the older Element Call ones.
+     */
     val roomEventTypes = listOf(
+        "org.matrix.msc4075.rtc.notification",
         "org.matrix.msc4075.call.notify",
         "org.matrix.msc4310.rtc.notification",
         "m.rtc.notification",

@@ -38,9 +38,8 @@ One version for the five artifacts and the BOM, under `io.element.android`:
 
 Each is published by the `io.element.call.publish` convention plugin (`com.vanniktech.maven.publish`) as
 its release variant with a sources jar, an empty javadoc jar, Gradle module metadata, and a POM naming
-both licences. The published `element-call` POM depends on the core at `org.matrix.rtc:matrixrtc-android`,
-the coordinate the plan reserves for the core's own publication; see the last section for what that
-means today.
+both licences. The published `element-call` POM depends on the core at `io.element.android:matrix-rtc-android`, its own
+coordinate, with an `aar` artifact selector; see the last section for what that means today.
 
 ## Cutting a release
 
@@ -67,13 +66,12 @@ Central release is immutable and public and three things have to be in place fir
   artifacts are already under it), as the secrets `MAVEN_CENTRAL_USERNAME` and `MAVEN_CENTRAL_PASSWORD`.
 - **A signing key**, as `MAVEN_SIGNING_KEY` (the armoured private key) and `MAVEN_SIGNING_KEY_PASSWORD`.
   Signing is off by default so a local publish needs no key; `-PRELEASE_SIGNING_ENABLED=true` turns it on.
-- **A core artifact the POMs can name.** The `element-call` POM depends on `org.matrix.rtc:matrixrtc-android`.
-  Today that coordinate exists only in the local Maven repository, published from `rtc/local` (below)
-  out of the release asset `gradle.properties` pins, so a Central release of `element-call` would be
-  unresolvable for every host. Until `matrix-rust-rtc`
-  publishes to Maven (the core feedback in the plan's §14), or an interim artifact is decided, the gate
-  stays closed and the exit condition of the plan's L4 - "resolves from Maven Central in a clean
-  project" - is not met.
+- **A core artifact on Central.** The `element-call` POM depends on `io.element.android:matrix-rtc-android`,
+  which `element-hq/matrix-rust-rtc` publishes to GitHub Packages (a token even to read) and attaches to its
+  GitHub release, not yet to Maven Central. A Central release of `element-call` would resolve for a host only
+  with the Ivy repository over that release added by hand, which is what a Central release exists to avoid.
+  Until the core is on Central (`docs/FEEDBACK.md` item 29), the gate stays closed and the exit condition
+  of the plan's L4 - "resolves from Maven Central in a clean project" - is not met.
 
 Two more things a first release should say out loud in its notes: the core's `libmatrix_rtc_ffi.so` is
 not 16 KB aligned, which Android 16 tells users about on install, and the Element Call compatibility is
@@ -81,9 +79,9 @@ pinned to the state-event generation while the library builds against the releas
 
 ## What must never be published
 
-`rtc/local` publishes the locally built core AAR to the **local** Maven repository as
-`org.matrix.rtc:matrixrtc-android:<MATRIX_RTC_VERSION>`, so that the library's POMs name a real
-dependency and `tests/consumer` resolves it. That project has no remote repository configured, on purpose:
-the group belongs to the core, and a build of it from this repository must never appear on Central under
-it. When the core publishes its own artifact, the coordinate stays, this publication goes, and
-`call/impl` and `call/ui` switch to a catalog entry.
+`rtc/local` publishes the core AAR in place to the **local** Maven repository as
+`io.element.android:matrix-rtc-android:<MATRIX_RTC_VERSION>`, the core's own coordinate, so that
+`tests/consumer` and a host on layer 3 resolve the dependency the library's POMs name. That project has no
+remote repository configured, on purpose: the artifact is the core's to publish, and a copy of it - or a
+local build under its name - must never appear on Central from this repository. When the core is on
+Central, this publication and the Ivy repository in `settings.gradle.kts` go, and nothing else changes.

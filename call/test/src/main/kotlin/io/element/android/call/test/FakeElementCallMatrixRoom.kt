@@ -25,6 +25,8 @@ class FakeElementCallMatrixRoom(
     /** Ourselves, so a membership feed that waits for the members is not held up by default. */
     override val joinedMemberIds: Flow<List<UserId>> = flowOf(listOf(A_USER_ID)),
     private val sendStateEventResult: (String, String, String) -> Result<EventId> = { _, _, _ -> lambdaError() },
+    private val sendRoomEventResult: (String, String) -> Result<EventId> = { _, _ -> lambdaError() },
+    private val redactEventResult: (EventId, String?) -> Result<Unit> = { _, _ -> lambdaError() },
     private val sendDelayedEventResult: (String, String?, String, ULong) -> Result<String> = { _, _, _, _ -> lambdaError() },
     private val updateDelayedEventResult: (String, ElementCallDelayedEventAction) -> Result<Unit> = { _, _ -> lambdaError() },
     private val sendStickyEventResult: (String, String, ULong) -> Result<String> = { _, _, _ -> lambdaError() },
@@ -38,6 +40,14 @@ class FakeElementCallMatrixRoom(
 
     override suspend fun sendStateEvent(eventType: String, stateKey: String, contentJson: String): Result<EventId> {
         return sendStateEventResult(eventType, stateKey, contentJson)
+    }
+
+    override suspend fun sendRoomEvent(eventType: String, contentJson: String): Result<EventId> {
+        return sendRoomEventResult(eventType, contentJson)
+    }
+
+    override suspend fun redactEvent(eventId: EventId, reason: String?): Result<Unit> {
+        return redactEventResult(eventId, reason)
     }
 
     override suspend fun sendDelayedEvent(eventType: String, stateKey: String?, contentJson: String, delayMs: ULong): Result<String> {

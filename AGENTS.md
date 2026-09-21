@@ -41,7 +41,7 @@ The host decides where those composables sit. The plan this repository follows i
 | `call/ui` | `element-call-ui` | the ONLY Compose module: screen, tiles, bar, floating tile, PiP content, `ElementCallStyle`, previews | `call/api`; libwebrtc only in `…ui.video` |
 | `call/matrix` | `element-call-matrix` | the ONLY module importing `org.matrix.rustcomponents.sdk`: `ElementCallSdkTransport` and the `temporary/` widget-driver stopgap | `call/api`, the SDK |
 | `call/test` | `element-call-test` | fakes for every port and for the RTC service, fixtures, test-pattern frames | `call/api` |
-| `rtc/local` | local Maven only | `matrixrtc-release.aar` (gitignored): the pinned core release, or a local build; published to `~/.m2` as `org.matrix.rtc:matrixrtc-android` so the POMs resolve | |
+| `rtc/local` | local Maven only | `matrixrtc-release.aar` (gitignored): the pinned core release, or a local build. An Ivy repository in `settings.gradle.kts` serves it as `io.element.android:matrix-rtc-android`, the core's own coordinate; this project publishes it to `~/.m2` under the same coordinate so the POMs resolve on layer 3 | |
 | `bom` | `element-call-bom` | one version for the five artifacts | |
 | `tests/consumer` | not published | a separate Gradle build: a minified app over the published artifacts from `mavenLocal()` | the artifacts |
 | `sample` | not published | the harness: a Compose app over the fakes, the only Activity, the instrumented tests | `call/ui`, `call/impl`, `call/test`; never `call/matrix` |
@@ -135,8 +135,10 @@ until one does.
 Anything that exists because the SDK or the core does not yet expose what the call needs lives in a folder named
 `temporary/`, is annotated `@ElementCallTemporaryApi`, and has its removal recipe in `docs/FEEDBACK.md`. Today:
 
-- `rtc/local`: the core has no Maven coordinate, so the AAR is a local file, fetched from a pinned release asset. The
-  asset is a personal account's release checked by sha256 only; the provenance recipe is `docs/FEEDBACK.md` item 28.
+- `rtc/local` and the Ivy repository over it: the core (`io.element.android:matrix-rtc-android`) is on GitHub Packages,
+  which needs a token even to read, and not yet on Maven Central, so the AAR is fetched from its pinned release asset
+  and resolved as a file; a host resolves the same asset the same way (README, "Consuming a release"). The asset is
+  checked by sha256 only; the provenance recipe is `docs/FEEDBACK.md` item 28.
 - `call/matrix/…/temporary/widget/`: the widget-driver stopgap for membership, delayed events and to-device keys.
 
 ## The SDK edge

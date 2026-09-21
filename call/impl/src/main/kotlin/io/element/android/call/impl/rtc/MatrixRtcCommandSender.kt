@@ -12,6 +12,7 @@ import io.element.android.call.api.matrix.ElementCallMatrixException
 import io.element.android.call.api.matrix.ElementCallMatrixRoom
 import io.element.android.call.api.matrix.ElementCallMatrixTransport
 import io.element.android.call.api.rtc.id.DeviceId
+import io.element.android.call.api.rtc.id.EventId
 import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.call.api.rtc.id.UserId
 import kotlinx.coroutines.CancellationException
@@ -26,7 +27,7 @@ import timber.log.Timber
 /**
  * The outbound half of the bridge: everything the RTC core wants to put on the wire.
  *
- * Room-scoped commands - the state event, the delayed events, the sticky event - go to the
+ * Room-scoped commands - the state event, the room event, the delayed events, the sticky event - go to the
  * [ElementCallMatrixRoom] open for the room, looked up through [roomProvider] because a room is open
  * for as long as a call while this sender lives as long as the session. To-device messages are not
  * scoped to a room and go straight to the [transport].
@@ -121,19 +122,25 @@ internal class MatrixRtcCommandSender(
     }
 
     /**
-     * Message-like room events: the core sends reactions and raised hands this way. No port carries them
-     * yet - they arrive with the roster media model (plan 002) - so the core is told, in its own terms,
-     * that the transport cannot do it, and nothing the UI can trigger today reaches here.
+     * Message-like room events. The core sends its MSC4075 notification this way when the membership is room
+     * state - [io.element.android.call.api.rtc.MatrixRtcElementCallCompat.STATE_EVENTS], the mode this library
+     * pins - so this is what makes a call ring. It also carries reactions and raised hands, which nothing in
+     * the UI triggers yet (plan 002).
+     *
+     * @return the event id the homeserver assigned, which the core keeps for a raised hand so that [redactEvent]
+     * can lower it.
      */
     override suspend fun sendRoomEvent(roomId: String, eventType: String, contentJson: String): String {
-        Timber.i("MatrixRTC command: sendRoomEvent($eventType)")
-        throw CommandSenderException.NotSupported("sendRoomEvent($eventType): room events are not carried by this library yet")
+        return command("sendRoomEvent($eventType)") {
+            room(roomId).sendRoomEvent(eventType, contentJson).getOrThrow().value
+        }
     }
 
-    /** Redactions undo a reaction or a raised hand; see [sendRoomEvent]. */
+    /** A redaction lowers a raised hand: the core redacts the `m.reaction` it sent through [sendRoomEvent]. */
     override suspend fun redactEvent(roomId: String, eventId: String, reason: String?) {
-        Timber.i("MatrixRTC command: redactEvent")
-        throw CommandSenderException.NotSupported("redactEvent: redactions are not carried by this library yet")
+        command("redactEvent") {
+            room(roomId).redactEvent(EventId(eventId), reason).getOrThrow()
+        }
     }
 
     override suspend fun sendToDeviceMessage(
