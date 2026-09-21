@@ -9,12 +9,14 @@ call implementation for android: media, session, user interface and the Matrix s
 </p>
 
 
-**Status: pre-release.** The code is imported from the spike and severed from Element X; the sample app and the test
-harness exist. Nothing is published yet.
+**Status: release candidates.** Versions are `0.x` and every one of them may change the API; releases are GitHub
+releases whose assets a Gradle build resolves directly, see [Consuming a release](#consuming-a-release). Maven Central
+comes later ([RELEASING.md](RELEASING.md)).
 
 <!--- TOC -->
 
 * [Modules](#modules)
+* [Consuming a release](#consuming-a-release)
 * [Building](#building)
 * [The sample app](#the-sample-app)
 * [Host requirements](#host-requirements)
@@ -37,6 +39,58 @@ Five published artifacts under `io.element.android`, one version, plus `element-
 | not published | `sample` | the harness: a Compose app over the fakes, with the only Activity and the instrumented tests |
 
 See [AGENTS.md](AGENTS.md) for the boundaries between them.
+
+## Consuming a release
+
+The artifacts are not on Maven Central yet. Each [release](https://github.com/element-hq/element-call-android/releases)
+carries them as assets, laid out so that Gradle resolves them straight from the release through an Ivy repository,
+with their module metadata, POMs and sources; `SHA256SUMS` lists their checksums. The `matrix-rust-rtc` core they
+depend on, `io.element.android:matrix-rtc-android`, is resolved the same way from
+[its own releases](https://github.com/element-hq/matrix-rust-rtc/releases), which carry the bare AAR.
+
+In `settings.gradle.kts`, next to the repositories the build already has (both blocks are content-filtered, so
+nothing else is looked up there, and both go the day the artifacts are on Central):
+
+```kotlin
+dependencyResolutionManagement {
+    repositories {
+        ivy {
+            url = uri("https://github.com/element-hq/element-call-android/releases/download")
+            patternLayout { artifact("v[revision]/[artifact]-[revision](-[classifier]).[ext]") }
+            metadataSources { gradleMetadata() }
+            content {
+                includeModule("io.element.android", "element-call-bom")
+                includeModule("io.element.android", "element-call-api")
+                includeModule("io.element.android", "element-call")
+                includeModule("io.element.android", "element-call-ui")
+                includeModule("io.element.android", "element-call-matrix")
+                includeModule("io.element.android", "element-call-test")
+            }
+        }
+        ivy {
+            url = uri("https://github.com/element-hq/matrix-rust-rtc/releases/download")
+            patternLayout { artifact("v[revision]/[artifact]-[revision].[ext]") }
+            metadataSources { artifact() }
+            content { includeModule("io.element.android", "matrix-rtc-android") }
+        }
+        google()
+        mavenCentral()
+    }
+}
+```
+
+Then the dependencies, through the BOM so one version pins the five:
+
+```kotlin
+implementation(platform("io.element.android:element-call-bom:0.1.0-rc.1"))
+implementation("io.element.android:element-call-ui")
+implementation("io.element.android:element-call")
+implementation("io.element.android:element-call-matrix")
+testImplementation("io.element.android:element-call-test")
+```
+
+The core's version is fixed by the library's metadata; a host never names it. An unreleased build is consumed
+from the local Maven repository instead ([docs/local_stack.md](docs/local_stack.md), layer 3).
 
 ## Building
 

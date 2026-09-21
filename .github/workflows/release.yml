@@ -1,14 +1,30 @@
 name: Release
 
-# On a `v*` tag: validate that the tag matches VERSION_NAME and that everything is green, publish the
-# artifacts, build the sample APK and draft the GitHub release. See RELEASING.md for the prerequisites
-# and for why publishing to Maven Central is gated on a repository variable.
+# Cuts a release from a release/<version> branch, the way element-call-ios does: scripts/release.sh
+# validates the version, generates the notes from the pull request labels, closes the changelog section,
+# stamps VERSION_NAME, builds and tests, and lays out the release assets; this workflow then commits, tags
+# v<version>, pushes both atomically and creates the GitHub release with the assets, which is where a host
+# resolves the library from (README, "Consuming a release"). The changelog reaches main afterwards through an
+# ordinary pull request. See RELEASING.md, including why publishing to Maven Central is gated on a
+# repository variable.
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, bare semver: 0.1.0, or 0.2.0-rc.1 for a prerelease (the tag gets the v)"
+        required: true
+      dry_run:
+        description: "Validate, build and print, change nothing"
+        type: boolean
+        default: true
 
 permissions: {}
+
+# Never two at once, and never cancel one in flight: between the push and the release there is a moment
+# where the tag exists and the release does not, and cancelling there leaves that visible.
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 env:
   GRADLE_OPTS: -Dorg.gradle.jvmargs="-Xmx6g -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8 -XX:+HeapDumpOnOutOfMemoryError" -Dkotlin.daemon.jvm.options=-Xmx2g -XX:+UseG1GC
@@ -16,15 +32,49 @@ env:
 
 jobs:
   release:
-    name: Release ${{ github.ref_name }}
+    name: Release ${{ inputs.version }}${{ inputs.dry_run && ' (dry run)' || '' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    # Skip in forks
+    if: github.repository == 'element-hq/element-call-android'
+
+    # GITHUB_TOKEN is enough, and that is the point of releasing from a branch rather than from main. The
+    # release commit and tag go to release/<version>, which is not protected, so nothing here needs a
+    # personal access token that can bypass protection on main; the changelog reaches main afterwards
+    # through an ordinary reviewed pull request. contents:write for the branch, the tag and the release.
     permissions:
-      # To draft the GitHub release.
       contents: write
+
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The full history and all tags, because the script reads the tags reachable from HEAD to decide both
+      # what the previous release was and whether this version goes backwards. Credentials persist because
+      # the push below is this same checkout's; every other workflow drops them.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          persist-credentials: false
+          fetch-depth: 0
+          persist-credentials: true
+
+      # A dry run is a read; rehearse it from anywhere, including main. Publishing must come from
+      # release/<version>, and the branch name must agree with the version being released, so a run
+      # dispatched against the wrong branch cannot mint a tag off it.
+      - name: Check the branch
+        env:
+          BRANCH: ${{ github.ref_name }}
+          VERSION: ${{ inputs.version }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "Dry run on $BRANCH."
+            exit 0
+          fi
+          if [ "$BRANCH" != "release/$VERSION" ]; then
+            echo "::error::To release $VERSION, dispatch this from a branch named release/$VERSION (this is $BRANCH). See RELEASING.md."
+            exit 1
+          fi
+          echo "Releasing $VERSION from $BRANCH."
+
       - name: Fetch the matrix-rust-rtc AAR
         # The core is not on Maven Central yet: gradle.properties pins its release asset and sha256,
         # and the script fetches it into rtc/local (docs/local_stack.md, layer 1).
@@ -38,29 +88,124 @@ jobs:
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
         with:
           cache-read-only: true
-      - name: Validate the release
-        # Tag against VERSION_NAME, CHANGES.md section, build, tests, quality checks, local publish,
-        # minified consumer. The same script a developer rehearses with locally.
-        run: ./scripts/release.sh "$GITHUB_REF_NAME" $CI_GRADLE_ARG_PROPERTIES
+
+      # Validates the version, generates the notes from the pull request labels, prepends them to CHANGES.md,
+      # stamps VERSION_NAME, then builds, tests, checks, publishes locally, builds the minified consumer twice
+      # and lays out the release assets. Touches nothing but the working tree, build/ and ~/.m2, so it is the
+      # same command a maintainer runs to rehearse. Every refusal is in there.
+      - name: Prepare the release
+        id: prepare
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ inputs.version }}
+          DRY_RUN_FLAG: ${{ inputs.dry_run && '--dry-run' || '' }}
+        # $DRY_RUN_FLAG unquoted on purpose: it must vanish when empty rather than become an empty
+        # argument. It is a literal chosen by the expression above, never user input.
+        # shellcheck disable=SC2086
+        run: ./scripts/release.sh "$VERSION" $DRY_RUN_FLAG
+
+      # The two files the release commit will carry, shown while a dry run is the only chance to read them
+      # before the tag exists.
+      - name: Show the release diff
+        run: git --no-pager diff -- CHANGES.md gradle.properties
+
+      - name: Build the sample APK
+        run: ./gradlew :sample:assembleDebug $CI_GRADLE_ARG_PROPERTIES
+
+      # Uploaded on every run, before anything is published. On a dry run this is the output to read; on a
+      # real run it is the recovery path: if release creation fails after the tag has been pushed, the notes
+      # and assets it needed are here, and RELEASING.md's "If it fails halfway" says what to do with them.
+      - name: Upload the notes, changelog and assets
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-${{ inputs.version }}${{ inputs.dry_run && '-dry-run' || '' }}
+          path: |
+            ${{ steps.prepare.outputs.notes }}
+            CHANGES.md
+            gradle.properties
+            build/release-assets/
+            sample/build/outputs/apk/debug/sample-debug.apk
+          retention-days: 30
+          if-no-files-found: error
+
+      # Everything from here changes the world, so the dry run stops here. dry_run defaults to true: the
+      # normal path is to run this workflow twice.
+
+      # One --atomic push, so the tag and the changelog entry describing it land together or not at all, and
+      # the tagged tree contains its own changelog and its own version. Path-explicit add, not `git add -A`:
+      # a new generated file has to be named here or it never reaches the tag.
+      - name: Commit, tag and push
+        if: ${{ !inputs.dry_run }}
+        env:
+          VERSION: ${{ steps.prepare.outputs.version }}
+          TAG: ${{ steps.prepare.outputs.tag }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          git config user.name "Element CI"
+          git config user.email "ci@element.io"
+          git add CHANGES.md gradle.properties
+          git commit -m "Release $VERSION"
+          git tag -a "$TAG" -m "$TAG"
+          git push --atomic origin "HEAD:refs/heads/$BRANCH" "refs/tags/$TAG"
+
+      # Idempotent, because the tag is pushed in the step above and re-dispatching the same version would be
+      # refused for existing already. If this step is what failed, running the workflow again cannot be the
+      # fix, so it must be able to finish the job on a tag that is already there rather than erroring on a
+      # release that is already there.
+      #
+      # --verify-tag so it refuses to invent a tag if the push above somehow did not land. --prerelease for
+      # anything with a hyphen in it, so an rc never becomes "latest". The assets are what a host's Ivy
+      # repository resolves, so their names are the artifacts' own (<artifactId>-<version>[-classifier].<ext>)
+      # and must not change.
+      - name: Create the release
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.prepare.outputs.tag }}
+          PRERELEASE: ${{ steps.prepare.outputs.prerelease }}
+          NOTES: ${{ steps.prepare.outputs.notes }}
+        run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Release $TAG already exists; leaving it alone."
+          else
+            args=(--verify-tag --title "$TAG" --notes-file "$NOTES")
+            if [ "$PRERELEASE" = "yes" ]; then
+              args+=(--prerelease)
+            fi
+            gh release create "$TAG" "${args[@]}" build/release-assets/* sample/build/outputs/apk/debug/sample-debug.apk
+          fi
+          gh release view "$TAG" --json url,isPrerelease,tagName,assets --jq '{url, isPrerelease, tagName, assets: [.assets[].name]}'
+
       - name: Publish to Maven Central
         # Gated: a Central release is immutable and public. Set MAVEN_CENTRAL_PUBLISH=true once the
         # prerequisites in RELEASING.md are met (a Central Portal account for io.element.android, the
-        # signing key, and a core artifact the published POMs can name).
-        if: vars.MAVEN_CENTRAL_PUBLISH == 'true'
+        # signing key, and the core on Central).
+        if: ${{ !inputs.dry_run && vars.MAVEN_CENTRAL_PUBLISH == 'true' }}
         env:
           ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.MAVEN_SIGNING_KEY }}
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.MAVEN_SIGNING_KEY_PASSWORD }}
         run: ./gradlew publishAndReleaseToMavenCentral -PRELEASE_SIGNING_ENABLED=true $CI_GRADLE_ARG_PROPERTIES
-      - name: Build the sample APK
-        run: ./gradlew :sample:assembleDebug $CI_GRADLE_ARG_PROPERTIES
-      - name: Draft the GitHub release
+
+      # The tag is the release and it is already public; this pull request only carries the changelog entry
+      # and the version back to main. Opened by hand, deliberately: a pull request opened with GITHUB_TOKEN
+      # does not trigger other workflows, so the checks would not run on it.
+      - name: Say what is left to do
+        if: ${{ !inputs.dry_run }}
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.prepare.outputs.tag }}
+          BRANCH: ${{ github.ref_name }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            --draft \
-            --title "$GITHUB_REF_NAME" \
-            --notes-file <(sed -n "/^## ${GITHUB_REF_NAME#v}/,/^## /p" CHANGES.md | sed '$d') \
-            sample/build/outputs/apk/debug/sample-debug.apk
+          {
+            echo "### Released $TAG"
+            echo
+            echo "- Tag and release: [$TAG]($REPO_URL/releases/tag/$TAG)"
+            echo
+            echo "**Now open the pull request** that carries the changelog entry and VERSION_NAME back to \`main\`:"
+            echo
+            echo "  $REPO_URL/compare/main...$BRANCH?expand=1"
+            echo
+            echo "Merge it with a **merge commit**, not a squash, so the tagged commit stays an ancestor of \`main\`. See RELEASING.md."
+          } >> "$GITHUB_STEP_SUMMARY"

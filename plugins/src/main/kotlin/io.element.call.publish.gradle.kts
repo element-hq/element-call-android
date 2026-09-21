@@ -21,6 +21,11 @@ import com.vanniktech.maven.publish.SourcesJar
  *
  * Signing is off by default so a local publish needs no key. `release.yml` turns it on with
  * `-PRELEASE_SIGNING_ENABLED=true` and in-memory GPG credentials.
+ *
+ * A second target, `dist`, is a Maven layout under the root `build/dist`, which `scripts/release.sh`
+ * flattens into the GitHub release's assets: until Maven Central, that release is where a host resolves
+ * the library from (README, "Consuming a release"). Only modules on this plugin reach it, so the core in
+ * `rtc/local` never does.
  */
 plugins {
     id("com.vanniktech.maven.publish")
@@ -51,6 +56,15 @@ mavenPublishing {
                 url.set("https://raw.githubusercontent.com/element-hq/element-call-android/main/LICENSE-COMMERCIAL")
                 distribution.set("repo")
             }
+        }
+    }
+}
+
+publishing {
+    repositories {
+        maven {
+            name = "dist"
+            url = rootProject.layout.buildDirectory.dir("dist").get().asFile.toURI()
         }
     }
 }

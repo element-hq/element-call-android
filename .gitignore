@@ -58,3 +58,6 @@ checkouts/**
 # The locally built matrix-rust-rtc AAR and its dated copies (see docs/local_stack.md, layer 1)
 rtc/local/*.aar
 rtc/local/sdks/
+
+# What scripts/release.sh writes while rehearsing a release (see RELEASING.md)
+release-notes.md
