@@ -247,6 +247,9 @@ fun anElementCallScreenState(
     // Zero rather than null so a connected preview shows a duration; the label reads a fixed value
     // under inspection anyway.
     connectedAtElapsedMs: Long? = 0L,
+    // Fixed rather than the stamped ones, so the screenshots do not change at every release.
+    libraryVersion: String = "0.4.0",
+    coreVersion: String = "0.3.0",
     eventSink: (ElementCallScreenEvent) -> Unit = {},
 ) = ElementCallScreenState(
     connection = connection,
@@ -283,6 +286,8 @@ fun anElementCallScreenState(
             )
         }
         .toImmutableList(),
+    libraryVersion = libraryVersion,
+    coreVersion = coreVersion,
     eventSink = eventSink,
 )
 

@@ -46,6 +46,8 @@ data class ElementCallIcons(
     val selected: ImageVector,
     /** The member-count pill. */
     val participants: ImageVector,
+    /** The top bar's more-options button, which opens the overflow menu. */
+    val overflow: ImageVector,
 ) {
     companion object {
         /** The bundled defaults. Resolved in composition, as vector resources are. */
@@ -66,6 +68,7 @@ data class ElementCallIcons(
             minimize = ImageVector.vectorResource(R.drawable.ic_element_call_collapse),
             selected = ImageVector.vectorResource(R.drawable.ic_element_call_check),
             participants = ImageVector.vectorResource(R.drawable.ic_element_call_user_profile),
+            overflow = ImageVector.vectorResource(R.drawable.ic_element_call_overflow_vertical),
         )
     }
 }

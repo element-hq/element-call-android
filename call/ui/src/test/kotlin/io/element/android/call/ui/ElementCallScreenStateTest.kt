@@ -15,6 +15,7 @@ import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.ElementCallSnapshot
+import io.element.android.call.api.ElementCallVersion
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
 import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
@@ -58,6 +59,8 @@ class ElementCallScreenStateTest {
             assertThat(initialState.isMicrophonePermissionGranted).isFalse()
             assertThat(initialState.memberCount).isEqualTo(0)
             assertThat(initialState.tiles).isEmpty()
+            assertThat(initialState.libraryVersion).isEqualTo(ElementCallVersion.library)
+            assertThat(initialState.coreVersion).isEqualTo(ElementCallVersion.core)
             // "Not yet" is not "over": the screen must not dismiss a call that has not started.
             assertThat(closeCount).isEqualTo(0)
         }

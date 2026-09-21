@@ -109,6 +109,13 @@ data class ElementCallScreenState(
     val tiles: ImmutableList<CallParticipant>,
     /** Who the controller has settled on for the big tile. See `ElementCallSnapshot.spotlightMemberId`. */
     val spotlightMemberId: String?,
+    /**
+     * What the overflow menu shows: the library version and the core it was built against. Carried in
+     * state rather than read from `ElementCallVersion` where they are drawn, so previews and screenshots
+     * show a fixed value rather than one that changes with every release.
+     */
+    val libraryVersion: String,
+    val coreVersion: String,
     val eventSink: (ElementCallScreenEvent) -> Unit,
 ) {
     /**

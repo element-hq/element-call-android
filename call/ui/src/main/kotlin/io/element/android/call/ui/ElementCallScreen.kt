@@ -145,7 +145,8 @@ fun ElementCallScreen(
 }
 
 /**
- * Who the call is with, centred as the design has it, with the way out of the screen at the start.
+ * Who the call is with, centred as the design has it, with the way out of the screen at the start
+ * and the overflow menu at the end.
  *
  * In a DM the room's name *is* the other person's name, but it arrives asynchronously, so until it
  * does the person in the spotlight stands in for it rather than leaving the bar blank.
@@ -167,6 +168,7 @@ private fun CallTopBar(state: ElementCallScreenState, modifier: Modifier = Modif
                 tint = ElementCallTheme.colors.iconPrimary,
             )
         }
+        CallOverflowMenu(state = state, modifier = Modifier.align(Alignment.CenterEnd))
         Text(
             text = state.roomName ?: state.spotlightParticipant?.displayName ?: "",
             style = ElementCallTheme.typography.bodyLgMedium,
@@ -176,7 +178,7 @@ private fun CallTopBar(state: ElementCallScreenState, modifier: Modifier = Modif
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier
                 .align(Alignment.Center)
-                // Room for the button on both sides, so the title is centred on the screen rather
+                // Room for the buttons on both sides, so the title is centred on the screen rather
                 // than on what is left of it.
                 .padding(horizontal = TOP_BAR_BUTTON_ROOM),
         )
