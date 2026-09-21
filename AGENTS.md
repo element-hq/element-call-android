@@ -150,15 +150,25 @@ library runs on it; an older one fails at configuration time. When bumping the S
 
 ## Releasing
 
-`VERSION_NAME` in `gradle.properties` is the version; semver `0.x`, minor for an API or SDK-pin change, patch otherwise.
-`./scripts/release.sh v<version>` rehearses a release without touching any remote; `release.yml` runs it on a `v*` tag
-and publishes only behind the `MAVEN_CENTRAL_PUBLISH` gate. `./gradlew publishToMavenLocal -PVERSION_NAME=0.0.0-local`
-is how a host consumes an unreleased build. Details, prerequisites and what must never be published: `RELEASING.md`.
+A release is a tag `v<version>` and the GitHub release on it, whose assets a host resolves through an Ivy
+repository until Maven Central (README, "Consuming a release"). Semver `0.x`, minor for an API or SDK-pin change,
+patch otherwise. **Nobody bumps a version in a pull request**: `scripts/release.sh` stamps `VERSION_NAME` and closes
+the `## Unreleased` section of `CHANGES.md` with notes generated from the `PR-` labels, and `release.yml`, dispatched
+by hand on a `release/<version>` branch, commits that, tags, pushes atomically and creates the release; the changelog
+reaches `main` through an ordinary pull request afterwards, merged with a merge commit. Same process as
+element-call-ios. `./scripts/release.sh <version> --skip-build` rehearses the notes locally (needs `gh auth login`);
+without the flag it also builds and lays out the assets in `build/release-assets`. Maven Central stays behind the
+`MAVEN_CENTRAL_PUBLISH` gate. Details, refusals and what must never be published: `RELEASING.md`.
 
 ## Pull requests
 
-- Sentence-style titles; the title is the changelog entry. Exactly one `PR-` label (see `.github/release.yml`).
-- 500 production lines max; tests can be larger. No history rewrites. Commits have a title and a description.
+- Sentence-style titles; the title is the changelog entry, generated at release time from the `PR-` label (exactly
+  one, see `.github/release.yml`; `PR-Task` keeps a change out of the notes).
+- 500 production lines max; tests can be larger. No history rewrites.
+- Commits have a title and a description of a few lines: what changed and why, the non-obvious decision if there
+  was one. No narrative; nobody reads a long one, and the why is what a later reader needs.
+- `CHANGES.md`'s `## Unreleased` is for what a host has to act on, a line or two per item. The release notes are
+  the pull request titles; do not restate them there.
 - Add the `Record-Screenshots` label when previews change.
 - Plans are frozen once implementation starts; discoveries go in the plan's appendix, not its body.
 

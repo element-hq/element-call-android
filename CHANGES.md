@@ -1,7 +1,13 @@
 # Changes
 
-The library's changelog, one section per release, newest first. The matrix-rust-rtc core's own history is
-in `docs/CHANGELOG.md`. Entries are the pull request titles (`CONTRIBUTING.md`).
+Entries under a released version are **generated when the release is cut**, from the `PR-` label on each merged
+pull request (`.github/release.yml`), see [RELEASING.md](RELEASING.md). There is nothing to add here for an
+ordinary change: label the pull request and give it a title that reads as a changelog line.
+
+`Unreleased` is for the exception, something a host has to **act** on: a renamed port method, a port gaining a
+requirement, a new build setting, a core or SDK bump that changes what the host resolves. Write that here by hand,
+and the release carries it into its own section above the generated list, where a host bumping the version will
+actually read it. The matrix-rust-rtc core's own history is in `docs/CHANGELOG.md`.
 
 ## Unreleased
 

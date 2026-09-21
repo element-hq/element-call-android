@@ -122,8 +122,10 @@ Element X's settings turn the property into a `mavenLocal()` repository filtered
 The library side exists: `publishToMavenLocal` publishes the five artifacts and the BOM through the
 `io.element.call.publish` plugin, and, from `rtc/local`, the core file as
 `io.element.android:matrix-rtc-android:<MATRIX_RTC_VERSION>` (the coordinate the published POMs name; `RELEASING.md`
-says why it goes no further than `~/.m2`). `tests/consumer` is a minified app built this way on every change.
-Element X's `-PelementCallLocalVersion` property arrives with its integration pull requests (plan §10, PR 2).
+says why it goes no further than `~/.m2`). `tests/consumer` is a minified app built this way on every change, and,
+with `-PelementCallDistDir`, against a directory of release assets the way a host resolves a release (README,
+"Consuming a release"). Element X's `-PelementCallLocalVersion` property arrives with its integration pull requests
+(plan §10, PR 2).
 
 ## Two rules
 
