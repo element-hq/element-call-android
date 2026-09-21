@@ -11,8 +11,10 @@ package io.element.android.call.ui
 
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onNodeWithContentDescription
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.v2.runAndroidComposeUiTest
 import io.element.android.call.tests.testutils.EventsRecorder
 import io.element.android.call.tests.testutils.assertNodeWithTextIsDisplayed
@@ -76,6 +78,23 @@ class ElementCallScreenTest : RobolectricTest() {
                 ElementCallScreenEvent.SwitchCamera,
             )
         )
+    }
+
+    /** The overflow menu says which Element Call this is, and asks the controller for nothing. */
+    @Test
+    fun `the overflow menu shows the versions`() = runAndroidComposeUiTest<ComponentActivity> {
+        val events = EventsRecorder<ElementCallScreenEvent>()
+        setContent {
+            ElementCallScreen(
+                state = anElementCallScreenState(libraryVersion = "1.2.3", coreVersion = "4.5.6", eventSink = events),
+            )
+        }
+
+        clickOnContentDescription(R.string.element_call_a11y_more_options)
+
+        onNodeWithText(activity!!.getString(R.string.element_call_version_library, "1.2.3")).assertIsDisplayed()
+        onNodeWithText(activity!!.getString(R.string.element_call_version_core, "4.5.6")).assertIsDisplayed()
+        events.assertEmpty()
     }
 
     /** There is no camera to switch while it is off, and a button that does nothing is worse than a disabled one. */

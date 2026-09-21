@@ -17,6 +17,7 @@ import androidx.compose.runtime.setValue
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.ElementCallSnapshot
+import io.element.android.call.api.ElementCallVersion
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import kotlinx.collections.immutable.ImmutableList
@@ -167,5 +168,7 @@ private fun ElementCallSnapshot?.toState(
     connectedAtElapsedMs = this?.connectedAtElapsedMs,
     tiles = tiles,
     spotlightMemberId = this?.spotlightMemberId,
+    libraryVersion = ElementCallVersion.library,
+    coreVersion = ElementCallVersion.core,
     eventSink = eventSink,
 )

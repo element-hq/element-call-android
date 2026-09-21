@@ -19,6 +19,7 @@
     <string name="element_call_a11y_start_screen_share">Share your screen</string>
     <string name="element_call_a11y_stop_screen_share">Stop sharing your screen</string>
     <string name="element_call_a11y_minimize_call">Minimize call</string>
+    <string name="element_call_a11y_more_options">More options</string>
     <string name="element_call_a11y_selected">Selected</string>
     <string name="element_call_action_stop">Stop</string>
     <string name="element_call_audio_output_title">Audio output</string>
@@ -34,4 +35,6 @@
     <string name="element_call_call_ended">Call ended</string>
     <string name="element_call_call_failed">Call failed</string>
     <string name="element_call_call_in_progress">Call in progress</string>
+    <string name="element_call_version_library">Element Call Android %1$s</string>
+    <string name="element_call_version_core">matrix-rust-rtc %1$s</string>
 </resources>

@@ -17,6 +17,17 @@ plugins {
 
 android {
     namespace = "io.element.android.call.api"
+
+    // The only generated code in the library: the version the artifacts are published as and the core
+    // release they were built against, for ElementCallVersion. Both come from the root gradle.properties,
+    // so a local publish with -PVERSION_NAME=... stamps what it publishes.
+    buildFeatures {
+        buildConfig = true
+    }
+    defaultConfig {
+        buildConfigField("String", "VERSION_NAME", "\"${project.property("VERSION_NAME")}\"")
+        buildConfigField("String", "MATRIX_RTC_VERSION", "\"${project.property("MATRIX_RTC_VERSION")}\"")
+    }
 }
 
 dependencies {
