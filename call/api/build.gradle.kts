@@ -1,3 +1,5 @@
+import extension.testCommonDependencies
+
 /*
  * Copyright (c) 2026 Element Creations Ltd.
  *
@@ -21,4 +23,6 @@ dependencies {
     api(libs.coroutines.core)
     api(libs.kotlinx.collections.immutable)
     implementation(libs.androidx.annotationjvm)
+
+    testCommonDependencies(libs)
 }

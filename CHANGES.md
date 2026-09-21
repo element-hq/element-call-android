@@ -22,6 +22,9 @@ Everything so far: the first extraction of the native call from the Element X An
 - `element-call-test`: fakes for every port, the RTC service fakes, fixtures, and `ElementCallTestPattern`.
 - The core is matrix-rust-rtc v0.2.0-rc.1, fetched from its release asset by `tools/rtc/fetch-rust-rtc`
   against the sha256 pinned in `gradle.properties`; its bindings live in `org.matrix.rtc`.
+- Security hardening from the 2026-09-18 audit: no TLS bypass in the screenshot push, no persisted token while
+  a pull request's build runs, network-derived values reach workflow shells through `env`, and
+  `ElementCallOpenIdToken.toString()` redacts the bearer token. The core's provenance gap is `docs/FEEDBACK.md` item 28.
 - Known limits of this first version: the Element Call compatibility is pinned to the state-event
   generation; the core AAR has no Maven coordinate of its own; the core's raised hands and reactions are
   read and dropped, and the room events they send are refused as unsupported, until the roster media model

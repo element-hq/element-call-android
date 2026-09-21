@@ -18,6 +18,9 @@ jobs:
       # Need write permissions on PRs to remove the label "Record-Screenshots"
       pull-requests: write
       contents: write
+    # This job runs the pull request's own Gradle build with the write token above. That is safe only under
+    # `pull_request`, where GitHub hands a fork a read-only token whatever is declared here: never switch it to
+    # `pull_request_target`, which would run a stranger's build script with write access to this repository.
     name: Record screenshots on branch ${{ github.event.pull_request.head.ref || github.ref_name }}
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' || github.event.label.name == 'Record-Screenshots'
