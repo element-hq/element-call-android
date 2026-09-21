@@ -132,9 +132,11 @@ code lands.
 4. Picture-in-picture: `android:supportsPictureInPicture="true"` and `smallestScreenSize` in `configChanges` on
    the host Activity; `ElementCallPictureInPicture.attach(activity, controller)` from its `onCreate`, and
    `ElementCallPictureInPicture.onUserLeaveHint(activity, controller)` from its `onUserLeaveHint()` override.
-5. Screen sharing: the library's service declares `microphone|camera`; a host that turns screen sharing on adds
-   `FOREGROUND_SERVICE_MEDIA_PROJECTION` and the `mediaProjection` type to `ElementCallForegroundService` in its
-   own manifest, with `tools:node="merge"`. That type is Play-reviewed, so the library does not declare it.
+5. Screen sharing is off by default. A host turns it on with `ElementCallOptions(isScreenSharingEnabled = true)`
+   and, in the same change, adds `FOREGROUND_SERVICE_MEDIA_PROJECTION` and the `mediaProjection` type to
+   `ElementCallForegroundService` in its own manifest, with `tools:node="merge"`; the library's service declares
+   only `microphone|camera`. That type is Play-reviewed, so the library does not declare it, and without it the
+   first share is a `SecurityException` on Android 14+.
 
 ## Documentation
 

@@ -293,8 +293,8 @@ private fun ConnectingPlaceholder(state: ElementCallScreenState) {
 @Composable
 private fun CallControlsBar(state: ElementCallScreenState, modifier: Modifier = Modifier) {
     Row(
-        // Tighter than it looks like it should be, because six 52dp buttons do not fit across a
-        // small phone with room to breathe between them. See BUTTON_SIZE.
+        // Tighter than it looks like it should be, because six 52dp buttons - a group call with screen
+        // sharing on - do not fit across a small phone with room to breathe between them. See BUTTON_SIZE.
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 20.dp),
@@ -319,14 +319,18 @@ private fun CallControlsBar(state: ElementCallScreenState, modifier: Modifier = 
             isActive = !state.isCameraEnabled,
         )
         AudioDeviceButton(state)
-        RoundCallButton(
-            onClick = { state.eventSink(ElementCallScreenEvent.ToggleScreenShare) },
-            icon = if (state.isScreenSharing) ElementCallTheme.icons.shareScreenActive else ElementCallTheme.icons.shareScreen,
-            contentDescription = stringResource(
-                if (state.isScreenSharing) R.string.element_call_a11y_stop_screen_share else R.string.element_call_a11y_start_screen_share
-            ),
-            isActive = state.isScreenSharing,
-        )
+        // Absent rather than disabled when the host has not opted in: there is nothing the user could
+        // do to make it work, and a button that never does anything is a bug report.
+        if (state.isScreenShareAvailable) {
+            RoundCallButton(
+                onClick = { state.eventSink(ElementCallScreenEvent.ToggleScreenShare) },
+                icon = if (state.isScreenSharing) ElementCallTheme.icons.shareScreenActive else ElementCallTheme.icons.shareScreen,
+                contentDescription = stringResource(
+                    if (state.isScreenSharing) R.string.element_call_a11y_stop_screen_share else R.string.element_call_a11y_start_screen_share
+                ),
+                isActive = state.isScreenSharing,
+            )
+        }
         // In a one-to-one call this lives on our thumbnail instead - see CallTileLayout - which is
         // both where the design puts it and one fewer button to fit across the bar.
         if (state.layout == CallLayout.Group) {
@@ -408,7 +412,8 @@ private fun RoundCallButton(
  * 48dp rather than the 52 this started at: screen share made six buttons in a group call, and six
  * 52dp circles come to 312dp, which leaves nothing between them on a 360dp phone. Still at the 48dp
  * minimum touch target, so nothing is harder to hit - only closer together. A one-to-one call has
- * five and could afford more, but the two bars should not be different sizes.
+ * five and could afford more, as does a host that leaves screen sharing off, but the bar should not
+ * change size with the layout or the host's options.
  */
 private val BUTTON_SIZE = 48.dp
 

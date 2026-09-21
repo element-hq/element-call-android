@@ -74,6 +74,8 @@ data class ElementCallScreenState(
      * is concerned: tapping the button is what resolves either.
      */
     val isCameraPermissionGranted: Boolean,
+    /** Whether the host has turned screen sharing on. False, and the bar has no share button at all. */
+    val isScreenShareAvailable: Boolean,
     /**
      * Whether we are sharing our screen.
      *

@@ -35,8 +35,8 @@
           ~
           ~ Screen sharing needs the `mediaProjection` type too. It is Play-reviewed and a library
           ~ manifest merges into every host, so the host declares it, with its permission, when it turns
-          ~ screen sharing on (README, host requirements): `tools:node="merge"` lets the two declarations
-          ~ combine.
+          ~ screen sharing on with `ElementCallOptions.isScreenSharingEnabled` (README, host requirements):
+          ~ `tools:node="merge"` lets the two declarations combine.
           -->
         <service
             android:name=".services.ElementCallForegroundService"

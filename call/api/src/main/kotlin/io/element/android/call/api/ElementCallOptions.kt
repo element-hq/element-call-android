@@ -30,4 +30,14 @@ data class ElementCallOptions(
     val logging: MatrixRtcLoggingConfiguration? = null,
     /** The ongoing-call notification the foreground service posts. */
     val notification: ElementCallNotificationConfig = ElementCallNotificationConfig(),
+    /**
+     * Whether the user may share their screen. Off, the control bar has no share button and the
+     * controller refuses to start a share.
+     *
+     * Off by default because turning it on is not free for the host: publishing a projection needs the
+     * `mediaProjection` foreground service type and `FOREGROUND_SERVICE_MEDIA_PROJECTION`, both
+     * Play-reviewed, which the host declares on `ElementCallForegroundService` in its own manifest
+     * (README, host requirements). Enabling this without them is a `SecurityException` on Android 14+.
+     */
+    val isScreenSharingEnabled: Boolean = false,
 )

@@ -177,6 +177,8 @@ enum class SampleFixture(val key: String, val title: String, val description: St
             isDm = isDm,
             isMicrophonePermissionGranted = true,
             isCameraPermissionGranted = true,
+            // The sample opts in, as its manifest does: it is where the share button is walked through by hand.
+            isScreenShareAvailable = true,
             isCameraEnabled = participants.any { it.isLocal && it.streams.any { stream -> stream.kind == MatrixRtcStreamKind.CAMERA && !stream.isMuted } },
             memberCount = participants.size,
             roomMembers = (ROOM_MEMBERS +

@@ -91,6 +91,7 @@ class ElementCallScreenStateTest {
                 isCameraEnabled = true,
                 isFrontCamera = false,
                 isCameraPermissionGranted = true,
+                isScreenShareAvailable = true,
                 isScreenSharing = true,
                 isTileStatsVisible = true,
                 audioLevels = persistentMapOf(A_REMOTE_MEMBER_ID to MatrixRtcAudioLevel(level = 0.5f, frameCount = 42)),
@@ -108,6 +109,7 @@ class ElementCallScreenStateTest {
             assertThat(state.isCameraEnabled).isTrue()
             assertThat(state.isFrontCamera).isFalse()
             assertThat(state.isCameraPermissionGranted).isTrue()
+            assertThat(state.isScreenShareAvailable).isTrue()
             assertThat(state.isScreenSharing).isTrue()
             assertThat(state.isTileStatsVisible).isTrue()
             assertThat(state.audioLevels[A_REMOTE_MEMBER_ID]).isEqualTo(MatrixRtcAudioLevel(level = 0.5f, frameCount = 42))
@@ -197,7 +199,7 @@ class ElementCallScreenStateTest {
      */
     @Test
     fun `sharing the screen starts at the system dialog and stopping does not`() = runTest {
-        val controller = FakeElementCallController(initialState = aConnectedSnapshot())
+        val controller = FakeElementCallController(initialState = aConnectedSnapshot().copy(isScreenShareAvailable = true))
         var requestCount = 0
 
         moleculeFlow(RecompositionMode.Immediate) {
@@ -207,7 +209,7 @@ class ElementCallScreenStateTest {
             assertThat(requestCount).isEqualTo(1)
             assertThat(controller.screenShareTokens).isEmpty()
 
-            controller.state.value = aConnectedSnapshot().copy(isScreenSharing = true)
+            controller.state.value = aConnectedSnapshot().copy(isScreenShareAvailable = true, isScreenSharing = true)
             consumeItemsUntilPredicate { it.isScreenSharing }.last().eventSink(ElementCallScreenEvent.ToggleScreenShare)
 
             assertThat(requestCount).isEqualTo(1)
