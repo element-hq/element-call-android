@@ -135,7 +135,8 @@ until one does.
 Anything that exists because the SDK or the core does not yet expose what the call needs lives in a folder named
 `temporary/`, is annotated `@ElementCallTemporaryApi`, and has its removal recipe in `docs/FEEDBACK.md`. Today:
 
-- `rtc/local`: the core has no Maven coordinate, so the AAR is a local file, fetched from a pinned release asset.
+- `rtc/local`: the core has no Maven coordinate, so the AAR is a local file, fetched from a pinned release asset. The
+  asset is a personal account's release checked by sha256 only; the provenance recipe is `docs/FEEDBACK.md` item 28.
 - `call/matrix/…/temporary/widget/`: the widget-driver stopgap for membership, delayed events and to-device keys.
 
 ## The SDK edge

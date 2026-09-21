@@ -16,4 +16,11 @@ data class ElementCallOpenIdToken(
     val tokenType: String,
     val matrixServerName: String,
     val expiresInSeconds: Long,
-)
+) {
+    /**
+     * Redacted on purpose: a data class prints every field, and this one is a bearer credential. A log line
+     * that interpolates the whole object must not leak it.
+     */
+    override fun toString(): String =
+        "ElementCallOpenIdToken(accessToken=<redacted>, tokenType=$tokenType, matrixServerName=$matrixServerName, expiresInSeconds=$expiresInSeconds)"
+}

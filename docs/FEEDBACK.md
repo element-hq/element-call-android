@@ -124,6 +124,18 @@ between entries.
     `.so` with the NDK's 16 KB flags (`-Wl,-z,max-page-size=16384`) and check it with `check_elf_alignment.sh`
     in the release pipeline. Seen on the Android 16 emulator; also flagged by lint's `Aligned16KB` on every
     build of `call/ui`. **Fixed in v0.2.0-rc.1**: every `PT_LOAD` segment of the three `.so` files is 16 KB aligned.
+28. **The release this library pins is published from a personal account, and nothing but a checksum vouches
+    for it.** `gradle.properties` fetches `v0.2.0-rc.1` from `BillCarsonFr/matrix-rust-rtc`; `element-hq/matrix-rust-rtc`
+    exists but holds no code yet. The asset is built by the core's own `release.yml` and uploaded by
+    `github-actions[bot]`, and the sha256 in `gradle.properties` matches the digest GitHub recorded for it, so the
+    file cannot be swapped under us - but the checksum only says the bytes did not change, not where they came
+    from, and every audio frame, video frame, media key and OpenID token this library handles ends up inside them.
+    Three things would close the gap, in order: publish releases from `element-hq/matrix-rust-rtc` (the URL in
+    `gradle.properties` is the only line that changes here); pin the actions in the core's `release.yml` by commit
+    SHA the way this repository does, rather than `@v4` and `@stable`; and attest the build with
+    `actions/attest-build-provenance`, so that `tools/rtc/fetch-rust-rtc` can run `gh attestation verify` on the
+    AAR and refuse one that was not built by that workflow from that commit. Found by the security audit of this
+    repository, 2026-09-18.
 
 ### Deployment
 

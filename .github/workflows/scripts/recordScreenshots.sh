@@ -57,7 +57,6 @@ echo "Record screenshots"
 ./gradlew recordPaparazziDebug --stacktrace $GRADLE_ARGS
 
 echo "Committing changes"
-git config http.sslVerify false
 
 if [[ -z ${INPUT_AUTHOR_NAME} ]]; then
   git config user.name "ElementBot"

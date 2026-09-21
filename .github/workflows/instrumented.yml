@@ -50,7 +50,7 @@ jobs:
       - name: Run the sample's instrumented tests
         # The floating tile's drag, the strip's paging and a tile's pixels: what only a touch pipeline
         # and a GL surface can answer for (plan §7.2).
-        uses: reactivecircus/android-emulator-runner@c9c93e6ba9c4194322e114c40970d5983d9a07cc # v2.38.0
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 34
           arch: x86_64

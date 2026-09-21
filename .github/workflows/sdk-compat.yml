@@ -50,15 +50,24 @@ jobs:
         uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
         with:
           cache-read-only: true
+      # The version strings come from Maven Central's metadata, so they reach the shell as environment
+      # variables, never interpolated into the script: an expression in `run:` is expanded before the shell
+      # sees it and would execute whatever the metadata contained.
       - name: "Leg A: compile and test against the newest SDK"
         if: steps.sdk.outputs.latest != steps.sdk.outputs.pinned
-        run: ./gradlew :call:matrix:testDebugUnitTest -PmatrixSdkVersion=${{ steps.sdk.outputs.latest }} $CI_GRADLE_ARG_PROPERTIES
+        env:
+          LATEST: ${{ steps.sdk.outputs.latest }}
+        run: ./gradlew :call:matrix:testDebugUnitTest -PmatrixSdkVersion="$LATEST" $CI_GRADLE_ARG_PROPERTIES
       - name: "Leg B: our bytecode on the newest SDK at test runtime"
         if: steps.sdk.outputs.latest != steps.sdk.outputs.pinned
-        run: ./gradlew :call:matrix:testDebugUnitTest -PmatrixSdkTestVersion=${{ steps.sdk.outputs.latest }} $CI_GRADLE_ARG_PROPERTIES
+        env:
+          LATEST: ${{ steps.sdk.outputs.latest }}
+        run: ./gradlew :call:matrix:testDebugUnitTest -PmatrixSdkTestVersion="$LATEST" $CI_GRADLE_ARG_PROPERTIES
       - name: Nothing newer than the pin
         if: steps.sdk.outputs.latest == steps.sdk.outputs.pinned
-        run: echo "The pin ${{ steps.sdk.outputs.pinned }} is the newest SDK; nothing to check."
+        env:
+          PINNED: ${{ steps.sdk.outputs.pinned }}
+        run: echo "The pin $PINNED is the newest SDK; nothing to check."
       - name: 🚫 Upload test results on error
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
