@@ -14,6 +14,27 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 _Nothing yet._
 
+## 0.1.0-rc.2 - 2026-09-22
+
+
+
+### What's Changed
+
+✨ Features
+* Add an overflow menu to see the component version by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/9
+
+⚠️ API Changes
+* Feat: Make the screen sharing feature opt-in by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/10
+
+🧱 Build
+* chore: Bump rust-rtc to 0.3.0-rc.2 by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/11
+
+Others
+* Release 0.1.0-rc.1 by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/8
+
+
+**Full Changelog**: https://github.com/element-hq/element-call-android/compare/v0.1.0-rc.1...v0.1.0-rc.2
+
 ## 0.1.0-rc.1 - 2026-09-21
 
 First release, for Element X to integrate behind its `NativeCall` flag. What a host has to know:
