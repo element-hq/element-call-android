@@ -126,11 +126,15 @@ interface MatrixRtcCall : AutoCloseable {
     ): Result<Unit>
 
     /**
-     * Start capturing and publishing the microphone.
+     * Start capturing and publishing the microphone, [muted] deciding the state it is published in.
+     *
+     * Publishing an already-muted track is what a call joined muted needs: mute the publication
+     * afterwards and every peer sees this member unmuted for as long as the mute takes to reach the
+     * transport, which is exactly when the roster is being drawn for the first time.
      *
      * Requires [android.Manifest.permission.RECORD_AUDIO].
      */
-    suspend fun publishMicrophone(): Result<Unit>
+    suspend fun publishMicrophone(muted: Boolean): Result<Unit>
 
     suspend fun setMicrophoneMuted(muted: Boolean)
 

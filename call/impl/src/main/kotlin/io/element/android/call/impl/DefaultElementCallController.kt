@@ -206,6 +206,12 @@ internal class DefaultElementCallController(
                     callData = callData,
                     connection = ElementCallConnection.RequestingPermission,
                     isScreenShareAvailable = options.isScreenSharingEnabled,
+                    // What the call will join with, not what is capturing - nothing is, yet. The
+                    // control bar is on screen from this moment, so a video call whose button read
+                    // "off" until the media connected would announce the wrong call and then flip
+                    // under the user's finger. From here on this is the camera's desired state, and
+                    // the tap that changes it is the answer runCall joins on.
+                    isCameraEnabled = !callData.isAudioCall,
                 )
                 // Reported as soon as the call is requested rather than once it connects, so a host's
                 // Join button hides while we are still joining rather than blinking through an
@@ -298,20 +304,46 @@ internal class DefaultElementCallController(
             // microphone, and this is what lets it add the camera type it could not claim before.
             // Without it, capture stops the moment the call is backgrounded.
             platform.startForegroundService()
-            // Turned on as soon as it is granted, because the only way to get here is having just
-            // asked for it - which only happens when the user tapped the camera button. Making them
-            // tap twice would be an odd reward for saying yes.
+            // Turned on as soon as it is granted: once a call is running, the only way to reach this
+            // is having just tapped the camera button, and making the user tap it again would be an
+            // odd reward for saying yes.
+            //
+            // Only once one is running, though. Before that a grant is not an ask - a host may answer
+            // this up front, as the screen does for a video call, and on an audio call that would
+            // start a camera nobody reached for - so what the call joins with is recorded by the
+            // button, in setCameraEnabled, and nowhere else.
             call?.setCameraEnabled(true)
         }
     }
 
     override fun setMicrophoneMuted(muted: Boolean) {
         // Muting reaches the transport as well as capture, so it suspends.
-        scope.launch { call?.setMicrophoneMuted(muted) }
+        scope.launch {
+            // Recorded on the snapshot whether or not there is a call yet: before there is one this
+            // is the only place the intent lives, and runCall publishes the microphone in that state
+            // rather than unmuting the user who muted themselves while it connected. Once the call is
+            // up the observer hands the same value straight back.
+            updateState { it.copy(isMicrophoneMuted = muted) }
+            call?.setMicrophoneMuted(muted)
+        }
     }
 
+    /**
+     * Turn the camera on or off, or record what the call should join with when there is no call yet.
+     *
+     * The two are the same field: before the media connects the snapshot *is* the camera's state, and
+     * runCall reads it back. Once there is a call, its own flow takes over and keeps the button
+     * honest - a camera that refuses to start puts it back off.
+     */
     override fun setCameraEnabled(enabled: Boolean) {
-        scope.launch { call?.setCameraEnabled(enabled) }
+        scope.launch {
+            val call = call
+            if (call == null) {
+                updateState { it.copy(isCameraEnabled = enabled) }
+            } else {
+                call.setCameraEnabled(enabled)
+            }
+        }
     }
 
     override fun switchCamera() {
@@ -459,7 +491,11 @@ internal class DefaultElementCallController(
         // any one tile's collection, and are torn down with the call in endCall().
         videoSharingScope = CoroutineScope(scope.coroutineContext + SupervisorJob())
 
-        connected.publishMicrophone().onFailure {
+        // Published in whatever state the microphone button is in. It has been on screen since before
+        // the permission was asked for, and a tap there while the call connects has nowhere to go but
+        // the snapshot - see setMicrophoneMuted - so this is where that intent is spent, on a track
+        // the core publishes already muted.
+        connected.publishMicrophone(muted = _state.value?.isMicrophoneMuted == true).onFailure {
             fail("Microphone failed: ${it.message}")
             return
         }
@@ -472,6 +508,10 @@ internal class DefaultElementCallController(
         // A video call is looked at, not held to an ear, so it starts on the loudspeaker; a headset
         // still wins over both built-in outputs when one is connected.
         audioDeviceController.start(preferLoudspeaker = !callData.isAudioCall)
+
+        // Read before the observers start, because they publish the call's own camera state - off,
+        // it has not been asked to capture yet - over the state the call is joining with.
+        val wantsCamera = _state.value?.isCameraEnabled == true
 
         coroutineScope {
             // Subscribed before the call is announced as connected, never after. The core's event
@@ -488,15 +528,16 @@ internal class DefaultElementCallController(
 
             // A video call starts with the camera on. The caller asked for video and the callee
             // answered a notification that said video, so making them find the camera button is
-            // asking a question they already answered.
+            // asking a question they already answered - unless they answered it again by turning the
+            // camera off while the call connected, which is what the snapshot then says.
             //
             // Only when the permission is already in hand: if it arrives later,
             // setCameraPermissionGranted turns the camera on itself, which covers the other
             // ordering. Nothing here waits for it - a video call whose camera is refused is still a
             // working call.
-            if (!callData.isAudioCall && _state.value?.isCameraPermissionGranted == true) {
+            if (wantsCamera && _state.value?.isCameraPermissionGranted == true) {
                 connected.setCameraEnabled(true)
-                    .onFailure { Timber.w(it, "ElementCall: could not start the camera for a video call") }
+                    .onFailure { Timber.w(it, "ElementCall: could not start the camera the call joins with") }
             }
 
             updateState {

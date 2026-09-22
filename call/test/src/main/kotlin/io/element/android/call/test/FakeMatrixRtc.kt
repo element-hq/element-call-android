@@ -168,8 +168,9 @@ class FakeMatrixRtcCall : MatrixRtcCall {
         }
     }
 
-    var publishMicrophoneCount = 0
-        private set
+    /** The mute each [publishMicrophone] was made with, in order: what the call joined as. */
+    val publishMicrophoneCalls = mutableListOf<Boolean>()
+    val publishMicrophoneCount get() = publishMicrophoneCalls.size
     var disconnectCount = 0
         private set
 
@@ -180,8 +181,11 @@ class FakeMatrixRtcCall : MatrixRtcCall {
 
     suspend fun emit(event: MatrixRtcCallEvent) = _events.emit(event)
 
-    override suspend fun publishMicrophone(): Result<Unit> {
-        publishMicrophoneCount++
+    override suspend fun publishMicrophone(muted: Boolean): Result<Unit> {
+        publishMicrophoneCalls += muted
+        // As the real one does: the publication carries the mute, so the flow reports it from the
+        // moment the microphone is up rather than only once someone toggles the button.
+        _isMicrophoneMuted.value = muted
         return Result.success(Unit)
     }
 

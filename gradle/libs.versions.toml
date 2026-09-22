@@ -19,7 +19,7 @@ activity = "1.13.0"
 compose_bom = "2026.08.00"
 
 # The matrix-rust-rtc core. Must match MATRIX_RTC_VERSION and MATRIX_RTC_AAR_URL in gradle.properties.
-matrix_rtc = "0.3.0-rc.1"
+matrix_rtc = "0.3.0-rc.2"
 
 # Coroutines
 coroutines = "1.11.0"
