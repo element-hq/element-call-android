@@ -103,6 +103,7 @@ data class ElementCallSnapshot(
      * enough renderer and decoder threads to crash libwebrtc's JNI layer.
      */
     val spotlightMemberId: String? = null,
+    /** Whether the microphone is muted, and before the media connects whether it will be published muted. */
     val isMicrophoneMuted: Boolean = false,
     /** Whether we are publishing a test tone instead of the microphone. */
     val isAudioTestToneEnabled: Boolean = false,
@@ -114,7 +115,11 @@ data class ElementCallSnapshot(
     /** Where call audio is going, or null before the route has been taken. */
     val selectedAudioDevice: CallAudioDevice? = null,
     val isMicrophonePermissionGranted: Boolean = false,
-    /** Whether our camera is capturing and publishing. */
+    /**
+     * Whether our camera is capturing and publishing - and, until the media connects, whether it is
+     * going to: the control bar is on screen throughout the join, so this is what the button reads
+     * and what a tap on it changes, and the call is joined in whatever state it is left in.
+     */
     val isCameraEnabled: Boolean = false,
     /** Whether the camera in use faces the user, which is what decides if the self view mirrors. */
     val isFrontCamera: Boolean = true,

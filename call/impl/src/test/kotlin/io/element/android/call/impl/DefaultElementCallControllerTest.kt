@@ -581,6 +581,121 @@ class DefaultElementCallControllerTest {
         assertThat(rtcService.lastSession?.lastCall?.cameraEnabledCalls).contains(true)
     }
 
+    /**
+     * The button says what the call will join with, from the first frame.
+     *
+     * It used to say what was capturing, which before the media connects is nothing at all: a video
+     * call showed the camera off for the whole join and then flipped it on under the user's finger,
+     * announcing the wrong call and changing its mind.
+     */
+    @Test
+    fun `a video call shows the camera on before it connects`() = runTest {
+        val videoCall = createController(isAudioCall = false)
+        assertThat(videoCall.state.value?.connection).isEqualTo(ElementCallConnection.RequestingPermission)
+        assertThat(videoCall.state.value?.isCameraEnabled).isTrue()
+
+        val audioCall = createController(isAudioCall = true)
+        assertThat(audioCall.state.value?.isCameraEnabled).isFalse()
+    }
+
+    /**
+     * The control bar is on screen from the first frame, so both buttons can be pressed while the
+     * call is still connecting - there is no separate lobby screen for them to live on. What they
+     * record is what the call joins with.
+     *
+     * For the microphone that is the state the publication itself is made in, not a mute applied
+     * after it: a track published unmuted and muted a moment later shows every peer an unmuted
+     * member for exactly as long as the roster takes to draw for the first time.
+     */
+    @Test
+    fun `muting while the call connects publishes the microphone already muted`() = runTest {
+        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
+        val controller = createController(rtcService = rtcService)
+
+        // Nothing to mute yet: the permission has not been answered, so there is no session, let
+        // alone a call. The tap has nowhere to go but the snapshot.
+        controller.setMicrophoneMuted(true)
+        runCurrent()
+        assertThat(controller.state.value?.isMicrophoneMuted).isTrue()
+
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+
+        assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.Connected)
+        assertThat(rtcService.lastSession?.lastCall?.publishMicrophoneCalls).containsExactly(true)
+        // And it is still muted once connected: the observers start after the publication, so what
+        // they report back is the state it was published in rather than a default that undoes it.
+        assertThat(controller.state.value?.isMicrophoneMuted).isTrue()
+    }
+
+    @Test
+    fun `a microphone nobody touched is published unmuted`() = runTest {
+        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
+        val controller = createController(rtcService = rtcService)
+
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+
+        assertThat(rtcService.lastSession?.lastCall?.publishMicrophoneCalls).containsExactly(false)
+        assertThat(controller.state.value?.isMicrophoneMuted).isFalse()
+    }
+
+    @Test
+    fun `a mute taken back while the call connects publishes the microphone unmuted`() = runTest {
+        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
+        val controller = createController(rtcService = rtcService)
+
+        controller.setMicrophoneMuted(true)
+        controller.setMicrophoneMuted(false)
+        runCurrent()
+
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+
+        assertThat(rtcService.lastSession?.lastCall?.publishMicrophoneCalls).containsExactly(false)
+        assertThat(controller.state.value?.isMicrophoneMuted).isFalse()
+    }
+
+    @Test
+    fun `turning the camera on while the call connects starts it once connected`() = runTest {
+        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
+        val controller = createController(rtcService = rtcService, isAudioCall = true)
+
+        // The permission answered first, which is what makes the button live: without it the tap
+        // asks for the permission instead, and that answer is not an ask for the camera.
+        controller.setCameraPermissionGranted(true)
+        controller.setCameraEnabled(true)
+        runCurrent()
+        assertThat(controller.state.value?.isCameraEnabled).isTrue()
+
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+
+        assertThat(rtcService.lastSession?.lastCall?.cameraEnabledCalls).containsExactly(true)
+        assertThat(controller.state.value?.isCameraEnabled).isTrue()
+    }
+
+    /**
+     * The mirror image, and the reason the ask is kept beside the snapshot rather than read off it:
+     * a video call starts the camera by default, so "off" has to be distinguishable from "untouched".
+     */
+    @Test
+    fun `turning the camera off while a video call connects leaves it off`() = runTest {
+        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
+        val controller = createController(rtcService = rtcService, isAudioCall = false)
+
+        controller.setCameraPermissionGranted(true)
+        controller.setCameraEnabled(false)
+        runCurrent()
+
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+
+        assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.Connected)
+        assertThat(rtcService.lastSession?.lastCall?.cameraEnabledCalls).isEmpty()
+        assertThat(controller.state.value?.isCameraEnabled).isFalse()
+    }
+
     @Test
     fun `an audio call leaves the camera off`() = runTest {
         val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))

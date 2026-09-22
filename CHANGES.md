@@ -7,7 +7,8 @@ ordinary change: label the pull request and give it a title that reads as a chan
 `Unreleased` is for the exception, something a host has to **act** on: a renamed port method, a port gaining a
 requirement, a new build setting, a core or SDK bump that changes what the host resolves. Write that here by hand,
 and the release carries it into its own section above the generated list, where a host bumping the version will
-actually read it. The matrix-rust-rtc core's own history is in `docs/CHANGELOG.md`.
+actually read it. The matrix-rust-rtc core's own history is the core's:
+[its CHANGELOG](https://github.com/element-hq/matrix-rust-rtc/blob/main/CHANGELOG.md) and its release notes.
 
 ## Unreleased
 

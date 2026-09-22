@@ -540,7 +540,7 @@ internal class RustMatrixRtcCall(
     /** Last constraints actually sent per stream, so unchanged ones are not sent again. */
     private val appliedConstraints = ConcurrentHashMap<VideoStreamKey, MatrixRtcVideoConstraints>()
 
-    override suspend fun publishMicrophone(): Result<Unit> = runCatchingExceptions {
+    override suspend fun publishMicrophone(muted: Boolean): Result<Unit> = runCatchingExceptions {
         if (microphoneTrack != null) return@runCatchingExceptions
         val track = withContext(ffiDispatcher) {
             mediaSession.publish(
@@ -552,15 +552,19 @@ internal class RustMatrixRtcCall(
                     ),
                     video = null,
                     simulcast = false,
+                    // Published in the state the user is already in - the microphone button is on
+                    // screen while the call connects - so no peer sees this member unmuted for the
+                    // moment between the publication and the replay below.
+                    muted = muted,
                 )
             )
         }
         microphoneTrack = track
         audioCapture.setTestToneEnabled(_isAudioTestToneEnabled.value)
         audioCapture.start(track)
-        // Replayed onto the freshly published track: muting before publishing is ordinary, and the
-        // transport only learns about it once there is a track to mute.
-        setMicrophoneMuted(_isMicrophoneMuted.value)
+        // Replayed onto the freshly published track: the publication above carried the mute to the
+        // transport, this is what carries it to the capturer and to isMicrophoneMuted.
+        setMicrophoneMuted(muted)
         Timber.d("MatrixRTC: publishing microphone as $localMemberId")
     }.onFailure {
         Timber.w(it, "MatrixRTC: failed to publish microphone")
@@ -607,6 +611,9 @@ internal class RustMatrixRtcCall(
                         // this flag and nothing else - so publishing several layers is the only
                         // defence. See item 13 in `libraries/rustrtc/FEEDBACK.md`.
                         simulcast = true,
+                        // Unmuted by setTransportMuted below, once capture is running: a peer told
+                        // to expect frames before there are any is shown a grey tile meanwhile.
+                        muted = true,
                     )
                 )
             }.also { cameraTrack = it }
@@ -663,6 +670,9 @@ internal class RustMatrixRtcCall(
                             // but a single layer is the one dynacast pauses, and shipping something
                             // that silently sends nothing is worse than shipping something soft.
                             simulcast = true,
+                            // Unmuted by setScreenShareMuted below, once the projection has actually
+                            // started - the reason that call is ordered after screenCapture.start.
+                            muted = true,
                         )
                     )
                 }.also { screenTrack = it }
