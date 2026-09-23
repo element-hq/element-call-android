@@ -14,7 +14,7 @@ import io.element.android.call.impl.ElementCallStackRegistry
 import timber.log.Timber
 
 /**
- * Acts on the ongoing-call notification's buttons.
+ * Acts on the ongoing-call notification's buttons and the picture-in-picture window's actions.
  *
  * A receiver rather than an Activity because these must not open anything: hanging up from the
  * notification shade should end the call and leave the shade where it is, and bringing the app to the
@@ -28,12 +28,12 @@ class ElementCallActionReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         val action = intent?.action ?: return
         val controller = ElementCallStackRegistry.active()?.controller ?: run {
-            Timber.w("ElementCall: notification action $action with no stack alive")
+            Timber.w("ElementCall: call action $action with no stack alive")
             return
         }
         when (action) {
             ACTION_HANG_UP -> {
-                Timber.i("ElementCall: hang up from the notification")
+                Timber.i("ElementCall: hang up from a call action")
                 controller.hangUp()
             }
             ACTION_TOGGLE_MUTE -> {
@@ -41,10 +41,10 @@ class ElementCallActionReceiver : BroadcastReceiver() {
                 // when the notification was posted would hold whatever the state was *then*, and
                 // muting from the call screen afterwards would leave this button inverted.
                 val isMuted = controller.state.value?.isMicrophoneMuted == true
-                Timber.i("ElementCall: ${if (isMuted) "unmute" else "mute"} from the notification")
+                Timber.i("ElementCall: ${if (isMuted) "unmute" else "mute"} from a call action")
                 controller.setMicrophoneMuted(!isMuted)
             }
-            else -> Timber.w("ElementCall: unknown notification action $action")
+            else -> Timber.w("ElementCall: unknown call action $action")
         }
     }
 
