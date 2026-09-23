@@ -576,7 +576,7 @@ internal class DefaultElementCallController(
         // eleven-person call produced over a hundred snapshots a second from this one source, each of
         // them a new state and a recomposition of every tile. Ten a second in total is all a meter
         // needs, and nothing but the diagnostics meters reads the levels - the tiles use the core's
-        // damped speaking flag.
+        // speaking flag.
         observe {
             call.audioLevels
                 .sample(AUDIO_LEVEL_SAMPLE_MS.milliseconds)
