@@ -20,15 +20,28 @@ import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.PendingIntentCompat
 import androidx.core.app.Person
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
 import io.element.android.call.api.ElementCallNotificationConfig
+import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.impl.ElementCallStackRegistry
 import io.element.android.call.impl.R
 import io.element.android.call.impl.receivers.ElementCallActionIntents
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import timber.log.Timber
 
 /**
@@ -46,7 +59,15 @@ import timber.log.Timber
  * [ElementCallNotificationConfig], so that a host with a second call path can share one id with it.
  */
 class ElementCallForegroundService : Service() {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var notificationUpdates: Job? = null
+
     override fun onBind(intent: Intent?): IBinder? = null
+
+    override fun onDestroy() {
+        scope.cancel()
+        super.onDestroy()
+    }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val stack = ElementCallStackRegistry.active() ?: run {
@@ -59,7 +80,8 @@ class ElementCallForegroundService : Service() {
         val config = stack.options.notification
         val isProjecting = intent?.getBooleanExtra(EXTRA_IS_PROJECTING, false) == true
         createNotificationChannel(config)
-        val notification = buildNotification(stack.controller.state.value?.roomName, stack.controller.state.value?.isMicrophoneMuted == true, config)
+        val content = stack.controller.state.value.notificationContent()
+        val notification = buildNotification(content, config)
 
         return try {
             ServiceCompat.startForeground(
@@ -68,6 +90,7 @@ class ElementCallForegroundService : Service() {
                 notification,
                 grantedServiceTypes(this, isProjecting),
             )
+            followCall(stack.controller.state, config)
             START_STICKY
         } catch (throwable: Throwable) {
             // Most likely the microphone permission was revoked mid-call, which makes a microphone
@@ -87,12 +110,12 @@ class ElementCallForegroundService : Service() {
      * action is part of the style rather than added: `CallStyle` insists on one, which is the right
      * insistence.
      *
-     * Read from the controller at post time. The service is restarted whenever the call's shape
-     * changes - a permission granted, a screen share started - so the title follows the call rather
-     * than being frozen at whatever it was when the call began.
+     * Re-posted by [followCall] whenever what it shows changes, so the mute button and the title
+     * follow the call rather than whatever they were when the service last started.
      */
-    private fun buildNotification(roomName: String?, isMuted: Boolean, config: ElementCallNotificationConfig): Notification {
-        val title = roomName?.takeIf { it.isNotBlank() } ?: getString(R.string.element_call_notification_call_in_progress)
+    private fun buildNotification(content: NotificationContent, config: ElementCallNotificationConfig): Notification {
+        val isMuted = content.isMuted
+        val title = content.roomName?.takeIf { it.isNotBlank() } ?: getString(R.string.element_call_notification_call_in_progress)
         // CallStyle needs somebody to name the call after, and for a room that is the room.
         val caller = Person.Builder().setName(title).setImportant(true).build()
 
@@ -122,6 +145,25 @@ class ElementCallForegroundService : Service() {
                 ).build()
             )
             .build()
+    }
+
+    /**
+     * Keeps the posted notification in step with the call. Re-posting under the foreground id updates
+     * it in place, where starting the service again would be refused from the background.
+     */
+    private fun followCall(state: Flow<ElementCallSnapshot?>, config: ElementCallNotificationConfig) {
+        notificationUpdates?.cancel()
+        notificationUpdates = scope.launch {
+            val context = this@ElementCallForegroundService
+            state.notificationContentChanges().collect { content ->
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                ) {
+                    return@collect
+                }
+                NotificationManagerCompat.from(context).notify(config.notificationId, buildNotification(content, config))
+            }
+        }
     }
 
     /**
@@ -198,3 +240,20 @@ class ElementCallForegroundService : Service() {
         }
     }
 }
+
+internal data class NotificationContent(
+    val roomName: String?,
+    val isMuted: Boolean,
+)
+
+internal fun ElementCallSnapshot?.notificationContent() = NotificationContent(
+    roomName = this?.roomName,
+    isMuted = this?.isMicrophoneMuted == true,
+)
+
+/** What the notification shows, each time it changes after the one already posted. */
+internal fun Flow<ElementCallSnapshot?>.notificationContentChanges(): Flow<NotificationContent> =
+    filterNotNull()
+        .map { it.notificationContent() }
+        .distinctUntilChanged()
+        .drop(1)
