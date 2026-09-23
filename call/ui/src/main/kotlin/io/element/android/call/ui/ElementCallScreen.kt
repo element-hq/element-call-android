@@ -170,7 +170,7 @@ private fun CallTopBar(state: ElementCallScreenState, modifier: Modifier = Modif
         }
         CallOverflowMenu(state = state, modifier = Modifier.align(Alignment.CenterEnd))
         Text(
-            text = state.roomName ?: state.spotlightParticipant?.displayName ?: "",
+            text = state.roomName ?: state.spotlightTile?.displayName ?: "",
             style = ElementCallTheme.typography.bodyLgMedium,
             color = ElementCallTheme.colors.textPrimary,
             textAlign = TextAlign.Center,

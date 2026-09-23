@@ -77,7 +77,7 @@ data class ElementCallScreenState(
     /** Whether tiles are showing their debug readout. Toggled by long-pressing a tile. */
     val isTileStatsVisible: Boolean,
     /**
-     * Video by [CallParticipant.tileId], for the tiles that have video - ourselves included. Empty
+     * Video by [CallTile.tileId], for the tiles that have video - ourselves included. Empty
      * before media connects, and a tile absent from it has no video to show.
      *
      * Flows rather than the latest frames, which is the unusual part of this state class and is
@@ -100,8 +100,8 @@ data class ElementCallScreenState(
      * the RTC layer's own view, unmixed with anything the room says, because telling those two apart
      * is the point of it.
      */
-    val tiles: ImmutableList<CallParticipant>,
-    /** The [CallParticipant.tileId] of the big tile. See `ElementCallSnapshot.spotlightTileId`. */
+    val tiles: ImmutableList<CallTile>,
+    /** The [CallTile.tileId] of the big tile. See `ElementCallSnapshot.spotlightTileId`. */
     val spotlightTileId: String?,
     /**
      * What the overflow menu shows: the library version and the core it was built against. Carried in
@@ -119,7 +119,7 @@ data class ElementCallScreenState(
      * **Never ourselves**, and null when we are alone: the core never ranks our own tile. We are
      * already in the strip, so spotlighting us would draw the same person twice.
      */
-    val spotlightParticipant: CallParticipant?
+    val spotlightTile: CallTile?
         get() = spotlightTileId?.let { id -> tiles.firstOrNull { it.tileId == id } }
 
     /**
@@ -130,8 +130,8 @@ data class ElementCallScreenState(
      * a highlight - the same face, twice, one above the other - so they are excluded here. Put them
      * back by using [tiles] instead if the strip ever grows enough for the highlight to make sense.
      */
-    val stripParticipants: ImmutableList<CallParticipant>
-        get() = tiles.filterNot { it.tileId == spotlightParticipant?.tileId }.toImmutableList()
+    val stripTiles: ImmutableList<CallTile>
+        get() = tiles.filterNot { it.tileId == spotlightTile?.tileId }.toImmutableList()
 
     /**
      * Which arrangement the screen draws: the other person full-bleed with us as a thumbnail, or the

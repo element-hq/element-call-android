@@ -16,10 +16,10 @@ import io.element.android.call.test.aTile
 import kotlinx.collections.immutable.persistentListOf
 import org.junit.Test
 
-class CallParticipantTest {
+class CallTileTest {
     @Test
     fun `a member publishing an unmuted microphone is neither muted nor missing one`() {
-        val participant = aRemoteParticipant().toParticipant()
+        val participant = aRemoteParticipant().toTile()
 
         assertThat(participant.isMuted).isFalse()
         assertThat(participant.hasMicrophone).isTrue()
@@ -29,7 +29,7 @@ class CallParticipantTest {
     fun `a member who muted themselves still has a microphone`() {
         val participant = aRemoteParticipant()
             .copy(streams = persistentListOf(MatrixRtcStreamState(MatrixRtcStreamKind.MICROPHONE, isMuted = true)))
-            .toParticipant()
+            .toTile()
 
         assertThat(participant.isMuted).isTrue()
         assertThat(participant.hasMicrophone).isTrue()
@@ -44,7 +44,7 @@ class CallParticipantTest {
     fun `a member with no microphone stream reads as muted but is marked as having none`() {
         val participant = aRemoteParticipant()
             .copy(streams = persistentListOf(MatrixRtcStreamState(MatrixRtcStreamKind.CAMERA, isMuted = false)))
-            .toParticipant()
+            .toTile()
 
         assertThat(participant.isMuted).isTrue()
         assertThat(participant.hasMicrophone).isFalse()
@@ -52,7 +52,7 @@ class CallParticipantTest {
 
     @Test
     fun `a member publishing nothing at all reads the same way`() {
-        val participant = aRemoteParticipant().copy(streams = persistentListOf()).toParticipant()
+        val participant = aRemoteParticipant().copy(streams = persistentListOf()).toTile()
 
         assertThat(participant.isMuted).isTrue()
         assertThat(participant.hasMicrophone).isFalse()
@@ -66,7 +66,7 @@ class CallParticipantTest {
     @Test
     fun `a screen share tile never reports a missing microphone, a mute or a speaker`() {
         val share = aTile(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.SCREEN_SHARE, isMicrophoneMuted = true, isSpeaking = true)
-            .toCallParticipant(roomMembers = emptyMap(), isLocal = false, hasMicrophone = false, isFrontCamera = false)
+            .toCallTile(roomMembers = emptyMap(), isLocal = false, hasMicrophone = false, isFrontCamera = false)
 
         assertThat(share.isScreenShare).isTrue()
         assertThat(share.hasMicrophone).isTrue()
@@ -77,9 +77,9 @@ class CallParticipantTest {
 
     @Test
     fun `a sharer's two tiles have different ids and the camera keeps its own`() {
-        val camera = aTile(A_REMOTE_MEMBER_ID).toCallParticipant(emptyMap(), isLocal = false, hasMicrophone = true, isFrontCamera = false)
+        val camera = aTile(A_REMOTE_MEMBER_ID).toCallTile(emptyMap(), isLocal = false, hasMicrophone = true, isFrontCamera = false)
         val share = aTile(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.SCREEN_SHARE)
-            .toCallParticipant(emptyMap(), isLocal = false, hasMicrophone = true, isFrontCamera = false)
+            .toCallTile(emptyMap(), isLocal = false, hasMicrophone = true, isFrontCamera = false)
 
         assertThat(camera.tileId).isEqualTo(A_REMOTE_MEMBER_ID)
         assertThat(share.tileId).isNotEqualTo(camera.tileId)
@@ -88,13 +88,13 @@ class CallParticipantTest {
 
     @Test
     fun `speaking comes from the core's tile`() {
-        val speaking = aTile(A_REMOTE_MEMBER_ID, isSpeaking = true).toCallParticipant(emptyMap(), isLocal = false, hasMicrophone = true, isFrontCamera = false)
+        val speaking = aTile(A_REMOTE_MEMBER_ID, isSpeaking = true).toCallTile(emptyMap(), isLocal = false, hasMicrophone = true, isFrontCamera = false)
 
         assertThat(speaking.isActiveSpeaker).isTrue()
     }
 
-    private fun MatrixRtcParticipant.toParticipant() =
-        cameraTile().toCallParticipant(
+    private fun MatrixRtcParticipant.toTile() =
+        cameraTile().toCallTile(
             roomMembers = emptyMap(),
             isLocal = isLocal,
             hasMicrophone = hasStream(MatrixRtcStreamKind.MICROPHONE),

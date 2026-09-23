@@ -115,13 +115,13 @@ fun rememberElementCallScreenState(
  * the final page of a big call, and first is where iOS puts it. Our mute and camera come from the
  * call rather than from the core's tile, so a tap shows on the badge before the round trip does.
  */
-private fun ElementCallSnapshot.callTiles(): ImmutableList<CallParticipant> {
+private fun ElementCallSnapshot.callTiles(): ImmutableList<CallTile> {
     fun MatrixRtcTile.hasMicrophone() = participants.firstOrNull { it.memberId == id.memberId }?.hasStream(MatrixRtcStreamKind.MICROPHONE) != false
     val own = ownTile?.let {
         it.copy(isHero = false, isMicrophoneMuted = isMicrophoneMuted, hasVideo = isCameraEnabled)
-            .toCallParticipant(roomMembers, isLocal = true, hasMicrophone = it.hasMicrophone(), isFrontCamera = isFrontCamera)
+            .toCallTile(roomMembers, isLocal = true, hasMicrophone = it.hasMicrophone(), isFrontCamera = isFrontCamera)
     }
-    val ranked = tiles.map { it.toCallParticipant(roomMembers, isLocal = false, hasMicrophone = it.hasMicrophone(), isFrontCamera = isFrontCamera) }
+    val ranked = tiles.map { it.toCallTile(roomMembers, isLocal = false, hasMicrophone = it.hasMicrophone(), isFrontCamera = isFrontCamera) }
     return (listOfNotNull(own) + ranked).toImmutableList()
 }
 
@@ -133,7 +133,7 @@ private fun ElementCallSnapshot.callTiles(): ImmutableList<CallParticipant> {
  */
 private fun ElementCallSnapshot?.toState(
     videoFrames: ImmutableMap<String, Flow<MatrixRtcVideoFrame>>,
-    tiles: ImmutableList<CallParticipant>,
+    tiles: ImmutableList<CallTile>,
     eventSink: (ElementCallScreenEvent) -> Unit,
 ) = ElementCallScreenState(
     connection = this?.connection ?: ElementCallConnection.RequestingPermission,

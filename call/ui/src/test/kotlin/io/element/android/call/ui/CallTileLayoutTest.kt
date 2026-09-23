@@ -34,7 +34,7 @@ class CallTileLayoutTest {
      * The spotlighted member is in the spotlight and *not* also in the strip.
      *
      * Not a cosmetic point: two tiles for one member means two collectors on one video stream, which
-     * is a native crash rather than a duplicated face. It was one, before `stripParticipants`
+     * is a native crash rather than a duplicated face. It was one, before `stripTiles`
      * existed.
      */
     @Test

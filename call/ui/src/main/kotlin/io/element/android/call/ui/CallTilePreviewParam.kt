@@ -13,8 +13,8 @@ import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.cameraTile
 
 /** One tile in each of the states it can be drawn in, so a change to any badge or fallback is a screenshot diff. */
-open class CallParticipantPreviewParam : PreviewParameterProvider<CallParticipant> {
-    override val values: Sequence<CallParticipant>
+open class CallTilePreviewParam : PreviewParameterProvider<CallTile> {
+    override val values: Sequence<CallTile>
         get() = sequenceOf(
             // Us, camera off: the avatar, and no room profile yet so the initial comes from the user id.
             aLocalParticipant().toTile(),
@@ -37,7 +37,7 @@ private val A_BOB = ElementCallRoomMember(
     avatarUrl = null,
 )
 
-private fun io.element.android.call.api.rtc.MatrixRtcParticipant.toTile(roomMember: ElementCallRoomMember? = null) = cameraTile().toCallParticipant(
+private fun io.element.android.call.api.rtc.MatrixRtcParticipant.toTile(roomMember: ElementCallRoomMember? = null) = cameraTile().toCallTile(
     roomMembers = roomMember?.let { mapOf(it.userId to it) } ?: emptyMap(),
     isLocal = isLocal,
     hasMicrophone = true,
