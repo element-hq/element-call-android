@@ -1030,8 +1030,13 @@ private fun gridSlots(
         slots[spotlightTileId] = area
         return slots
     }
-    // Nobody spotlighted - which is what being alone in a call looks like, since the spotlight is
-    // never ourselves - so the grid has the lot.
+    // Alone in the call: our own tile is all there is, and a 4:3 grid cell would leave half a phone
+    // empty around it. It gets the area, as a spotlight with no strip does.
+    if (spotlightTileId == null && strip.size == 1) {
+        slots[strip.single()] = area
+        return slots
+    }
+    // Nobody spotlighted, and more than one tile: the grid has the lot.
     if (spotlightTileId == null) {
         val grid = bestGrid(strip.size, width, height, spacing) ?: return slots
         placeGrid(slots, strip, grid, area, spacing)

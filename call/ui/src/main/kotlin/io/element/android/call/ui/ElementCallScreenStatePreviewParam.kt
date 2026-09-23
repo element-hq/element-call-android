@@ -22,7 +22,6 @@ import io.element.android.call.api.rtc.id.UserId
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableMap
-import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 
@@ -276,7 +275,6 @@ fun anElementCallScreenState(
     audioLevels = audioLevels.toImmutableMap(),
     receiveStats = receiveStats.toImmutableMap(),
     frameEncryption = frameEncryption.toImmutableMap(),
-    activeSpeakerIds = activeSpeakerIds.toImmutableSet(),
     isMicrophoneMuted = isMicrophoneMuted,
     isAudioTestToneEnabled = isAudioTestToneEnabled,
     audioDevices = audioDevices.toImmutableList(),
@@ -292,19 +290,11 @@ fun anElementCallScreenState(
     roomName = roomName,
     isDm = isDm,
     connectedAtElapsedMs = connectedAtElapsedMs,
-    // The first remote, which is what the controller settles on in a preview's worth of time.
-    spotlightMemberId = participants.firstOrNull { !it.isLocal }?.memberId,
     // Derived rather than passed, so a preview cannot describe a call whose tiles disagree with its
     // participants - which is exactly the sort of state the real presenter can never produce.
-    tiles = participants
-        .map {
-            it.toCallParticipant(
-                roomMembers = emptyMap(),
-                activeSpeakerIds = activeSpeakerIds,
-                isFrontCamera = isFrontCamera,
-            )
-        }
-        .toImmutableList(),
+    tiles = previewCallTiles(participants, activeSpeakerIds, isFrontCamera),
+    // The head of the ranking, which is what the controller spotlights.
+    spotlightTileId = previewCallTiles(participants, activeSpeakerIds, isFrontCamera).firstOrNull { !it.isLocal }?.tileId,
     libraryVersion = libraryVersion,
     coreVersion = coreVersion,
     eventSink = eventSink,
@@ -390,3 +380,20 @@ fun aStaleParticipant() = MatrixRtcParticipant(
     isReachable = true,
     streams = emptyList(),
 )
+
+/** Our own tile first, then the core's shape of the rest: what the presenter builds from a snapshot. */
+private fun previewCallTiles(
+    participants: List<MatrixRtcParticipant>,
+    speakingIds: Set<String>,
+    isFrontCamera: Boolean,
+) = (listOfNotNull(participants.previewOwnTile()?.let { it.copy(isSpeaking = it.id.memberId in speakingIds) }) + participants.previewTiles(speakingIds))
+    .map { tile ->
+        val participant = participants.first { it.memberId == tile.id.memberId }
+        tile.toCallParticipant(
+            roomMembers = emptyMap(),
+            isLocal = participant.isLocal,
+            hasMicrophone = participant.hasStream(MatrixRtcStreamKind.MICROPHONE),
+            isFrontCamera = isFrontCamera,
+        )
+    }
+    .toImmutableList()

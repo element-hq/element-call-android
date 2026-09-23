@@ -13,13 +13,13 @@ import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcTile
+import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.id.UserId
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.ImmutableMap
-import kotlinx.collections.immutable.ImmutableSet
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
-import kotlinx.collections.immutable.persistentSetOf
 
 /**
  * Everything known about the call currently running, as one immutable value.
@@ -86,23 +86,17 @@ data class ElementCallSnapshot(
      */
     val frameEncryption: ImmutableMap<String, MatrixRtcFrameEncryptionState> = persistentMapOf(),
     /**
-     * Who the transport currently hears, by member id.
-     *
-     * The SFU derives this from the RTP audio level header, which end-to-end encryption leaves
-     * readable - so a member can be an active speaker here while [audioLevels] shows us nothing,
-     * which is precisely what a broken key looks like.
+     * The remote tiles, in the core's rank order: a member sharing their screen is two of them. Our
+     * own is [ownTile], never in here. Render in the order given; the core already damped it.
      */
-    val activeSpeakerIds: ImmutableSet<String> = persistentSetOf(),
+    val tiles: ImmutableList<MatrixRtcTile> = persistentListOf(),
     /**
-     * Which member the call screen gives the big tile to, or null when there is nobody to spotlight.
+     * Our camera tile, or null before media connects.
      *
-     * Decided here rather than derived from [activeSpeakerIds] in the UI, because it needs a memory
-     * and a clock. Active speakers change several times a second in any real conversation, and a
-     * spotlight that followed them exactly would be both unwatchable and expensive: every change
-     * tears down one video tile and builds another, and doing that a few times a second churned
-     * enough renderer and decoder threads to crash libwebrtc's JNI layer.
+     * The core only publishes it once our membership reaches its roster, so until then it is built
+     * from our row in [participants]: otherwise every join would open on an empty stage.
      */
-    val spotlightMemberId: String? = null,
+    val ownTile: MatrixRtcTile? = null,
     /** Whether the microphone is muted, and before the media connects whether it will be published muted. */
     val isMicrophoneMuted: Boolean = false,
     /** Whether we are publishing a test tone instead of the microphone. */
@@ -161,6 +155,16 @@ data class ElementCallSnapshot(
      */
     val isTileStatsVisible: Boolean = false,
 ) {
+    /**
+     * The tile the call screen gives its big slot to, or null when nobody else is here.
+     *
+     * The head of [tiles]: a hero ranks first, and otherwise the core's damped ranking is already
+     * the answer - a spotlight that followed raw speaker events would tear down and rebuild a video
+     * tile several times a second.
+     */
+    val spotlightTileId: MatrixRtcTileId?
+        get() = tiles.firstOrNull()?.id
+
     /**
      * Whether anybody in the call is sending a picture - a camera or a screen, ours or theirs.
      *

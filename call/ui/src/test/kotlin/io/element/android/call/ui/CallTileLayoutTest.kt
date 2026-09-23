@@ -63,6 +63,19 @@ class CallTileLayoutTest {
     }
 
     /**
+     * Alone in a call the core ranks nobody, so there is no spotlight and our own tile is the only one:
+     * it has to fill most of the screen rather than sit as a strip card on an empty stage.
+     */
+    @Test
+    fun `alone in a call our own tile fills most of the screen`() {
+        for ((width, height) in listOf(WIDTH to HEIGHT, HEIGHT to WIDTH)) {
+            val slot = computeSlots(listOf("us"), spotlightTileId = null, width, height, SPACING).getValue("us")
+
+            assertThat(slot.width * slot.height).isAtLeast(width * height * 0.5f)
+        }
+    }
+
+    /**
      * The property that matters at every size: nobody is drawn off the edge and nobody overlaps.
      *
      * Checked across a range of member counts because the failure is count-dependent - the grid
