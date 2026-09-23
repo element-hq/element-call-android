@@ -75,6 +75,6 @@ fun aTile(
 
 /** A roster ranked in the order given, with detail for every tile: the core's default window. */
 fun aRoster(vararg tiles: MatrixRtcTile) = MatrixRtcTileRoster(
-    order = tiles.map { MatrixRtcTileRef(it.id, it.isHero) },
+    order = tiles.map { MatrixRtcTileRef(it.id, it.userId, it.isHero) },
     detail = tiles.associateBy { it.id },
 )

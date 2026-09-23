@@ -167,7 +167,7 @@ internal fun FfiStreamState.map() = MatrixRtcStreamState(
 
 internal fun FfiTileId.map() = MatrixRtcTileId(memberId = memberId, kind = kind.map())
 
-internal fun FfiTileRef.map() = MatrixRtcTileRef(id = id.map(), isHero = hero)
+internal fun FfiTileRef.map() = MatrixRtcTileRef(id = id.map(), userId = UserId(userId), isHero = hero)
 
 internal fun FfiCallTile.map() = MatrixRtcTile(
     id = MatrixRtcTileId(memberId = memberId, kind = kind.map()),

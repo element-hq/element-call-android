@@ -42,8 +42,13 @@ data class MatrixRtcTile(
     val isReachable: Boolean,
 )
 
+/**
+ * A tile's place in the order: enough to place it, and to draw it as an avatar with a name when
+ * its full record is outside the detail window.
+ */
 data class MatrixRtcTileRef(
     val id: MatrixRtcTileId,
+    val userId: UserId,
     val isHero: Boolean,
 )
 
