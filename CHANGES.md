@@ -12,7 +12,15 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 ## Unreleased
 
-_Nothing yet._
+- **Needs matrix-rust-rtc with the call tile roster** (`MediaSession.nextRoster`). Until it is released and pinned,
+  build it with `./tools/rtc/build-rust-rtc`.
+- `MatrixRtcCall` gains `tiles` and `localState`. A fake or a host transport implementing it must supply both.
+- `ElementCallSnapshot`: `tiles` (remote, ranked) and `ownTile` added. `spotlightMemberId` becomes `spotlightTileId`,
+  the head of `tiles`. `activeSpeakerIds` is removed; speaking is `MatrixRtcTile.isSpeaking`, damped by the core.
+- A member sharing their screen is two tiles, the share a hero. Test tags and keys are unchanged
+  (`memberId`, `memberId#SCREEN_SHARE`).
+- `isScreenSharing` now reflects the screen-share publication rather than what was asked for.
+- `toCallTiles` and `screenShareTileId` are gone; build a `CallParticipant` with `MatrixRtcTile.toCallParticipant`.
 
 ## 0.1.0-rc.5 - 2026-09-25
 
