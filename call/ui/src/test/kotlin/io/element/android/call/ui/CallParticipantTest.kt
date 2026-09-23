@@ -8,8 +8,11 @@
 package io.element.android.call.ui
 
 import com.google.common.truth.Truth.assertThat
+import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamState
+import io.element.android.call.api.rtc.cameraTile
+import io.element.android.call.test.aTile
 import kotlinx.collections.immutable.persistentListOf
 import org.junit.Test
 
@@ -57,25 +60,44 @@ class CallParticipantTest {
 
     /**
      * A screen is not expected to carry a microphone, so it must not report the absence of one - that
-     * would put a fault notice on the one tile where having no audio is the normal state.
+     * would put a fault notice on the one tile where having no audio is the normal state. Nor is it
+     * anybody's voice, so the owner's mute and speaking stay on their camera tile.
      */
     @Test
-    fun `a screen share tile never reports a missing microphone`() {
-        val tiles = aRemoteParticipant()
-            .copy(
-                streams = persistentListOf(
-                    MatrixRtcStreamState(MatrixRtcStreamKind.SCREEN_SHARE, isMuted = false),
-                )
-            )
-            .toCallTiles(roomMembers = emptyMap(), activeSpeakerIds = emptySet(), isFrontCamera = false)
+    fun `a screen share tile never reports a missing microphone, a mute or a speaker`() {
+        val share = aTile(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.SCREEN_SHARE, isMicrophoneMuted = true, isSpeaking = true)
+            .toCallParticipant(roomMembers = emptyMap(), isLocal = false, hasMicrophone = false, isFrontCamera = false)
 
-        val screen = tiles.single { it.isScreenShare }
-        assertThat(screen.hasMicrophone).isTrue()
-        assertThat(screen.isMuted).isFalse()
-        // The person behind it still reports the truth: they publish a screen and no microphone.
-        assertThat(tiles.single { !it.isScreenShare }.hasMicrophone).isFalse()
+        assertThat(share.isScreenShare).isTrue()
+        assertThat(share.hasMicrophone).isTrue()
+        assertThat(share.isMuted).isFalse()
+        assertThat(share.isActiveSpeaker).isFalse()
+        assertThat(share.hasVideo).isTrue()
     }
 
-    private fun io.element.android.call.api.rtc.MatrixRtcParticipant.toParticipant() =
-        toCallParticipant(roomMembers = emptyMap(), activeSpeakerIds = emptySet(), isFrontCamera = false)
+    @Test
+    fun `a sharer's two tiles have different ids and the camera keeps its own`() {
+        val camera = aTile(A_REMOTE_MEMBER_ID).toCallParticipant(emptyMap(), isLocal = false, hasMicrophone = true, isFrontCamera = false)
+        val share = aTile(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.SCREEN_SHARE)
+            .toCallParticipant(emptyMap(), isLocal = false, hasMicrophone = true, isFrontCamera = false)
+
+        assertThat(camera.tileId).isEqualTo(A_REMOTE_MEMBER_ID)
+        assertThat(share.tileId).isNotEqualTo(camera.tileId)
+        assertThat(share.memberId).isEqualTo(camera.memberId)
+    }
+
+    @Test
+    fun `speaking comes from the core's tile`() {
+        val speaking = aTile(A_REMOTE_MEMBER_ID, isSpeaking = true).toCallParticipant(emptyMap(), isLocal = false, hasMicrophone = true, isFrontCamera = false)
+
+        assertThat(speaking.isActiveSpeaker).isTrue()
+    }
+
+    private fun MatrixRtcParticipant.toParticipant() =
+        cameraTile().toCallParticipant(
+            roomMembers = emptyMap(),
+            isLocal = isLocal,
+            hasMicrophone = hasStream(MatrixRtcStreamKind.MICROPHONE),
+            isFrontCamera = false,
+        )
 }

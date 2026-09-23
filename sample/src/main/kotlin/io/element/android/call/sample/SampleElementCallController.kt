@@ -19,6 +19,7 @@ import io.element.android.call.api.rtc.MatrixRtcStreamState
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.test.ElementCallTestPattern
+import io.element.android.call.ui.previewOwnTile
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.CoroutineScope
@@ -137,7 +138,8 @@ class SampleElementCallController(
     }
 
     private fun update(block: (ElementCallSnapshot) -> ElementCallSnapshot) {
-        _state.update { it?.let(block) }
+        // Our own tile follows our own streams, as the core's local state does.
+        _state.update { it?.let(block)?.let { snapshot -> snapshot.copy(ownTile = snapshot.participants.previewOwnTile()) } }
     }
 
     /** Our own participant with one stream set the given way, added if we were not publishing it. */

@@ -80,3 +80,22 @@ data class MatrixRtcLocalState(
      */
     val isScreenSharing: Boolean,
 )
+
+/**
+ * A member's camera tile as the transport's roster describes them, unranked and never a hero.
+ *
+ * For the moment before the core publishes a tile of its own - our own in particular, which only
+ * arrives once our membership reaches the core's roster - and for fixtures. Not speaking: that is
+ * the core's damped signal, which the roster does not carry.
+ */
+fun MatrixRtcParticipant.cameraTile() = MatrixRtcTile(
+    id = MatrixRtcTileId(memberId, MatrixRtcStreamKind.CAMERA),
+    userId = userId,
+    deviceId = deviceId,
+    isHero = false,
+    hasVideo = streams.any { it.kind == MatrixRtcStreamKind.CAMERA && !it.isMuted },
+    isMicrophoneMuted = streams.none { it.kind == MatrixRtcStreamKind.MICROPHONE && !it.isMuted },
+    isSpeaking = false,
+    handRaisedAtMs = null,
+    isReachable = isReachable,
+)

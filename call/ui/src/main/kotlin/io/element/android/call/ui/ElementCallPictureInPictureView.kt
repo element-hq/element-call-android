@@ -55,20 +55,11 @@ fun ElementCallPictureInPictureView(
     videoFrames: (memberId: String, kind: MatrixRtcStreamKind) -> Flow<MatrixRtcVideoFrame>,
     modifier: Modifier = Modifier,
 ) {
-    val participants = call.participants
-    // The same order of preference the call screen uses, reduced to a single winner.
-    val screenSharer = participants.firstOrNull { participant ->
-        !participant.isLocal && participant.streams.any { it.kind == MatrixRtcStreamKind.SCREEN_SHARE && !it.isMuted }
-    }
-    val spotlit = participants.firstOrNull { it.memberId == call.spotlightMemberId && !it.isLocal }
-        ?: participants.firstOrNull { !it.isLocal }
-
-    val memberId = screenSharer?.memberId ?: spotlit?.memberId
-    val kind = if (screenSharer != null) MatrixRtcStreamKind.SCREEN_SHARE else MatrixRtcStreamKind.CAMERA
-    val hasVideo = when {
-        screenSharer != null -> true
-        else -> spotlit?.streams?.any { it.kind == MatrixRtcStreamKind.CAMERA && !it.isMuted } == true
-    }
+    // The call screen's spotlight, reduced to a single winner: the head of the core's ranking.
+    val spotlit = call.tiles.firstOrNull()
+    val memberId = spotlit?.id?.memberId
+    val kind = spotlit?.id?.kind ?: MatrixRtcStreamKind.CAMERA
+    val hasVideo = spotlit?.hasVideo == true
 
     Surface(modifier = modifier.fillMaxSize(), color = Color.Black) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

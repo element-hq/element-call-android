@@ -10,10 +10,11 @@ package io.element.android.call.ui
 import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcTile
 import io.element.android.call.api.rtc.id.UserId
 
 /**
- * One member of the call, as a tile needs to draw them.
+ * One tile of the call - a member's camera, or their screen - as it needs to be drawn.
  *
  * The join between two things that know nothing about each other: the RTC layer, which has member
  * ids and stream states, and the room, which has names and avatars. Done once here so the call
@@ -32,7 +33,7 @@ data class CallParticipant(
      * Whether the member publishes a microphone stream at all, muted or not.
      *
      * [isMuted] deliberately collapses this into itself for the badge, and that is still the right
-     * call there - see [toCallParticipant]. It is kept apart here because the two have different
+     * call there - see `toCallParticipant`. It is kept apart here because the two have different
      * *causes*: muted is a choice the member made, absent is us having nothing to play, and a member
      * who is talking away on another client while we draw a mute badge is the second one. That
      * happened - see the `Audio` section of the RTC `FEEDBACK.md` - and took a side-by-side with
@@ -85,76 +86,40 @@ data class CallParticipant(
 }
 
 /**
- * Build the tile model for one RTC participant.
+ * Build the tile model for one of the core's tiles.
  *
  * A member with no microphone stream at all reads as muted *on the badge*, deliberately: to anyone
  * looking at the call the two are the same fact, and drawing an un-muted icon for someone who cannot
- * be heard is the more misleading of the two options.
+ * be heard is the more misleading of the two options. The tile collapses them as well, so the
+ * distinction comes from the transport's roster, [hasMicrophone], and is shown wherever the question
+ * being asked is "why".
  *
- * The distinction is still carried, on [CallParticipant.hasMicrophone], and shown wherever the
- * question being asked is "why". Collapsing it everywhere was the actual mistake: the badge choice
- * was sound, but it left no surface at all on which a missing stream looked different from a mute,
- * so a member the SFU was happily relaying to everyone else read here as having muted themselves.
+ * A share tile carries its owner's microphone, but a screen is nobody's voice: the mute badge and the
+ * speaking ring stay on the person's tile rather than being repeated on this one.
  */
-fun MatrixRtcParticipant.toCallParticipant(
+fun MatrixRtcTile.toCallParticipant(
     roomMembers: Map<UserId, ElementCallRoomMember>,
-    activeSpeakerIds: Set<String>,
+    isLocal: Boolean,
+    hasMicrophone: Boolean,
     isFrontCamera: Boolean,
 ): CallParticipant {
-    val microphone = streams.firstOrNull { it.kind == MatrixRtcStreamKind.MICROPHONE }
-    val hasVideo = streams.any { it.kind == MatrixRtcStreamKind.CAMERA && !it.isMuted }
+    val isScreenShare = id.kind == MatrixRtcStreamKind.SCREEN_SHARE
     return CallParticipant(
-        memberId = memberId,
+        memberId = id.memberId,
         userId = userId,
         roomMember = roomMembers[userId],
         isLocal = isLocal,
-        isMuted = microphone == null || microphone.isMuted,
-        hasMicrophone = microphone != null,
-        isActiveSpeaker = memberId in activeSpeakerIds,
+        isMuted = !isScreenShare && isMicrophoneMuted,
+        hasMicrophone = isScreenShare || hasMicrophone,
+        isActiveSpeaker = !isScreenShare && isSpeaking,
         hasVideo = hasVideo,
         // Mirroring a remote member would be wrong twice over: it is not how they look to
         // themselves, and any text in frame reads backwards.
-        isVideoMirrored = isLocal && isFrontCamera,
+        isVideoMirrored = isLocal && !isScreenShare && isFrontCamera,
         isReachable = isReachable,
+        streamKind = id.kind,
     )
 }
 
-/** Whether the participant has a stream of this kind that is actually sending. */
-fun MatrixRtcParticipant.publishes(kind: MatrixRtcStreamKind) = streams.any { it.kind == kind && !it.isMuted }
-
-/**
- * The tile id a member's screen share gets, kept next to [CallParticipant.tileId] so the presenter
- * cannot key the frame map differently from the way the tile keys itself.
- */
-fun screenShareTileId(memberId: String) = "$memberId#${MatrixRtcStreamKind.SCREEN_SHARE}"
-
-/**
- * The tiles one RTC participant is drawn as: themselves, and their screen if they are sharing one.
- *
- * Only *their* screen. Our own share is published but never drawn, because the person sharing a
- * screen is already looking at it - and because we do not subscribe to our own outgoing stream, so
- * there would be no frames to draw even if we wanted the tile.
- */
-fun MatrixRtcParticipant.toCallTiles(
-    roomMembers: Map<UserId, ElementCallRoomMember>,
-    activeSpeakerIds: Set<String>,
-    isFrontCamera: Boolean,
-): List<CallParticipant> {
-    val person = toCallParticipant(roomMembers, activeSpeakerIds, isFrontCamera)
-    if (isLocal || !publishes(MatrixRtcStreamKind.SCREEN_SHARE)) return listOf(person)
-    return listOf(
-        person,
-        person.copy(
-            streamKind = MatrixRtcStreamKind.SCREEN_SHARE,
-            hasVideo = true,
-            isVideoMirrored = false,
-            // A screen has no microphone and is nobody's voice, so the mute badge and the speaking
-            // ring belong on the person's tile rather than being repeated on this one. Same for the
-            // missing-stream notice: a screen is not expected to have one, so saying it has none
-            // would report a fault on the one tile where it is the normal state.
-            isMuted = false,
-            hasMicrophone = true,
-            isActiveSpeaker = false,
-        ),
-    )
-}
+/** Whether the participant publishes a stream of this kind at all, muted or not. */
+fun MatrixRtcParticipant.hasStream(kind: MatrixRtcStreamKind) = streams.any { it.kind == kind }
