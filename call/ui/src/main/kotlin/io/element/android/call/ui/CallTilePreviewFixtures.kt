@@ -11,7 +11,8 @@ import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTile
 import io.element.android.call.api.rtc.MatrixRtcTileId
-import io.element.android.call.api.rtc.cameraTile
+import io.element.android.call.api.rtc.MatrixRtcTileKind
+import io.element.android.call.api.rtc.personTile
 
 /**
  * The remote tiles the core would publish for these participants, for previews and fixtures, in the
@@ -23,17 +24,17 @@ fun List<MatrixRtcParticipant>.previewTiles(speakingIds: Set<String> = emptySet(
     val shares = remotes
         .filter { participant -> participant.streams.any { it.kind == MatrixRtcStreamKind.SCREEN_SHARE } }
         .map { participant ->
-            participant.cameraTile().copy(
-                id = MatrixRtcTileId(participant.memberId, MatrixRtcStreamKind.SCREEN_SHARE),
+            participant.personTile().copy(
+                id = MatrixRtcTileId(participant.memberId, MatrixRtcTileKind.SCREEN_SHARE),
                 isHero = true,
                 hasVideo = participant.streams.any { it.kind == MatrixRtcStreamKind.SCREEN_SHARE && !it.isMuted },
             )
         }
     val cameras = remotes
-        .map { it.cameraTile().copy(isSpeaking = it.memberId in speakingIds) }
+        .map { it.personTile().copy(isSpeaking = it.memberId in speakingIds) }
         .sortedWith(compareByDescending<MatrixRtcTile> { it.isSpeaking }.thenByDescending { it.hasVideo })
     return shares + cameras
 }
 
 /** Our own tile for these participants, as the core would publish it. */
-fun List<MatrixRtcParticipant>.previewOwnTile(): MatrixRtcTile? = firstOrNull { it.isLocal }?.cameraTile()
+fun List<MatrixRtcParticipant>.previewOwnTile(): MatrixRtcTile? = firstOrNull { it.isLocal }?.personTile()

@@ -8,13 +8,13 @@
 package io.element.android.call.impl.rtc
 
 import com.google.common.truth.Truth.assertThat
-import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTileId
+import io.element.android.call.api.rtc.MatrixRtcTileKind
 import io.element.android.call.api.rtc.id.UserId
 import org.junit.Test
 import org.matrix.rtc.FfiCallTile
-import org.matrix.rtc.FfiStreamKind
 import org.matrix.rtc.FfiTileId
+import org.matrix.rtc.FfiTileKind
 import org.matrix.rtc.FfiTileRef
 import org.matrix.rtc.FfiTileRoster
 
@@ -23,13 +23,13 @@ class TileRosterMapperTest {
     fun `detail is joined to the order by identity, not by index`() {
         // A narrowed window: the core sends records for B and C only, so index 0 of detail is B's.
         val roster = FfiTileRoster(
-            order = listOf(aRef("A", userId = "@a:x"), aRef("B"), aRef("C", FfiStreamKind.SCREEN_SHARE, hero = true)),
-            detail = listOf(anFfiTile("B", userId = "@b:x"), anFfiTile("C", FfiStreamKind.SCREEN_SHARE, userId = "@c:x", hero = true)),
+            order = listOf(aRef("A", userId = "@a:x"), aRef("B"), aRef("C", FfiTileKind.SCREEN_SHARE, hero = true)),
+            detail = listOf(anFfiTile("B", userId = "@b:x"), anFfiTile("C", FfiTileKind.SCREEN_SHARE, userId = "@c:x", hero = true)),
         ).map()
 
         assertThat(roster.order.map { it.id.memberId }).containsExactly("A", "B", "C").inOrder()
         assertThat(roster.ranked.map { it.userId }).containsExactly(UserId("@b:x"), UserId("@c:x")).inOrder()
-        assertThat(roster.detail[MatrixRtcTileId("A", MatrixRtcStreamKind.CAMERA)]).isNull()
+        assertThat(roster.detail[MatrixRtcTileId("A", MatrixRtcTileKind.PERSON)]).isNull()
         // No record for A, but its reference still says whose tile it is: enough for a name and an avatar.
         assertThat(roster.order.first().userId).isEqualTo(UserId("@a:x"))
     }
@@ -37,11 +37,11 @@ class TileRosterMapperTest {
     @Test
     fun `a sharer's two tiles are told apart by kind`() {
         val roster = FfiTileRoster(
-            order = listOf(aRef("A", FfiStreamKind.SCREEN_SHARE, hero = true), aRef("A")),
-            detail = listOf(anFfiTile("A", FfiStreamKind.SCREEN_SHARE, hero = true), anFfiTile("A", hasVideo = false)),
+            order = listOf(aRef("A", FfiTileKind.SCREEN_SHARE, hero = true), aRef("A")),
+            detail = listOf(anFfiTile("A", FfiTileKind.SCREEN_SHARE, hero = true), anFfiTile("A", hasVideo = false)),
         ).map()
 
-        assertThat(roster.ranked.map { it.id.kind }).containsExactly(MatrixRtcStreamKind.SCREEN_SHARE, MatrixRtcStreamKind.CAMERA).inOrder()
+        assertThat(roster.ranked.map { it.id.kind }).containsExactly(MatrixRtcTileKind.SCREEN_SHARE, MatrixRtcTileKind.PERSON).inOrder()
         assertThat(roster.ranked.map { it.isHero }).containsExactly(true, false).inOrder()
         assertThat(roster.ranked.map { it.hasVideo }).containsExactly(true, false).inOrder()
     }
@@ -61,12 +61,12 @@ class TileRosterMapperTest {
         assertThat(anFfiTile("A").map().handRaisedAtMs).isNull()
     }
 
-    private fun aRef(memberId: String, kind: FfiStreamKind = FfiStreamKind.CAMERA, hero: Boolean = false, userId: String = "@someone:example.org") =
+    private fun aRef(memberId: String, kind: FfiTileKind = FfiTileKind.PERSON, hero: Boolean = false, userId: String = "@someone:example.org") =
         FfiTileRef(id = FfiTileId(memberId, kind), userId = userId, hero = hero)
 
     private fun anFfiTile(
         memberId: String,
-        kind: FfiStreamKind = FfiStreamKind.CAMERA,
+        kind: FfiTileKind = FfiTileKind.PERSON,
         userId: String = "@someone:example.org",
         hero: Boolean = false,
         hasVideo: Boolean = true,

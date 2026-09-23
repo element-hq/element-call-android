@@ -22,6 +22,7 @@ import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcStreamState
 import io.element.android.call.api.rtc.MatrixRtcTile
 import io.element.android.call.api.rtc.MatrixRtcTileId
+import io.element.android.call.api.rtc.MatrixRtcTileKind
 import io.element.android.call.api.rtc.MatrixRtcTileRef
 import io.element.android.call.api.rtc.MatrixRtcTileRoster
 import io.element.android.call.api.rtc.id.UserId
@@ -40,6 +41,7 @@ import org.matrix.rtc.FfiStreamRef
 import org.matrix.rtc.FfiStreamState
 import org.matrix.rtc.FfiStreamStats
 import org.matrix.rtc.FfiTileId
+import org.matrix.rtc.FfiTileKind
 import org.matrix.rtc.FfiTileRef
 import org.matrix.rtc.FfiTileRoster
 import org.matrix.rtc.JoinedMembership
@@ -167,6 +169,16 @@ internal fun FfiStreamState.map() = MatrixRtcStreamState(
     kind = kind.map(),
     isMuted = muted,
 )
+
+internal fun FfiTileKind.map(): MatrixRtcTileKind = when (this) {
+    FfiTileKind.PERSON -> MatrixRtcTileKind.PERSON
+    FfiTileKind.SCREEN_SHARE -> MatrixRtcTileKind.SCREEN_SHARE
+}
+
+internal fun MatrixRtcTileKind.map(): FfiTileKind = when (this) {
+    MatrixRtcTileKind.PERSON -> FfiTileKind.PERSON
+    MatrixRtcTileKind.SCREEN_SHARE -> FfiTileKind.SCREEN_SHARE
+}
 
 internal fun FfiTileId.map() = MatrixRtcTileId(memberId = memberId, kind = kind.map())
 

@@ -11,6 +11,8 @@ import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTile
+import io.element.android.call.api.rtc.MatrixRtcTileId
+import io.element.android.call.api.rtc.MatrixRtcTileKind
 import io.element.android.call.api.rtc.id.UserId
 
 /**
@@ -82,6 +84,10 @@ data class CallTileData(
     val displayName: String get() = roomMember?.displayName?.takeIf { it.isNotBlank() } ?: userId.value
 
     val isScreenShare: Boolean get() = streamKind == MatrixRtcStreamKind.SCREEN_SHARE
+
+    /** What the core calls this tile: the identity the call layer is addressed by. */
+    val id: MatrixRtcTileId
+        get() = MatrixRtcTileId(memberId, if (isScreenShare) MatrixRtcTileKind.SCREEN_SHARE else MatrixRtcTileKind.PERSON)
 }
 
 /**
@@ -102,7 +108,7 @@ fun MatrixRtcTile.toCallTileData(
     hasMicrophone: Boolean,
     isFrontCamera: Boolean,
 ): CallTileData {
-    val isScreenShare = id.kind == MatrixRtcStreamKind.SCREEN_SHARE
+    val isScreenShare = id.kind == MatrixRtcTileKind.SCREEN_SHARE
     return CallTileData(
         memberId = id.memberId,
         userId = userId,
@@ -116,7 +122,7 @@ fun MatrixRtcTile.toCallTileData(
         // themselves, and any text in frame reads backwards.
         isVideoMirrored = isLocal && !isScreenShare && isFrontCamera,
         isReachable = isReachable,
-        streamKind = id.kind,
+        streamKind = id.kind.videoStreamKind,
     )
 }
 

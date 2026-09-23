@@ -11,14 +11,15 @@ import com.google.common.truth.Truth.assertThat
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcTileId
+import io.element.android.call.api.rtc.MatrixRtcTileKind
 import org.junit.Test
 
 class StreamsToPollTest {
     @Test
     fun `a sharer's two tiles ask for the camera, the screen and one microphone`() {
         val composed = listOf(
-            MatrixRtcTileId("A", MatrixRtcStreamKind.SCREEN_SHARE),
-            MatrixRtcTileId("A", MatrixRtcStreamKind.CAMERA),
+            MatrixRtcTileId("A", MatrixRtcTileKind.SCREEN_SHARE),
+            MatrixRtcTileId("A", MatrixRtcTileKind.PERSON),
         )
 
         val streams = streamsToPoll(composed, withMicrophone = setOf("A"))
@@ -33,7 +34,7 @@ class StreamsToPollTest {
     /** No microphone stream means nothing to poll for it: the warning about that is logged elsewhere. */
     @Test
     fun `a member without a microphone is asked about their tile only`() {
-        val streams = streamsToPoll(listOf(MatrixRtcTileId("A", MatrixRtcStreamKind.CAMERA)), withMicrophone = emptySet())
+        val streams = streamsToPoll(listOf(MatrixRtcTileId("A", MatrixRtcTileKind.PERSON)), withMicrophone = emptySet())
 
         assertThat(streams).containsExactly(MatrixRtcStreamRef("A", MatrixRtcStreamKind.CAMERA))
     }

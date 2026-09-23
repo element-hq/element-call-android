@@ -29,6 +29,7 @@ import io.element.android.call.api.rtc.MatrixRtcSpeakingMember
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcTileId
+import io.element.android.call.api.rtc.MatrixRtcTileKind
 import io.element.android.call.api.rtc.MatrixRtcTransport
 import io.element.android.call.test.A_ROOM_ID
 import io.element.android.call.test.FakeElementCallLifecycleListener
@@ -828,7 +829,7 @@ class DefaultElementCallControllerTest {
     fun `the composed tiles reach the call, including one that connects later`() = runTest {
         val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
         val controller = createController(rtcService = rtcService)
-        val composed = setOf(MatrixRtcTileId(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.CAMERA))
+        val composed = setOf(MatrixRtcTileId(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.PERSON))
         controller.setComposedTiles(composed)
 
         controller.setMicrophonePermissionGranted(true)
@@ -836,7 +837,7 @@ class DefaultElementCallControllerTest {
         val call = rtcService.lastSession?.lastCall!!
         assertThat(call.composedTiles).containsExactly(composed)
 
-        val more = composed + MatrixRtcTileId(ANOTHER_REMOTE_MEMBER_ID, MatrixRtcStreamKind.SCREEN_SHARE)
+        val more = composed + MatrixRtcTileId(ANOTHER_REMOTE_MEMBER_ID, MatrixRtcTileKind.SCREEN_SHARE)
         controller.setComposedTiles(more)
         assertThat(call.composedTiles).containsExactly(composed, more).inOrder()
     }
@@ -857,7 +858,7 @@ class DefaultElementCallControllerTest {
 
         call.tiles.value = aRoster(aTile(A_REMOTE_MEMBER_ID), aTile(ANOTHER_REMOTE_MEMBER_ID))
         runCurrent()
-        assertThat(controller.state.value?.spotlightTileId).isEqualTo(MatrixRtcTileId(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.CAMERA))
+        assertThat(controller.state.value?.spotlightTileId).isEqualTo(MatrixRtcTileId(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.PERSON))
 
         repeat(6) { index ->
             val speaker = if (index % 2 == 0) A_REMOTE_MEMBER_ID else ANOTHER_REMOTE_MEMBER_ID
@@ -879,11 +880,11 @@ class DefaultElementCallControllerTest {
         runCurrent()
         val call = rtcService.lastSession?.lastCall!!
 
-        call.tiles.value = aRoster(aTile(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.SCREEN_SHARE), aTile(A_REMOTE_MEMBER_ID))
+        call.tiles.value = aRoster(aTile(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.SCREEN_SHARE), aTile(A_REMOTE_MEMBER_ID))
         runCurrent()
 
-        assertThat(controller.state.value?.spotlightTileId).isEqualTo(MatrixRtcTileId(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.SCREEN_SHARE))
-        assertThat(controller.state.value?.tiles?.map { it.id.kind }).containsExactly(MatrixRtcStreamKind.SCREEN_SHARE, MatrixRtcStreamKind.CAMERA).inOrder()
+        assertThat(controller.state.value?.spotlightTileId).isEqualTo(MatrixRtcTileId(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.SCREEN_SHARE))
+        assertThat(controller.state.value?.tiles?.map { it.id.kind }).containsExactly(MatrixRtcTileKind.SCREEN_SHARE, MatrixRtcTileKind.PERSON).inOrder()
     }
 
     /** Never ourselves: the core never ranks our own tile, so alone there is nobody to spotlight. */

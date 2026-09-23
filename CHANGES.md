@@ -14,6 +14,8 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 - **Needs matrix-rust-rtc with the call tile roster** (`MediaSession.nextRoster`). Until it is released and pinned,
   build it with `./tools/rtc/build-rust-rtc`.
+- A tile's kind is a `MatrixRtcTileKind` - `PERSON` or `SCREEN_SHARE` - not a stream kind: `MatrixRtcTileId.kind`,
+  with `videoStreamKind` for the stream a tile draws. `MatrixRtcParticipant.cameraTile()` is `personTile()`.
 - `MatrixRtcCall` gains `tiles` and `localState`. A fake or a host transport implementing it must supply both.
   `MatrixRtcTileRef` carries `userId`, so a tile outside the detail window still has a name and an avatar.
 - `ElementCallSnapshot`: `tiles` (remote, ranked) and `ownTile` added. `spotlightMemberId` becomes `spotlightTileId`,

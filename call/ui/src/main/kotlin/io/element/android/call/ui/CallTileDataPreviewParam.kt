@@ -10,7 +10,7 @@ package io.element.android.call.ui
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
-import io.element.android.call.api.rtc.cameraTile
+import io.element.android.call.api.rtc.personTile
 
 /** One tile in each of the states it can be drawn in, so a change to any badge or fallback is a screenshot diff. */
 open class CallTileDataPreviewParam : PreviewParameterProvider<CallTileData> {
@@ -37,7 +37,7 @@ private val A_BOB = ElementCallRoomMember(
     avatarUrl = null,
 )
 
-private fun io.element.android.call.api.rtc.MatrixRtcParticipant.toTile(roomMember: ElementCallRoomMember? = null) = cameraTile().toCallTileData(
+private fun io.element.android.call.api.rtc.MatrixRtcParticipant.toTile(roomMember: ElementCallRoomMember? = null) = personTile().toCallTileData(
     roomMembers = roomMember?.let { mapOf(it.userId to it) } ?: emptyMap(),
     isLocal = isLocal,
     hasMicrophone = true,
