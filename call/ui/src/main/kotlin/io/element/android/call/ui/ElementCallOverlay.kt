@@ -102,7 +102,7 @@ fun ElementCallOverlay(
         // hangs the call up if the answer is no.
         val isInPictureInPicture by controller.isInPictureInPicture.collectAsState()
         if (isInPictureInPicture) {
-            ElementCallPictureInPictureView(call = current, videoFrames = controller::videoFrames)
+            ElementCallPictureInPictureContent(call = current, videoFrames = controller::videoFrames)
         } else {
             CallInApp(controller = controller, current = current, modifier = modifier, content = content)
         }

@@ -98,6 +98,10 @@ until one does.
   no comments about what is absent or was removed, no development history; that belongs in the commit.
 - `runCatching` is always `runCatchingExceptions` (it rethrows `CancellationException`).
 - Classes implementing an interface are `Default…`, never `…Impl`. Fakes are `Fake<Interface>`.
+- A composable is named with a plain noun for what it draws: `CallTile`, `ElementCallMinimizedBar`, never `…View`
+  or `…Composable`. When it needs a model of its own, the model takes the suffix: `CallTile(tile: CallTileData)`,
+  as `ElementCallAvatar(ElementCallAvatarData)` does and as Element X's `Avatar(AvatarData)` does. A screen is
+  `…Screen` over `…State`, from a `…Presenter`.
 - State classes have no default constructor values; events are sealed interfaces; sealed interfaces passed to
   composables are `@Immutable` or `@Stable`; use `toImmutableList()` not `toPersistentList()`.
 

@@ -411,7 +411,7 @@ private fun previewCallTiles(
 ) = (listOfNotNull(participants.previewOwnTile()?.let { it.copy(isSpeaking = it.id.memberId in speakingIds) }) + participants.previewTiles(speakingIds))
     .map { tile ->
         val participant = participants.first { it.memberId == tile.id.memberId }
-        tile.toCallTile(
+        tile.toCallTileData(
             roomMembers = emptyMap(),
             isLocal = participant.isLocal,
             hasMicrophone = participant.hasStream(MatrixRtcStreamKind.MICROPHONE),
