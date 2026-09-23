@@ -436,6 +436,18 @@ Then, in this order:
 `participants()` is the transport's roster and is a different thing from the core's membership projection. Both are
 legitimate and they can differ; log which layer a surprising row came from.
 
+**What to draw is the tile roster, not `participants()`.** `nextRoster()` / `roster()` give every remote tile — one per
+camera, one more per screen share — ranked and damped by the core; `nextLocalState()` / `localState()` give your own
+tile, which is never in the ranked list, and the sharing flag. Both long-poll with the latest value winning, so pump
+each from one coroutine, seeded from its pull. The semantics are the reviewed contract,
+`element-call-feature-hq/plans/002.rust_rtc_media_roster_model/contract.md`; three things bite silently:
+
+- A tile's identity is `(memberId, kind)`. Join `detail` to `order` by it, never by index: `setDetailWindow` makes
+  `detail` a subsequence.
+- Render `order` as given. It already carries the hysteresis; a re-sort, or a spotlight damper of your own, fights it.
+- `localState()` is null until your membership reaches the core's roster, later than `participants()` lists you.
+  Build your own tile from your `participants()` row until then, or every join opens on an empty stage.
+
 Two Rust-side deployment notes: Android honours only the AAR's bundled root certificates, so a deployment fronted by
 an enterprise CA fails the TLS handshake with no way to install trust (`FEEDBACK.md` item 3); and the AAR ships no
 `x86` ABI, so a 32-bit emulator build installs without the native library and fails at first use rather than at
