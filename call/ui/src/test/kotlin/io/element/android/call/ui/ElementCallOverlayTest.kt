@@ -68,6 +68,18 @@ class ElementCallOverlayTest : RobolectricTest() {
             assertThat(controller.hangUpCount).isEqualTo(1)
         }
 
+    @Test
+    fun `a maximized call that ends gives the screen back to the host`() = runAndroidComposeUiTest<ComponentActivity> {
+        val controller = FakeElementCallController(initialState = aConnectedSnapshot(isMaximized = true))
+        setOverlay(controller)
+        assertNodeWithContentDescriptionIsDisplayed(R.string.element_call_a11y_hang_up)
+
+        controller.state.value = null
+
+        onNodeWithText(HOST_CONTENT).assertIsDisplayed()
+        assertNoNodeWithContentDescription(R.string.element_call_a11y_hang_up)
+    }
+
     /** A voice call docks as a bar above the host's content, and tapping it brings the call back. */
     @Test
     fun `a minimized audio call docks as the bar over the host content`() = runAndroidComposeUiTest<ComponentActivity> {

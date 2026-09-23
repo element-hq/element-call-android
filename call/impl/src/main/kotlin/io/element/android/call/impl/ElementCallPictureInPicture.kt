@@ -17,6 +17,10 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import io.element.android.call.api.ElementCallController
 import io.element.android.call.impl.util.runCatchingExceptions
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
@@ -37,6 +41,8 @@ import timber.log.Timber
  * maximized, is minimized or ends, so backgrounding the app with no call - or with a call docked in the
  * bar - behaves exactly as it did before any of this existed. See
  * [ElementCallController.shouldEnterPictureInPicture] for the rule.
+ *
+ * A call ending while floating closes the window by moving the task back, not by finishing the host's Activity.
  */
 object ElementCallPictureInPicture {
     /**
@@ -57,6 +63,24 @@ object ElementCallPictureInPicture {
                             )
                         }.onFailure { Timber.w(it, "ElementCall: cannot set picture-in-picture params") }
                     }
+                }
+            }
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            activity.lifecycleScope.launch {
+                activity.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    controller.state
+                        .map { it != null }
+                        .distinctUntilChanged()
+                        // Transitions only: a host may use picture-in-picture without a call.
+                        .drop(1)
+                        .filter { hasCall -> !hasCall }
+                        .collect {
+                            if (activity.isInPictureInPictureMode) {
+                                Timber.d("ElementCall: call ended in picture-in-picture")
+                                activity.moveTaskToBack(false)
+                            }
+                        }
                 }
             }
         }
