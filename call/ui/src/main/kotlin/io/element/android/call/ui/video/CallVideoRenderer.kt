@@ -14,10 +14,12 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.viewinterop.AndroidView
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.ui.TileFrameCounter
@@ -44,6 +46,7 @@ import timber.log.Timber
  * @param modifier sizes the view; see above.
  * @param frameCounter told about every frame drawn, for the debug overlay. Counts only - it must never
  * write Compose state, or reading the numbers would cost more than producing them.
+ * @param onVideoSizeChange told the frame's size as displayed, rotation applied, when it changes.
  */
 @Composable
 fun CallVideoRenderer(
@@ -51,6 +54,7 @@ fun CallVideoRenderer(
     isMirrored: Boolean,
     modifier: Modifier = Modifier,
     frameCounter: TileFrameCounter? = null,
+    onVideoSizeChange: ((IntSize) -> Unit)? = null,
 ) {
     // Previews and Paparazzi have no GL context, and the renderer's init would try to make one.
     // A placeholder keeps every screenshot test that renders this screen alive.
@@ -67,11 +71,20 @@ fun CallVideoRenderer(
 
     val handle = remember { RendererHandle() }
     var isAttached by remember { mutableStateOf(false) }
+    val currentOnVideoSizeChange by rememberUpdatedState(onVideoSizeChange)
 
     LaunchedEffect(isAttached, frames) {
         if (!isAttached) return@LaunchedEffect
+        var lastSize = IntSize.Zero
         frames.collect { frame ->
             frameCounter?.onFrame(frame.width, frame.height)
+            currentOnVideoSizeChange?.let { report ->
+                val size = frame.displayedSize()
+                if (size != lastSize) {
+                    lastSize = size
+                    report(size)
+                }
+            }
             handle.render(frame)
         }
     }
@@ -174,5 +187,8 @@ private fun CallTextureView.render(frame: MatrixRtcVideoFrame) {
         videoFrame.release()
     }
 }
+
+private fun MatrixRtcVideoFrame.displayedSize(): IntSize =
+    if (rotationDegrees % 180 == 0) IntSize(width, height) else IntSize(height, width)
 
 private const val NANOS_PER_MICRO = 1_000L
