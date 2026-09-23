@@ -95,5 +95,5 @@ internal class CallTextureView(context: Context) : TextureView(context), Texture
     }
 }
 
-private const val RENDERER_NAME = "CallTileData"
+private const val RENDERER_NAME = "CallTile"
 private const val SURFACE_RELEASE_TIMEOUT_MS = 500L
