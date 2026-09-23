@@ -28,6 +28,7 @@ import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcService
 import io.element.android.call.api.rtc.MatrixRtcSession
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcTransport
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
@@ -183,6 +184,7 @@ internal class DefaultElementCallController(
 
     private var session: MatrixRtcSession? = null
     private var call: MatrixRtcCall? = null
+    private var composedTiles: Set<MatrixRtcTileId> = emptySet()
 
     /**
      * Begin a call. Does nothing if one is already running, including for the same room: rejoining
@@ -431,6 +433,13 @@ internal class DefaultElementCallController(
         scope.launch { call?.setVideoConstraints(memberId, kind, constraints) }
     }
 
+    override fun setComposedTiles(tileIds: Set<MatrixRtcTileId>) {
+        // Kept, not only forwarded: the screen usually declares before media connects, and a call
+        // that started with nothing declared would poll nothing until the next page turn.
+        composedTiles = tileIds
+        call?.setComposedTiles(tileIds)
+    }
+
     override fun hangUp() {
         scope.launch { endCall(leave = true) }
     }
@@ -485,6 +494,7 @@ internal class DefaultElementCallController(
             return
         }
         call = connected
+        connected.setComposedTiles(composedTiles)
         // A child of the session scope rather than this coroutine: the shared flows have to outlive
         // any one tile's collection, and are torn down with the call in endCall().
         videoSharingScope = CoroutineScope(scope.coroutineContext + SupervisorJob())

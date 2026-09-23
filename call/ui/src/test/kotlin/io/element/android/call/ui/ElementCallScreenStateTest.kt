@@ -19,7 +19,9 @@ import io.element.android.call.api.ElementCallVersion
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
 import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcTile
+import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.id.UserId
 import io.element.android.call.test.A_ROOM_ID
@@ -232,6 +234,7 @@ class ElementCallScreenStateTest {
             state.eventSink(ElementCallScreenEvent.Minimize)
             state.eventSink(ElementCallScreenEvent.ToggleTileStats)
             state.eventSink(ElementCallScreenEvent.SetVideoConstraints(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.CAMERA, constraints))
+            state.eventSink(ElementCallScreenEvent.SetComposedTiles(setOf(MatrixRtcTileId(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.CAMERA))))
             state.eventSink(ElementCallScreenEvent.HangUp)
 
             assertThat(controller.switchCameraCount).isEqualTo(1)
@@ -239,8 +242,9 @@ class ElementCallScreenStateTest {
             assertThat(controller.maximizedCalls).containsExactly(false)
             assertThat(controller.toggleTileStatsCount).isEqualTo(1)
             assertThat(controller.videoConstraints).containsExactly(
-                FakeElementCallController.VideoStreamRef(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.CAMERA) to constraints,
+                MatrixRtcStreamRef(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.CAMERA) to constraints,
             )
+            assertThat(controller.composedTiles).containsExactly(setOf(MatrixRtcTileId(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.CAMERA)))
             assertThat(controller.hangUpCount).isEqualTo(1)
             cancelAndIgnoreRemainingEvents()
         }

@@ -78,6 +78,7 @@ data class FrameSample(val framesPerInterval: Int, val width: Int, val height: I
 internal fun CallTileStatsOverlay(
     counter: TileFrameCounter,
     receiveStats: MatrixRtcReceiveStats?,
+    audioStats: MatrixRtcReceiveStats?,
     frameEncryption: MatrixRtcFrameEncryptionState?,
     requestedWidth: Int,
     requestedHeight: Int,
@@ -120,6 +121,12 @@ internal fun CallTileStatsOverlay(
         if (receiveStats != null) {
             StatLine("$bitrateKbps kbps · ${receiveStats.packetsLost} lost")
             StatLine("jit ${(receiveStats.jitter * 1000).toInt()}ms · drop ${receiveStats.framesDropped}")
+        }
+        // The microphone's own counters, because "concealed" is the one number that separates audio
+        // that is silent from audio that is fabricated - see MatrixRtcReceiveStats.concealedFraction.
+        if (audioStats != null) {
+            val concealed = audioStats.concealedFraction?.let { "${(it * 100).toInt()}%" } ?: "?"
+            StatLine("mic ${audioStats.packetsLost} lost · $concealed concealed")
         }
         if (frameEncryption != null) {
             StatLine("e2ee ${frameEncryption.name.lowercase()}")

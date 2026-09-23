@@ -684,8 +684,12 @@ takes the whole app down.
 
 ### Telling a starved stream from a silent one
 
-Poll `mediaSession.receiveStats(memberId, kind)` about once a second (RTCP reports arrive at roughly that rate, so
-faster only repeats values). Null means "no report yet", which is not zero.
+Poll about once a second (RTCP reports arrive at roughly that rate, so faster only repeats values), and poll **the
+streams you draw, in one call**: `mediaSession.receiveStatsFor(streams)` takes a list of `FfiStreamRef(memberId, kind)`
+and answers every entry in one round trip, in request order, `stats == null` where a single `receiveStats` would
+return null ("no report yet", which is not zero). This library asks for each composed tile's own stream plus its
+member's microphone — the set the layout declares through `setComposedTiles` — so a call of two hundred costs one
+call a second for the twenty tiles on screen, not two per member (`RustMatrixRtcCall.pollReceiveStats`).
 
 Read the counters together, because each alone lies:
 

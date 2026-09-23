@@ -18,6 +18,7 @@ import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcSpeakingMember
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcStreamState
 import io.element.android.call.api.rtc.MatrixRtcTile
 import io.element.android.call.api.rtc.MatrixRtcTileId
@@ -35,7 +36,9 @@ import org.matrix.rtc.FfiParticipant
 import org.matrix.rtc.FfiReceiveStats
 import org.matrix.rtc.FfiSpeakingMember
 import org.matrix.rtc.FfiStreamKind
+import org.matrix.rtc.FfiStreamRef
 import org.matrix.rtc.FfiStreamState
+import org.matrix.rtc.FfiStreamStats
 import org.matrix.rtc.FfiTileId
 import org.matrix.rtc.FfiTileRef
 import org.matrix.rtc.FfiTileRoster
@@ -194,3 +197,9 @@ internal fun FfiLocalState.map() = MatrixRtcLocalState(
     tile = tile.map(),
     isScreenSharing = isScreenSharing,
 )
+
+internal fun MatrixRtcStreamRef.map() = FfiStreamRef(memberId = memberId, kind = kind.map())
+
+/** The stream asked about and its counters; null counters mean no RTCP report yet, not zero. */
+internal fun FfiStreamStats.map(): Pair<MatrixRtcStreamRef, MatrixRtcReceiveStats?> =
+    MatrixRtcStreamRef(memberId, kind.map()) to stats?.map()

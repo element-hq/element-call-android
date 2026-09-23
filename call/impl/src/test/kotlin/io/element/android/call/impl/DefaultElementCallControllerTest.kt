@@ -27,6 +27,7 @@ import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcSpeakingMember
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcTransport
 import io.element.android.call.test.A_ROOM_ID
@@ -357,7 +358,7 @@ class DefaultElementCallControllerTest {
             consumeItemsUntilPredicate { it.connection == ElementCallConnection.Connected }
 
             val call = rtcService.lastSession?.lastCall!!
-            call.receiveStats.value = mapOf("aRemoteMemberId" to A_RECEIVE_STATS)
+            call.receiveStats.value = mapOf(MatrixRtcStreamRef("aRemoteMemberId", MatrixRtcStreamKind.MICROPHONE) to A_RECEIVE_STATS)
             call.emit(
                 MatrixRtcCallEvent.FrameEncryption(
                     memberId = "aRemoteMemberId",
@@ -367,7 +368,7 @@ class DefaultElementCallControllerTest {
             )
 
             val state = consumeItemsUntilPredicate { it.frameEncryption.isNotEmpty() }.last()
-            assertThat(state.receiveStats["aRemoteMemberId"]).isEqualTo(A_RECEIVE_STATS)
+            assertThat(state.receiveStats[MatrixRtcStreamRef("aRemoteMemberId", MatrixRtcStreamKind.MICROPHONE)]).isEqualTo(A_RECEIVE_STATS)
             assertThat(state.frameEncryption["aRemoteMemberId"]).isEqualTo(MatrixRtcFrameEncryptionState.MISSING_KEY)
             cancelAndIgnoreRemainingEvents()
         }
@@ -817,6 +818,27 @@ class DefaultElementCallControllerTest {
         controller.videoFrames(A_REMOTE_MEMBER_ID).collect { frameCount++ }
 
         assertThat(frameCount).isEqualTo(0)
+    }
+
+    /**
+     * The screen declares what it composes before media is up, so the set has to survive until the
+     * call exists - and reach every call the controller starts after it.
+     */
+    @Test
+    fun `the composed tiles reach the call, including one that connects later`() = runTest {
+        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
+        val controller = createController(rtcService = rtcService)
+        val composed = setOf(MatrixRtcTileId(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.CAMERA))
+        controller.setComposedTiles(composed)
+
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+        val call = rtcService.lastSession?.lastCall!!
+        assertThat(call.composedTiles).containsExactly(composed)
+
+        val more = composed + MatrixRtcTileId(ANOTHER_REMOTE_MEMBER_ID, MatrixRtcStreamKind.SCREEN_SHARE)
+        controller.setComposedTiles(more)
+        assertThat(call.composedTiles).containsExactly(composed, more).inOrder()
     }
 
     /**

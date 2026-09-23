@@ -10,6 +10,7 @@ package io.element.android.call.api
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import kotlinx.coroutines.flow.Flow
@@ -89,6 +90,9 @@ interface ElementCallController {
 
     /** Tell the core how big a member's video is actually being drawn, so it sends the right layer. */
     fun setVideoConstraints(memberId: String, kind: MatrixRtcStreamKind, constraints: MatrixRtcVideoConstraints)
+
+    /** Tell the call which tiles the screen composes, so it only polls statistics for those. See [MatrixRtcCall.setComposedTiles]. */
+    fun setComposedTiles(tileIds: Set<MatrixRtcTileId>)
 
     /** End the call and publish a leave membership. */
     fun hangUp()

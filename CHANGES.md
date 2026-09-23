@@ -21,6 +21,12 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 - A member sharing their screen is two tiles, the share a hero. Test tags and keys are unchanged
   (`memberId`, `memberId#SCREEN_SHARE`).
 - `isScreenSharing` now reflects the screen-share publication rather than what was asked for.
+- Receive statistics are per stream and bounded to what is drawn. `MatrixRtcCall.receiveStats` and
+  `ElementCallSnapshot.receiveStats` are keyed by `MatrixRtcStreamRef(memberId, kind)` (were member id,
+  microphone only), and hold each composed tile's stream plus its member's microphone. The screen declares
+  the composed set through `ElementCallController.setComposedTiles`; a host transport implementing
+  `MatrixRtcCall` must supply it, and one round trip (`receiveStatsFor`) per second serves the whole set.
+  `TileStats` gains `audioStats`.
 - `toCallTiles` and `screenShareTileId` are gone; build a `CallTileData` (formerly `CallParticipant`) with `MatrixRtcTile.toCallTileData`.
 - Composables renamed: `CallParticipantTile` is `CallTile`, and `ElementCallPictureInPictureView` is
   `ElementCallPictureInPictureContent`. Same parameters.

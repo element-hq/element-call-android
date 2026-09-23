@@ -16,6 +16,7 @@ import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamState
+import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.test.ElementCallTestPattern
@@ -125,6 +126,10 @@ class SampleElementCallController(
             isScreenSharing = token != null,
             participants = it.participants.withLocalStream(MatrixRtcStreamKind.SCREEN_SHARE, isMuted = token == null),
         )
+    }
+
+    override fun setComposedTiles(tileIds: Set<MatrixRtcTileId>) {
+        // Nothing to poll: the harness has no transport.
     }
 
     override fun setVideoConstraints(memberId: String, kind: MatrixRtcStreamKind, constraints: MatrixRtcVideoConstraints) {

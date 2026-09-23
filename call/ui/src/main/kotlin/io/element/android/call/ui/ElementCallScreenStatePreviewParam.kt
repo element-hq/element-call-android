@@ -16,6 +16,7 @@ import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcStreamState
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.api.rtc.id.UserId
@@ -69,7 +70,7 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
                     A_LOCAL_MEMBER_ID to MatrixRtcAudioLevel(level = 0.6f, frameCount = 900),
                     A_REMOTE_MEMBER_ID to MatrixRtcAudioLevel(level = 0f, frameCount = 900),
                 ),
-                receiveStats = mapOf(A_REMOTE_MEMBER_ID to aReceiveStats(concealedSamples = 42_000)),
+                receiveStats = mapOf(MatrixRtcStreamRef(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.MICROPHONE) to aReceiveStats(concealedSamples = 42_000)),
                 frameEncryption = mapOf(
                     A_LOCAL_MEMBER_ID to MatrixRtcFrameEncryptionState.OK,
                     A_REMOTE_MEMBER_ID to MatrixRtcFrameEncryptionState.MISSING_KEY,
@@ -86,7 +87,7 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
                     A_LOCAL_MEMBER_ID to MatrixRtcAudioLevel(level = 0.5f, frameCount = 3_000),
                     A_REMOTE_MEMBER_ID to MatrixRtcAudioLevel(level = 0f, frameCount = 3_000),
                 ),
-                receiveStats = mapOf(A_REMOTE_MEMBER_ID to aReceiveStats(packetsReceived = 2_400)),
+                receiveStats = mapOf(MatrixRtcStreamRef(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.MICROPHONE) to aReceiveStats(packetsReceived = 2_400)),
                 frameEncryption = mapOf(
                     A_LOCAL_MEMBER_ID to MatrixRtcFrameEncryptionState.MISSING_KEY,
                     A_REMOTE_MEMBER_ID to MatrixRtcFrameEncryptionState.MISSING_KEY,
@@ -253,7 +254,7 @@ fun anElementCallScreenState(
     memberCount: Int = 0,
     participants: List<MatrixRtcParticipant> = emptyList(),
     audioLevels: Map<String, MatrixRtcAudioLevel> = emptyMap(),
-    receiveStats: Map<String, MatrixRtcReceiveStats> = emptyMap(),
+    receiveStats: Map<MatrixRtcStreamRef, MatrixRtcReceiveStats> = emptyMap(),
     frameEncryption: Map<String, MatrixRtcFrameEncryptionState> = emptyMap(),
     activeSpeakerIds: Set<String> = emptySet(),
     isMicrophoneMuted: Boolean = false,

@@ -21,6 +21,8 @@ import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcService
 import io.element.android.call.api.rtc.MatrixRtcSession
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcStreamRef
+import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcTileRoster
 import io.element.android.call.api.rtc.MatrixRtcTransport
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
@@ -111,7 +113,14 @@ class FakeMatrixRtcCall : MatrixRtcCall {
 
     override val audioLevels = MutableStateFlow(emptyMap<String, MatrixRtcAudioLevel>())
 
-    override val receiveStats = MutableStateFlow(emptyMap<String, MatrixRtcReceiveStats>())
+    override val receiveStats = MutableStateFlow(emptyMap<MatrixRtcStreamRef, MatrixRtcReceiveStats>())
+
+    /** Every set [setComposedTiles] was given, in order. */
+    val composedTiles = mutableListOf<Set<MatrixRtcTileId>>()
+
+    override fun setComposedTiles(tileIds: Set<MatrixRtcTileId>) {
+        composedTiles += tileIds
+    }
 
     private val _isMicrophoneMuted = MutableStateFlow(false)
     override val isMicrophoneMuted: StateFlow<Boolean> = _isMicrophoneMuted
@@ -128,11 +137,8 @@ class FakeMatrixRtcCall : MatrixRtcCall {
     private val _isScreenSharing = MutableStateFlow(false)
     override val isScreenSharing: StateFlow<Boolean> = _isScreenSharing
 
-    /** One member's one video stream: what the real implementation keys its flows by. */
-    data class VideoStreamRef(val memberId: String, val kind: MatrixRtcStreamKind)
-
     /** Streams [videoFrames] has been asked for, so a test can assert what the UI opened. */
-    val videoFramesRequests = mutableListOf<VideoStreamRef>()
+    val videoFramesRequests = mutableListOf<MatrixRtcStreamRef>()
 
     /**
      * How many streams are currently open per member and kind.
@@ -142,7 +148,7 @@ class FakeMatrixRtcCall : MatrixRtcCall {
      * and collecting it opens a stream. A fake that returned `emptyFlow()` could not tell the two
      * apart, and so could not catch two tiles opening two streams on one member.
      */
-    val openVideoStreams = mutableMapOf<VideoStreamRef, Int>()
+    val openVideoStreams = mutableMapOf<MatrixRtcStreamRef, Int>()
 
     /**
      * How many streams have *ever* been opened, which [openVideoStreams] cannot show.
@@ -151,17 +157,17 @@ class FakeMatrixRtcCall : MatrixRtcCall {
      * watching only that number cannot tell a stream that stayed up from one that was torn down and
      * rebuilt - and tearing it down and rebuilding it is the thing that crashes.
      */
-    val videoStreamOpenCounts = mutableMapOf<VideoStreamRef, Int>()
+    val videoStreamOpenCounts = mutableMapOf<MatrixRtcStreamRef, Int>()
 
     /** Zero rather than null for a stream never opened, which reads better in an assertion. */
     fun openVideoStreamsFor(memberId: String, kind: MatrixRtcStreamKind = MatrixRtcStreamKind.CAMERA): Int =
-        openVideoStreams[VideoStreamRef(memberId, kind)] ?: 0
+        openVideoStreams[MatrixRtcStreamRef(memberId, kind)] ?: 0
 
     fun videoStreamOpenCountFor(memberId: String, kind: MatrixRtcStreamKind = MatrixRtcStreamKind.CAMERA): Int =
-        videoStreamOpenCounts[VideoStreamRef(memberId, kind)] ?: 0
+        videoStreamOpenCounts[MatrixRtcStreamRef(memberId, kind)] ?: 0
 
     override fun videoFrames(memberId: String, kind: MatrixRtcStreamKind): Flow<MatrixRtcVideoFrame> {
-        val ref = VideoStreamRef(memberId, kind)
+        val ref = MatrixRtcStreamRef(memberId, kind)
         videoFramesRequests += ref
         return flow {
             openVideoStreams[ref] = (openVideoStreams[ref] ?: 0) + 1
@@ -237,14 +243,14 @@ class FakeMatrixRtcCall : MatrixRtcCall {
      * A list rather than the latest value: what matters is that a tile reports its size *once* when it
      * settles rather than on every frame of an animation, and only a history shows that.
      */
-    val videoConstraints = mutableListOf<Pair<VideoStreamRef, MatrixRtcVideoConstraints>>()
+    val videoConstraints = mutableListOf<Pair<MatrixRtcStreamRef, MatrixRtcVideoConstraints>>()
 
     override suspend fun setVideoConstraints(
         memberId: String,
         kind: MatrixRtcStreamKind,
         constraints: MatrixRtcVideoConstraints,
     ): Result<Unit> {
-        videoConstraints += VideoStreamRef(memberId, kind) to constraints
+        videoConstraints += MatrixRtcStreamRef(memberId, kind) to constraints
         return Result.success(Unit)
     }
 

@@ -67,6 +67,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcStreamRef
+import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.ui.theme.ElementCallTheme
@@ -247,6 +250,12 @@ internal fun CallTileLayout(
             // the tile already sent, which the call layer drops.
             val parkedTiles = remember { mutableSetOf<String>() }
             LaunchedEffect(composedIds) {
+                // The same set, told to the call, which polls statistics for these tiles and no others.
+                state.eventSink(
+                    ElementCallScreenEvent.SetComposedTiles(
+                        state.tiles.filter { it.tileId in composedIds }.map { MatrixRtcTileId(it.memberId, it.streamKind) }.toSet()
+                    )
+                )
                 val parked = state.tiles.filter { it.tileId !in composedIds && state.videoFrames[it.tileId] != null }
                 parked.filter { parkedTiles.add(it.tileId) }.forEach { tile ->
                     state.eventSink(
@@ -322,7 +331,16 @@ internal fun CallTileLayout(
                         onExit = { rendered.removeAll { it.tileId == tile.tileId } },
                         stats = if (state.isTileStatsVisible) {
                             TileStats(
-                                receiveStats = state.receiveStats[tile.memberId],
+                                receiveStats = state.receiveStats[MatrixRtcStreamRef(tile.memberId, tile.streamKind)],
+                                // A screen is nobody's voice: its owner's audio is read off their camera tile.
+                                audioStats = if (tile.isScreenShare) {
+                                    null
+                                } else {
+                                    state.receiveStats[MatrixRtcStreamRef(
+                                        tile.memberId,
+                                        MatrixRtcStreamKind.MICROPHONE
+                                    )]
+                                },
                                 frameEncryption = state.frameEncryption[tile.memberId],
                                 requestedWidth = slot.width.roundToInt(),
                                 requestedHeight = slot.height.roundToInt(),
