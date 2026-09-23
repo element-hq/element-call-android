@@ -89,7 +89,7 @@ class ElementCallPictureInPictureTest : RobolectricTest() {
 
         val params = ElementCallPictureInPicture.pictureInPictureParams(activity, shouldEnter = true, isMuted = false)
 
-        assertThat(params.actions.map { it.title }).containsExactly("Mute microphone", "Hang up").inOrder()
+        assertThat(params.actions.map { it.title }).containsExactly("Mute", "Hang up").inOrder()
     }
 
     @Test
@@ -98,7 +98,7 @@ class ElementCallPictureInPictureTest : RobolectricTest() {
 
         val params = ElementCallPictureInPicture.pictureInPictureParams(activity, shouldEnter = true, isMuted = true)
 
-        assertThat(params.actions.first().title).isEqualTo("Unmute microphone")
+        assertThat(params.actions.first().title).isEqualTo("Unmute")
     }
 
     @Test
