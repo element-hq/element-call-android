@@ -35,7 +35,7 @@ data class MatrixRtcTile(
     val hasVideo: Boolean,
     /** The member's microphone is absent or muted. The same on every tile the member owns. */
     val isMicrophoneMuted: Boolean,
-    /** Damped by the core, so it is what the order was ranked on rather than the raw meter. */
+    /** Speaking now, as the transport hears it. Not damped: only the order is, so a tile can be speaking and not move. */
     val isSpeaking: Boolean,
     /** Server-clock milliseconds, null when the hand is down. */
     val handRaisedAtMs: Long?,
@@ -85,8 +85,8 @@ data class MatrixRtcLocalState(
  * A member's camera tile as the transport's roster describes them, unranked and never a hero.
  *
  * For the moment before the core publishes a tile of its own - our own in particular, which only
- * arrives once our membership reaches the core's roster - and for fixtures. Not speaking: that is
- * the core's damped signal, which the roster does not carry.
+ * arrives once our membership reaches the core's roster - and for fixtures. Not speaking: the
+ * roster does not carry it.
  */
 fun MatrixRtcParticipant.cameraTile() = MatrixRtcTile(
     id = MatrixRtcTileId(memberId, MatrixRtcStreamKind.CAMERA),

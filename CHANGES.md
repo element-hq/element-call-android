@@ -16,7 +16,7 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
   build it with `./tools/rtc/build-rust-rtc`.
 - `MatrixRtcCall` gains `tiles` and `localState`. A fake or a host transport implementing it must supply both.
 - `ElementCallSnapshot`: `tiles` (remote, ranked) and `ownTile` added. `spotlightMemberId` becomes `spotlightTileId`,
-  the head of `tiles`. `activeSpeakerIds` is removed; speaking is `MatrixRtcTile.isSpeaking`, damped by the core.
+  the head of `tiles`. `activeSpeakerIds` is removed; speaking is `MatrixRtcTile.isSpeaking`.
 - A member sharing their screen is two tiles, the share a hero. Test tags and keys are unchanged
   (`memberId`, `memberId#SCREEN_SHARE`).
 - `isScreenSharing` now reflects the screen-share publication rather than what was asked for.
