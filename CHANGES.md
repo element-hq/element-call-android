@@ -14,6 +14,23 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 _Nothing yet._
 
+## 0.1.0-rc.3 - 2026-09-23
+
+
+
+### What's Changed
+
+✨ Features
+* Add mute and hang up to picture-in-picture by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/15
+
+🐛 Bugfixes
+* Fix Picture-in-picture window stays open after the call ends by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/14
+* Size the floating tile to the video's aspect ratio by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/17
+* Keep the notification's mute button in sync with the call mute state by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/18
+
+
+**Full Changelog**: https://github.com/element-hq/element-call-android/compare/v0.1.0-rc.2...v0.1.0-rc.3
+
 ## 0.1.0-rc.2 - 2026-09-22
 
 
