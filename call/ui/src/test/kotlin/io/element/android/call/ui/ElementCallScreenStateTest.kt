@@ -22,6 +22,7 @@ import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcTile
 import io.element.android.call.api.rtc.MatrixRtcTileId
+import io.element.android.call.api.rtc.MatrixRtcTileKind
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.id.UserId
 import io.element.android.call.test.A_ROOM_ID
@@ -234,7 +235,7 @@ class ElementCallScreenStateTest {
             state.eventSink(ElementCallScreenEvent.Minimize)
             state.eventSink(ElementCallScreenEvent.ToggleTileStats)
             state.eventSink(ElementCallScreenEvent.SetVideoConstraints(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.CAMERA, constraints))
-            state.eventSink(ElementCallScreenEvent.SetComposedTiles(setOf(MatrixRtcTileId(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.CAMERA))))
+            state.eventSink(ElementCallScreenEvent.SetComposedTiles(setOf(MatrixRtcTileId(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.PERSON))))
             state.eventSink(ElementCallScreenEvent.HangUp)
 
             assertThat(controller.switchCameraCount).isEqualTo(1)
@@ -244,7 +245,7 @@ class ElementCallScreenStateTest {
             assertThat(controller.videoConstraints).containsExactly(
                 MatrixRtcStreamRef(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.CAMERA) to constraints,
             )
-            assertThat(controller.composedTiles).containsExactly(setOf(MatrixRtcTileId(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.CAMERA)))
+            assertThat(controller.composedTiles).containsExactly(setOf(MatrixRtcTileId(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.PERSON)))
             assertThat(controller.hangUpCount).isEqualTo(1)
             cancelAndIgnoreRemainingEvents()
         }
@@ -341,7 +342,7 @@ class ElementCallScreenStateTest {
             val before = awaitItem().tiles.single().tileId
 
             controller.state.value = controller.state.value?.copy(
-                tiles = listOf(aTile(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.SCREEN_SHARE), aTile(A_REMOTE_MEMBER_ID)).toImmutableList(),
+                tiles = listOf(aTile(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.SCREEN_SHARE), aTile(A_REMOTE_MEMBER_ID)).toImmutableList(),
             )
             val sharing = consumeItemsUntilPredicate { it.tiles.size == 2 }.last()
             assertThat(sharing.tiles.single { !it.isScreenShare }.tileId).isEqualTo(before)

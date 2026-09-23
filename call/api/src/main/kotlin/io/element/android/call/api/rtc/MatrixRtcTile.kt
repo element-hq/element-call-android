@@ -10,16 +10,34 @@ package io.element.android.call.api.rtc
 import io.element.android.call.api.rtc.id.UserId
 
 /**
- * A tile's identity: one video stream of one membership.
+ * What a tile is: a person, or a screen they are sharing.
  *
- * The same pair the media plane is addressed by, so [MatrixRtcCall.videoFrames] and
- * [MatrixRtcCall.setVideoConstraints] take its two halves. Stable while the tile is in the call; a
- * member's camera tile keeps it when their screen share starts and stops.
+ * Not a [MatrixRtcStreamKind]. A person tile draws the member's camera and carries their microphone
+ * state; a share tile draws the screen. Which stream a tile draws is [videoStreamKind], so nothing
+ * guesses it - and a microphone can never be spelled as a tile.
+ */
+enum class MatrixRtcTileKind {
+    PERSON,
+    SCREEN_SHARE,
+    ;
+
+    /** The stream this kind of tile draws: what [MatrixRtcCall.videoFrames] and [MatrixRtcCall.setVideoConstraints] take. */
+    val videoStreamKind: MatrixRtcStreamKind
+        get() = when (this) {
+            PERSON -> MatrixRtcStreamKind.CAMERA
+            SCREEN_SHARE -> MatrixRtcStreamKind.SCREEN_SHARE
+        }
+}
+
+/**
+ * A tile's identity: one member, and whether this is them or their screen.
+ *
+ * Stable while the tile is in the call; a member's person tile keeps it when their screen share
+ * starts and stops. The media plane is reached through [MatrixRtcTileKind.videoStreamKind].
  */
 data class MatrixRtcTileId(
     val memberId: String,
-    /** [MatrixRtcStreamKind.CAMERA] or [MatrixRtcStreamKind.SCREEN_SHARE]. */
-    val kind: MatrixRtcStreamKind,
+    val kind: MatrixRtcTileKind,
 )
 
 /**
@@ -97,14 +115,14 @@ data class MatrixRtcLocalState(
 )
 
 /**
- * A member's camera tile as the transport's roster describes them, unranked and never a hero.
+ * A member's person tile as the transport's roster describes them, unranked and never a hero.
  *
  * For the moment before the core publishes a tile of its own - our own in particular, which only
  * arrives once our membership reaches the core's roster - and for fixtures. Not speaking: the
  * roster does not carry it.
  */
-fun MatrixRtcParticipant.cameraTile() = MatrixRtcTile(
-    id = MatrixRtcTileId(memberId, MatrixRtcStreamKind.CAMERA),
+fun MatrixRtcParticipant.personTile() = MatrixRtcTile(
+    id = MatrixRtcTileId(memberId, MatrixRtcTileKind.PERSON),
     userId = userId,
     deviceId = deviceId,
     isHero = false,

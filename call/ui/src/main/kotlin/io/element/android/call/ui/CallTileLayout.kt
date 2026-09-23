@@ -69,7 +69,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
-import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.ui.theme.ElementCallTheme
@@ -253,7 +252,7 @@ internal fun CallTileLayout(
                 // The same set, told to the call, which polls statistics for these tiles and no others.
                 state.eventSink(
                     ElementCallScreenEvent.SetComposedTiles(
-                        state.tiles.filter { it.tileId in composedIds }.map { MatrixRtcTileId(it.memberId, it.streamKind) }.toSet()
+                        state.tiles.filter { it.tileId in composedIds }.map { it.id }.toSet()
                     )
                 )
                 val parked = state.tiles.filter { it.tileId !in composedIds && state.videoFrames[it.tileId] != null }

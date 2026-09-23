@@ -844,7 +844,7 @@ private fun MatrixRtcFrameEncryptionDiagnostic.describe(): String = when (this) 
  * screen does.
  */
 internal fun streamsToPoll(composed: Collection<MatrixRtcTileId>, withMicrophone: Set<String>): List<MatrixRtcStreamRef> {
-    val tiles = composed.map { MatrixRtcStreamRef(it.memberId, it.kind) }
+    val tiles = composed.map { MatrixRtcStreamRef(it.memberId, it.kind.videoStreamKind) }
     val microphones = composed.map { it.memberId }.distinct()
         .filter { it in withMicrophone }
         .map { MatrixRtcStreamRef(it, MatrixRtcStreamKind.MICROPHONE) }

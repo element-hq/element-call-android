@@ -159,7 +159,7 @@ private fun ElementCallSnapshot?.toState(
     isDm = this?.isDm == true,
     connectedAtElapsedMs = this?.connectedAtElapsedMs,
     tiles = tiles,
-    spotlightTileId = this?.spotlightTileId?.let { id -> tiles.firstOrNull { it.memberId == id.memberId && it.streamKind == id.kind }?.tileId },
+    spotlightTileId = this?.spotlightTileId?.let { id -> tiles.firstOrNull { it.id == id }?.tileId },
     libraryVersion = ElementCallVersion.library,
     coreVersion = ElementCallVersion.core,
     eventSink = eventSink,

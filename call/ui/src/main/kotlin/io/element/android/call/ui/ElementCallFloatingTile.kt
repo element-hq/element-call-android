@@ -195,7 +195,7 @@ private fun ElementCallSnapshot.floatingTile(): FloatingTile? {
     val hasVideo = if (isLocal) isCameraEnabled else chosen.hasVideo
     return FloatingTile(
         memberId = chosen.id.memberId.takeIf { hasVideo },
-        kind = chosen.id.kind,
+        kind = chosen.id.kind.videoStreamKind,
         isMirrored = isLocal && isFrontCamera,
         userId = chosen.userId,
         roomMember = roomMembers[chosen.userId],

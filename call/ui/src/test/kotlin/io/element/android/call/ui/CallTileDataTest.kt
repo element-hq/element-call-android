@@ -11,7 +11,8 @@ import com.google.common.truth.Truth.assertThat
 import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamState
-import io.element.android.call.api.rtc.cameraTile
+import io.element.android.call.api.rtc.MatrixRtcTileKind
+import io.element.android.call.api.rtc.personTile
 import io.element.android.call.test.aTile
 import kotlinx.collections.immutable.persistentListOf
 import org.junit.Test
@@ -65,7 +66,7 @@ class CallTileDataTest {
      */
     @Test
     fun `a screen share tile never reports a missing microphone, a mute or a speaker`() {
-        val share = aTile(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.SCREEN_SHARE, isMicrophoneMuted = true, isSpeaking = true)
+        val share = aTile(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.SCREEN_SHARE, isMicrophoneMuted = true, isSpeaking = true)
             .toCallTileData(roomMembers = emptyMap(), isLocal = false, hasMicrophone = false, isFrontCamera = false)
 
         assertThat(share.isScreenShare).isTrue()
@@ -78,7 +79,7 @@ class CallTileDataTest {
     @Test
     fun `a sharer's two tiles have different ids and the camera keeps its own`() {
         val camera = aTile(A_REMOTE_MEMBER_ID).toCallTileData(emptyMap(), isLocal = false, hasMicrophone = true, isFrontCamera = false)
-        val share = aTile(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.SCREEN_SHARE)
+        val share = aTile(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.SCREEN_SHARE)
             .toCallTileData(emptyMap(), isLocal = false, hasMicrophone = true, isFrontCamera = false)
 
         assertThat(camera.tileId).isEqualTo(A_REMOTE_MEMBER_ID)
@@ -94,7 +95,7 @@ class CallTileDataTest {
     }
 
     private fun MatrixRtcParticipant.toTile() =
-        cameraTile().toCallTileData(
+        personTile().toCallTileData(
             roomMembers = emptyMap(),
             isLocal = isLocal,
             hasMicrophone = hasStream(MatrixRtcStreamKind.MICROPHONE),

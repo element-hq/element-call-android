@@ -58,7 +58,7 @@ fun ElementCallPictureInPictureContent(
     // The call screen's spotlight, reduced to a single winner: the head of the core's ranking.
     val spotlit = call.tiles.firstOrNull()
     val memberId = spotlit?.id?.memberId
-    val kind = spotlit?.id?.kind ?: MatrixRtcStreamKind.CAMERA
+    val kind = spotlit?.id?.kind?.videoStreamKind ?: MatrixRtcStreamKind.CAMERA
     val hasVideo = spotlit?.hasVideo == true
 
     Surface(modifier = modifier.fillMaxSize(), color = Color.Black) {

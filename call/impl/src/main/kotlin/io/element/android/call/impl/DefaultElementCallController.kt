@@ -32,7 +32,7 @@ import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcTransport
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
-import io.element.android.call.api.rtc.cameraTile
+import io.element.android.call.api.rtc.personTile
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.coroutines.CoroutineScope
@@ -577,7 +577,7 @@ internal class DefaultElementCallController(
         observe { call.tiles.collect { value -> updateState { it.copy(tiles = value.ranked.toImmutableList()) } } }
         observe {
             combine(call.localState, call.participants) { local, participants ->
-                local?.tile ?: participants.firstOrNull { it.isLocal }?.cameraTile()
+                local?.tile ?: participants.firstOrNull { it.isLocal }?.personTile()
             }
                 .distinctUntilChanged()
                 .collect { value -> updateState { it.copy(ownTile = value) } }

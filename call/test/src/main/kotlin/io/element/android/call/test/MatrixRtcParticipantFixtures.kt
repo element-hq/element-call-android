@@ -12,6 +12,7 @@ import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamState
 import io.element.android.call.api.rtc.MatrixRtcTile
 import io.element.android.call.api.rtc.MatrixRtcTileId
+import io.element.android.call.api.rtc.MatrixRtcTileKind
 import io.element.android.call.api.rtc.MatrixRtcTileRef
 import io.element.android.call.api.rtc.MatrixRtcTileRoster
 import io.element.android.call.api.rtc.id.UserId
@@ -55,12 +56,12 @@ fun aSharingParticipant(
 /** A tile as the core sends it. A share is a hero, as the core marks it. */
 fun aTile(
     memberId: String,
-    kind: MatrixRtcStreamKind = MatrixRtcStreamKind.CAMERA,
+    kind: MatrixRtcTileKind = MatrixRtcTileKind.PERSON,
     userId: UserId = UserId("@someone:example.org"),
     hasVideo: Boolean = true,
     isMicrophoneMuted: Boolean = false,
     isSpeaking: Boolean = false,
-    isHero: Boolean = kind == MatrixRtcStreamKind.SCREEN_SHARE,
+    isHero: Boolean = kind == MatrixRtcTileKind.SCREEN_SHARE,
 ) = MatrixRtcTile(
     id = MatrixRtcTileId(memberId, kind),
     userId = userId,
