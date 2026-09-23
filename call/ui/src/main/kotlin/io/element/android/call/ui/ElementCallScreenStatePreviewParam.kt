@@ -232,6 +232,19 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
                 activeSpeakerIds = setOf(A_REMOTE_MEMBER_ID),
                 videoFrames = mapOf(A_REMOTE_MEMBER_ID to emptyFlow()),
             ),
+            // Alone in the call: nobody is ranked, so our own tile has the screen.
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
+                memberCount = 1,
+                participants = listOf(aLocalParticipant()),
+            ),
+            // Someone sharing their screen: the share is the hero and takes the spotlight, their camera stays in the strip.
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
+                memberCount = 3,
+                participants = listOf(aLocalParticipant(), aRemoteSharingParticipant(), aStaleParticipant()),
+                videoFrames = mapOf("$A_REMOTE_MEMBER_ID#SCREEN_SHARE" to emptyFlow(), A_REMOTE_MEMBER_ID to emptyFlow()),
+            ),
         )
 }
 
@@ -350,6 +363,15 @@ fun aRemoteCameraParticipant() = aRemoteParticipant().copy(
     streams = persistentListOf(
         MatrixRtcStreamState(MatrixRtcStreamKind.MICROPHONE, isMuted = false),
         MatrixRtcStreamState(MatrixRtcStreamKind.CAMERA, isMuted = false),
+    ),
+)
+
+/** The remote member on their camera and sharing their screen: two tiles, one member. */
+fun aRemoteSharingParticipant() = aRemoteParticipant().copy(
+    streams = persistentListOf(
+        MatrixRtcStreamState(MatrixRtcStreamKind.MICROPHONE, isMuted = false),
+        MatrixRtcStreamState(MatrixRtcStreamKind.CAMERA, isMuted = false),
+        MatrixRtcStreamState(MatrixRtcStreamKind.SCREEN_SHARE, isMuted = false),
     ),
 )
 
