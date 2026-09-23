@@ -20,7 +20,7 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 - A member sharing their screen is two tiles, the share a hero. Test tags and keys are unchanged
   (`memberId`, `memberId#SCREEN_SHARE`).
 - `isScreenSharing` now reflects the screen-share publication rather than what was asked for.
-- `toCallTiles` and `screenShareTileId` are gone; build a `CallParticipant` with `MatrixRtcTile.toCallParticipant`.
+- `toCallTiles` and `screenShareTileId` are gone; build a `CallTile` (formerly `CallParticipant`) with `MatrixRtcTile.toCallTile`.
 
 ## 0.1.0-rc.5 - 2026-09-25
 

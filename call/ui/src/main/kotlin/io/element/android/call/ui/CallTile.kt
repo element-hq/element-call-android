@@ -14,13 +14,13 @@ import io.element.android.call.api.rtc.MatrixRtcTile
 import io.element.android.call.api.rtc.id.UserId
 
 /**
- * One tile of the call - a member's camera, or their screen - as it needs to be drawn.
+ * One of the core's tiles - a member's camera, or their screen - as it needs to be drawn.
  *
- * The join between two things that know nothing about each other: the RTC layer, which has member
- * ids and stream states, and the room, which has names and avatars. Done once here so the call
- * screen and the minimized bar cannot disagree about who is in the call.
+ * The join between two things that know nothing about each other: the core's [MatrixRtcTile], which
+ * has member ids and stream states, and the room, which has names and avatars. Done once here so the
+ * call screen and the minimized bar cannot disagree about who is in the call.
  */
-data class CallParticipant(
+data class CallTile(
     /** The RTC member id. Fresh on every join, and what every per-member report is keyed by. */
     val memberId: String,
     val userId: UserId,
@@ -33,7 +33,7 @@ data class CallParticipant(
      * Whether the member publishes a microphone stream at all, muted or not.
      *
      * [isMuted] deliberately collapses this into itself for the badge, and that is still the right
-     * call there - see `toCallParticipant`. It is kept apart here because the two have different
+     * call there - see `toCallTile`. It is kept apart here because the two have different
      * *causes*: muted is a choice the member made, absent is us having nothing to play, and a member
      * who is talking away on another client while we draw a mute badge is the second one. That
      * happened - see the `Audio` section of the RTC `FEEDBACK.md` - and took a side-by-side with
@@ -54,16 +54,15 @@ data class CallParticipant(
      */
     val isReachable: Boolean = true,
     /**
-     * Which of the member's streams this tile draws.
+     * Which of the member's streams this tile draws: with [memberId], the tile's identity.
      *
-     * A member sharing their screen gets two tiles - themselves, and their screen - so a tile is no
-     * longer one per member and [memberId] is no longer enough to tell two of them apart. See
-     * [tileId].
+     * A member sharing their screen gets two tiles - themselves, and their screen - so [memberId]
+     * alone is not enough to tell two of them apart. See [tileId].
      */
     val streamKind: MatrixRtcStreamKind = MatrixRtcStreamKind.CAMERA,
 ) {
     /**
-     * What identifies this tile in a keyed list, as [memberId] used to.
+     * [MatrixRtcTile.id] as one string, for a keyed list and a test tag.
      *
      * The member id alone would collide between someone and their screen, and a collision in a keyed
      * layout is not a cosmetic problem: two tiles sharing a key means Compose reuses one composable
@@ -97,14 +96,14 @@ data class CallParticipant(
  * A share tile carries its owner's microphone, but a screen is nobody's voice: the mute badge and the
  * speaking ring stay on the person's tile rather than being repeated on this one.
  */
-fun MatrixRtcTile.toCallParticipant(
+fun MatrixRtcTile.toCallTile(
     roomMembers: Map<UserId, ElementCallRoomMember>,
     isLocal: Boolean,
     hasMicrophone: Boolean,
     isFrontCamera: Boolean,
-): CallParticipant {
+): CallTile {
     val isScreenShare = id.kind == MatrixRtcStreamKind.SCREEN_SHARE
-    return CallParticipant(
+    return CallTile(
         memberId = id.memberId,
         userId = userId,
         roomMember = roomMembers[userId],

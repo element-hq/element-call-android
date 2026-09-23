@@ -269,8 +269,8 @@ class ElementCallScreenStateTest {
 
             assertThat(state.tiles).hasSize(2)
             // The remote is spotlighted, so only we are left in the strip.
-            assertThat(state.spotlightParticipant?.memberId).isEqualTo(A_REMOTE_MEMBER_ID)
-            assertThat(state.stripParticipants.map { it.memberId }).containsExactly(A_LOCAL_MEMBER_ID)
+            assertThat(state.spotlightTile?.memberId).isEqualTo(A_REMOTE_MEMBER_ID)
+            assertThat(state.stripTiles.map { it.memberId }).containsExactly(A_LOCAL_MEMBER_ID)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -298,8 +298,8 @@ class ElementCallScreenStateTest {
             val state = awaitItem()
 
             assertThat(state.tiles.map { it.memberId }).containsExactly(A_LOCAL_MEMBER_ID, ANOTHER_REMOTE_MEMBER_ID, A_REMOTE_MEMBER_ID).inOrder()
-            assertThat(state.spotlightParticipant?.memberId).isEqualTo(ANOTHER_REMOTE_MEMBER_ID)
-            assertThat(state.stripParticipants.map { it.memberId }).containsExactly(A_LOCAL_MEMBER_ID, A_REMOTE_MEMBER_ID).inOrder()
+            assertThat(state.spotlightTile?.memberId).isEqualTo(ANOTHER_REMOTE_MEMBER_ID)
+            assertThat(state.stripTiles.map { it.memberId }).containsExactly(A_LOCAL_MEMBER_ID, A_REMOTE_MEMBER_ID).inOrder()
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -364,8 +364,8 @@ class ElementCallScreenStateTest {
         moleculeFlow(RecompositionMode.Immediate) { rememberElementCallScreenState(controller, aNavigator()) }.test {
             val state = awaitItem()
 
-            assertThat(state.spotlightParticipant).isNull()
-            assertThat(state.stripParticipants.map { it.memberId }).containsExactly(A_LOCAL_MEMBER_ID)
+            assertThat(state.spotlightTile).isNull()
+            assertThat(state.stripTiles.map { it.memberId }).containsExactly(A_LOCAL_MEMBER_ID)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -447,10 +447,10 @@ class ElementCallScreenStateTest {
         moleculeFlow(RecompositionMode.Immediate) { rememberElementCallScreenState(controller, aNavigator()) }.test {
             val state = awaitItem()
 
-            assertThat(state.spotlightParticipant?.isScreenShare).isTrue()
-            assertThat(state.spotlightParticipant?.tileId).isEqualTo("$A_REMOTE_MEMBER_ID#SCREEN_SHARE")
+            assertThat(state.spotlightTile?.isScreenShare).isTrue()
+            assertThat(state.spotlightTile?.tileId).isEqualTo("$A_REMOTE_MEMBER_ID#SCREEN_SHARE")
             // The sharer is still shown - only their screen was promoted, not them.
-            assertThat(state.stripParticipants.map { it.tileId }).containsExactly(A_REMOTE_MEMBER_ID, ANOTHER_REMOTE_MEMBER_ID)
+            assertThat(state.stripTiles.map { it.tileId }).containsExactly(A_REMOTE_MEMBER_ID, ANOTHER_REMOTE_MEMBER_ID)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -543,7 +543,7 @@ class ElementCallScreenStateTest {
 
             assertThat(state.layout).isEqualTo(CallLayout.OneToOne)
             // The other person is the one who fills the screen, never us.
-            assertThat(state.spotlightParticipant?.memberId).isEqualTo(A_REMOTE_MEMBER_ID)
+            assertThat(state.spotlightTile?.memberId).isEqualTo(A_REMOTE_MEMBER_ID)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -586,7 +586,7 @@ class ElementCallScreenStateTest {
 
             assertThat(state.tiles).hasSize(3)
             assertThat(state.layout).isEqualTo(CallLayout.Group)
-            assertThat(state.spotlightParticipant?.isScreenShare).isTrue()
+            assertThat(state.spotlightTile?.isScreenShare).isTrue()
             cancelAndIgnoreRemainingEvents()
         }
     }
