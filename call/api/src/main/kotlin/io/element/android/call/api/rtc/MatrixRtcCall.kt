@@ -34,7 +34,22 @@ interface MatrixRtcCall : AutoCloseable {
 
     val events: Flow<MatrixRtcCallEvent>
 
+    /**
+     * The transport's view, one row per membership, ourselves included. What to ask for call-wide
+     * questions and diagnostics; what to draw is [tiles].
+     */
     val participants: StateFlow<List<MatrixRtcParticipant>>
+
+    /**
+     * The remote tiles, ranked and damped by the core. Pushed, and never republished unchanged.
+     */
+    val tiles: StateFlow<MatrixRtcTileRoster>
+
+    /**
+     * Our own tile and screen-sharing state. Null until our membership is on the core's roster, which
+     * is later than [participants] first lists us.
+     */
+    val localState: StateFlow<MatrixRtcLocalState?>
 
     /**
      * How loud each member is, keyed by member id, ours included.
@@ -80,10 +95,10 @@ interface MatrixRtcCall : AutoCloseable {
     val isFrontCamera: StateFlow<Boolean>
 
     /**
-     * Whether we are capturing and publishing the screen, see [setScreenShareEnabled].
+     * Whether our screen-share publication is up and unmuted, see [setScreenShareEnabled].
      *
-     * Goes false on its own if the user stops the share from the system UI, which is a thing they can
-     * do at any moment from outside the app and which nothing else would report.
+     * [MatrixRtcLocalState.isScreenSharing], so it goes false on its own if the user stops the share
+     * from the system UI: the capturer turns that stop into an unpublish.
      */
     val isScreenSharing: StateFlow<Boolean>
 

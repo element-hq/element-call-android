@@ -14,10 +14,12 @@ import io.element.android.call.api.rtc.MatrixRtcCall
 import io.element.android.call.api.rtc.MatrixRtcCallEvent
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionDiagnostic
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
+import io.element.android.call.api.rtc.MatrixRtcLocalState
 import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcTileRoster
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.impl.rtc.media.AudioCapture
@@ -30,15 +32,19 @@ import io.element.android.call.impl.util.runCatchingExceptions
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -87,8 +93,20 @@ internal class RustMatrixRtcCall(
     private val _isFrontCamera = MutableStateFlow(true)
     override val isFrontCamera: StateFlow<Boolean> = _isFrontCamera
 
-    private val _isScreenSharing = MutableStateFlow(false)
-    override val isScreenSharing: StateFlow<Boolean> = _isScreenSharing
+    private val _tiles = MutableStateFlow(MatrixRtcTileRoster.EMPTY)
+    override val tiles: StateFlow<MatrixRtcTileRoster> = _tiles
+
+    private val _localState = MutableStateFlow<MatrixRtcLocalState?>(null)
+    override val localState: StateFlow<MatrixRtcLocalState?> = _localState
+
+    // From the publication rather than from what we asked for, so a share that ends any other way
+    // still reads false. Keeping it true is on us: an OS-level stop has to become an unpublish.
+    override val isScreenSharing: StateFlow<Boolean> = _localState
+        .map { it?.isScreenSharing == true }
+        .stateIn(callScope, SharingStarted.Eagerly, false)
+
+    // What we last asked for, so a second stop - ours racing the projection's own - is a no-op.
+    private var isCapturingScreen = false
 
     /**
      * One frame of slack and drop the oldest, because the camera must never wait for a renderer. A
@@ -248,6 +266,7 @@ internal class RustMatrixRtcCall(
 
     fun start() {
         pumpEvents()
+        pumpTiles()
         pollReceiveStats()
         refreshParticipants()
         // Anything already publishing before we connected will not produce a StreamStarted event.
@@ -256,6 +275,39 @@ internal class RustMatrixRtcCall(
                 .filterNot { it.isLocal }
                 .filter { participant -> participant.streams.any { it.kind == FfiStreamKind.MICROPHONE } }
                 .forEach { playAudioOf(it.memberId) }
+        }
+    }
+
+    /**
+     * The single consumer of `nextRoster()` and `nextLocalState()`, seeded from their pulls first so
+     * the stage has everyone from its first frame. Both long-poll and return the latest value, so a
+     * slow collector skips superseded rosters rather than queueing them.
+     */
+    private fun pumpTiles() {
+        callScope.launch {
+            pump("tile roster", seed = { mediaSession.roster() }, next = { mediaSession.nextRoster() }) { roster ->
+                val mapped = roster.map()
+                if (mapped.order != _tiles.value.order) {
+                    Timber.d("MatrixRTC: tile order ${mapped.order.map { "${it.id.memberId}/${it.id.kind}${if (it.isHero) " (hero)" else ""}" }}")
+                }
+                _tiles.value = mapped
+            }
+        }
+        callScope.launch {
+            pump("local state", seed = { mediaSession.localState() }, next = { mediaSession.nextLocalState() }) {
+                _localState.value = it.map()
+            }
+        }
+    }
+
+    private suspend fun <T : Any> pump(name: String, seed: () -> T?, next: suspend () -> T?, apply: (T) -> Unit) {
+        withContext(ffiDispatcher) { runCatchingExceptions { seed() } }.getOrNull()?.let(apply)
+        while (currentCoroutineContext().isActive) {
+            val value = withContext(ffiDispatcher) { runCatchingExceptions { next() } }
+                .onFailure { Timber.w(it, "MatrixRTC: $name pump stopped") }
+                .getOrNull()
+                ?: break
+            apply(value)
         }
     }
 
@@ -644,7 +696,7 @@ internal class RustMatrixRtcCall(
 
     override suspend fun setScreenShareEnabled(enabled: Boolean, token: MatrixRtcScreenCaptureToken?): Result<Unit> =
         runCatchingExceptions {
-            if (_isScreenSharing.value == enabled) return@runCatchingExceptions
+            if (isCapturingScreen == enabled) return@runCatchingExceptions
 
             if (enabled) {
                 val resultData = token?.resultData
@@ -701,10 +753,12 @@ internal class RustMatrixRtcCall(
                 // stream goes away - so there is nothing to order against, and stopping capture first
                 // is what guarantees no frame reaches a track that is being torn down.
                 // `stopCapture()` blocks until the capture thread is done.
+                // Latched first: stopping fires the projection's own onStop, which comes back here.
+                isCapturingScreen = false
                 screenCapture.stop()
                 unpublishScreenShare()
             }
-            _isScreenSharing.value = enabled
+            if (enabled) isCapturingScreen = true
             Timber.i("MatrixRTC: screen share ${if (enabled) "started" else "stopped"} for $localMemberId")
         }.onFailure {
             Timber.w(it, "MatrixRTC: failed to ${if (enabled) "start" else "stop"} the screen share")

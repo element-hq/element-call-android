@@ -14,12 +14,14 @@ import io.element.android.call.api.rtc.MatrixRtcElementCallCompat
 import io.element.android.call.api.rtc.MatrixRtcLeaveReason
 import io.element.android.call.api.rtc.MatrixRtcMembership
 import io.element.android.call.api.rtc.MatrixRtcNotify
+import io.element.android.call.api.rtc.MatrixRtcLocalState
 import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcService
 import io.element.android.call.api.rtc.MatrixRtcSession
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcTileRoster
 import io.element.android.call.api.rtc.MatrixRtcTransport
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
@@ -102,6 +104,10 @@ class FakeMatrixRtcCall : MatrixRtcCall {
     override val events: Flow<MatrixRtcCallEvent> = _events
 
     override val participants = MutableStateFlow(emptyList<MatrixRtcParticipant>())
+
+    override val tiles = MutableStateFlow(MatrixRtcTileRoster.EMPTY)
+
+    override val localState = MutableStateFlow<MatrixRtcLocalState?>(null)
 
     override val audioLevels = MutableStateFlow(emptyMap<String, MatrixRtcAudioLevel>())
 

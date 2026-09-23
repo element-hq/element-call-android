@@ -12,23 +12,33 @@ import io.element.android.call.api.rtc.MatrixRtcEndReason
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionDiagnostic
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcKeyRejection
+import io.element.android.call.api.rtc.MatrixRtcLocalState
 import io.element.android.call.api.rtc.MatrixRtcMembership
 import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcSpeakingMember
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamState
+import io.element.android.call.api.rtc.MatrixRtcTile
+import io.element.android.call.api.rtc.MatrixRtcTileId
+import io.element.android.call.api.rtc.MatrixRtcTileRef
+import io.element.android.call.api.rtc.MatrixRtcTileRoster
 import io.element.android.call.api.rtc.id.UserId
 import org.matrix.rtc.FfiCallEvent
+import org.matrix.rtc.FfiCallTile
 import org.matrix.rtc.FfiEndedReason
 import org.matrix.rtc.FfiFrameEncryptionDiagnostic
 import org.matrix.rtc.FfiFrameEncryptionState
 import org.matrix.rtc.FfiKeyRejection
+import org.matrix.rtc.FfiLocalState
 import org.matrix.rtc.FfiParticipant
 import org.matrix.rtc.FfiReceiveStats
 import org.matrix.rtc.FfiSpeakingMember
 import org.matrix.rtc.FfiStreamKind
 import org.matrix.rtc.FfiStreamState
+import org.matrix.rtc.FfiTileId
+import org.matrix.rtc.FfiTileRef
+import org.matrix.rtc.FfiTileRoster
 import org.matrix.rtc.JoinedMembership
 
 /**
@@ -153,4 +163,34 @@ internal fun FfiParticipant.map() = MatrixRtcParticipant(
 internal fun FfiStreamState.map() = MatrixRtcStreamState(
     kind = kind.map(),
     isMuted = muted,
+)
+
+internal fun FfiTileId.map() = MatrixRtcTileId(memberId = memberId, kind = kind.map())
+
+internal fun FfiTileRef.map() = MatrixRtcTileRef(id = id.map(), isHero = hero)
+
+internal fun FfiCallTile.map() = MatrixRtcTile(
+    id = MatrixRtcTileId(memberId = memberId, kind = kind.map()),
+    userId = UserId(userId),
+    deviceId = deviceId,
+    isHero = hero,
+    hasVideo = hasVideo,
+    isMicrophoneMuted = microphoneMuted,
+    isSpeaking = speaking,
+    handRaisedAtMs = handRaisedAtMs?.toLong(),
+    isReachable = reachable,
+)
+
+/**
+ * Detail is a subsequence of the order, joined by identity: the core only sends full records for the
+ * declared window, so the two lists line up by index only while that window covers everything.
+ */
+internal fun FfiTileRoster.map() = MatrixRtcTileRoster(
+    order = order.map { it.map() },
+    detail = detail.associate { tile -> tile.map().let { it.id to it } },
+)
+
+internal fun FfiLocalState.map() = MatrixRtcLocalState(
+    tile = tile.map(),
+    isScreenSharing = isScreenSharing,
 )
