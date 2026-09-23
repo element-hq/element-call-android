@@ -23,6 +23,13 @@ android {
         // What a minifying host must keep: JNA, the uniffi bindings, libwebrtc's JNI entry points (§8.3).
         consumerProguardFiles("consumer-rules.pro")
     }
+
+    testOptions {
+        unitTests {
+            // The picture-in-picture tests read the actions' strings.
+            isIncludeAndroidResources = true
+        }
+    }
 }
 
 dependencies {

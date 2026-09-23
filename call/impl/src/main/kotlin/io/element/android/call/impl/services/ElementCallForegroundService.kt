@@ -28,7 +28,7 @@ import androidx.core.content.getSystemService
 import io.element.android.call.api.ElementCallNotificationConfig
 import io.element.android.call.impl.ElementCallStackRegistry
 import io.element.android.call.impl.R
-import io.element.android.call.impl.receivers.ElementCallActionReceiver
+import io.element.android.call.impl.receivers.ElementCallActionIntents
 import timber.log.Timber
 
 /**
@@ -96,8 +96,8 @@ class ElementCallForegroundService : Service() {
         // CallStyle needs somebody to name the call after, and for a room that is the room.
         val caller = Person.Builder().setName(title).setImportant(true).build()
 
-        val hangUpIntent = broadcast(ElementCallActionReceiver.ACTION_HANG_UP, HANG_UP_REQUEST_CODE)
-        val muteIntent = broadcast(ElementCallActionReceiver.ACTION_TOGGLE_MUTE, TOGGLE_MUTE_REQUEST_CODE)
+        val hangUpIntent = ElementCallActionIntents.hangUp(this)
+        val muteIntent = ElementCallActionIntents.toggleMute(this)
 
         return NotificationCompat.Builder(this, config.channelId)
             .setSmallIcon(config.smallIcon ?: R.drawable.ic_element_call_notification)
@@ -136,13 +136,6 @@ class ElementCallForegroundService : Service() {
         return PendingIntentCompat.getActivity(this, RETURN_REQUEST_CODE, intent, PendingIntent.FLAG_UPDATE_CURRENT, false)
     }
 
-    private fun broadcast(action: String, requestCode: Int): PendingIntent {
-        val intent = Intent(this, ElementCallActionReceiver::class.java).setAction(action)
-        // Explicitly not immutable: mutability is irrelevant here since the receiver reads no extras,
-        // but PendingIntentCompat wants the choice made rather than defaulted.
-        return PendingIntentCompat.getBroadcast(this, requestCode, intent, PendingIntent.FLAG_UPDATE_CURRENT, false)!!
-    }
-
     private fun createNotificationChannel(config: ElementCallNotificationConfig) {
         // Channels arrived in O, and the library supports 24. Touching NotificationChannel below that
         // throws before the service can start its own notification.
@@ -158,8 +151,6 @@ class ElementCallForegroundService : Service() {
 
     companion object {
         private const val EXTRA_IS_PROJECTING = "is_projecting"
-        private const val HANG_UP_REQUEST_CODE = 0
-        private const val TOGGLE_MUTE_REQUEST_CODE = 1
         private const val RETURN_REQUEST_CODE = 2
 
         private fun isGranted(context: Context, permission: String) =

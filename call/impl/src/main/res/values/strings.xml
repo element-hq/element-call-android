@@ -10,4 +10,5 @@
     <string name="element_call_notification_call_in_progress">Call in progress</string>
     <string name="element_call_notification_mute_microphone">Mute microphone</string>
     <string name="element_call_notification_unmute_microphone">Unmute microphone</string>
+    <string name="element_call_notification_hang_up">Hang up</string>
 </resources>

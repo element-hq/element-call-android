@@ -83,6 +83,33 @@ class ElementCallPictureInPictureTest : RobolectricTest() {
         assertThat(shadowOf(activity).isTaskMovedToBack).isFalse()
     }
 
+    @Test
+    fun `a call puts mute then hang up on the window`() {
+        val activity = anActivityWithPictureInPicture()
+
+        val params = ElementCallPictureInPicture.pictureInPictureParams(activity, shouldEnter = true, isMuted = false)
+
+        assertThat(params.actions.map { it.title }).containsExactly("Mute microphone", "Hang up").inOrder()
+    }
+
+    @Test
+    fun `a muted call offers unmute`() {
+        val activity = anActivityWithPictureInPicture()
+
+        val params = ElementCallPictureInPicture.pictureInPictureParams(activity, shouldEnter = true, isMuted = true)
+
+        assertThat(params.actions.first().title).isEqualTo("Unmute microphone")
+    }
+
+    @Test
+    fun `no call leaves the window without actions`() {
+        val activity = anActivityWithPictureInPicture()
+
+        val params = ElementCallPictureInPicture.pictureInPictureParams(activity, shouldEnter = false, isMuted = null)
+
+        assertThat(params.actions).isEmpty()
+    }
+
     private fun anActivityWithPictureInPicture(): ComponentActivity {
         val activity = Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
         shadowOf(activity.packageManager).setSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE, true)

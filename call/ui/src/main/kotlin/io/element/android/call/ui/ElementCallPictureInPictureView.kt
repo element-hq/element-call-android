@@ -38,8 +38,8 @@ import kotlinx.coroutines.flow.emptyFlow
  *
  * Everything the full screen has is dropped rather than shrunk. At the size Android gives a PiP
  * window, control buttons are below the minimum touch target and a strip of other participants is a
- * row of unrecognisable thumbnails - and the system already provides the two actions that matter, an
- * expand tap and a dismiss, drawn over the window itself.
+ * row of unrecognisable thumbnails. Mute and hang up are system actions drawn over the window, set by
+ * `ElementCallPictureInPicture`, next to the system's own expand and dismiss.
  *
  * Which tile: whoever is spotlighted, which follows the same rule as the full screen and so means a
  * shared screen if there is one and the current speaker otherwise. Both are the right answer to
