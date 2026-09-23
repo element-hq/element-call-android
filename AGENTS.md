@@ -94,6 +94,8 @@ until one does.
  */
 ```
 
+- Comments are short, and only where the code cannot say it: the why, a non-obvious constraint. No walls of text,
+  no comments about what is absent or was removed, no development history; that belongs in the commit.
 - `runCatching` is always `runCatchingExceptions` (it rethrows `CancellationException`).
 - Classes implementing an interface are `Default…`, never `…Impl`. Fakes are `Fake<Interface>`.
 - State classes have no default constructor values; events are sealed interfaces; sealed interfaces passed to
@@ -165,8 +167,8 @@ without the flag it also builds and lays out the assets in `build/release-assets
 - Sentence-style titles; the title is the changelog entry, generated at release time from the `pr-` label (exactly
   one, see `.github/release.yml`; `pr-task` keeps a change out of the notes).
 - 500 production lines max; tests can be larger. No history rewrites.
-- Commits have a title and a description of a few lines: what changed and why, the non-obvious decision if there
-  was one. No narrative; nobody reads a long one, and the why is what a later reader needs.
+- Commits have a title, and a description only when the title leaves a later reader missing something (the why,
+  the non-obvious decision). When there is one, it is a single line under 80 characters.
 - `CHANGES.md`'s `## Unreleased` is for what a host has to act on, a line or two per item. The release notes are
   the pull request titles; do not restate them there.
 - Add the `Record-Screenshots` label when previews change.

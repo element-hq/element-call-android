@@ -132,6 +132,7 @@ code lands.
 4. Picture-in-picture: `android:supportsPictureInPicture="true"` and `smallestScreenSize` in `configChanges` on
    the host Activity; `ElementCallPictureInPicture.attach(activity, controller)` from its `onCreate`, and
    `ElementCallPictureInPicture.onUserLeaveHint(activity, controller)` from its `onUserLeaveHint()` override.
+   A call ending while floating closes the window (`moveTaskToBack`).
 5. Screen sharing is off by default. A host turns it on with `ElementCallOptions(isScreenSharingEnabled = true)`
    and, in the same change, adds `FOREGROUND_SERVICE_MEDIA_PROJECTION` and the `mediaProjection` type to
    `ElementCallForegroundService` in its own manifest, with `tools:node="merge"`; the library's service declares

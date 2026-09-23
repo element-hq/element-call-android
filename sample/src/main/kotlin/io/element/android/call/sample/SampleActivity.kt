@@ -24,7 +24,7 @@ import timber.log.Timber
  * means to: `adb shell am start -n io.element.android.call.sample/.SampleActivity --es fixture group`.
  */
 class SampleActivity : ComponentActivity() {
-    private lateinit var controller: SampleElementCallController
+    internal lateinit var controller: SampleElementCallController
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
