@@ -88,6 +88,7 @@ fun rememberElementCallScreenState(
             ElementCallScreenEvent.ToggleTileStats -> controller.toggleTileStats()
             is ElementCallScreenEvent.SetVideoConstraints ->
                 controller.setVideoConstraints(event.memberId, event.kind, event.constraints)
+            is ElementCallScreenEvent.SetComposedTiles -> controller.setComposedTiles(event.tileIds)
             ElementCallScreenEvent.ToggleScreenShare -> {
                 if (current?.isScreenSharing == true) {
                     controller.setScreenShareEnabled(token = null)

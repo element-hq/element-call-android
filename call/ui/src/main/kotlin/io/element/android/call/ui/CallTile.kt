@@ -144,6 +144,7 @@ fun CallTile(
             CallTileStatsOverlay(
                 counter = frameCounter,
                 receiveStats = stats.receiveStats,
+                audioStats = stats.audioStats,
                 frameEncryption = stats.frameEncryption,
                 requestedWidth = stats.requestedWidth,
                 requestedHeight = stats.requestedHeight,
@@ -183,7 +184,10 @@ enum class CallTileAppearance {
  * of arguments the tile has to carry around whether or not anybody is looking at them.
  */
 data class TileStats(
+    /** This tile's own stream: the camera's or the screen's counters. */
     val receiveStats: MatrixRtcReceiveStats?,
+    /** The member's microphone, on their camera tile only. */
+    val audioStats: MatrixRtcReceiveStats?,
     val frameEncryption: MatrixRtcFrameEncryptionState?,
     val requestedWidth: Int,
     val requestedHeight: Int,

@@ -60,13 +60,22 @@ interface MatrixRtcCall : AutoCloseable {
     val audioLevels: StateFlow<Map<String, MatrixRtcAudioLevel>>
 
     /**
-     * RTP receive counters per remote member, refreshed while media is connected.
+     * RTP receive counters per remote stream, refreshed while media is connected: the stream of every
+     * tile declared through [setComposedTiles], plus the microphone of each of those members.
      *
-     * This is what [audioLevels] cannot tell you: whether packets are actually arriving. A member
+     * This is what [audioLevels] cannot tell you: whether packets are actually arriving. A stream
      * appears once the transport has its first RTCP report, so an entry missing early in a call means
-     * "not known yet" rather than "nothing received".
+     * "not known yet" rather than "nothing received". Nothing is polled for a tile nobody composes.
      */
-    val receiveStats: StateFlow<Map<String, MatrixRtcReceiveStats>>
+    val receiveStats: StateFlow<Map<MatrixRtcStreamRef, MatrixRtcReceiveStats>>
+
+    /**
+     * Declare which tiles the UI currently composes - on screen or within a page of it.
+     *
+     * Contract C12's "declare what you compose": what the stats poll is bounded to, so a call of two
+     * hundred costs one round trip a second for the twenty tiles drawn rather than one per member.
+     */
+    fun setComposedTiles(tileIds: Set<MatrixRtcTileId>)
 
     /**
      * Whether our microphone is currently muted.

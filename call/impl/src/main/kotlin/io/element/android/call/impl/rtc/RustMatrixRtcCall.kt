@@ -19,6 +19,8 @@ import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcStreamRef
+import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcTileRoster
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
@@ -127,9 +129,7 @@ internal class RustMatrixRtcCall(
      * two independent video streams. Keyed by member alone, as this was, the second one to be asked
      * for would silently get the first one's frames.
      */
-    private val remoteVideoFlows = ConcurrentHashMap<VideoStreamKey, Flow<MatrixRtcVideoFrame>>()
-
-    private data class VideoStreamKey(val memberId: String, val kind: MatrixRtcStreamKind)
+    private val remoteVideoFlows = ConcurrentHashMap<MatrixRtcStreamRef, Flow<MatrixRtcVideoFrame>>()
 
     /**
      * Our own camera frames come from capture, which is already running and already shared.
@@ -147,7 +147,7 @@ internal class RustMatrixRtcCall(
         if (memberId == localMemberId && kind == MatrixRtcStreamKind.CAMERA) {
             localVideoFrames
         } else {
-            remoteVideoFlows.getOrPut(VideoStreamKey(memberId, kind)) { remoteVideoFrames(memberId, kind) }
+            remoteVideoFlows.getOrPut(MatrixRtcStreamRef(memberId, kind)) { remoteVideoFrames(memberId, kind) }
         }
 
     private fun remoteVideoFrames(memberId: String, kind: MatrixRtcStreamKind): Flow<MatrixRtcVideoFrame> = flow {
@@ -204,14 +204,17 @@ internal class RustMatrixRtcCall(
     private val _audioLevels = MutableStateFlow<Map<String, MatrixRtcAudioLevel>>(emptyMap())
     override val audioLevels: StateFlow<Map<String, MatrixRtcAudioLevel>> = _audioLevels
 
-    private val _receiveStats = MutableStateFlow<Map<String, MatrixRtcReceiveStats>>(emptyMap())
-    override val receiveStats: StateFlow<Map<String, MatrixRtcReceiveStats>> = _receiveStats
+    private val _receiveStats = MutableStateFlow<Map<MatrixRtcStreamRef, MatrixRtcReceiveStats>>(emptyMap())
+    override val receiveStats: StateFlow<Map<MatrixRtcStreamRef, MatrixRtcReceiveStats>> = _receiveStats
 
     /** Last logged frame-encryption state per member, so only transitions are logged. Event pump only. */
     private val lastFrameEncryption = mutableMapOf<String, MatrixRtcFrameEncryptionState>()
 
-    /** Members already logged as having no stats yet, so the notice appears once. Stats poll only. */
-    private val membersWithoutStats = mutableSetOf<String>()
+    /** Streams the core has answered with no counters, so the "no stats yet" line is said once. */
+    private val streamsWithoutStats = mutableSetOf<MatrixRtcStreamRef>()
+
+    /** What the screen composes, see [setComposedTiles]; the stats poll asks about nothing else. */
+    private val composedTiles = MutableStateFlow<Set<MatrixRtcTileId>>(emptySet())
 
     /**
      * Members already reported as publishing no microphone, so the warning appears once each. Cleared
@@ -257,7 +260,7 @@ internal class RustMatrixRtcCall(
         audioPlayback.stop(memberId)
         playbackClaims.remove(memberId)
         _audioLevels.update { it - memberId }
-        _receiveStats.update { it - memberId }
+        _receiveStats.update { stats -> stats.filterKeys { it.memberId != memberId } }
         // A member who left will not come back under this id - the core mints a fresh one on rejoin -
         // so their cached flows are dead weight from here on. All of them: a member who was sharing
         // their screen as well as their camera has one per kind.
@@ -339,67 +342,46 @@ internal class RustMatrixRtcCall(
         }
     }
 
+    override fun setComposedTiles(tileIds: Set<MatrixRtcTileId>) {
+        composedTiles.value = tileIds
+    }
+
     /**
      * The counters come from RTCP, which reports about once a second, so polling faster would only
-     * repeat values. Only remote members are asked: our own stream has nothing to receive.
-     *
-     * Microphone only, deliberately. A camera track has its own counters, but `receiveStats` is keyed
-     * by member *and* kind while the maps here are keyed by member alone - reporting video would mean
-     * a second axis on every stats map and on the card that reads them. Nothing receives remote video
-     * yet, so there is nothing to report; it belongs with the work that adds remote tiles.
+     * repeat values. One batched call a second for the streams of the tiles the screen composes, plus
+     * their members' microphones - never the whole roster, which at two hundred members was two
+     * round trips per member per second on this one lane. Our own streams have nothing to receive.
      */
     private fun pollReceiveStats() {
         callScope.launch {
             while (isActive) {
                 delay(STATS_POLL_INTERVAL)
-                val remoteMembers = _participants.value.filterNot { it.isLocal }
-                val memberIds = remoteMembers
-                    .filter { participant -> participant.streams.any { it.kind == MatrixRtcStreamKind.MICROPHONE } }
-                    .map { it.memberId }
-                logMembersWithoutMicrophone(remoteMembers, memberIds)
-                if (memberIds.isEmpty()) {
-                    _receiveStats.value = emptyMap()
-                    membersWithoutStats.clear()
-                    continue
-                }
-                val stats = withContext(ffiDispatcher) {
-                    memberIds.associateWith { memberId ->
-                        // Null until the first RTCP report lands, which is not the same as zero.
-                        runCatchingExceptions { mediaSession.receiveStats(memberId, FfiStreamKind.MICROPHONE) }
-                            .onFailure { Timber.w(it, "MatrixRTC: cannot read receive stats for $memberId") }
-                            .getOrNull()
-                            ?.map()
-                    }
-                }
-                _receiveStats.value = stats.mapNotNull { (memberId, memberStats) -> memberStats?.let { memberId to it } }.toMap()
-                logReceiveStats(stats)
-
-                // The camera stream's counters, for members publishing one. Asked for separately
-                // because receiveStats is keyed by stream kind: the microphone's report above has
-                // no frame counters at all, so reading "0 decoded" off it says nothing.
-                //
-                // This is the pair that tells a decode stall from a delivery one when a tile goes
-                // black. Frames flat while packets climb is the decoder stuck on what arrived; both
-                // climbing with nothing drawn puts the loss between the core and us.
-                val videoMemberIds = _participants.value
-                    .filterNot { it.isLocal }
-                    .filter { participant -> participant.streams.any { it.kind == MatrixRtcStreamKind.CAMERA && !it.isMuted } }
-                    .map { it.memberId }
-                withContext(ffiDispatcher) {
-                    videoMemberIds.forEach { memberId ->
-                        runCatchingExceptions { mediaSession.receiveStats(memberId, FfiStreamKind.CAMERA) }
-                            .getOrNull()
-                            ?.map()
-                            ?.let { video ->
-                                Timber.i(
-                                    "MatrixRTC: rx video $memberId - ${video.packetsReceived} pkts, ${video.packetsLost} lost, " +
-                                        "${video.framesDecoded} decoded, ${video.framesDropped} dropped"
-                                )
-                            }
-                    }
-                }
+                pollReceiveStatsOnce()
             }
         }
+    }
+
+    private suspend fun pollReceiveStatsOnce() {
+        val remoteMembers = _participants.value.filterNot { it.isLocal }
+        val withMicrophone = remoteMembers
+            .filter { participant -> participant.streams.any { it.kind == MatrixRtcStreamKind.MICROPHONE } }
+            .map { it.memberId }
+        logMembersWithoutMicrophone(remoteMembers, withMicrophone)
+        val streams = streamsToPoll(composedTiles.value.filterNot { it.memberId == localMemberId }, withMicrophone.toSet())
+        if (streams.isEmpty()) {
+            _receiveStats.value = emptyMap()
+            streamsWithoutStats.clear()
+            return
+        }
+        val answered = withContext(ffiDispatcher) {
+            runCatchingExceptions { mediaSession.receiveStatsFor(streams.map { it.map() }) }
+                .onFailure { Timber.w(it, "MatrixRTC: cannot read receive stats") }
+                .getOrNull()
+        } ?: return
+        // Null until the first RTCP report lands, which is not the same as zero.
+        val stats = answered.associate { it.map() }
+        _receiveStats.value = stats.mapNotNull { (stream, streamStats) -> streamStats?.let { stream to it } }.toMap()
+        logReceiveStats(stats)
     }
 
     /**
@@ -433,30 +415,38 @@ internal class RustMatrixRtcCall(
 
     /**
      * On logcat at info, because these counters are what tell a starved stream apart from a silent
-     * one and a pasted log is often all we have to go on. Once a second per member, which is nothing
-     * next to the SDK's own output.
+     * one and a pasted log is often all we have to go on. Once a second per composed stream, which is
+     * nothing next to the SDK's own output.
      *
-     * A member the core has no stats for is reported too, once: otherwise an absent `rx` line reads
-     * the same whether there was nobody to poll or every read came back null.
+     * A stream the core has no stats for is reported too, once: otherwise an absent `rx` line reads
+     * the same whether there was nothing to poll or every read came back null.
      */
-    private fun logReceiveStats(stats: Map<String, MatrixRtcReceiveStats?>) {
-        stats.forEach { (memberId, memberStats) ->
-            if (memberStats == null) {
-                if (membersWithoutStats.add(memberId)) {
-                    Timber.i("MatrixRTC: no receive stats yet for $memberId")
+    private fun logReceiveStats(stats: Map<MatrixRtcStreamRef, MatrixRtcReceiveStats?>) {
+        stats.forEach { (stream, streamStats) ->
+            if (streamStats == null) {
+                if (streamsWithoutStats.add(stream)) {
+                    Timber.i("MatrixRTC: no receive stats yet for ${stream.memberId}/${stream.kind}")
                 }
                 return@forEach
             }
-            membersWithoutStats.remove(memberId)
-            val invented = memberStats.concealedFraction?.let { "${(it * 100).roundToInt()}%" } ?: "unknown"
-            Timber.i(
-                // No frame counters here on purpose: these are the microphone stream's stats, and an
-                // audio stream has no frames to decode. Logging them would only ever print zero and
-                // read as "no video is arriving". The camera's counters are logged separately, see
-                // pollReceiveStats.
-                "MatrixRTC: rx audio $memberId - ${memberStats.packetsReceived} pkts, ${memberStats.packetsLost} lost, " +
-                    "$invented invented, jitter ${"%.3f".format(memberStats.jitter)}s"
-            )
+            streamsWithoutStats.remove(stream)
+            if (stream.kind == MatrixRtcStreamKind.MICROPHONE) {
+                // No frame counters here on purpose: an audio stream has no frames to decode, and
+                // logging them would only ever print zero and read as "no video is arriving".
+                val invented = streamStats.concealedFraction?.let { "${(it * 100).roundToInt()}%" } ?: "unknown"
+                Timber.i(
+                    "MatrixRTC: rx audio ${stream.memberId} - ${streamStats.packetsReceived} pkts, ${streamStats.packetsLost} lost, " +
+                        "$invented invented, jitter ${"%.3f".format(streamStats.jitter)}s"
+                )
+            } else {
+                // The pair that tells a decode stall from a delivery one when a tile goes black:
+                // frames flat while packets climb is the decoder stuck on what arrived; both climbing
+                // with nothing drawn puts the loss between the core and us.
+                Timber.i(
+                    "MatrixRTC: rx video ${stream.memberId}/${stream.kind} - ${streamStats.packetsReceived} pkts, " +
+                        "${streamStats.packetsLost} lost, ${streamStats.framesDecoded} decoded, ${streamStats.framesDropped} dropped"
+                )
+            }
         }
     }
 
@@ -557,7 +547,7 @@ internal class RustMatrixRtcCall(
     ): Result<Unit> = runCatchingExceptions {
         // Skipped when nothing changed, because a tile's size is recomputed on every layout pass and
         // most of those land on the same numbers. The FFI call is cheap but it reaches the SFU.
-        val key = VideoStreamKey(memberId, kind)
+        val key = MatrixRtcStreamRef(memberId, kind)
         if (appliedConstraints[key] == constraints) return@runCatchingExceptions
         appliedConstraints[key] = constraints
 
@@ -590,7 +580,7 @@ internal class RustMatrixRtcCall(
     }
 
     /** Last constraints actually sent per stream, so unchanged ones are not sent again. */
-    private val appliedConstraints = ConcurrentHashMap<VideoStreamKey, MatrixRtcVideoConstraints>()
+    private val appliedConstraints = ConcurrentHashMap<MatrixRtcStreamRef, MatrixRtcVideoConstraints>()
 
     override suspend fun publishMicrophone(muted: Boolean): Result<Unit> = runCatchingExceptions {
         if (microphoneTrack != null) return@runCatchingExceptions
@@ -846,4 +836,17 @@ private fun MatrixRtcFrameEncryptionDiagnostic.describe(): String = when (this) 
     MatrixRtcFrameEncryptionDiagnostic.NotApplicable -> "nothing to explain"
     MatrixRtcFrameEncryptionDiagnostic.NoKeyInstalled -> "no key installed"
     is MatrixRtcFrameEncryptionDiagnostic.KeysInstalled -> "keys installed at $keyIndices"
+}
+
+/**
+ * The streams one stats sample asks about: each composed tile's own stream, then one microphone per
+ * member among them who publishes one. In that order, without repeats, so the answer reads as the
+ * screen does.
+ */
+internal fun streamsToPoll(composed: Collection<MatrixRtcTileId>, withMicrophone: Set<String>): List<MatrixRtcStreamRef> {
+    val tiles = composed.map { MatrixRtcStreamRef(it.memberId, it.kind) }
+    val microphones = composed.map { it.memberId }.distinct()
+        .filter { it in withMicrophone }
+        .map { MatrixRtcStreamRef(it, MatrixRtcStreamKind.MICROPHONE) }
+    return (tiles + microphones).distinct()
 }

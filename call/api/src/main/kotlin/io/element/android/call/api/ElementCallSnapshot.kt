@@ -13,6 +13,7 @@ import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcTile
 import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.id.UserId
@@ -73,10 +74,11 @@ data class ElementCallSnapshot(
     /** Meter readings by member id, ours included: what we capture and what we decode. */
     val audioLevels: ImmutableMap<String, MatrixRtcAudioLevel> = persistentMapOf(),
     /**
-     * RTP receive counters by member id, for remote members only. Empty until the transport's first
-     * report, so a member missing here is not yet known rather than receiving nothing.
+     * RTP receive counters by remote stream - each composed tile's, and its member's microphone.
+     * Empty until the transport's first report, so a stream missing here is not yet known rather than
+     * receiving nothing.
      */
-    val receiveStats: ImmutableMap<String, MatrixRtcReceiveStats> = persistentMapOf(),
+    val receiveStats: ImmutableMap<MatrixRtcStreamRef, MatrixRtcReceiveStats> = persistentMapOf(),
     /**
      * Last per-member frame-encryption state the core has reported.
      *

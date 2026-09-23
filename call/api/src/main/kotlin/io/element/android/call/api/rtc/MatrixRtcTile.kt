@@ -43,6 +43,16 @@ data class MatrixRtcTile(
 )
 
 /**
+ * One of a member's streams, of any kind: what per-stream state - frame flows, constraints, receive
+ * statistics - is keyed by. Not a [MatrixRtcTileId], which names a renderable tile; this can name a
+ * microphone.
+ */
+data class MatrixRtcStreamRef(
+    val memberId: String,
+    val kind: MatrixRtcStreamKind,
+)
+
+/**
  * A tile's place in the order: enough to place it, and to draw it as an avatar with a name when
  * its full record is outside the detail window.
  */
