@@ -123,7 +123,7 @@ internal fun CallTileLayout(
     //
     // Seeded rather than left for the effect below to fill, so that a screenshot test - which
     // renders a composition without ever running one - draws the call rather than an empty screen.
-    val rendered = remember { mutableStateListOf<CallTile>().apply { addAll(state.tiles) } }
+    val rendered = remember { mutableStateListOf<CallTileData>().apply { addAll(state.tiles) } }
     LaunchedEffect(state.tiles) {
         state.tiles.forEach { tile ->
             val index = rendered.indexOfFirst { it.tileId == tile.tileId }
@@ -422,7 +422,7 @@ private fun SwitchCameraButton(onClick: () -> Unit, modifier: Modifier = Modifie
  */
 @Composable
 private fun ReportVideoConstraints(
-    tile: CallTile,
+    tile: CallTileData,
     slot: Rect,
     hasVideo: Boolean,
     isVisible: Boolean,
@@ -483,7 +483,7 @@ private fun rememberDrawn(isVisible: Boolean): Boolean {
  */
 @Composable
 private fun PlacedTile(
-    tile: CallTile,
+    tile: CallTileData,
     videoFrames: Flow<MatrixRtcVideoFrame>?,
     isSpotlight: Boolean,
     appearance: CallTileAppearance,
@@ -527,7 +527,7 @@ private fun PlacedTile(
     // back as an avatar for their fade-out.
     val frames = (videoFrames ?: lastFrames.value.takeIf { !isPresent })?.takeIf { isDrawn }
 
-    CallParticipantTile(
+    CallTile(
         tile = tile,
         videoFrames = frames,
         isSpotlight = isSpotlight,

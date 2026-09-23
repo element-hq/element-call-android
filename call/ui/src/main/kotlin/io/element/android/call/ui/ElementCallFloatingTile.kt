@@ -66,7 +66,7 @@ import kotlin.math.roundToInt
  * out-of-app mode, so the system only shrinks the Activity once the user has left the app entirely.
  * Floating over *our own* content while the user carries on scrolling a timeline is something only
  * the app can draw, which is why this is hand-rolled rather than delegated. Native PiP still covers
- * the moment the user leaves - see `ElementCallPictureInPictureView` - and the two hand over to each other.
+ * the moment the user leaves - see `ElementCallPictureInPictureContent` - and the two hand over to each other.
  *
  * Draggable and corner-snapping, because a fixed thumbnail eventually covers the one thing the user
  * wants to read, and because every messenger that has this behaves the same way, so the gesture needs

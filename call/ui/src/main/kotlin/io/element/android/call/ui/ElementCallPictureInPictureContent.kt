@@ -50,7 +50,7 @@ import kotlinx.coroutines.flow.emptyFlow
  * rather than the whole call's.
  */
 @Composable
-fun ElementCallPictureInPictureView(
+fun ElementCallPictureInPictureContent(
     call: ElementCallSnapshot,
     videoFrames: (memberId: String, kind: MatrixRtcStreamKind) -> Flow<MatrixRtcVideoFrame>,
     modifier: Modifier = Modifier,
@@ -106,10 +106,10 @@ fun ElementCallPictureInPictureView(
 // At the size Android gives a picture-in-picture window, which is the only size this is ever drawn at.
 @PreviewsDayNight
 @Composable
-internal fun ElementCallPictureInPictureViewPreview(
+internal fun ElementCallPictureInPictureContentPreview(
     @PreviewParameter(MinimizedElementCallSnapshotPreviewParam::class) call: ElementCallSnapshot,
 ) = ElementCallPreview {
-    ElementCallPictureInPictureView(
+    ElementCallPictureInPictureContent(
         call = call,
         videoFrames = { _, _ -> emptyFlow() },
         modifier = Modifier.size(width = 240.dp, height = 135.dp),

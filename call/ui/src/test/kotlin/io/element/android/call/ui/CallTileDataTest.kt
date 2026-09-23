@@ -16,7 +16,7 @@ import io.element.android.call.test.aTile
 import kotlinx.collections.immutable.persistentListOf
 import org.junit.Test
 
-class CallTileTest {
+class CallTileDataTest {
     @Test
     fun `a member publishing an unmuted microphone is neither muted nor missing one`() {
         val participant = aRemoteParticipant().toTile()
@@ -66,7 +66,7 @@ class CallTileTest {
     @Test
     fun `a screen share tile never reports a missing microphone, a mute or a speaker`() {
         val share = aTile(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.SCREEN_SHARE, isMicrophoneMuted = true, isSpeaking = true)
-            .toCallTile(roomMembers = emptyMap(), isLocal = false, hasMicrophone = false, isFrontCamera = false)
+            .toCallTileData(roomMembers = emptyMap(), isLocal = false, hasMicrophone = false, isFrontCamera = false)
 
         assertThat(share.isScreenShare).isTrue()
         assertThat(share.hasMicrophone).isTrue()
@@ -77,9 +77,9 @@ class CallTileTest {
 
     @Test
     fun `a sharer's two tiles have different ids and the camera keeps its own`() {
-        val camera = aTile(A_REMOTE_MEMBER_ID).toCallTile(emptyMap(), isLocal = false, hasMicrophone = true, isFrontCamera = false)
+        val camera = aTile(A_REMOTE_MEMBER_ID).toCallTileData(emptyMap(), isLocal = false, hasMicrophone = true, isFrontCamera = false)
         val share = aTile(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.SCREEN_SHARE)
-            .toCallTile(emptyMap(), isLocal = false, hasMicrophone = true, isFrontCamera = false)
+            .toCallTileData(emptyMap(), isLocal = false, hasMicrophone = true, isFrontCamera = false)
 
         assertThat(camera.tileId).isEqualTo(A_REMOTE_MEMBER_ID)
         assertThat(share.tileId).isNotEqualTo(camera.tileId)
@@ -88,13 +88,13 @@ class CallTileTest {
 
     @Test
     fun `speaking comes from the core's tile`() {
-        val speaking = aTile(A_REMOTE_MEMBER_ID, isSpeaking = true).toCallTile(emptyMap(), isLocal = false, hasMicrophone = true, isFrontCamera = false)
+        val speaking = aTile(A_REMOTE_MEMBER_ID, isSpeaking = true).toCallTileData(emptyMap(), isLocal = false, hasMicrophone = true, isFrontCamera = false)
 
         assertThat(speaking.isActiveSpeaker).isTrue()
     }
 
     private fun MatrixRtcParticipant.toTile() =
-        cameraTile().toCallTile(
+        cameraTile().toCallTileData(
             roomMembers = emptyMap(),
             isLocal = isLocal,
             hasMicrophone = hasStream(MatrixRtcStreamKind.MICROPHONE),
