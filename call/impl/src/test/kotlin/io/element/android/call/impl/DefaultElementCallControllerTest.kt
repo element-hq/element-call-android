@@ -25,7 +25,6 @@ import io.element.android.call.api.rtc.MatrixRtcLocalState
 import io.element.android.call.api.rtc.MatrixRtcNotificationType
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
-import io.element.android.call.api.rtc.MatrixRtcSpeakingMember
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcTileId
@@ -846,10 +845,10 @@ class DefaultElementCallControllerTest {
      * The spotlight is the head of the core's order and nothing else.
      *
      * Speaker events used to move it here, behind a dwell of our own; the core now damps the speaking
-     * input it ranks on, so a second damper on top would only make the two disagree about who is first.
+     * input it ranks on and no speaker event reaches this layer at all.
      */
     @Test
-    fun `the spotlight is the head of the order, and speaker events do not move it`() = runTest {
+    fun `the spotlight is the head of the order`() = runTest {
         val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
         val controller = createController(rtcService = rtcService)
         controller.setMicrophonePermissionGranted(true)
@@ -859,13 +858,6 @@ class DefaultElementCallControllerTest {
         call.tiles.value = aRoster(aTile(A_REMOTE_MEMBER_ID), aTile(ANOTHER_REMOTE_MEMBER_ID))
         runCurrent()
         assertThat(controller.state.value?.spotlightTileId).isEqualTo(MatrixRtcTileId(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.PERSON))
-
-        repeat(6) { index ->
-            val speaker = if (index % 2 == 0) A_REMOTE_MEMBER_ID else ANOTHER_REMOTE_MEMBER_ID
-            call.emit(MatrixRtcCallEvent.ActiveSpeakers(listOf(MatrixRtcSpeakingMember(speaker, level = 0.8f))))
-        }
-        runCurrent()
-        assertThat(controller.state.value?.spotlightTileId?.memberId).isEqualTo(A_REMOTE_MEMBER_ID)
 
         call.tiles.value = aRoster(aTile(ANOTHER_REMOTE_MEMBER_ID, isSpeaking = true), aTile(A_REMOTE_MEMBER_ID))
         runCurrent()

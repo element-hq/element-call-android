@@ -43,6 +43,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -270,14 +271,45 @@ internal class RustMatrixRtcCall(
     fun start() {
         pumpEvents()
         pumpTiles()
+        pumpParticipants()
+        followPlayback()
         pollReceiveStats()
-        refreshParticipants()
-        // Anything already publishing before we connected will not produce a StreamStarted event.
+    }
+
+    /**
+     * The participant roster, pushed by the core with the latest value winning - so there is nothing
+     * to re-read after an event, and a lagging event consumer can never leave it stale.
+     */
+    private fun pumpParticipants() {
         callScope.launch {
-            withContext(ffiDispatcher) { mediaSession.participants() }
-                .filterNot { it.isLocal }
-                .filter { participant -> participant.streams.any { it.kind == FfiStreamKind.MICROPHONE } }
-                .forEach { playAudioOf(it.memberId) }
+            pump("participants", seed = { mediaSession.participants() }, next = { mediaSession.nextParticipants() }) { participants ->
+                val refreshed = participants.map { it.map() }
+                // Logged when the set changes, because "why do I see a member who left" needs to name
+                // the layer holding the extra row: this is the media roster, the core's own membership
+                // projection shows up as its `membership changed` line.
+                if (refreshed.mapTo(mutableSetOf()) { it.memberId } != _participants.value.mapTo(mutableSetOf()) { it.memberId }) {
+                    Timber.i("MatrixRTC: media roster ${refreshed.size}: ${refreshed.map { "${it.memberId}${if (it.isLocal) " (self)" else ""}" }}")
+                }
+                _participants.value = refreshed
+            }
+        }
+    }
+
+    /**
+     * Who we play follows the roster, not the event stream: a remote member with a microphone stream
+     * has a player, a member without one does not. Driven from a latest-value push, so a missed
+     * `StreamStarted` can never leave someone silent and a missed `ParticipantLeft` can never leak
+     * their player.
+     */
+    private fun followPlayback() {
+        callScope.launch {
+            _participants
+                .map { microphoneMembers(it, localMemberId) }
+                .distinctUntilChanged()
+                .collect { wanted ->
+                    (playbackClaims - wanted).forEach { stopPlayback(it) }
+                    (wanted - playbackClaims).forEach { playAudioOf(it) }
+                }
         }
     }
 
@@ -334,7 +366,6 @@ internal class RustMatrixRtcCall(
                 if (mapped != null) {
                     handleInternally(mapped)
                     _events.emit(mapped)
-                    refreshParticipants()
                 } else {
                     Timber.d("MatrixRTC: ignoring ${event::class.simpleName}, not carried by this library yet")
                 }
@@ -477,18 +508,6 @@ internal class RustMatrixRtcCall(
                     "MatrixRTC: key index ${event.keyIndex} for ${event.memberId} discarded, " +
                         "${event.reason} (from ${event.senderUserId}/${event.senderDeviceId})"
                 )
-            is MatrixRtcCallEvent.StreamStarted -> {
-                // Our own publications now raise this too, so the guard is what keeps us from
-                // opening a playback stream on ourselves and hearing our own voice back.
-                if (event.kind == MatrixRtcStreamKind.MICROPHONE && event.memberId != localMemberId) {
-                    playAudioOf(event.memberId)
-                }
-            }
-            is MatrixRtcCallEvent.StreamStopped -> {
-                if (event.kind == MatrixRtcStreamKind.MICROPHONE) {
-                    stopPlayback(event.memberId)
-                }
-            }
             // The only report of what the media layer actually installed, and the one thing that
             // separates the three ways a member can sit at MISSING_KEY: we never fed the key, we fed
             // it and the media layer refused it, or it was installed at an index the frame cryptor is
@@ -496,7 +515,6 @@ internal class RustMatrixRtcCall(
             // own member id here, which needs no network at all to go wrong.
             is MatrixRtcCallEvent.KeyImported ->
                 Timber.i("MatrixRTC: key index ${event.keyIndex} imported for ${event.memberId}")
-            is MatrixRtcCallEvent.ParticipantLeft -> stopPlayback(event.memberId)
             is MatrixRtcCallEvent.Ended -> {
                 audioPlayback.stopAll()
                 playbackClaims.clear()
@@ -521,23 +539,6 @@ internal class RustMatrixRtcCall(
             return
         }
         audioPlayback.start(memberId, stream)
-    }
-
-    private fun refreshParticipants() {
-        callScope.launch {
-            val refreshed = withContext(ffiDispatcher) {
-                runCatchingExceptions { mediaSession.participants().map { it.map() } }
-                    .getOrDefault(emptyList())
-            }
-            // Logged when the roster changes, because "why do I see a member who left" needs to name
-            // the layer holding the extra row. This is the media roster; the core's own membership
-            // projection shows up as its `membership changed` line and our `feeding N sticky
-            // event(s)`. Best effort: concurrent refreshes may duplicate or drop a line.
-            if (refreshed.mapTo(mutableSetOf()) { it.memberId } != _participants.value.mapTo(mutableSetOf()) { it.memberId }) {
-                Timber.i("MatrixRTC: media roster ${refreshed.size}: ${refreshed.map { "${it.memberId}${if (it.isLocal) " (self)" else ""}" }}")
-            }
-            _participants.value = refreshed
-        }
     }
 
     override suspend fun setVideoConstraints(
@@ -850,3 +851,9 @@ internal fun streamsToPoll(composed: Collection<MatrixRtcTileId>, withMicrophone
         .map { MatrixRtcStreamRef(it, MatrixRtcStreamKind.MICROPHONE) }
     return (tiles + microphones).distinct()
 }
+
+/** The remote members we should be playing: everyone else publishing a microphone stream, muted or not. */
+internal fun microphoneMembers(participants: List<MatrixRtcParticipant>, localMemberId: String): Set<String> =
+    participants
+        .filter { it.memberId != localMemberId && !it.isLocal && it.streams.any { stream -> stream.kind == MatrixRtcStreamKind.MICROPHONE } }
+        .mapTo(mutableSetOf()) { it.memberId }

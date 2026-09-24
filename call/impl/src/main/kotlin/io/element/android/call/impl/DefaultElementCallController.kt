@@ -609,9 +609,7 @@ internal class DefaultElementCallController(
         observe { audioDeviceController.selectedDevice.collect { value -> updateState { it.copy(selectedAudioDevice = value) } } }
         observe {
             call.events.collect { event ->
-                // Active speakers arrive several times a second and are on screen anyway, so they
-                // would only bury the events that say something happened.
-                if (event !is MatrixRtcCallEvent.ActiveSpeakers) Timber.d("ElementCall: $event")
+                Timber.d("ElementCall: $event")
                 when (event) {
                     is MatrixRtcCallEvent.MediaConnectionDegraded -> updateState {
                         it.copy(connection = if (event.degraded) ElementCallConnection.Degraded else ElementCallConnection.Connected)

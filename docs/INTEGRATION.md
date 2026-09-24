@@ -429,8 +429,9 @@ Then, in this order:
    event flow has no replay, and the event that matters most — `Ended` — arrives exactly when a call is short-lived
    enough for the gap to catch it. In Compose, launch your collectors `UNDISPATCHED` so they are subscribed by the
    time the launcher returns rather than merely queued.
-2. **Sweep the existing roster.** `mediaSession.participants()` — anything already publishing before you connected
-   raises no `StreamStarted`, so a member who was speaking when you joined is silent forever otherwise.
+2. **Pump the participant roster.** `mediaSession.nextParticipants()` in a loop, seeded from `participants()`: a
+   latest-value push, so there is nothing to re-read after an event, and it already holds everyone publishing before
+   you connected. Drive audio playback from it (§11), not from `StreamStarted`.
 3. Publish your own microphone (§8).
 
 `participants()` is the transport's roster and is a different thing from the core's membership projection. Both are
@@ -666,14 +667,12 @@ the one counter that names it directly.
 Allocate nothing per frame here. `frame.data` is already a fresh array on every call at 100 frames a second per
 member; wrapping it to meter it doubles that, and this is the one path where a GC pause is audible.
 
-**Two sources decide when to start playback, and they race.** The `StreamStarted` event and your initial
-`participants()` sweep will both fire for anyone already publishing when you connect. Claim the member in a
-concurrent set *before* opening the stream, not after — two callers past a check on the playback map each end up
-with a reader and an `AudioTrack` on the same member, playing their audio twice and slightly out of step. Release
-the claim if opening fails, so a later `StreamStarted` can retry.
-
-**Skip your own member id.** Your own publications now raise `StreamStarted` too; without the guard you play your
-own voice back.
+**Playback follows the roster, not the event stream.** Every value of `nextParticipants()` says who publishes a
+microphone; open a player for each remote member who does and close it for each who no longer does
+(`RustMatrixRtcCall.followPlayback`). `StreamStarted` and `StreamStopped` are still emitted, but a consumer that lags
+the event stream by more than its buffer loses events silently, and a lost `StreamStarted` used to leave a member
+silent for the rest of the call. The roster is a latest-value push and cannot be lagged. Skip your own member id:
+your own publications are on the roster too.
 
 Stop playback on `StreamStopped`, `ParticipantLeft` and `Ended`, and drop that member's cached video flows at the
 same time — a member who left will not come back under that id.
