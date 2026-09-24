@@ -479,10 +479,10 @@ internal class WidgetMatrixBridge(
     /**
      * The driver hands over `{type, content, sender, encrypted}` only: it has already dropped cleartext
      * in an encrypted room and attested the sender of an encrypted message, but reports neither the
-     * sender's device nor whether it is cross-signed. The device is read from the key message itself,
-     * or failing that from the sender's one live membership, and an encrypted message is taken as
-     * cross-signed - the trust Element Call web gets through this same driver (FEEDBACK.md,
-     * "Widget-driver stopgap").
+     * sender's device nor whether it is cross-signed. The device is the one the key message claims, and
+     * an encrypted message is taken as cross-signed - the trust Element Call web gets through this same
+     * driver (FEEDBACK.md, "Widget-driver stopgap"). A message naming no device is passed on without
+     * one: the core checks the device against the membership, so it must not come from the membership.
      */
     private suspend fun deliverToDevice(data: JsonObject) {
         val eventType = data.string("type")
@@ -493,11 +493,10 @@ internal class WidgetMatrixBridge(
             return
         }
         val wasEncrypted = (data["encrypted"] as? JsonPrimitive)?.booleanOrNull ?: false
-        val claimedDeviceId = claimedDeviceId(content)
-        val deviceId = claimedDeviceId ?: membershipDeviceId(sender)
-        if (claimedDeviceId == null) {
+        val deviceId = claimedDeviceId(content)
+        if (deviceId == null) {
             // Field names only, never values: which shape of key message the peer speaks.
-            Timber.i("WidgetBridge: $eventType from $sender names no device (fields: ${content.keys.sorted()}), inferred ${deviceId ?: "none"}")
+            Timber.i("WidgetBridge: $eventType from $sender names no device (fields: ${content.keys.sorted()})")
         }
         toDevice.emit(
             ElementCallToDeviceMessage(
@@ -519,42 +518,12 @@ internal class WidgetMatrixBridge(
     }
 
     /**
-     * The device the key message claims to come from: Element Call has written it at the top level
-     * (`device_id`) and, more recently, inside `member`.
+     * The device the key message claims to come from: older Element Call wrote it at the top level
+     * (`device_id`), Element Web writes `member.claimed_device_id` and matrix-rust-rtc writes both.
      */
     private fun claimedDeviceId(content: JsonObject): String? {
-        return content.string("device_id") ?: (content["member"] as? JsonObject)?.string("device_id")
-    }
-
-    /**
-     * The device behind the user's live call membership, when there is exactly one. Element Call's key
-     * messages do not always name their device, while the core refuses a key whose device it cannot
-     * match to the membership.
-     */
-    private fun membershipDeviceId(userId: UserId): String? {
-        val memberships = stateByType[MatrixRtcEventTypes.MEMBER_ELEMENT_CALL_STATE_UNSTABLE]?.value?.values
-            ?.filter { it.sender == userId && it.contentJson != "{}" }
-            ?: return null
-        val deviceIds = mutableSetOf<String>()
-        for (membership in memberships) {
-            (parseObject(membership.contentJson)?.get("memberships") as? JsonArray)
-                ?.filterIsInstance<JsonObject>()
-                ?.forEach { entry -> entry.string("device_id")?.let(deviceIds::add) }
-            if (deviceIds.isEmpty()) {
-                deviceIdInStateKey(membership.stateKey, userId.value)?.let(deviceIds::add)
-            }
-        }
-        return deviceIds.singleOrNull()
-    }
-
-    /**
-     * Element Call keys its membership `_{user}_{device}_m.call` (or `{user}_{device}`, or just the
-     * user); the device is whatever follows the user id.
-     */
-    private fun deviceIdInStateKey(stateKey: String, userId: String): String? {
-        val key = stateKey.removePrefix("_")
-        if (!key.startsWith("${userId}_")) return null
-        return key.removePrefix("${userId}_").removeSuffix("_m.call").takeIf { it.isNotEmpty() }
+        return content.string("device_id")
+            ?: (content["member"] as? JsonObject)?.let { it.string("claimed_device_id") ?: it.string("device_id") }
     }
 
     // JSON
