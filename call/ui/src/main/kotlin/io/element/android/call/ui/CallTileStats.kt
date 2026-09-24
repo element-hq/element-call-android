@@ -83,7 +83,6 @@ internal fun CallTileStatsOverlay(
     requestedWidth: Int,
     requestedHeight: Int,
     isReachable: Boolean,
-    hasMicrophone: Boolean,
     modifier: Modifier = Modifier,
 ) {
     var sample by remember { mutableStateOf(FrameSample(0, 0, 0)) }
@@ -136,13 +135,6 @@ internal fun CallTileStatsOverlay(
         // is the only signal the FFI gives us about which SFU is carrying whom.
         if (!isReachable) {
             StatLine("UNREACHABLE")
-        }
-        // The name pill draws a mute badge for this too, because "cannot be heard" is what a viewer
-        // needs from a badge. Here the question is why, and "they muted" and "we were never given
-        // their audio" are different answers - the second one is a fault, and the far end will be
-        // hearing them perfectly well while we say they are muted.
-        if (!hasMicrophone) {
-            StatLine("NO MIC STREAM")
         }
     }
 }

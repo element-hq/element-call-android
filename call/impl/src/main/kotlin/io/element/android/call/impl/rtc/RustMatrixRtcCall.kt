@@ -21,6 +21,8 @@ import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcTileId
+import io.element.android.call.api.rtc.MatrixRtcTileKind
+import io.element.android.call.api.rtc.MatrixRtcTileRef
 import io.element.android.call.api.rtc.MatrixRtcTileRoster
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
@@ -43,7 +45,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -271,41 +272,38 @@ internal class RustMatrixRtcCall(
     fun start() {
         pumpEvents()
         pumpTiles()
-        pumpParticipants()
+        seedParticipants()
         followPlayback()
         pollReceiveStats()
     }
 
     /**
-     * The participant roster, pushed by the core with the latest value winning - so there is nothing
-     * to re-read after an event, and a lagging event consumer can never leave it stale.
+     * The transport's roster, read once: the whole call every time, which is the cost the tile
+     * roster's detail window exists to avoid, so it is never pumped or re-read per event. What it
+     * seeds is our own row, for the tile we draw before the core publishes our local state.
      */
-    private fun pumpParticipants() {
+    private fun seedParticipants() {
         callScope.launch {
-            pump("participants", seed = { mediaSession.participants() }, next = { mediaSession.nextParticipants() }) { participants ->
-                val refreshed = participants.map { it.map() }
-                // Logged when the set changes, because "why do I see a member who left" needs to name
-                // the layer holding the extra row: this is the media roster, the core's own membership
-                // projection shows up as its `membership changed` line.
-                if (refreshed.mapTo(mutableSetOf()) { it.memberId } != _participants.value.mapTo(mutableSetOf()) { it.memberId }) {
-                    Timber.i("MatrixRTC: media roster ${refreshed.size}: ${refreshed.map { "${it.memberId}${if (it.isLocal) " (self)" else ""}" }}")
-                }
-                _participants.value = refreshed
+            val participants = withContext(ffiDispatcher) {
+                runCatchingExceptions { mediaSession.participants().map { it.map() } }.getOrDefault(emptyList())
             }
+            Timber.i("MatrixRTC: media roster ${participants.size}: ${participants.map { "${it.memberId}${if (it.isLocal) " (self)" else ""}" }}")
+            _participants.value = participants
         }
     }
 
     /**
-     * Who we play follows the roster, not the event stream: a remote member with a microphone stream
-     * has a player, a member without one does not. Driven from a latest-value push, so a missed
-     * `StreamStarted` can never leave someone silent and a missed `ParticipantLeft` can never leak
-     * their player.
+     * Who we play follows the tile roster, not the event stream: every remote person tile is a
+     * candidate, and a candidate we have no player for is opened on each push - `audioStream` answers
+     * null at once for a member with no microphone track, so the retries cost nothing and a mic that
+     * appears later is picked up on the push it causes. Anyone gone from the order loses their player.
+     * A missed `StreamStarted` can therefore never leave someone silent, and a missed
+     * `ParticipantLeft` never leaks a player.
      */
     private fun followPlayback() {
         callScope.launch {
-            _participants
-                .map { microphoneMembers(it, localMemberId) }
-                .distinctUntilChanged()
+            _tiles
+                .map { playbackCandidates(it.order, localMemberId) }
                 .collect { wanted ->
                     (playbackClaims - wanted).forEach { stopPlayback(it) }
                     (wanted - playbackClaims).forEach { playAudioOf(it) }
@@ -393,12 +391,8 @@ internal class RustMatrixRtcCall(
     }
 
     private suspend fun pollReceiveStatsOnce() {
-        val remoteMembers = _participants.value.filterNot { it.isLocal }
-        val withMicrophone = remoteMembers
-            .filter { participant -> participant.streams.any { it.kind == MatrixRtcStreamKind.MICROPHONE } }
-            .map { it.memberId }
-        logMembersWithoutMicrophone(remoteMembers, withMicrophone)
-        val streams = streamsToPoll(composedTiles.value.filterNot { it.memberId == localMemberId }, withMicrophone.toSet())
+        // The members we play are the members with a microphone: opening their audio is what found out.
+        val streams = streamsToPoll(composedTiles.value.filterNot { it.memberId == localMemberId }, playbackClaims.toSet())
         if (streams.isEmpty()) {
             _receiveStats.value = emptyMap()
             streamsWithoutStats.clear()
@@ -413,35 +407,6 @@ internal class RustMatrixRtcCall(
         val stats = answered.associate { it.map() }
         _receiveStats.value = stats.mapNotNull { (stream, streamStats) -> streamStats?.let { stream to it } }.toMap()
         logReceiveStats(stats)
-    }
-
-    /**
-     * A remote member with no microphone stream at all, said once per member and at warn.
-     *
-     * Nothing used to report this, and it is not a state anything else makes visible: playback is
-     * never opened, so there is no `audio in` line and no `rx audio` line either, and the tile draws
-     * the same mute badge it draws for someone who muted themselves. The absence looked exactly like
-     * a quiet participant. It took a side-by-side with Element Call - which had the same member
-     * unmuted and audible to everyone else - to find, which is a diagnosis that should not have
-     * needed a second client.
-     *
-     * At warn rather than info because it is one-sided in the way that hides it: our end is healthy,
-     * we simply never get their audio, and the far end has no idea we cannot hear them.
-     */
-    private fun logMembersWithoutMicrophone(remoteMembers: List<MatrixRtcParticipant>, withMicrophone: List<String>) {
-        remoteMembers.forEach { participant ->
-            if (participant.memberId in withMicrophone) {
-                membersWithoutMicrophone.remove(participant.memberId)
-                return@forEach
-            }
-            if (membersWithoutMicrophone.add(participant.memberId)) {
-                val kinds = participant.streams.joinToString { it.kind.name }.ifEmpty { "none" }
-                Timber.w(
-                    "MatrixRTC: ${participant.memberId} publishes no microphone stream, so they cannot be heard " +
-                        "here and are drawn as muted - streams: $kinds"
-                )
-            }
-        }
     }
 
     /**
@@ -534,10 +499,16 @@ internal class RustMatrixRtcCall(
                 .getOrNull()
         }
         if (stream == null) {
-            // Released so a later StreamStarted for this member can try again.
+            // Released, so the next roster push tries again. Said once: a member the SFU relays to
+            // everyone else but whose microphone never reaches our roster used to look exactly like a
+            // quiet participant, and took a side-by-side with Element Call to find.
             playbackClaims.remove(memberId)
+            if (membersWithoutMicrophone.add(memberId)) {
+                Timber.w("MatrixRTC: $memberId publishes no microphone stream, so they cannot be heard here and are drawn as muted")
+            }
             return
         }
+        membersWithoutMicrophone.remove(memberId)
         audioPlayback.start(memberId, stream)
     }
 
@@ -852,8 +823,8 @@ internal fun streamsToPoll(composed: Collection<MatrixRtcTileId>, withMicrophone
     return (tiles + microphones).distinct()
 }
 
-/** The remote members we should be playing: everyone else publishing a microphone stream, muted or not. */
-internal fun microphoneMembers(participants: List<MatrixRtcParticipant>, localMemberId: String): Set<String> =
-    participants
-        .filter { it.memberId != localMemberId && !it.isLocal && it.streams.any { stream -> stream.kind == MatrixRtcStreamKind.MICROPHONE } }
-        .mapTo(mutableSetOf()) { it.memberId }
+/** Whose audio we try to play: every remote person tile in the order. Whether they have a microphone, opening it tells us. */
+internal fun playbackCandidates(order: List<MatrixRtcTileRef>, localMemberId: String): Set<String> =
+    order
+        .filter { it.id.kind == MatrixRtcTileKind.PERSON && it.id.memberId != localMemberId }
+        .mapTo(mutableSetOf()) { it.id.memberId }

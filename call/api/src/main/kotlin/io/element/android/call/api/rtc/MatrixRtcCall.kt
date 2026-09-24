@@ -35,8 +35,9 @@ interface MatrixRtcCall : AutoCloseable {
     val events: Flow<MatrixRtcCallEvent>
 
     /**
-     * The transport's view, one row per membership, ourselves included. What to ask for call-wide
-     * questions and diagnostics; what to draw is [tiles].
+     * The transport's view, one row per membership, ourselves included, **as read at connect**: a
+     * diagnostics pull, the whole call every time, so it is not kept live. What to draw is [tiles],
+     * and whose audio plays follows [tiles] too.
      */
     val participants: StateFlow<List<MatrixRtcParticipant>>
 

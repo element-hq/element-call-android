@@ -8,7 +8,6 @@
 package io.element.android.call.ui
 
 import io.element.android.call.api.ElementCallRoomMember
-import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTile
 import io.element.android.call.api.rtc.MatrixRtcTileId
@@ -31,17 +30,6 @@ data class CallTileData(
     val isLocal: Boolean,
     /** Whether the microphone stream is muted, or absent entirely - both mean "cannot be heard". */
     val isMuted: Boolean,
-    /**
-     * Whether the member publishes a microphone stream at all, muted or not.
-     *
-     * [isMuted] deliberately collapses this into itself for the badge, and that is still the right
-     * call there - see `toCallTileData`. It is kept apart here because the two have different
-     * *causes*: muted is a choice the member made, absent is us having nothing to play, and a member
-     * who is talking away on another client while we draw a mute badge is the second one. That
-     * happened - see the `Audio` section of the RTC `FEEDBACK.md` - and took a side-by-side with
-     * Element Call to notice, because nothing anywhere said the stream was missing rather than off.
-     */
-    val hasMicrophone: Boolean = true,
     val isActiveSpeaker: Boolean,
     val hasVideo: Boolean,
     /** Only ever our own front camera: see [isVideoMirrored]'s use in the tile. */
@@ -95,9 +83,8 @@ data class CallTileData(
  *
  * A member with no microphone stream at all reads as muted *on the badge*, deliberately: to anyone
  * looking at the call the two are the same fact, and drawing an un-muted icon for someone who cannot
- * be heard is the more misleading of the two options. The tile collapses them as well, so the
- * distinction comes from the transport's roster, [hasMicrophone], and is shown wherever the question
- * being asked is "why".
+ * be heard is the more misleading of the two options. The call layer logs the difference once, when
+ * opening their audio finds nothing to open.
  *
  * A share tile carries its owner's microphone, but a screen is nobody's voice: the mute badge and the
  * speaking ring stay on the person's tile rather than being repeated on this one.
@@ -105,7 +92,6 @@ data class CallTileData(
 fun MatrixRtcTile.toCallTileData(
     roomMembers: Map<UserId, ElementCallRoomMember>,
     isLocal: Boolean,
-    hasMicrophone: Boolean,
     isFrontCamera: Boolean,
 ): CallTileData {
     val isScreenShare = id.kind == MatrixRtcTileKind.SCREEN_SHARE
@@ -115,7 +101,6 @@ fun MatrixRtcTile.toCallTileData(
         roomMember = roomMembers[userId],
         isLocal = isLocal,
         isMuted = !isScreenShare && isMicrophoneMuted,
-        hasMicrophone = isScreenShare || hasMicrophone,
         isActiveSpeaker = !isScreenShare && isSpeaking,
         hasVideo = hasVideo,
         // Mirroring a remote member would be wrong twice over: it is not how they look to
@@ -125,6 +110,3 @@ fun MatrixRtcTile.toCallTileData(
         streamKind = id.kind.videoStreamKind,
     )
 }
-
-/** Whether the participant publishes a stream of this kind at all, muted or not. */
-fun MatrixRtcParticipant.hasStream(kind: MatrixRtcStreamKind) = streams.any { it.kind == kind }

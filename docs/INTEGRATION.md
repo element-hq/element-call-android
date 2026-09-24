@@ -429,9 +429,9 @@ Then, in this order:
    event flow has no replay, and the event that matters most — `Ended` — arrives exactly when a call is short-lived
    enough for the gap to catch it. In Compose, launch your collectors `UNDISPATCHED` so they are subscribed by the
    time the launcher returns rather than merely queued.
-2. **Pump the participant roster.** `mediaSession.nextParticipants()` in a loop, seeded from `participants()`: a
-   latest-value push, so there is nothing to re-read after an event, and it already holds everyone publishing before
-   you connected. Drive audio playback from it (§11), not from `StreamStarted`.
+2. **Read `participants()` once**, for your own row before the core publishes your local state. It is the whole
+   call every time — the cost the tile roster's detail window exists to avoid — so never re-read it per event. Who
+   to draw and who to hear both follow `nextRoster()` (§11).
 3. Publish your own microphone (§8).
 
 `participants()` is the transport's roster and is a different thing from the core's membership projection. Both are
@@ -667,12 +667,13 @@ the one counter that names it directly.
 Allocate nothing per frame here. `frame.data` is already a fresh array on every call at 100 frames a second per
 member; wrapping it to meter it doubles that, and this is the one path where a GC pause is audible.
 
-**Playback follows the roster, not the event stream.** Every value of `nextParticipants()` says who publishes a
-microphone; open a player for each remote member who does and close it for each who no longer does
+**Playback follows the tile roster, not the event stream.** Every remote person tile in `nextRoster().order` is a
+candidate: on each roster, open `audioStream(memberId, MICROPHONE)` for candidates you have no player for — it
+returns `null` at once for a member with no microphone track, so the retries cost nothing and a microphone that
+appears later is picked up on the roster it changes — and stop the player of anyone gone from the order
 (`RustMatrixRtcCall.followPlayback`). `StreamStarted` and `StreamStopped` are still emitted, but a consumer that lags
 the event stream by more than its buffer loses events silently, and a lost `StreamStarted` used to leave a member
-silent for the rest of the call. The roster is a latest-value push and cannot be lagged. Skip your own member id:
-your own publications are on the roster too.
+silent for the rest of the call. The roster is a latest-value push and cannot be lagged.
 
 Stop playback on `StreamStopped`, `ParticipantLeft` and `Ended`, and drop that member's cached video flows at the
 same time — a member who left will not come back under that id.

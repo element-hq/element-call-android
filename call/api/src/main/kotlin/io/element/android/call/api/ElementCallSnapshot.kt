@@ -12,7 +12,6 @@ import io.element.android.call.api.rtc.MatrixRtcAudioLevel
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
-import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcTile
 import io.element.android.call.api.rtc.MatrixRtcTileId
@@ -69,7 +68,10 @@ data class ElementCallSnapshot(
      * question: later, but derived from media actually flowing.
      */
     val memberCount: Int = 0,
-    /** Everyone the media session sees in the call, us included. Empty until media connects. */
+    /**
+     * The transport's roster as read at connect, us included: a diagnostics view, not kept live.
+     * Everything drawn, and everything heard, follows [tiles] and [ownTile] instead.
+     */
     val participants: ImmutableList<MatrixRtcParticipant> = persistentListOf(),
     /** Meter readings by member id, ours included: what we capture and what we decode. */
     val audioLevels: ImmutableMap<String, MatrixRtcAudioLevel> = persistentMapOf(),
@@ -177,11 +179,7 @@ data class ElementCallSnapshot(
      * rather than holding it against their ear.
      */
     val hasVideo: Boolean
-        get() = participants.any { participant ->
-            participant.streams.any {
-                !it.isMuted && (it.kind == MatrixRtcStreamKind.CAMERA || it.kind == MatrixRtcStreamKind.SCREEN_SHARE)
-            }
-        }
+        get() = isCameraEnabled || tiles.any { it.hasVideo }
 }
 
 sealed interface ElementCallConnection {
