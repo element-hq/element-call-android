@@ -23,7 +23,6 @@ class CallTileDataTest {
         val participant = aRemoteParticipant().toTile()
 
         assertThat(participant.isMuted).isFalse()
-        assertThat(participant.hasMicrophone).isTrue()
     }
 
     @Test
@@ -33,7 +32,6 @@ class CallTileDataTest {
             .toTile()
 
         assertThat(participant.isMuted).isTrue()
-        assertThat(participant.hasMicrophone).isTrue()
     }
 
     /**
@@ -42,13 +40,12 @@ class CallTileDataTest {
      * have to stay distinguishable behind it or the fault has nowhere to show up.
      */
     @Test
-    fun `a member with no microphone stream reads as muted but is marked as having none`() {
+    fun `a member with no microphone stream reads as muted`() {
         val participant = aRemoteParticipant()
             .copy(streams = persistentListOf(MatrixRtcStreamState(MatrixRtcStreamKind.CAMERA, isMuted = false)))
             .toTile()
 
         assertThat(participant.isMuted).isTrue()
-        assertThat(participant.hasMicrophone).isFalse()
     }
 
     @Test
@@ -56,7 +53,6 @@ class CallTileDataTest {
         val participant = aRemoteParticipant().copy(streams = persistentListOf()).toTile()
 
         assertThat(participant.isMuted).isTrue()
-        assertThat(participant.hasMicrophone).isFalse()
     }
 
     /**
@@ -65,12 +61,11 @@ class CallTileDataTest {
      * anybody's voice, so the owner's mute and speaking stay on their camera tile.
      */
     @Test
-    fun `a screen share tile never reports a missing microphone, a mute or a speaker`() {
+    fun `a screen share tile never reports a mute or a speaker`() {
         val share = aTile(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.SCREEN_SHARE, isMicrophoneMuted = true, isSpeaking = true)
-            .toCallTileData(roomMembers = emptyMap(), isLocal = false, hasMicrophone = false, isFrontCamera = false)
+            .toCallTileData(roomMembers = emptyMap(), isLocal = false, isFrontCamera = false)
 
         assertThat(share.isScreenShare).isTrue()
-        assertThat(share.hasMicrophone).isTrue()
         assertThat(share.isMuted).isFalse()
         assertThat(share.isActiveSpeaker).isFalse()
         assertThat(share.hasVideo).isTrue()
@@ -78,9 +73,9 @@ class CallTileDataTest {
 
     @Test
     fun `a sharer's two tiles have different ids and the camera keeps its own`() {
-        val camera = aTile(A_REMOTE_MEMBER_ID).toCallTileData(emptyMap(), isLocal = false, hasMicrophone = true, isFrontCamera = false)
+        val camera = aTile(A_REMOTE_MEMBER_ID).toCallTileData(emptyMap(), isLocal = false, isFrontCamera = false)
         val share = aTile(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.SCREEN_SHARE)
-            .toCallTileData(emptyMap(), isLocal = false, hasMicrophone = true, isFrontCamera = false)
+            .toCallTileData(emptyMap(), isLocal = false, isFrontCamera = false)
 
         assertThat(camera.tileId).isEqualTo(A_REMOTE_MEMBER_ID)
         assertThat(share.tileId).isNotEqualTo(camera.tileId)
@@ -89,7 +84,7 @@ class CallTileDataTest {
 
     @Test
     fun `speaking comes from the core's tile`() {
-        val speaking = aTile(A_REMOTE_MEMBER_ID, isSpeaking = true).toCallTileData(emptyMap(), isLocal = false, hasMicrophone = true, isFrontCamera = false)
+        val speaking = aTile(A_REMOTE_MEMBER_ID, isSpeaking = true).toCallTileData(emptyMap(), isLocal = false, isFrontCamera = false)
 
         assertThat(speaking.isActiveSpeaker).isTrue()
     }
@@ -98,7 +93,6 @@ class CallTileDataTest {
         personTile().toCallTileData(
             roomMembers = emptyMap(),
             isLocal = isLocal,
-            hasMicrophone = hasStream(MatrixRtcStreamKind.MICROPHONE),
             isFrontCamera = false,
         )
 }

@@ -36,7 +36,6 @@ import io.element.android.call.test.FakeElementCallRoomContextProvider
 import io.element.android.call.test.FakeMatrixRtcService
 import io.element.android.call.test.aCameraParticipant
 import io.element.android.call.test.aRoster
-import io.element.android.call.test.aSharingParticipant
 import io.element.android.call.test.aTile
 import io.element.android.call.test.audio.FakeAudioFocus
 import io.element.android.call.test.audio.FakeCallAudioDeviceController
@@ -995,18 +994,18 @@ class DefaultElementCallControllerTest {
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
         val call = rtcService.lastSession?.lastCall!!
-        call.participants.value = listOf(aCameraParticipant(A_REMOTE_MEMBER_ID, isLocal = false, isCameraMuted = true))
+        call.tiles.value = aRoster(aTile(A_REMOTE_MEMBER_ID, hasVideo = false))
         runCurrent()
 
         // Maximized, audio only, foreground: the one case it is for.
         assertThat(audioDeviceController.proximityBlankingAllowed).isTrue()
 
         // Someone turns a camera on - now there is something to look at.
-        call.participants.value = listOf(aCameraParticipant(A_REMOTE_MEMBER_ID, isLocal = false, isCameraMuted = false))
+        call.tiles.value = aRoster(aTile(A_REMOTE_MEMBER_ID, hasVideo = true))
         runCurrent()
         assertThat(audioDeviceController.proximityBlankingAllowed).isFalse()
 
-        call.participants.value = listOf(aCameraParticipant(A_REMOTE_MEMBER_ID, isLocal = false, isCameraMuted = true))
+        call.tiles.value = aRoster(aTile(A_REMOTE_MEMBER_ID, hasVideo = false))
         runCurrent()
         assertThat(audioDeviceController.proximityBlankingAllowed).isTrue()
 
@@ -1041,22 +1040,22 @@ class DefaultElementCallControllerTest {
         val call = rtcService.lastSession?.lastCall!!
 
         // Audio only: the bar.
-        call.participants.value = listOf(aCameraParticipant(A_REMOTE_MEMBER_ID, isLocal = false, isCameraMuted = true))
+        call.tiles.value = aRoster(aTile(A_REMOTE_MEMBER_ID, hasVideo = false))
         runCurrent()
         assertThat(controller.state.value?.hasVideo).isFalse()
 
         // Someone turns a camera on: the tile.
-        call.participants.value = listOf(aCameraParticipant(A_REMOTE_MEMBER_ID, isLocal = false, isCameraMuted = false))
+        call.tiles.value = aRoster(aTile(A_REMOTE_MEMBER_ID, hasVideo = true))
         runCurrent()
         assertThat(controller.state.value?.hasVideo).isTrue()
 
         // A screen share counts too, even with every camera off.
-        call.participants.value = listOf(aSharingParticipant(A_REMOTE_MEMBER_ID))
+        call.tiles.value = aRoster(aTile(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.SCREEN_SHARE), aTile(A_REMOTE_MEMBER_ID, hasVideo = true))
         runCurrent()
         assertThat(controller.state.value?.hasVideo).isTrue()
 
         // And back off again.
-        call.participants.value = listOf(aCameraParticipant(A_REMOTE_MEMBER_ID, isLocal = false, isCameraMuted = true))
+        call.tiles.value = aRoster(aTile(A_REMOTE_MEMBER_ID, hasVideo = false))
         runCurrent()
         assertThat(controller.state.value?.hasVideo).isFalse()
     }

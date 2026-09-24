@@ -149,7 +149,6 @@ fun CallTile(
                 requestedWidth = stats.requestedWidth,
                 requestedHeight = stats.requestedHeight,
                 isReachable = tile.isReachable,
-                hasMicrophone = tile.hasMicrophone,
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(4.dp),

@@ -24,8 +24,11 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
   (`memberId`, `memberId#SCREEN_SHARE`).
 - `isScreenSharing` now reflects the screen-share publication rather than what was asked for.
 - `MatrixRtcCallEvent.ActiveSpeakers` and `MatrixRtcSpeakingMember` are removed; speaking is `MatrixRtcTile.isSpeaking`.
-  The participant roster is pushed by the core (`nextParticipants`), and remote audio playback follows it rather
-  than `StreamStarted`/`StreamStopped`, so a lagging event consumer can no longer leave anyone silent.
+  Remote audio playback follows the tile roster's order rather than `StreamStarted`/`StreamStopped`, so a lagging
+  event consumer can no longer leave anyone silent. `MatrixRtcCall.participants` and `ElementCallSnapshot.participants`
+  are read once at connect and no longer kept live; `ElementCallSnapshot.hasVideo` reads the tiles.
+- The stats overlay's `NO MIC STREAM` line and `CallTileData.hasMicrophone` are gone; the call layer still logs
+  once, at warn, when a member's microphone cannot be opened.
 - Receive statistics are per stream and bounded to what is drawn. `MatrixRtcCall.receiveStats` and
   `ElementCallSnapshot.receiveStats` are keyed by `MatrixRtcStreamRef(memberId, kind)` (were member id,
   microphone only), and hold each composed tile's stream plus its member's microphone. The screen declares

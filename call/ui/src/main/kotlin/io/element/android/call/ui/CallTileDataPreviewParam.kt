@@ -22,8 +22,6 @@ open class CallTileDataPreviewParam : PreviewParameterProvider<CallTileData> {
             aRemoteParticipant().toTile(roomMember = A_BOB).copy(hasVideo = true, isActiveSpeaker = true),
             // Muted, with a name from the room.
             aRemoteParticipant(isMuted = true).toTile(roomMember = A_BOB),
-            // Relayed by the SFU with no microphone stream at all, which the badge shows as muted.
-            aRemoteParticipant().toTile(roomMember = A_BOB).copy(hasMicrophone = false),
             // Not reachable: the core has them in the slot but the transport does not see them.
             aRemoteParticipant(isReachable = false).toTile(roomMember = A_BOB),
             // A shared screen: video, no badges, drawn as a spotlight.
@@ -40,6 +38,5 @@ private val A_BOB = ElementCallRoomMember(
 private fun io.element.android.call.api.rtc.MatrixRtcParticipant.toTile(roomMember: ElementCallRoomMember? = null) = personTile().toCallTileData(
     roomMembers = roomMember?.let { mapOf(it.userId to it) } ?: emptyMap(),
     isLocal = isLocal,
-    hasMicrophone = true,
     isFrontCamera = true,
 )

@@ -18,8 +18,6 @@ import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.ElementCallVersion
-import io.element.android.call.api.rtc.MatrixRtcStreamKind
-import io.element.android.call.api.rtc.MatrixRtcTile
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.ImmutableMap
@@ -117,12 +115,11 @@ fun rememberElementCallScreenState(
  * call rather than from the core's tile, so a tap shows on the badge before the round trip does.
  */
 private fun ElementCallSnapshot.callTiles(): ImmutableList<CallTileData> {
-    fun MatrixRtcTile.hasMicrophone() = participants.firstOrNull { it.memberId == id.memberId }?.hasStream(MatrixRtcStreamKind.MICROPHONE) != false
     val own = ownTile?.let {
         it.copy(isHero = false, isMicrophoneMuted = isMicrophoneMuted, hasVideo = isCameraEnabled)
-            .toCallTileData(roomMembers, isLocal = true, hasMicrophone = it.hasMicrophone(), isFrontCamera = isFrontCamera)
+            .toCallTileData(roomMembers, isLocal = true, isFrontCamera = isFrontCamera)
     }
-    val ranked = tiles.map { it.toCallTileData(roomMembers, isLocal = false, hasMicrophone = it.hasMicrophone(), isFrontCamera = isFrontCamera) }
+    val ranked = tiles.map { it.toCallTileData(roomMembers, isLocal = false, isFrontCamera = isFrontCamera) }
     return (listOfNotNull(own) + ranked).toImmutableList()
 }
 

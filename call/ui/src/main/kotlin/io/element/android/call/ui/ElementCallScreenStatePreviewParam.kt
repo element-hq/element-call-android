@@ -415,7 +415,6 @@ private fun previewCallTiles(
         tile.toCallTileData(
             roomMembers = emptyMap(),
             isLocal = participant.isLocal,
-            hasMicrophone = participant.hasStream(MatrixRtcStreamKind.MICROPHONE),
             isFrontCamera = isFrontCamera,
         )
     }
