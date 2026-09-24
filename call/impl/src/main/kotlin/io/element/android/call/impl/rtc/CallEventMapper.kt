@@ -16,7 +16,6 @@ import io.element.android.call.api.rtc.MatrixRtcLocalState
 import io.element.android.call.api.rtc.MatrixRtcMembership
 import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
-import io.element.android.call.api.rtc.MatrixRtcSpeakingMember
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcStreamState
@@ -35,7 +34,6 @@ import org.matrix.rtc.FfiKeyRejection
 import org.matrix.rtc.FfiLocalState
 import org.matrix.rtc.FfiParticipant
 import org.matrix.rtc.FfiReceiveStats
-import org.matrix.rtc.FfiSpeakingMember
 import org.matrix.rtc.FfiStreamKind
 import org.matrix.rtc.FfiStreamRef
 import org.matrix.rtc.FfiStreamState
@@ -58,7 +56,6 @@ internal fun FfiCallEvent.map(): MatrixRtcCallEvent? = when (this) {
     is FfiCallEvent.StreamStopped -> MatrixRtcCallEvent.StreamStopped(memberId, kind.map())
     is FfiCallEvent.StreamMuted -> MatrixRtcCallEvent.StreamMuted(memberId, kind.map())
     is FfiCallEvent.StreamUnmuted -> MatrixRtcCallEvent.StreamUnmuted(memberId, kind.map())
-    is FfiCallEvent.ActiveSpeakers -> MatrixRtcCallEvent.ActiveSpeakers(speakers.map { it.map() })
     is FfiCallEvent.MediaConnectionState -> MatrixRtcCallEvent.MediaConnectionDegraded(degraded)
     is FfiCallEvent.KeyImported -> MatrixRtcCallEvent.KeyImported(memberId, keyIndex.toInt())
     is FfiCallEvent.KeyDiscarded -> MatrixRtcCallEvent.KeyDiscarded(
@@ -75,11 +72,6 @@ internal fun FfiCallEvent.map(): MatrixRtcCallEvent? = when (this) {
     is FfiCallEvent.HandLowered,
     is FfiCallEvent.Reaction -> null
 }
-
-internal fun FfiSpeakingMember.map() = MatrixRtcSpeakingMember(
-    memberId = memberId,
-    level = level,
-)
 
 internal fun FfiKeyRejection.map(): MatrixRtcKeyRejection = when (this) {
     is FfiKeyRejection.Cleartext -> MatrixRtcKeyRejection.Cleartext
