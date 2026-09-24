@@ -14,6 +14,18 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 _Nothing yet._
 
+## 0.1.0-rc.4 - 2026-09-24
+
+
+
+### What's Changed
+
+🐛 Bugfixes
+* Fix: Keys wrongly discarded causing no video or audio. by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/23
+
+
+**Full Changelog**: https://github.com/element-hq/element-call-android/compare/v0.1.0-rc.3...v0.1.0-rc.4
+
 ## 0.1.0-rc.3 - 2026-09-23
 
 
