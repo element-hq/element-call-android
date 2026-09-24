@@ -261,9 +261,12 @@ class WidgetMatrixBridgeTest {
             assertThat(info.senderDeviceId).isEqualTo(DeviceId("BOBDEV"))
             assertThat(info.isSenderCrossSigned).isTrue()
 
-            // Element Call has since moved the device inside `member`.
-            driver.deliver(toWidget(SEND_TO_DEVICE, "t-2", toDeviceData(BOB, encrypted = true, content = aLegacyKey(memberDeviceId = "BOBDEV2"))))
+            // Element Call has since moved the device inside `member`, as `claimed_device_id`.
+            driver.deliver(toWidget(SEND_TO_DEVICE, "t-2", toDeviceData(BOB, encrypted = true, content = aLegacyKey(claimedDeviceId = "BOBDEV2"))))
             assertThat(awaitItem().encryptionInfo?.senderDeviceId).isEqualTo(DeviceId("BOBDEV2"))
+
+            driver.deliver(toWidget(SEND_TO_DEVICE, "t-3", toDeviceData(BOB, encrypted = true, content = aLegacyKey(memberDeviceId = "BOBDEV3"))))
+            assertThat(awaitItem().encryptionInfo?.senderDeviceId).isEqualTo(DeviceId("BOBDEV3"))
         }
     }
 
@@ -283,12 +286,13 @@ class WidgetMatrixBridgeTest {
     }
 
     /**
-     * Element Call's key messages do not always name their device, and the core refuses a key whose
-     * device it cannot match to the membership. The sender's one live membership names it - from its
-     * content, or failing that from its state key - and a sender with several is left unresolved.
+     * A stale membership (a client that died mid-call on a homeserver refusing delayed events) leaves
+     * the sender with two live ones. The device comes from the key message alone, whatever the
+     * memberships say: the core checks the key against the membership, so the bridge must not read the
+     * device off the membership and make that check pass by construction.
      */
     @Test
-    fun `the sender device is inferred from the membership when the key names none`() = runTest {
+    fun `the sender device comes from the key message, never from the memberships`() = runTest {
         val driver = FakeWidgetDriver()
         val bridge = negotiatedBridge(driver)
         driver.deliver(
@@ -296,27 +300,21 @@ class WidgetMatrixBridgeTest {
                 UPDATE_STATE,
                 "s-1",
                 stateBatch(
-                    // Bob: the device is in the content.
+                    // Bob: one live membership.
                     stateEvent(BOB_KEY, "\$bob1", BOB, aMembership("BOBDEV")),
-                    // Carol: content without memberships, the device is only in the state key.
-                    stateEvent("_${CAROL.value}_CARDEV_m.call", "\$carol1", CAROL, buildJsonObject { put("application", "m.call") }),
-                    // Dave: two live devices.
+                    // Dave: a stale membership next to the live one.
                     stateEvent("_${DAVE.value}_DAVE1_m.call", "\$dave1", DAVE, aMembership("DAVE1")),
                     stateEvent("_${DAVE.value}_DAVE2_m.call", "\$dave2", DAVE, aMembership("DAVE2")),
-                    // Erin: departed, so no live membership to read.
-                    stateEvent("_${ERIN.value}_ERINDEV_m.call", "\$erin1", ERIN, buildJsonObject {}),
                 )
             )
         )
 
         bridge.toDeviceMessages().test {
-            driver.deliver(toWidget(SEND_TO_DEVICE, "t-1", toDeviceData(BOB, encrypted = true, content = aLegacyKey())))
-            assertThat(awaitItem().encryptionInfo?.senderDeviceId).isEqualTo(DeviceId("BOBDEV"))
-            driver.deliver(toWidget(SEND_TO_DEVICE, "t-2", toDeviceData(CAROL, encrypted = true, content = aLegacyKey())))
-            assertThat(awaitItem().encryptionInfo?.senderDeviceId).isEqualTo(DeviceId("CARDEV"))
-            driver.deliver(toWidget(SEND_TO_DEVICE, "t-3", toDeviceData(DAVE, encrypted = true, content = aLegacyKey())))
+            driver.deliver(toWidget(SEND_TO_DEVICE, "t-1", toDeviceData(DAVE, encrypted = true, content = aLegacyKey(claimedDeviceId = "DAVE2"))))
+            assertThat(awaitItem().encryptionInfo?.senderDeviceId).isEqualTo(DeviceId("DAVE2"))
+            driver.deliver(toWidget(SEND_TO_DEVICE, "t-2", toDeviceData(DAVE, encrypted = true, content = aLegacyKey())))
             assertThat(awaitItem().encryptionInfo?.senderDeviceId).isNull()
-            driver.deliver(toWidget(SEND_TO_DEVICE, "t-4", toDeviceData(ERIN, encrypted = true, content = aLegacyKey())))
+            driver.deliver(toWidget(SEND_TO_DEVICE, "t-3", toDeviceData(BOB, encrypted = true, content = aLegacyKey())))
             assertThat(awaitItem().encryptionInfo?.senderDeviceId).isNull()
         }
     }
@@ -705,7 +703,7 @@ class WidgetMatrixBridgeTest {
         if (encrypted != null) put("encrypted", encrypted)
     }
 
-    private fun aLegacyKey(deviceId: String? = null, memberDeviceId: String? = null) = buildJsonObject {
+    private fun aLegacyKey(deviceId: String? = null, claimedDeviceId: String? = null, memberDeviceId: String? = null) = buildJsonObject {
         putJsonArray("keys") {
             add(
                 buildJsonObject {
@@ -716,9 +714,10 @@ class WidgetMatrixBridgeTest {
         }
         put("room_id", A_ROOM_ID.value)
         if (deviceId != null) put("device_id", deviceId)
-        if (memberDeviceId != null) {
+        if (claimedDeviceId != null || memberDeviceId != null) {
             putJsonObject("member") {
-                put("device_id", memberDeviceId)
+                if (claimedDeviceId != null) put("claimed_device_id", claimedDeviceId)
+                if (memberDeviceId != null) put("device_id", memberDeviceId)
             }
         }
     }

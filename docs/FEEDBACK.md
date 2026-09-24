@@ -1112,17 +1112,12 @@ stopgap is:
 
 **Trust relaxation while the stopgap is in place.** The core drops a media key whose sender is not cross-signed
 and the mapper drops one without a sender device. Through the widget driver neither is knowable, so the bridge
-takes the device from the key message content (`device_id`, or `member.device_id`) and treats an encrypted
-message as cross-signed. The driver already drops cleartext in an encrypted room and attests the sender of an
-encrypted message, so this is the trust level embedded Element Call web has today. It lives only in
-`WidgetMatrixBridge.deliverToDevice`; `EncryptionKeyMapper` and the core keep their strict checks.
-
-**Sender device of Element Call keys.** Element Call web's `io.element.call.encryption_keys` messages do not
-always carry a `device_id`, and the core refuses a key whose sender device it cannot match against the member
-event. The bridge infers the device from the sender's live `org.matrix.msc3401.call.member` membership
-(`memberships[].device_id`, else the `_{user}_{device}_m.call` state key) when they have exactly one; a
-multi-device sender is left unresolved and the key dropped. A rust-rtc option to resolve the device from the
-membership itself when the key names none would retire this.
+takes the device from the key message content (`device_id`, `member.claimed_device_id` or `member.device_id`) and
+treats an encrypted message as cross-signed. The driver already drops cleartext in an encrypted room and attests
+the sender of an encrypted message, so this is the trust level embedded Element Call web has today. It lives only
+in `WidgetMatrixBridge.deliverToDevice`; `EncryptionKeyMapper` and the core keep their strict checks. A key naming
+no device reaches the core without one and is rejected there: the core checks the device against the membership,
+so the bridge never reads it off the membership. Once the SDK reports the sending device, the bridge passes that.
 
 **Wire details worth knowing.** The machine's request enum is adjacently tagged (`action` tag, `data` content):
 a message whose `data` precedes `action` is buffered by serde and its raw JSON fields then fail with "invalid
