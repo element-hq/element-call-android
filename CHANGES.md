@@ -14,6 +14,18 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 _Nothing yet._
 
+## 0.1.0-rc.5 - 2026-09-25
+
+
+
+### What's Changed
+
+🐛 Bugfixes
+* bugfix: back should minimize the call by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/26
+
+
+**Full Changelog**: https://github.com/element-hq/element-call-android/compare/v0.1.0-rc.4...v0.1.0-rc.5
+
 ## 0.1.0-rc.4 - 2026-09-24
 
 
