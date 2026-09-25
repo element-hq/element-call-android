@@ -12,6 +12,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -200,6 +201,10 @@ private fun CallInApp(
     // third case and already handled: the proximity wake lock in the audio device controller
     // blanks the screen deliberately, and this does not fight it.
     KeepScreenOn(keepScreenOn = current.isMaximized)
+
+    BackHandler(enabled = current.isMaximized) {
+        controller.setMaximized(false)
+    }
 
     // How a minimized call shows itself depends on whether it has a picture. A voice call docks as
     // a bar above the content, per the design; a video call floats as a draggable tile, because a

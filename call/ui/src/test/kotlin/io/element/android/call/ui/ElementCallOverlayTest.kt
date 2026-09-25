@@ -80,6 +80,30 @@ class ElementCallOverlayTest : RobolectricTest() {
         assertNoNodeWithContentDescription(R.string.element_call_a11y_hang_up)
     }
 
+    /** Back minimizes a maximized call instead of reaching the host's navigation underneath. */
+    @Test
+    fun `back on a maximized call minimizes it`() = runAndroidComposeUiTest<ComponentActivity> {
+        val controller = FakeElementCallController(initialState = aConnectedSnapshot(isMaximized = true))
+        setOverlay(controller)
+
+        pressBack()
+
+        assertThat(controller.maximizedCalls).containsExactly(false)
+        assertThat(activity?.isFinishing).isFalse()
+    }
+
+    /** Minimized, the call leaves back to the host: the bar is not a screen to close. */
+    @Test
+    fun `back on a minimized call reaches the host`() = runAndroidComposeUiTest<ComponentActivity> {
+        val controller = FakeElementCallController(initialState = aConnectedSnapshot(isMaximized = false))
+        setOverlay(controller)
+
+        pressBack()
+
+        assertThat(controller.maximizedCalls).isEmpty()
+        assertThat(activity?.isFinishing).isTrue()
+    }
+
     /** A voice call docks as a bar above the host's content, and tapping it brings the call back. */
     @Test
     fun `a minimized audio call docks as the bar over the host content`() = runAndroidComposeUiTest<ComponentActivity> {
@@ -144,6 +168,11 @@ class ElementCallOverlayTest : RobolectricTest() {
 
             assertThat(controller.microphonePermissionAnswers).containsExactly(true)
         }
+
+    private fun AndroidComposeUiTest<ComponentActivity>.pressBack() {
+        runOnUiThread { activity?.onBackPressedDispatcher?.onBackPressed() }
+        waitForIdle()
+    }
 
     private fun AndroidComposeUiTest<ComponentActivity>.setOverlay(controller: FakeElementCallController) {
         setContent {
