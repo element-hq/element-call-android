@@ -10,9 +10,10 @@
 package io.element.android.call.ui
 
 import androidx.activity.ComponentActivity
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.v2.runAndroidComposeUiTest
@@ -21,6 +22,7 @@ import io.element.android.call.tests.testutils.assertNodeWithTextIsDisplayed
 import io.element.android.call.tests.testutils.clickOn
 import io.element.android.call.tests.testutils.clickOnContentDescription
 import io.element.android.call.tests.testutils.robolectric.RobolectricTest
+import kotlinx.coroutines.flow.emptyFlow
 import org.junit.Test
 
 /**
@@ -55,17 +57,26 @@ class ElementCallScreenTest : RobolectricTest() {
     fun `the labels follow the state`() = runAndroidComposeUiTest<ComponentActivity> {
         val events = EventsRecorder<ElementCallScreenEvent>()
         setContent {
-            ElementCallScreen(
-                state = anElementCallScreenState(
-                    isMicrophoneMuted = true,
-                    isCameraEnabled = true,
-                    isScreenShareAvailable = true,
-                    isScreenSharing = true,
-                    eventSink = events,
-                ),
-            )
+            // Inspection mode: our tile has a picture here, and a real renderer wants a GL context the JVM has none of.
+            CompositionLocalProvider(LocalInspectionMode provides true) {
+                ElementCallScreen(
+                    state = anElementCallScreenState(
+                        isMicrophoneMuted = true,
+                        isCameraEnabled = true,
+                        isScreenShareAvailable = true,
+                        isScreenSharing = true,
+                        // The switch-camera button is on our own tile, so we need one with a picture.
+                        participants = listOf(aLocalParticipant()),
+                        videoFrames = mapOf(A_LOCAL_MEMBER_ID to emptyFlow()),
+                        eventSink = events,
+                    ),
+                )
+            }
         }
 
+        // The stage declares what it composes and the window it needs on mount; the buttons are the subject here.
+        waitForIdle()
+        events.clear()
         clickOnContentDescription(R.string.element_call_a11y_unmute_microphone)
         clickOnContentDescription(R.string.element_call_a11y_turn_camera_off)
         clickOnContentDescription(R.string.element_call_a11y_stop_screen_share)
@@ -107,12 +118,12 @@ class ElementCallScreenTest : RobolectricTest() {
         events.assertEmpty()
     }
 
-    /** There is no camera to switch while it is off, and a button that does nothing is worse than a disabled one. */
+    /** There is no camera to switch while it is off: the button on our tile is only drawn with a picture to turn around. */
     @Test
     fun `switching the camera is not offered while the camera is off`() = runAndroidComposeUiTest<ComponentActivity> {
-        setContent { ElementCallScreen(state = anElementCallScreenState(isCameraEnabled = false)) }
+        setContent { ElementCallScreen(state = anElementCallScreenState(isCameraEnabled = false, participants = listOf(aLocalParticipant()))) }
 
-        onNodeWithContentDescription(activity!!.getString(R.string.element_call_a11y_switch_camera)).assertIsNotEnabled()
+        onNodeWithContentDescription(activity!!.getString(R.string.element_call_a11y_switch_camera)).assertDoesNotExist()
     }
 
     @Test

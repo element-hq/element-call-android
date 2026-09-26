@@ -84,7 +84,8 @@ fun ElementCallScreen(
             // The control bar floats over the bottom of the stage in both orientations (spec 003
             // R43), so the stage is told how much of its bottom the bar covers and scrolls its last
             // row clear of it (R44).
-            val controlsClearance = CONTROLS_HEIGHT + WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
+            val bottomInset = LocalCallStageTestHooks.current?.bottomInset ?: WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
+            val controlsClearance = CONTROLS_HEIGHT + bottomInset
             val stage = @Composable { stageModifier: Modifier ->
                 if (state.tiles.isEmpty()) {
                     ConnectingPlaceholder(state)
@@ -340,13 +341,6 @@ private fun CallControlsBar(state: ElementCallScreenState, modifier: Modifier = 
                 isActive = state.isScreenSharing,
             )
         }
-        RoundCallButton(
-            onClick = { state.eventSink(ElementCallScreenEvent.SwitchCamera) },
-            icon = ElementCallTheme.icons.switchCamera,
-            contentDescription = stringResource(R.string.element_call_a11y_switch_camera),
-            isActive = false,
-            enabled = state.isCameraEnabled,
-        )
         RoundCallButton(
             onClick = { state.eventSink(ElementCallScreenEvent.HangUp) },
             icon = ElementCallTheme.icons.endCall,

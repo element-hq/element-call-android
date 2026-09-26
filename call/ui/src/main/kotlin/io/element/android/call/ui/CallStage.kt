@@ -40,8 +40,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.FloatState
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -70,6 +72,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.traversalIndex
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
@@ -192,26 +195,27 @@ internal fun CallStage(
         val lingerScope = rememberCoroutineScope()
         val lingerJobs = remember { mutableMapOf<String, Job>() }
         val lastBand = remember { SetRef() }
-        val lastHidden = remember { SetRef() }
+        val lastShown = remember { StringRef() }
         val currentEventSink by rememberUpdatedState(state.eventSink)
         val tilesById = remember(state.tiles) { state.tiles.associateBy { it.tileId }.toImmutableMap() }
-        val hiddenIds = layout.hiddenTileIds
-        LaunchedEffect(bandIds, hiddenIds) {
+        LaunchedEffect(bandIds, spotlightTileId) {
             fun constrain(id: String, constraints: MatrixRtcVideoConstraints) {
                 val tile = tilesById[id] ?: return
                 if (!tile.isLocal && tile.hasVideo) {
                     currentEventSink(ElementCallScreenEvent.SetVideoConstraints(tile.memberId, tile.streamKind, constraints))
                 }
             }
-            val back = bandIds - lastBand.value + (lastHidden.value - hiddenIds)
+            val back = bandIds - lastBand.value + setOfNotNull(spotlightTileId)
             back.forEach { id ->
                 lingerJobs.remove(id)?.cancel()
                 retainedIds.remove(id)
             }
             // A hero no longer shown is hidden by the arrangement, so it is outside the band and
             // released after the linger like any other (R24); its page is gone, so it is paused here.
-            (hiddenIds - lastHidden.value).forEach { constrain(it, MatrixRtcVideoConstraints.Paused) }
-            val gone = lastBand.value - bandIds + (hiddenIds - lastHidden.value)
+            // Only the hero that was shown: one that arrived unshown was never subscribed.
+            val unshown = lastShown.value?.takeIf { it != spotlightTileId && it !in bandIds }
+            unshown?.let { constrain(it, MatrixRtcVideoConstraints.Paused) }
+            val gone = lastBand.value - bandIds - setOfNotNull(spotlightTileId) + setOfNotNull(unshown)
             gone.forEach { id ->
                 retainedIds[id] = Unit
                 lingerJobs[id] = lingerScope.launch {
@@ -222,19 +226,23 @@ internal fun CallStage(
                 }
             }
             lastBand.value = bandIds
-            lastHidden.value = hiddenIds
+            lastShown.value = spotlightTileId
         }
+        val hiddenIds = layout.hiddenTileIds
         val composedGridIds by remember(layout) { derivedStateOf { bandIds + retainedIds.keys } }
 
         // The same set, told to the call, which polls statistics for these tiles and no others
         // (R59); and the detail window, derived from it (R52 to R55). Ranks are looked up in the
         // order, never taken from grid positions: the grid has our tile first and the heroes
         // removed, so a grid index is off by one per hero.
-        LaunchedEffect(composedGridIds, spotlightTileId, state.tiles) {
+        LaunchedEffect(composedGridIds, bandIds, spotlightTileId, state.tiles) {
             val composed = state.tiles.filter { it.tileId in composedGridIds || it.tileId == spotlightTileId }
             currentEventSink(ElementCallScreenEvent.SetComposedTiles(composed.map { it.id }.toSet()))
+            // The range is the band's, not the linger's: a tile kept only for its stream to settle
+            // needs no record, and a range spanning the old band and the new one after a long
+            // scroll would declare most of the call (R52's named failure).
             val remoteOrder = state.tiles.filterNot { it.isLocal }
-            val ranks = remoteOrder.withIndex().filter { it.value.tileId in composedGridIds }.map { it.index }
+            val ranks = remoteOrder.withIndex().filter { it.value.tileId in bandIds }.map { it.index }
             val range = if (ranks.isEmpty()) IntRange.EMPTY else ranks.min()..ranks.max()
             // WORKAROUND, spec 003 R6 with R52: `speaking` is on the tile record and not on the
             // reference, so once the band has scrolled away from the head of the order the layout
@@ -262,6 +270,28 @@ internal fun CallStage(
             lastTiles.value.forEach { tile -> if (tile.tileId !in present) leavers[tile.tileId] = tile }
             present.forEach { leavers.remove(it) }
             lastTiles.value = state.tiles
+        }
+
+        val hooks = LocalCallStageTestHooks.current
+        if (hooks != null) {
+            SideEffect {
+                hooks.isMounted = true
+                hooks.layout = layout
+                hooks.stageSize = IntSize(width.roundToInt(), height.roundToInt())
+                hooks.scrollOffset = { scrollOffset.floatValue }
+                hooks.composedGridIds = composedGridIds
+                hooks.spotlightTileId = spotlightTileId
+                hooks.heroes = heroIds
+                hooks.eventSink = state.eventSink
+                hooks.scrollTo = { target -> scrollOffset.floatValue = target.coerceIn(0f, layout.maxScroll(height)) }
+            }
+            DisposableEffect(Unit) {
+                onDispose {
+                    hooks.isMounted = false
+                    hooks.layout = null
+                    hooks.liveIds.clear()
+                }
+            }
         }
 
         val gridIndex = remember(gridTileIds) { gridTileIds.withIndex().associate { it.value to it.index } }
@@ -304,6 +334,22 @@ internal fun CallStage(
                 tilesById = tilesById,
                 state = state,
             )
+        }
+
+        // On our own tile, as the design frames draw it: it acts on the picture it sits on, and the
+        // bar has one fewer button to fit. A sibling anchored to the slot rather than a child of
+        // the tile, so its tap is its own (000 R16). Only with a picture to turn around.
+        val own = state.tiles.firstOrNull { it.isLocal && it.tileId in composedGridIds && state.videoFrames[it.tileId] != null }
+        val ownSlot = own?.let { lastSlots[it.tileId] }
+        if (ownSlot != null) {
+            Box(modifier = Modifier.animatedSlot(ownSlot.rect, isSticky = ownSlot.isSticky, scrollOffset = scrollOffset).zIndex(OVERLAY_Z_INDEX)) {
+                SwitchCameraButton(
+                    onClick = { state.eventSink(ElementCallScreenEvent.SwitchCamera) },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(8.dp),
+                )
+            }
         }
 
         // Anchored to the spotlight *slot* rather than to whoever is in it, so it stays put while
@@ -422,6 +468,7 @@ private fun PlacedTile(
     }
     val isLive = rememberLive(isVisible, isNear)
     ReportVideoConstraints(tile = tile, slot = slot.rect, hasVideo = videoFrames != null, isLive = isLive, eventSink = eventSink)
+    ReportLiveToHooks(tile.tileId, isLive)
 
     // A member who has left is gone from the frame map in the same breath, and swapping their video
     // for an avatar for the moment they spend fading out reads as a glitch. Their last stream is
@@ -526,7 +573,10 @@ private fun HeroSpotlight(
             beyondViewportPageCount = 0,
         ) { page ->
             val tile = currentHeroIds.getOrNull(page)?.let { tilesById[it] } ?: return@HorizontalPager
-            ReportVideoConstraints(tile = tile, slot = rect, hasVideo = state.videoFrames[tile.tileId] != null, isLive = true, eventSink = state.eventSink)
+            // The pager may keep a neighbouring page composed for a moment; only the shown hero receives video (R24).
+            val isShown = tile.tileId == shownId
+            ReportVideoConstraints(tile = tile, slot = rect, hasVideo = state.videoFrames[tile.tileId] != null, isLive = isShown, eventSink = state.eventSink)
+            ReportLiveToHooks(tile.tileId, isLive = isShown)
             CallTile(
                 tile = tile,
                 videoFrames = state.videoFrames[tile.tileId],
@@ -545,11 +595,13 @@ private fun HeroSpotlight(
             )
         }
         if (heroIds.size > 1) {
+            // Bottom-left in landscape, where the frames put it and where no name pill is; top-right
+            // in portrait, where the share's name pill has the bottom-left.
             HeroPositionPill(
                 position = shownIndex + 1,
                 count = heroIds.size,
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
+                    .align(if (isLandscape) Alignment.BottomStart else Alignment.TopEnd)
                     .padding(14.dp)
                     .testTag(ElementCallTestTags.HERO_INDICATOR),
             )
@@ -584,6 +636,29 @@ private fun HeroSpotlight(
                 )
             }
         }
+    }
+}
+
+/**
+ * Small and dark so it reads as part of the tile rather than as another control. The circle is the
+ * button's own container: Material's icon button insists on a 48dp touch target and draws it over
+ * any smaller size, so the visible circle is the design's and the target is still the accessible one.
+ */
+@Composable
+private fun SwitchCameraButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    IconButton(
+        onClick = onClick,
+        modifier = modifier,
+        colors = IconButtonDefaults.iconButtonColors(
+            containerColor = ElementCallTheme.colors.overlayScrim,
+            contentColor = ElementCallTheme.colors.onOverlay,
+        ),
+    ) {
+        Icon(
+            imageVector = ElementCallTheme.icons.switchCamera,
+            contentDescription = stringResource(R.string.element_call_a11y_switch_camera),
+            modifier = Modifier.size(20.dp),
+        )
     }
 }
 

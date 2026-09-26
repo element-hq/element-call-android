@@ -67,6 +67,8 @@ internal fun interface CallStageArrangement {
 internal data class CallStageLayout(
     /** Grid tiles, in content coordinates: `y` grows with the scroll offset. */
     val tiles: Map<String, Rect>,
+    /** Each grid tile's row and column, for the harness dump. */
+    val gridPositions: Map<String, GridPosition>,
     /** The spotlight slot in viewport coordinates, or null when nothing is spotlit. */
     val spotlight: Rect?,
     val spotlightTileId: String?,
@@ -91,11 +93,14 @@ internal data class CallStageLayout(
 
     data class HeroStack(val count: Int, val shownIndex: Int)
 
+    data class GridPosition(val row: Int, val column: Int)
+
     fun maxScroll(viewportHeight: Float): Float = (contentHeight - viewportHeight).coerceAtLeast(0f)
 
     companion object {
         val Empty = CallStageLayout(
             tiles = emptyMap(),
+            gridPositions = emptyMap(),
             spotlight = null,
             spotlightTileId = null,
             contentHeight = 0f,
@@ -162,6 +167,7 @@ private fun computeRankedGrid(input: CallStageLayout.Input): CallStageLayout {
     }
     return CallStageLayout(
         tiles = placed.tiles,
+        gridPositions = placed.positions,
         spotlight = placed.spotlight,
         spotlightTileId = spotlightTileId,
         contentHeight = placed.contentHeight,
@@ -170,7 +176,12 @@ private fun computeRankedGrid(input: CallStageLayout.Input): CallStageLayout {
     )
 }
 
-private data class Placement(val tiles: Map<String, Rect>, val spotlight: Rect?, val contentHeight: Float)
+private data class Placement(
+    val tiles: Map<String, Rect>,
+    val positions: Map<String, CallStageLayout.GridPosition>,
+    val spotlight: Rect?,
+    val contentHeight: Float,
+)
 
 /**
  * Portrait: the spotlight is the full stage width, edge to edge, 16:9, at the top (R13, contract
@@ -187,7 +198,7 @@ private fun placeWithSpotlight(gridTileIds: List<String>, metrics: CallStageMetr
         val columnLeft = metrics.width - margin - tileWidth
         val spotlight = Rect(0f, 0f, columnLeft - gap, metrics.height)
         val rows = placeRows(gridTileIds, columns = 1, left = columnLeft, top = margin, tileWidth = tileWidth, tileHeight = tileHeight, gap = gap)
-        Placement(rows.tiles, spotlight, contentHeight(rows.bottom, metrics))
+        Placement(rows.tiles, rows.positions, spotlight, contentHeight(rows.bottom, metrics))
     } else {
         val spotlight = Rect(0f, 0f, metrics.width, metrics.width / metrics.spotlightAspect)
         val tileWidth = (metrics.width - 2 * margin - (metrics.columns - 1) * gap) / metrics.columns
@@ -200,12 +211,12 @@ private fun placeWithSpotlight(gridTileIds: List<String>, metrics: CallStageMetr
             tileHeight = tileWidth / metrics.tileAspect,
             gap = gap,
         )
-        Placement(rows.tiles, spotlight, contentHeight(rows.bottom, metrics))
+        Placement(rows.tiles, rows.positions, spotlight, contentHeight(rows.bottom, metrics))
     }
 }
 
 /**
- * Small calls (R34 to R36, contract B4): alone fills the stage (002 R18); two share it equally,
+ * Small calls (R34 to R36, contract B4): alone fills the stage above the controls (002 R18); two share it equally,
  * stacked in portrait and side by side in landscape; three are full-width rows in portrait when
  * they fit above the controls and otherwise the grid, and one row in landscape. Two and three in
  * landscape sit centred on the stage's height. Four or more: the grid, two columns in portrait and
@@ -222,7 +233,7 @@ private fun placeWithoutSpotlight(gridTileIds: List<String>, metrics: CallStageM
         val columns = if (metrics.isLandscape) metrics.landscapeColumns else metrics.columns
         val tileWidth = (gridWidth - (columns - 1) * gap) / columns
         val rows = placeRows(gridTileIds, columns, left = margin, top = margin, tileWidth = tileWidth, tileHeight = tileWidth / metrics.tileAspect, gap = gap)
-        return Placement(rows.tiles, null, contentHeight(rows.bottom, metrics))
+        return Placement(rows.tiles, rows.positions, null, contentHeight(rows.bottom, metrics))
     }
     fun centredRow(): Placement {
         var tileWidth = (gridWidth - (count - 1) * gap) / count
@@ -235,25 +246,27 @@ private fun placeWithoutSpotlight(gridTileIds: List<String>, metrics: CallStageM
         val left = (metrics.width - rowWidth) / 2
         val top = (metrics.height - tileHeight) / 2
         val rows = placeRows(gridTileIds, columns = count, left = left, top = top, tileWidth = tileWidth, tileHeight = tileHeight, gap = gap)
-        return Placement(rows.tiles, null, metrics.height)
+        return Placement(rows.tiles, rows.positions, null, metrics.height)
     }
     return when {
-        count == 0 -> Placement(emptyMap(), null, metrics.height)
+        count == 0 -> Placement(emptyMap(), emptyMap(), null, metrics.height)
+        // Alone: the stage, above the controls, so nothing of ours sits under the bar (R44).
         count == 1 -> Placement(
-            mapOf(gridTileIds.single() to Rect(margin, margin, metrics.width - margin, metrics.height - margin)),
+            mapOf(gridTileIds.single() to Rect(margin, margin, metrics.width - margin, areaBottom)),
+            mapOf(gridTileIds.single() to CallStageLayout.GridPosition(0, 0)),
             null,
             metrics.height,
         )
         count == 2 && !metrics.isLandscape -> {
             val tileHeight = (areaHeight - gap) / 2
             val rows = placeRows(gridTileIds, columns = 1, left = margin, top = margin, tileWidth = gridWidth, tileHeight = tileHeight, gap = gap)
-            Placement(rows.tiles, null, metrics.height)
+            Placement(rows.tiles, rows.positions, null, metrics.height)
         }
         count == 3 && !metrics.isLandscape -> {
             val tileHeight = gridWidth / metrics.tileAspect
             if (3 * tileHeight + 2 * gap <= areaHeight) {
                 val rows = placeRows(gridTileIds, columns = 1, left = margin, top = margin, tileWidth = gridWidth, tileHeight = tileHeight, gap = gap)
-                Placement(rows.tiles, null, contentHeight(rows.bottom, metrics))
+                Placement(rows.tiles, rows.positions, null, contentHeight(rows.bottom, metrics))
             } else {
                 grid()
             }
@@ -263,7 +276,7 @@ private fun placeWithoutSpotlight(gridTileIds: List<String>, metrics: CallStageM
     }
 }
 
-private data class Rows(val tiles: Map<String, Rect>, val bottom: Float)
+private data class Rows(val tiles: Map<String, Rect>, val positions: Map<String, CallStageLayout.GridPosition>, val bottom: Float)
 
 /** Rows from [top], every tile the same size (R12), a partial last row left-aligned (R29). */
 private fun placeRows(
@@ -276,16 +289,18 @@ private fun placeRows(
     gap: Float,
 ): Rows {
     val tiles = LinkedHashMap<String, Rect>(tileIds.size)
+    val positions = LinkedHashMap<String, CallStageLayout.GridPosition>(tileIds.size)
     tileIds.forEachIndexed { index, tileId ->
         val row = index / columns
         val column = index % columns
         val x = left + column * (tileWidth + gap)
         val y = top + row * (tileHeight + gap)
         tiles[tileId] = Rect(x, y, x + tileWidth, y + tileHeight)
+        positions[tileId] = CallStageLayout.GridPosition(row, column)
     }
     val rowCount = ceil(tileIds.size / columns.toFloat()).toInt()
     val bottom = if (rowCount == 0) top else top + rowCount * tileHeight + (rowCount - 1) * gap
-    return Rows(tiles, bottom)
+    return Rows(tiles, positions, bottom)
 }
 
 /** The last row clears the control bar when scrolled to the end (R44); never shorter than the stage. */

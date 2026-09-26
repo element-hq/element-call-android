@@ -34,9 +34,11 @@ import kotlinx.collections.immutable.ImmutableList
 @Composable
 fun SampleHomeScreen(
     fixtures: ImmutableList<SampleFixture>,
+    scenarios: ImmutableList<String>,
     isStyleOverridden: Boolean,
     onToggleStyle: () -> Unit,
     onOpen: (SampleFixture) -> Unit,
+    onOpenScenario: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Surface(modifier = modifier.fillMaxSize()) {
@@ -92,6 +94,31 @@ fun SampleHomeScreen(
                         color = MaterialTheme.colorScheme.outline,
                     )
                 }
+                HorizontalDivider()
+            }
+            item {
+                Text(
+                    text = "Scenarios",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                )
+                Text(
+                    text = "The layout timelines from feature-hq, played under a scrubber. Roster frames apply themselves; " +
+                        "scroll, rotate and swipe are cues for you. `--es scenario <name>` launches one.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
+            items(scenarios, key = { it }) { name ->
+                Text(
+                    text = name,
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenScenario(name) }
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                )
                 HorizontalDivider()
             }
         }

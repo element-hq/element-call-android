@@ -86,10 +86,10 @@ class CallStageLayoutTest {
     }
 
     @Test
-    fun `alone, our tile fills the stage`() {
+    fun `alone, our tile fills the stage above the controls`() {
         val layout = rankedGrid(gridTiles = listOf("own"), metrics = PORTRAIT)
 
-        assertThat(layout.tiles.getValue("own")).isEqualTo(Rect(MARGIN, MARGIN, WIDTH - MARGIN, HEIGHT - MARGIN))
+        assertThat(layout.tiles.getValue("own")).isEqualTo(Rect(MARGIN, MARGIN, WIDTH - MARGIN, HEIGHT - CLEARANCE))
         assertThat(layout.spotlight).isNull()
         assertThat(layout.contentHeight).isEqualTo(HEIGHT)
     }

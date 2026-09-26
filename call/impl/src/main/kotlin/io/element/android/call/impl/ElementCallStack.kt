@@ -72,6 +72,7 @@ class ElementCallStack private constructor(
         private var audioFocus: AudioFocus? = null
         private var options: ElementCallOptions = ElementCallOptions()
         private var dispatchers: ElementCallDispatchers = ElementCallDispatchers.Default
+        private var rtcService: MatrixRtcService? = null
 
         /** Room names, direct flags and member profiles. Defaults to none: tiles show user ids. */
         fun roomContext(provider: ElementCallRoomContextProvider) = apply { roomContextProvider = provider }
@@ -90,13 +91,20 @@ class ElementCallStack private constructor(
         fun dispatchers(dispatchers: ElementCallDispatchers) = apply { this.dispatchers = dispatchers }
 
         /**
+         * The RTC core, in place of the Rust one over [transport]: for a harness that plays a
+         * scripted call through the real controller and the real screen, or a host with a core of
+         * its own. The default is the Rust core.
+         */
+        fun rtcService(service: MatrixRtcService) = apply { rtcService = service }
+
+        /**
          * @param scope lives as long as the Matrix session. The core, its feeds and the running call
          * hang off it, so cancelling it is how a logout tears everything down.
          */
         fun build(scope: CoroutineScope): ElementCallStack {
             // Recorded before the library loads; applied on the first native call.
             options.logging?.let { MatrixRtcFfi.setLoggingConfiguration(it) }
-            val rtcService = RustMatrixRtcService(
+            val rtcService = rtcService ?: RustMatrixRtcService(
                 transport = transport,
                 dispatchers = dispatchers,
                 context = context,

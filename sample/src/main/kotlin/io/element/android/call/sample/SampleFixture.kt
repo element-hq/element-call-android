@@ -182,6 +182,9 @@ enum class SampleFixture(val key: String, val title: String, val description: St
             UserId("@bob:example.org") to ElementCallRoomMember(UserId("@bob:example.org"), displayName = "Bob", avatarUrl = null),
         )
 
+        /** A connected call with only us in it: what a scenario's roster frames are applied over. */
+        fun scenarioBase(): ElementCallSnapshot = aConnected(participants = listOf(aLocalParticipant()))
+
         private fun aConnected(
             connection: ElementCallConnection = ElementCallConnection.Connected,
             participants: List<MatrixRtcParticipant>,

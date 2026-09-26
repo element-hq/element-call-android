@@ -10,15 +10,18 @@ package io.element.android.call.sample
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.ElementCallData
+import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTileId
+import io.element.android.call.api.rtc.MatrixRtcTileRoster
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.test.ElementCallTestPattern
+import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -122,6 +125,26 @@ class SampleElementCallController(
     override fun setComposedTiles(tileIds: Set<MatrixRtcTileId>) {
         // Nothing to poll: the harness has no transport.
     }
+
+    /** The core's roster as a scenario states it: the order whole, detail as given. Names come from the user ids. */
+    fun setRoster(roster: MatrixRtcTileRoster) {
+        update { snapshot ->
+            val members = roster.order.associate { ref ->
+                ref.userId to ElementCallRoomMember(
+                    ref.userId,
+                    displayName = ref.userId.value.substringAfter('@').substringBefore(':').replaceFirstChar(Char::uppercase),
+                    avatarUrl = null,
+                )
+            }
+            snapshot.copy(
+                roster = roster,
+                memberCount = roster.order.map { it.id.memberId }.distinct().size + 1,
+                roomMembers = (snapshot.roomMembers + members).toImmutableMap(),
+            )
+        }
+    }
+
+    fun currentRoster(): MatrixRtcTileRoster = _state.value?.roster ?: MatrixRtcTileRoster.EMPTY
 
     override fun setDetailWindow(window: MatrixRtcDetailWindow) {
         // The fixtures carry detail for everything; logged so the window a layout asks for can be read off.

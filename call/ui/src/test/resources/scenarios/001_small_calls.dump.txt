@@ -1,0 +1,61 @@
+== 0s viewport 393x734 bottom 34
+window ranks - also -  composed 1  subscribed 0  spotlight -  fullscreen -
+rank slot                 rect                 vis      detail constraints
+-    own        grid 0,0  8,8,377,604          live     -      -
+
+== 0s 
+window ranks - also -  composed 1  subscribed 0  spotlight -  fullscreen -
+rank slot                 rect                 vis      detail constraints
+-    own        grid 0,0  8,8,377,604          live     -      -
+
+== 1s B
+window ranks 0..<1 also B  composed 2  subscribed 0  spotlight -  fullscreen -
+rank slot                 rect                 vis      detail constraints
+-    own        grid 0,0  8,8,377,298          live     -      -
+0    B          grid 1,0  8,314,377,298        live     detail -
+
+== 3s B C
+window ranks 0..<2 also B,C  composed 3  subscribed 0  spotlight -  fullscreen -
+rank slot                 rect                 vis      detail constraints
+-    own        grid 0,0  8,8,185,138          live     -      -
+0    B          grid 0,1  201,8,185,138        live     detail -
+1    C          grid 1,0  8,154,185,138        live     detail -
+
+== 5s B C D
+window ranks 0..<3 also B,C,D  composed 4  subscribed 0  spotlight -  fullscreen -
+rank slot                 rect                 vis      detail constraints
+-    own        grid 0,0  8,8,185,138          live     -      -
+0    B          grid 0,1  201,8,185,138        live     detail -
+1    C          grid 1,0  8,154,185,138        live     detail -
+2    D          grid 1,1  201,154,185,138      live     detail -
+
+== 7s B C D E F
+window ranks 0..<5 also B,C,D,E,F  composed 6  subscribed 0  spotlight -  fullscreen -
+rank slot                 rect                 vis      detail constraints
+-    own        grid 0,0  8,8,185,138          live     -      -
+0    B          grid 0,1  201,8,185,138        live     detail -
+1    C          grid 1,0  8,154,185,138        live     detail -
+2    D          grid 1,1  201,154,185,138      live     detail -
+3    E          grid 2,0  8,301,185,138        live     detail -
+4    F          grid 2,1  201,301,185,138      live     detail -
+
+== 8s rotate landscape
+window ranks 0..<5 also B,C,D,E,F  composed 6  subscribed 0  spotlight -  fullscreen -
+rank slot                 rect                 vis      detail constraints
+-    own        grid 0,0  8,8,174,130          live     -      -
+0    B          grid 0,1  190,8,174,130        live     detail -
+1    C          grid 0,2  371,8,174,130        live     detail -
+2    D          grid 0,3  553,8,174,130        live     detail -
+3    E          grid 1,0  8,146,174,130        live     detail -
+4    F          grid 1,1  190,146,174,130      live     detail -
+
+== 9s rotate portrait
+window ranks 0..<5 also B,C,D,E,F  composed 6  subscribed 0  spotlight -  fullscreen -
+rank slot                 rect                 vis      detail constraints
+-    own        grid 0,0  8,8,185,138          live     -      -
+0    B          grid 0,1  201,8,185,138        live     detail -
+1    C          grid 1,0  8,154,185,138        live     detail -
+2    D          grid 1,1  201,154,185,138      live     detail -
+3    E          grid 2,0  8,301,185,138        live     detail -
+4    F          grid 2,1  201,301,185,138      live     detail -
+

@@ -30,7 +30,7 @@
     <string name="element_call_a11y_sharing_screen">Sharing their screen</string>
     <string name="element_call_a11y_next_hero">Show the next spotlight</string>
     <string name="element_call_a11y_previous_hero">Show the previous spotlight</string>
-    <string name="element_call_hero_position">%1$d of %2$d</string>
+    <string name="element_call_hero_position">(%1$d of %2$d)</string>
     <string name="element_call_sharing_your_screen">You’re sharing your screen</string>
     <string name="element_call_audio_device_bluetooth">Bluetooth</string>
     <string name="element_call_audio_device_usb">USB device</string>

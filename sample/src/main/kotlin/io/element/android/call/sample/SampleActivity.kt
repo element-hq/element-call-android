@@ -13,6 +13,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.lifecycleScope
 import io.element.android.call.impl.ElementCallPictureInPicture
+import io.element.android.call.test.scenario.MatrixRtcScenario
 import timber.log.Timber
 
 /**
@@ -41,9 +42,17 @@ class SampleActivity : ComponentActivity() {
                 controller.start(fixture.snapshot())
             }
         }
+        val scenario = intent.getStringExtra(EXTRA_SCENARIO)?.let { name ->
+            if (name in SCENARIOS) {
+                MatrixRtcScenario.load(name)
+            } else {
+                Timber.w("Sample: unknown scenario '$name', known: $SCENARIOS")
+                null
+            }
+        }
 
         setContent {
-            SampleApp(controller = controller)
+            SampleApp(controller = controller, initialScenario = scenario)
         }
     }
 
@@ -55,5 +64,18 @@ class SampleActivity : ComponentActivity() {
     companion object {
         /** A [SampleFixture.key], as a string extra on the launch intent. */
         const val EXTRA_FIXTURE = "fixture"
+
+        /** A scenario's name under `scenarios/`, as a string extra: `--es scenario 004_scroll_and_rank`. */
+        const val EXTRA_SCENARIO = "scenario"
+
+        /** The vendored corpus, `plans/003.call_layout/scenarios/` in feature-hq. */
+        val SCENARIOS = listOf(
+            "001_small_calls",
+            "002_listen_mode",
+            "003_two_shares",
+            "004_scroll_and_rank",
+            "005_rotation_and_fullscreen",
+            "006_two_hundred",
+        )
     }
 }
