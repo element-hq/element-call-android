@@ -34,7 +34,7 @@ class CallTileLayoutTest {
      * The spotlighted member is in the spotlight and *not* also in the strip.
      *
      * Not a cosmetic point: two tiles for one member means two collectors on one video stream, which
-     * is a native crash rather than a duplicated face. It was one, before `stripParticipants`
+     * is a native crash rather than a duplicated face. It was one, before `stripTiles`
      * existed.
      */
     @Test
@@ -60,6 +60,19 @@ class CallTileLayoutTest {
         val above = slots.values.minOf { it.top }
         val below = HEIGHT - slots.values.maxOf { it.bottom }
         assertThat(above).isWithin(TOLERANCE).of(below)
+    }
+
+    /**
+     * Alone in a call the core ranks nobody, so there is no spotlight and our own tile is the only one:
+     * it has to fill most of the screen rather than sit as a strip card on an empty stage.
+     */
+    @Test
+    fun `alone in a call our own tile fills most of the screen`() {
+        for ((width, height) in listOf(WIDTH to HEIGHT, HEIGHT to WIDTH)) {
+            val slot = computeSlots(listOf("us"), spotlightTileId = null, width, height, SPACING).getValue("us")
+
+            assertThat(slot.width * slot.height).isAtLeast(width * height * 0.5f)
+        }
     }
 
     /**

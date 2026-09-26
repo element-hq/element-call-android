@@ -16,9 +16,11 @@ import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamState
+import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.test.ElementCallTestPattern
+import io.element.android.call.ui.previewOwnTile
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.CoroutineScope
@@ -126,6 +128,10 @@ class SampleElementCallController(
         )
     }
 
+    override fun setComposedTiles(tileIds: Set<MatrixRtcTileId>) {
+        // Nothing to poll: the harness has no transport.
+    }
+
     override fun setVideoConstraints(memberId: String, kind: MatrixRtcStreamKind, constraints: MatrixRtcVideoConstraints) {
         // Logged rather than acted on: there is no encoder to tell, but seeing the sizes tiles ask for is
         // exactly what the harness is for.
@@ -137,7 +143,8 @@ class SampleElementCallController(
     }
 
     private fun update(block: (ElementCallSnapshot) -> ElementCallSnapshot) {
-        _state.update { it?.let(block) }
+        // Our own tile follows our own streams, as the core's local state does.
+        _state.update { it?.let(block)?.let { snapshot -> snapshot.copy(ownTile = snapshot.participants.previewOwnTile()) } }
     }
 
     /** Our own participant with one stream set the given way, added if we were not publishing it. */

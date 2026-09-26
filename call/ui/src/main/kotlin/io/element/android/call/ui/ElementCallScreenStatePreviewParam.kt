@@ -16,13 +16,13 @@ import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcStreamState
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.api.rtc.id.UserId
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableMap
-import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 
@@ -70,7 +70,7 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
                     A_LOCAL_MEMBER_ID to MatrixRtcAudioLevel(level = 0.6f, frameCount = 900),
                     A_REMOTE_MEMBER_ID to MatrixRtcAudioLevel(level = 0f, frameCount = 900),
                 ),
-                receiveStats = mapOf(A_REMOTE_MEMBER_ID to aReceiveStats(concealedSamples = 42_000)),
+                receiveStats = mapOf(MatrixRtcStreamRef(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.MICROPHONE) to aReceiveStats(concealedSamples = 42_000)),
                 frameEncryption = mapOf(
                     A_LOCAL_MEMBER_ID to MatrixRtcFrameEncryptionState.OK,
                     A_REMOTE_MEMBER_ID to MatrixRtcFrameEncryptionState.MISSING_KEY,
@@ -87,7 +87,7 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
                     A_LOCAL_MEMBER_ID to MatrixRtcAudioLevel(level = 0.5f, frameCount = 3_000),
                     A_REMOTE_MEMBER_ID to MatrixRtcAudioLevel(level = 0f, frameCount = 3_000),
                 ),
-                receiveStats = mapOf(A_REMOTE_MEMBER_ID to aReceiveStats(packetsReceived = 2_400)),
+                receiveStats = mapOf(MatrixRtcStreamRef(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.MICROPHONE) to aReceiveStats(packetsReceived = 2_400)),
                 frameEncryption = mapOf(
                     A_LOCAL_MEMBER_ID to MatrixRtcFrameEncryptionState.MISSING_KEY,
                     A_REMOTE_MEMBER_ID to MatrixRtcFrameEncryptionState.MISSING_KEY,
@@ -233,6 +233,19 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
                 activeSpeakerIds = setOf(A_REMOTE_MEMBER_ID),
                 videoFrames = mapOf(A_REMOTE_MEMBER_ID to emptyFlow()),
             ),
+            // Alone in the call: nobody is ranked, so our own tile has the screen.
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
+                memberCount = 1,
+                participants = listOf(aLocalParticipant()),
+            ),
+            // Someone sharing their screen: the share is the hero and takes the spotlight, their camera stays in the strip.
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
+                memberCount = 3,
+                participants = listOf(aLocalParticipant(), aRemoteSharingParticipant(), aStaleParticipant()),
+                videoFrames = mapOf("$A_REMOTE_MEMBER_ID#SCREEN_SHARE" to emptyFlow(), A_REMOTE_MEMBER_ID to emptyFlow()),
+            ),
         )
 }
 
@@ -241,7 +254,7 @@ fun anElementCallScreenState(
     memberCount: Int = 0,
     participants: List<MatrixRtcParticipant> = emptyList(),
     audioLevels: Map<String, MatrixRtcAudioLevel> = emptyMap(),
-    receiveStats: Map<String, MatrixRtcReceiveStats> = emptyMap(),
+    receiveStats: Map<MatrixRtcStreamRef, MatrixRtcReceiveStats> = emptyMap(),
     frameEncryption: Map<String, MatrixRtcFrameEncryptionState> = emptyMap(),
     activeSpeakerIds: Set<String> = emptySet(),
     isMicrophoneMuted: Boolean = false,
@@ -276,7 +289,6 @@ fun anElementCallScreenState(
     audioLevels = audioLevels.toImmutableMap(),
     receiveStats = receiveStats.toImmutableMap(),
     frameEncryption = frameEncryption.toImmutableMap(),
-    activeSpeakerIds = activeSpeakerIds.toImmutableSet(),
     isMicrophoneMuted = isMicrophoneMuted,
     isAudioTestToneEnabled = isAudioTestToneEnabled,
     audioDevices = audioDevices.toImmutableList(),
@@ -292,19 +304,11 @@ fun anElementCallScreenState(
     roomName = roomName,
     isDm = isDm,
     connectedAtElapsedMs = connectedAtElapsedMs,
-    // The first remote, which is what the controller settles on in a preview's worth of time.
-    spotlightMemberId = participants.firstOrNull { !it.isLocal }?.memberId,
     // Derived rather than passed, so a preview cannot describe a call whose tiles disagree with its
     // participants - which is exactly the sort of state the real presenter can never produce.
-    tiles = participants
-        .map {
-            it.toCallParticipant(
-                roomMembers = emptyMap(),
-                activeSpeakerIds = activeSpeakerIds,
-                isFrontCamera = isFrontCamera,
-            )
-        }
-        .toImmutableList(),
+    tiles = previewCallTiles(participants, activeSpeakerIds, isFrontCamera),
+    // The head of the ranking, which is what the controller spotlights.
+    spotlightTileId = previewCallTiles(participants, activeSpeakerIds, isFrontCamera).firstOrNull { !it.isLocal }?.tileId,
     libraryVersion = libraryVersion,
     coreVersion = coreVersion,
     eventSink = eventSink,
@@ -363,6 +367,15 @@ fun aRemoteCameraParticipant() = aRemoteParticipant().copy(
     ),
 )
 
+/** The remote member on their camera and sharing their screen: two tiles, one member. */
+fun aRemoteSharingParticipant() = aRemoteParticipant().copy(
+    streams = persistentListOf(
+        MatrixRtcStreamState(MatrixRtcStreamKind.MICROPHONE, isMuted = false),
+        MatrixRtcStreamState(MatrixRtcStreamKind.CAMERA, isMuted = false),
+        MatrixRtcStreamState(MatrixRtcStreamKind.SCREEN_SHARE, isMuted = false),
+    ),
+)
+
 /** One of a crowd: distinct id and name, microphone only, every third one muted. */
 fun aCrowdParticipant(index: Int) = MatrixRtcParticipant(
     memberId = aCrowdMemberId(index),
@@ -390,3 +403,19 @@ fun aStaleParticipant() = MatrixRtcParticipant(
     isReachable = true,
     streams = emptyList(),
 )
+
+/** Our own tile first, then the core's shape of the rest: what the presenter builds from a snapshot. */
+private fun previewCallTiles(
+    participants: List<MatrixRtcParticipant>,
+    speakingIds: Set<String>,
+    isFrontCamera: Boolean,
+) = (listOfNotNull(participants.previewOwnTile()?.let { it.copy(isSpeaking = it.id.memberId in speakingIds) }) + participants.previewTiles(speakingIds))
+    .map { tile ->
+        val participant = participants.first { it.memberId == tile.id.memberId }
+        tile.toCallTileData(
+            roomMembers = emptyMap(),
+            isLocal = participant.isLocal,
+            isFrontCamera = isFrontCamera,
+        )
+    }
+    .toImmutableList()

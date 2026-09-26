@@ -28,12 +28,13 @@ import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcService
 import io.element.android.call.api.rtc.MatrixRtcSession
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcTransport
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
+import io.element.android.call.api.rtc.personTile
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableMap
-import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.FlowPreview
@@ -181,10 +182,9 @@ internal class DefaultElementCallController(
     /** Hosts the sharing above. Tied to the media connection, since that is what the flows read. */
     private var videoSharingScope: CoroutineScope? = null
 
-    /** When the spotlight last moved, for the dwell in [nextSpotlight]. */
-    private var spotlightChangedAtMs = 0L
     private var session: MatrixRtcSession? = null
     private var call: MatrixRtcCall? = null
+    private var composedTiles: Set<MatrixRtcTileId> = emptySet()
 
     /**
      * Begin a call. Does nothing if one is already running, including for the same room: rejoining
@@ -433,6 +433,13 @@ internal class DefaultElementCallController(
         scope.launch { call?.setVideoConstraints(memberId, kind, constraints) }
     }
 
+    override fun setComposedTiles(tileIds: Set<MatrixRtcTileId>) {
+        // Kept, not only forwarded: the screen usually declares before media connects, and a call
+        // that started with nothing declared would poll nothing until the next page turn.
+        composedTiles = tileIds
+        call?.setComposedTiles(tileIds)
+    }
+
     override fun hangUp() {
         scope.launch { endCall(leave = true) }
     }
@@ -487,6 +494,7 @@ internal class DefaultElementCallController(
             return
         }
         call = connected
+        connected.setComposedTiles(composedTiles)
         // A child of the session scope rather than this coroutine: the shared flows have to outlive
         // any one tile's collection, and are torn down with the call in endCall().
         videoSharingScope = CoroutineScope(scope.coroutineContext + SupervisorJob())
@@ -565,23 +573,20 @@ internal class DefaultElementCallController(
         // The core's count query rather than members.size: the projection behind members can sit at
         // zero for a whole call. See MatrixRtcSession.memberCount.
         observe { session.memberCount.collect { value -> updateState { it.copy(memberCount = value) } } }
+        observe { call.participants.collect { value -> updateState { it.copy(participants = value.toImmutableList()) } } }
+        observe { call.tiles.collect { value -> updateState { it.copy(tiles = value.ranked.toImmutableList()) } } }
         observe {
-            call.participants.collect { value ->
-                updateState {
-                    val participants = value.toImmutableList()
-                    val withParticipants = it.copy(participants = participants)
-                    // Recomputed here too, not only on speaker changes: the spotlighted member can
-                    // leave, and holding a spotlight on someone who is gone would leave the big tile
-                    // showing nothing at all.
-                    withParticipants.copy(spotlightMemberId = withParticipants.nextSpotlight(it.activeSpeakerIds))
-                }
+            combine(call.localState, call.participants) { local, participants ->
+                local?.tile ?: participants.firstOrNull { it.isLocal }?.personTile()
             }
+                .distinctUntilChanged()
+                .collect { value -> updateState { it.copy(ownTile = value) } }
         }
         // Sampled, because the meter publishes ten times a second *per member*: unsampled, an
         // eleven-person call produced over a hundred snapshots a second from this one source, each of
         // them a new state and a recomposition of every tile. Ten a second in total is all a meter
-        // needs, and nothing but the diagnostics meters reads the levels - the tiles use the SFU's
-        // active speakers.
+        // needs, and nothing but the diagnostics meters reads the levels - the tiles use the core's
+        // speaking flag.
         observe {
             call.audioLevels
                 .sample(AUDIO_LEVEL_SAMPLE_MS.milliseconds)
@@ -604,16 +609,10 @@ internal class DefaultElementCallController(
         observe { audioDeviceController.selectedDevice.collect { value -> updateState { it.copy(selectedAudioDevice = value) } } }
         observe {
             call.events.collect { event ->
-                // Active speakers arrive several times a second and are on screen anyway, so they
-                // would only bury the events that say something happened.
-                if (event !is MatrixRtcCallEvent.ActiveSpeakers) Timber.d("ElementCall: $event")
+                Timber.d("ElementCall: $event")
                 when (event) {
                     is MatrixRtcCallEvent.MediaConnectionDegraded -> updateState {
                         it.copy(connection = if (event.degraded) ElementCallConnection.Degraded else ElementCallConnection.Connected)
-                    }
-                    is MatrixRtcCallEvent.ActiveSpeakers -> updateState {
-                        val speakers = event.speakers.map { speaker -> speaker.memberId }.toImmutableSet()
-                        it.copy(activeSpeakerIds = speakers, spotlightMemberId = it.nextSpotlight(speakers))
                     }
                     is MatrixRtcCallEvent.FrameEncryption -> updateState {
                         it.copy(frameEncryption = (it.frameEncryption + (event.memberId to event.state)).toImmutableMap())
@@ -629,39 +628,6 @@ internal class DefaultElementCallController(
                 }
             }
         }
-    }
-
-    /**
-     * Who should hold the spotlight, given who is speaking now.
-     *
-     * Sticky on purpose. The rule is not "whoever is talking" but "whoever was last worth switching
-     * to", and a switch is only allowed once [SPOTLIGHT_MIN_DWELL_MS] has passed since the previous
-     * one. Two people talking over each other produce several `ActiveSpeakers` events a second, and
-     * without the dwell the big tile follows every one of them.
-     *
-     * That is not only unwatchable. Because the strip excludes whoever is spotlighted, each change
-     * disposes one video tile and composes another - so a flickering spotlight created and destroyed
-     * renderers, and the decoder threads behind them, several times a second. Roughly a thousand
-     * threads into a call, one of them found a stale JNI thread-local and aborted the process inside
-     * libwebrtc's `AttachCurrentThreadIfNeeded`.
-     *
-     * Never ourselves: we are in the strip, and spotlighting us would draw the same person twice.
-     */
-    private fun ElementCallSnapshot.nextSpotlight(speakers: Set<String>): String? {
-        val remotes = participants.filterNot { it.isLocal }
-        if (remotes.isEmpty()) return null
-
-        val current = remotes.firstOrNull { it.memberId == spotlightMemberId }
-        val candidate = remotes.firstOrNull { it.memberId in speakers } ?: current ?: remotes.first()
-        if (candidate.memberId == spotlightMemberId) return spotlightMemberId
-
-        val now = platform.elapsedRealtimeMs()
-        // A spotlight that has gone stale - its member left - is replaced at once. Waiting out the
-        // dwell there would leave the big tile on someone who is no longer in the call.
-        if (current != null && now - spotlightChangedAtMs < SPOTLIGHT_MIN_DWELL_MS) return spotlightMemberId
-
-        spotlightChangedAtMs = now
-        return candidate.memberId
     }
 
     private fun fail(message: String) {
@@ -756,14 +722,6 @@ internal class DefaultElementCallController(
 
         /** How often audio levels reach the state, for everyone at once. See `startObservers`. */
         const val AUDIO_LEVEL_SAMPLE_MS = 100L
-
-        /**
-         * How long the spotlight stays put before it is allowed to move again.
-         *
-         * Long enough that a back-and-forth exchange does not swap the big tile on every syllable,
-         * short enough that handing the floor to someone else is followed promptly.
-         */
-        const val SPOTLIGHT_MIN_DWELL_MS = 2_000L
 
         /**
          * How long to wait for the room context before deciding whether the far end rings. The

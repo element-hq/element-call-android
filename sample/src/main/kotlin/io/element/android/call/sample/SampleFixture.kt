@@ -21,7 +21,6 @@ import io.element.android.call.ui.A_BLUETOOTH_HEADSET
 import io.element.android.call.ui.A_REMOTE_MEMBER_ID
 import io.element.android.call.ui.A_SPEAKER
 import io.element.android.call.ui.aCallSnapshot
-import io.element.android.call.ui.aCrowdMemberId
 import io.element.android.call.ui.aCrowdParticipant
 import io.element.android.call.ui.aLocalParticipant
 import io.element.android.call.ui.aRemoteCameraParticipant
@@ -29,7 +28,6 @@ import io.element.android.call.ui.aRemoteParticipant
 import io.element.android.call.ui.aStaleParticipant
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
-import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toImmutableMap
 
 /**
@@ -62,7 +60,6 @@ enum class SampleFixture(val key: String, val title: String, val description: St
     ) {
         override fun snapshot() = aConnected(
             participants = listOf(aLocalParticipant(), aRemoteCameraParticipant()),
-            spotlightMemberId = A_REMOTE_MEMBER_ID,
             isDm = true,
         )
     },
@@ -73,8 +70,8 @@ enum class SampleFixture(val key: String, val title: String, val description: St
     ) {
         override fun snapshot() = aConnected(
             participants = listOf(aLocalParticipant(), aRemoteCameraParticipant(), aStaleParticipant()),
-            spotlightMemberId = A_REMOTE_MEMBER_ID,
-        ).copy(activeSpeakerIds = persistentSetOf(A_REMOTE_MEMBER_ID))
+            speakingIds = setOf(A_REMOTE_MEMBER_ID),
+        )
     },
     LARGE_CALL(
         key = "large_call",
@@ -86,7 +83,6 @@ enum class SampleFixture(val key: String, val title: String, val description: St
                 val member = aCrowdParticipant(index)
                 if (index % 2 == 0) member.copy(streams = member.streams + MatrixRtcStreamState(MatrixRtcStreamKind.CAMERA, isMuted = false)) else member
             },
-            spotlightMemberId = aCrowdMemberId(2),
         ).copy(memberCount = CROWD_SIZE + 1)
     },
     SCREEN_SHARE(
@@ -96,7 +92,6 @@ enum class SampleFixture(val key: String, val title: String, val description: St
     ) {
         override fun snapshot() = aConnected(
             participants = listOf(aLocalParticipant(), aSharingParticipant(A_REMOTE_MEMBER_ID, userId = UserId("@bob:example.org")), aStaleParticipant()),
-            spotlightMemberId = A_REMOTE_MEMBER_ID,
         )
     },
     MUTED(
@@ -106,7 +101,6 @@ enum class SampleFixture(val key: String, val title: String, val description: St
     ) {
         override fun snapshot() = aConnected(
             participants = listOf(aLocalParticipant(isMuted = true), aRemoteParticipant(isMuted = true)),
-            spotlightMemberId = A_REMOTE_MEMBER_ID,
             isDm = true,
         ).copy(isMicrophoneMuted = true, selectedAudioDevice = A_BLUETOOTH_HEADSET)
     },
@@ -118,7 +112,6 @@ enum class SampleFixture(val key: String, val title: String, val description: St
         override fun snapshot() = aConnected(
             connection = ElementCallConnection.Degraded,
             participants = listOf(aLocalParticipant(), aRemoteCameraParticipant()),
-            spotlightMemberId = A_REMOTE_MEMBER_ID,
         )
     },
     FAILED(
@@ -143,7 +136,6 @@ enum class SampleFixture(val key: String, val title: String, val description: St
     ) {
         override fun snapshot() = aConnected(
             participants = listOf(aLocalParticipant(), aRemoteCameraParticipant()),
-            spotlightMemberId = A_REMOTE_MEMBER_ID,
             isDm = true,
         ).copy(isMaximized = false)
     },
@@ -165,14 +157,14 @@ enum class SampleFixture(val key: String, val title: String, val description: St
         private fun aConnected(
             connection: ElementCallConnection = ElementCallConnection.Connected,
             participants: List<MatrixRtcParticipant>,
-            spotlightMemberId: String? = null,
+            speakingIds: Set<String> = emptySet(),
             isDm: Boolean = false,
         ): ElementCallSnapshot = aCallSnapshot(
             connection = connection,
             connectedAtElapsedMs = SystemClock.elapsedRealtime(),
             isMaximized = true,
             participants = participants,
-            spotlightMemberId = spotlightMemberId,
+            speakingIds = speakingIds,
         ).copy(
             isDm = isDm,
             isMicrophonePermissionGranted = true,

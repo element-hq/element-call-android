@@ -50,8 +50,8 @@ import kotlinx.coroutines.flow.emptyFlow
  * two cases are separate composables with separate keys.
  */
 @Composable
-fun CallParticipantTile(
-    participant: CallParticipant,
+fun CallTile(
+    tile: CallTileData,
     videoFrames: Flow<MatrixRtcVideoFrame>?,
     isSpotlight: Boolean,
     modifier: Modifier = Modifier,
@@ -88,7 +88,7 @@ fun CallParticipantTile(
             // and it would otherwise be an avatar floating over the other person's background.
             .then(
                 when {
-                    participant.isActiveSpeaker && appearance == CallTileAppearance.Card ->
+                    tile.isActiveSpeaker && appearance == CallTileAppearance.Card ->
                         Modifier.border(2.dp, ElementCallTheme.colors.borderActiveSpeaker, shape)
                     appearance == CallTileAppearance.Thumbnail ->
                         Modifier.border(1.dp, ElementCallTheme.colors.borderThumbnail, shape)
@@ -99,7 +99,7 @@ fun CallParticipantTile(
         if (videoFrames != null) {
             CallVideoRenderer(
                 frames = videoFrames,
-                isMirrored = participant.isVideoMirrored,
+                isMirrored = tile.isVideoMirrored,
                 modifier = Modifier.fillMaxSize(),
                 frameCounter = frameCounter,
             )
@@ -111,8 +111,8 @@ fun CallParticipantTile(
                 // placeholder is already stable and turns into the real avatar without the tile
                 // changing shape.
                 ElementCallAvatar(
-                    userId = participant.userId,
-                    roomMember = participant.roomMember,
+                    userId = tile.userId,
+                    roomMember = tile.roomMember,
                     size = if (isLarge) ElementCallAvatarSize.Spotlight else ElementCallAvatarSize.Tile,
                 )
             }
@@ -120,14 +120,14 @@ fun CallParticipantTile(
 
         when (appearance) {
             CallTileAppearance.Card -> NamePill(
-                participant = participant,
+                tile = tile,
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(6.dp),
             )
             // The name is in the top bar and the only other person is us, so all that is left to
             // say about them is whether they can be heard.
-            CallTileAppearance.FullBleed -> if (participant.isMuted) {
+            CallTileAppearance.FullBleed -> if (tile.isMuted) {
                 MutedBadge(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
@@ -144,11 +144,11 @@ fun CallParticipantTile(
             CallTileStatsOverlay(
                 counter = frameCounter,
                 receiveStats = stats.receiveStats,
+                audioStats = stats.audioStats,
                 frameEncryption = stats.frameEncryption,
                 requestedWidth = stats.requestedWidth,
                 requestedHeight = stats.requestedHeight,
-                isReachable = participant.isReachable,
-                hasMicrophone = participant.hasMicrophone,
+                isReachable = tile.isReachable,
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(4.dp),
@@ -183,7 +183,10 @@ enum class CallTileAppearance {
  * of arguments the tile has to carry around whether or not anybody is looking at them.
  */
 data class TileStats(
+    /** This tile's own stream: the camera's or the screen's counters. */
     val receiveStats: MatrixRtcReceiveStats?,
+    /** The member's microphone, on their camera tile only. */
+    val audioStats: MatrixRtcReceiveStats?,
     val frameEncryption: MatrixRtcFrameEncryptionState?,
     val requestedWidth: Int,
     val requestedHeight: Int,
@@ -197,7 +200,7 @@ data class TileStats(
  */
 @Composable
 private fun NamePill(
-    participant: CallParticipant,
+    tile: CallTileData,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -212,12 +215,12 @@ private fun NamePill(
         // asked - and the person it belongs to is in the strip with a real one.
         Icon(
             imageVector = when {
-                participant.isScreenShare -> ElementCallTheme.icons.shareScreenActive
-                participant.isMuted -> ElementCallTheme.icons.microphoneOff
+                tile.isScreenShare -> ElementCallTheme.icons.shareScreenActive
+                tile.isMuted -> ElementCallTheme.icons.microphoneOff
                 else -> ElementCallTheme.icons.microphoneOn
             },
             contentDescription = null,
-            tint = if (participant.isMuted && !participant.isScreenShare) {
+            tint = if (tile.isMuted && !tile.isScreenShare) {
                 ElementCallTheme.colors.iconCritical
             } else {
                 ElementCallTheme.colors.onOverlay
@@ -225,10 +228,10 @@ private fun NamePill(
             modifier = Modifier.size(14.dp),
         )
         Text(
-            text = if (participant.isScreenShare) {
-                stringResource(R.string.element_call_shared_screen_name, participant.displayName)
+            text = if (tile.isScreenShare) {
+                stringResource(R.string.element_call_shared_screen_name, tile.displayName)
             } else {
-                participant.displayName
+                tile.displayName
             },
             style = ElementCallTheme.typography.bodySmMedium,
             color = ElementCallTheme.colors.onOverlay,
@@ -262,11 +265,11 @@ private val BADGE_SIZE = 28.dp
 
 @PreviewsDayNight
 @Composable
-internal fun CallParticipantTilePreview(@PreviewParameter(CallParticipantPreviewParam::class) participant: CallParticipant) = ElementCallPreview {
-    CallParticipantTile(
-        participant = participant,
-        videoFrames = if (participant.hasVideo) emptyFlow() else null,
-        isSpotlight = participant.isScreenShare,
+internal fun CallTilePreview(@PreviewParameter(CallTileDataPreviewParam::class) tile: CallTileData) = ElementCallPreview {
+    CallTile(
+        tile = tile,
+        videoFrames = if (tile.hasVideo) emptyFlow() else null,
+        isSpotlight = tile.isScreenShare,
         modifier = Modifier.size(width = 160.dp, height = 200.dp),
     )
 }

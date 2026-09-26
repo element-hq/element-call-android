@@ -12,7 +12,32 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 ## Unreleased
 
-_Nothing yet._
+- Core: matrix-rust-rtc `0.4.0-rc.1` (the call tile roster, `MediaSession.nextRoster`). A host's Ivy repository over
+  the core's release asset (README, "Consuming a release") must point at the `v0.4.0-rc.1` asset.
+- A tile's kind is a `MatrixRtcTileKind` - `PERSON` or `SCREEN_SHARE` - not a stream kind: `MatrixRtcTileId.kind`,
+  with `videoStreamKind` for the stream a tile draws. `MatrixRtcParticipant.cameraTile()` is `personTile()`.
+- `MatrixRtcCall` gains `tiles` and `localState`. A fake or a host transport implementing it must supply both.
+  `MatrixRtcTileRef` carries `userId`, so a tile outside the detail window still has a name and an avatar.
+- `ElementCallSnapshot`: `tiles` (remote, ranked) and `ownTile` added. `spotlightMemberId` becomes `spotlightTileId`,
+  the head of `tiles`. `activeSpeakerIds` is removed; speaking is `MatrixRtcTile.isSpeaking`.
+- A member sharing their screen is two tiles, the share a hero. Test tags and keys are unchanged
+  (`memberId`, `memberId#SCREEN_SHARE`).
+- `isScreenSharing` now reflects the screen-share publication rather than what was asked for.
+- `MatrixRtcCallEvent.ActiveSpeakers` and `MatrixRtcSpeakingMember` are removed; speaking is `MatrixRtcTile.isSpeaking`.
+  Remote audio playback follows the tile roster's order rather than `StreamStarted`/`StreamStopped`, so a lagging
+  event consumer can no longer leave anyone silent. `MatrixRtcCall.participants` and `ElementCallSnapshot.participants`
+  are read once at connect and no longer kept live; `ElementCallSnapshot.hasVideo` reads the tiles.
+- The stats overlay's `NO MIC STREAM` line and `CallTileData.hasMicrophone` are gone; the call layer still logs
+  once, at warn, when a member's microphone cannot be opened.
+- Receive statistics are per stream and bounded to what is drawn. `MatrixRtcCall.receiveStats` and
+  `ElementCallSnapshot.receiveStats` are keyed by `MatrixRtcStreamRef(memberId, kind)` (were member id,
+  microphone only), and hold each composed tile's stream plus its member's microphone. The screen declares
+  the composed set through `ElementCallController.setComposedTiles`; a host transport implementing
+  `MatrixRtcCall` must supply it, and one round trip (`receiveStatsFor`) per second serves the whole set.
+  `TileStats` gains `audioStats`.
+- `toCallTiles` and `screenShareTileId` are gone; build a `CallTileData` (formerly `CallParticipant`) with `MatrixRtcTile.toCallTileData`.
+- Composables renamed: `CallParticipantTile` is `CallTile`, and `ElementCallPictureInPictureView` is
+  `ElementCallPictureInPictureContent`. Same parameters.
 
 ## 0.1.0-rc.5 - 2026-09-25
 

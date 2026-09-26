@@ -12,23 +12,36 @@ import io.element.android.call.api.rtc.MatrixRtcEndReason
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionDiagnostic
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcKeyRejection
+import io.element.android.call.api.rtc.MatrixRtcLocalState
 import io.element.android.call.api.rtc.MatrixRtcMembership
 import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
-import io.element.android.call.api.rtc.MatrixRtcSpeakingMember
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcStreamState
+import io.element.android.call.api.rtc.MatrixRtcTile
+import io.element.android.call.api.rtc.MatrixRtcTileId
+import io.element.android.call.api.rtc.MatrixRtcTileKind
+import io.element.android.call.api.rtc.MatrixRtcTileRef
+import io.element.android.call.api.rtc.MatrixRtcTileRoster
 import io.element.android.call.api.rtc.id.UserId
 import org.matrix.rtc.FfiCallEvent
+import org.matrix.rtc.FfiCallTile
 import org.matrix.rtc.FfiEndedReason
 import org.matrix.rtc.FfiFrameEncryptionDiagnostic
 import org.matrix.rtc.FfiFrameEncryptionState
 import org.matrix.rtc.FfiKeyRejection
+import org.matrix.rtc.FfiLocalState
 import org.matrix.rtc.FfiParticipant
 import org.matrix.rtc.FfiReceiveStats
-import org.matrix.rtc.FfiSpeakingMember
 import org.matrix.rtc.FfiStreamKind
+import org.matrix.rtc.FfiStreamRef
 import org.matrix.rtc.FfiStreamState
+import org.matrix.rtc.FfiStreamStats
+import org.matrix.rtc.FfiTileId
+import org.matrix.rtc.FfiTileKind
+import org.matrix.rtc.FfiTileRef
+import org.matrix.rtc.FfiTileRoster
 import org.matrix.rtc.JoinedMembership
 
 /**
@@ -43,7 +56,6 @@ internal fun FfiCallEvent.map(): MatrixRtcCallEvent? = when (this) {
     is FfiCallEvent.StreamStopped -> MatrixRtcCallEvent.StreamStopped(memberId, kind.map())
     is FfiCallEvent.StreamMuted -> MatrixRtcCallEvent.StreamMuted(memberId, kind.map())
     is FfiCallEvent.StreamUnmuted -> MatrixRtcCallEvent.StreamUnmuted(memberId, kind.map())
-    is FfiCallEvent.ActiveSpeakers -> MatrixRtcCallEvent.ActiveSpeakers(speakers.map { it.map() })
     is FfiCallEvent.MediaConnectionState -> MatrixRtcCallEvent.MediaConnectionDegraded(degraded)
     is FfiCallEvent.KeyImported -> MatrixRtcCallEvent.KeyImported(memberId, keyIndex.toInt())
     is FfiCallEvent.KeyDiscarded -> MatrixRtcCallEvent.KeyDiscarded(
@@ -60,11 +72,6 @@ internal fun FfiCallEvent.map(): MatrixRtcCallEvent? = when (this) {
     is FfiCallEvent.HandLowered,
     is FfiCallEvent.Reaction -> null
 }
-
-internal fun FfiSpeakingMember.map() = MatrixRtcSpeakingMember(
-    memberId = memberId,
-    level = level,
-)
 
 internal fun FfiKeyRejection.map(): MatrixRtcKeyRejection = when (this) {
     is FfiKeyRejection.Cleartext -> MatrixRtcKeyRejection.Cleartext
@@ -154,3 +161,49 @@ internal fun FfiStreamState.map() = MatrixRtcStreamState(
     kind = kind.map(),
     isMuted = muted,
 )
+
+internal fun FfiTileKind.map(): MatrixRtcTileKind = when (this) {
+    FfiTileKind.PERSON -> MatrixRtcTileKind.PERSON
+    FfiTileKind.SCREEN_SHARE -> MatrixRtcTileKind.SCREEN_SHARE
+}
+
+internal fun MatrixRtcTileKind.map(): FfiTileKind = when (this) {
+    MatrixRtcTileKind.PERSON -> FfiTileKind.PERSON
+    MatrixRtcTileKind.SCREEN_SHARE -> FfiTileKind.SCREEN_SHARE
+}
+
+internal fun FfiTileId.map() = MatrixRtcTileId(memberId = memberId, kind = kind.map())
+
+internal fun FfiTileRef.map() = MatrixRtcTileRef(id = id.map(), userId = UserId(userId), isHero = hero)
+
+internal fun FfiCallTile.map() = MatrixRtcTile(
+    id = MatrixRtcTileId(memberId = memberId, kind = kind.map()),
+    userId = UserId(userId),
+    deviceId = deviceId,
+    isHero = hero,
+    hasVideo = hasVideo,
+    isMicrophoneMuted = microphoneMuted,
+    isSpeaking = speaking,
+    handRaisedAtMs = handRaisedAtMs?.toLong(),
+    isReachable = reachable,
+)
+
+/**
+ * Detail is a subsequence of the order, joined by identity: the core only sends full records for the
+ * declared window, so the two lists line up by index only while that window covers everything.
+ */
+internal fun FfiTileRoster.map() = MatrixRtcTileRoster(
+    order = order.map { it.map() },
+    detail = detail.associate { tile -> tile.map().let { it.id to it } },
+)
+
+internal fun FfiLocalState.map() = MatrixRtcLocalState(
+    tile = tile.map(),
+    isScreenSharing = isScreenSharing,
+)
+
+internal fun MatrixRtcStreamRef.map() = FfiStreamRef(memberId = memberId, kind = kind.map())
+
+/** The stream asked about and its counters; null counters mean no RTCP report yet, not zero. */
+internal fun FfiStreamStats.map(): Pair<MatrixRtcStreamRef, MatrixRtcReceiveStats?> =
+    MatrixRtcStreamRef(memberId, kind.map()) to stats?.map()

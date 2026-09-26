@@ -21,17 +21,22 @@ import io.element.android.call.api.rtc.MatrixRtcElementCallCompat
 import io.element.android.call.api.rtc.MatrixRtcEndReason
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionDiagnostic
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
+import io.element.android.call.api.rtc.MatrixRtcLocalState
 import io.element.android.call.api.rtc.MatrixRtcNotificationType
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
-import io.element.android.call.api.rtc.MatrixRtcSpeakingMember
+import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcStreamRef
+import io.element.android.call.api.rtc.MatrixRtcTileId
+import io.element.android.call.api.rtc.MatrixRtcTileKind
 import io.element.android.call.api.rtc.MatrixRtcTransport
 import io.element.android.call.test.A_ROOM_ID
 import io.element.android.call.test.FakeElementCallLifecycleListener
 import io.element.android.call.test.FakeElementCallRoomContextProvider
 import io.element.android.call.test.FakeMatrixRtcService
 import io.element.android.call.test.aCameraParticipant
-import io.element.android.call.test.aSharingParticipant
+import io.element.android.call.test.aRoster
+import io.element.android.call.test.aTile
 import io.element.android.call.test.audio.FakeAudioFocus
 import io.element.android.call.test.audio.FakeCallAudioDeviceController
 import io.element.android.call.test.audio.aBluetoothHeadset
@@ -293,7 +298,7 @@ class DefaultElementCallControllerTest {
     }
 
     @Test
-    fun `audio levels and active speakers reach the state`() = runTest {
+    fun `audio levels reach the state`() = runTest {
         val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
         val controller = createController(rtcService = rtcService)
 
@@ -304,12 +309,9 @@ class DefaultElementCallControllerTest {
 
             val call = rtcService.lastSession?.lastCall!!
             call.audioLevels.value = mapOf("aRemoteMemberId" to MatrixRtcAudioLevel(level = 0.5f, frameCount = 42))
-            call.emit(MatrixRtcCallEvent.ActiveSpeakers(listOf(MatrixRtcSpeakingMember("aRemoteMemberId", level = 0.8f))))
 
-            // Levels are sampled and speakers are not, so the two need not arrive together.
-            val state = consumeItemsUntilPredicate { it.activeSpeakerIds.isNotEmpty() && it.audioLevels.isNotEmpty() }.last()
+            val state = consumeItemsUntilPredicate { it.audioLevels.isNotEmpty() }.last()
             assertThat(state.audioLevels["aRemoteMemberId"]).isEqualTo(MatrixRtcAudioLevel(level = 0.5f, frameCount = 42))
-            assertThat(state.activeSpeakerIds).containsExactly("aRemoteMemberId")
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -355,7 +357,7 @@ class DefaultElementCallControllerTest {
             consumeItemsUntilPredicate { it.connection == ElementCallConnection.Connected }
 
             val call = rtcService.lastSession?.lastCall!!
-            call.receiveStats.value = mapOf("aRemoteMemberId" to A_RECEIVE_STATS)
+            call.receiveStats.value = mapOf(MatrixRtcStreamRef("aRemoteMemberId", MatrixRtcStreamKind.MICROPHONE) to A_RECEIVE_STATS)
             call.emit(
                 MatrixRtcCallEvent.FrameEncryption(
                     memberId = "aRemoteMemberId",
@@ -365,7 +367,7 @@ class DefaultElementCallControllerTest {
             )
 
             val state = consumeItemsUntilPredicate { it.frameEncryption.isNotEmpty() }.last()
-            assertThat(state.receiveStats["aRemoteMemberId"]).isEqualTo(A_RECEIVE_STATS)
+            assertThat(state.receiveStats[MatrixRtcStreamRef("aRemoteMemberId", MatrixRtcStreamKind.MICROPHONE)]).isEqualTo(A_RECEIVE_STATS)
             assertThat(state.frameEncryption["aRemoteMemberId"]).isEqualTo(MatrixRtcFrameEncryptionState.MISSING_KEY)
             cancelAndIgnoreRemainingEvents()
         }
@@ -818,43 +820,65 @@ class DefaultElementCallControllerTest {
     }
 
     /**
-     * The spotlight does not follow every active-speaker event.
-     *
-     * Those arrive several times a second in any real conversation. Following them exactly makes the
-     * big tile unwatchable, and - because the strip excludes whoever is spotlighted - disposes one
-     * video tile and composes another on each change. Doing that a few times a second churned enough
-     * renderer and decoder threads that libwebrtc aborted the process on a stale JNI thread-local,
-     * roughly a thousand threads into a call with three people talking.
+     * The screen declares what it composes before media is up, so the set has to survive until the
+     * call exists - and reach every call the controller starts after it.
      */
     @Test
-    fun `two people talking over each other do not flap the spotlight`() = runTest {
+    fun `the composed tiles reach the call, including one that connects later`() = runTest {
+        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
+        val controller = createController(rtcService = rtcService)
+        val composed = setOf(MatrixRtcTileId(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.PERSON))
+        controller.setComposedTiles(composed)
+
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+        val call = rtcService.lastSession?.lastCall!!
+        assertThat(call.composedTiles).containsExactly(composed)
+
+        val more = composed + MatrixRtcTileId(ANOTHER_REMOTE_MEMBER_ID, MatrixRtcTileKind.SCREEN_SHARE)
+        controller.setComposedTiles(more)
+        assertThat(call.composedTiles).containsExactly(composed, more).inOrder()
+    }
+
+    /**
+     * The spotlight is the head of the core's order and nothing else.
+     *
+     * Speaker events used to move it here, behind a dwell of our own; the core now damps the speaking
+     * input it ranks on and no speaker event reaches this layer at all.
+     */
+    @Test
+    fun `the spotlight is the head of the order`() = runTest {
         val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
         val controller = createController(rtcService = rtcService)
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
         val call = rtcService.lastSession?.lastCall!!
 
-        call.participants.value = listOf(
-            aCameraParticipant(A_LOCAL_MEMBER_ID, isLocal = true, isCameraMuted = false),
-            aCameraParticipant(A_REMOTE_MEMBER_ID, isLocal = false, isCameraMuted = false),
-            aCameraParticipant(ANOTHER_REMOTE_MEMBER_ID, isLocal = false, isCameraMuted = false),
-        )
+        call.tiles.value = aRoster(aTile(A_REMOTE_MEMBER_ID), aTile(ANOTHER_REMOTE_MEMBER_ID))
         runCurrent()
-        val firstSpotlight = controller.state.value?.spotlightMemberId
-        assertThat(firstSpotlight).isNotNull()
+        assertThat(controller.state.value?.spotlightTileId).isEqualTo(MatrixRtcTileId(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.PERSON))
 
-        // The two remotes trade the floor several times, as they do when talking over one
-        // another. The clock does not move, so none of it clears the dwell.
-        repeat(6) { index ->
-            val speaker = if (index % 2 == 0) A_REMOTE_MEMBER_ID else ANOTHER_REMOTE_MEMBER_ID
-            call.emit(MatrixRtcCallEvent.ActiveSpeakers(listOf(MatrixRtcSpeakingMember(speaker, level = 0.8f))))
-        }
+        call.tiles.value = aRoster(aTile(ANOTHER_REMOTE_MEMBER_ID, isSpeaking = true), aTile(A_REMOTE_MEMBER_ID))
         runCurrent()
-
-        assertThat(controller.state.value?.spotlightMemberId).isEqualTo(firstSpotlight)
+        assertThat(controller.state.value?.spotlightTileId?.memberId).isEqualTo(ANOTHER_REMOTE_MEMBER_ID)
     }
 
-    /** Never ourselves: we are in the strip, and spotlighting us would draw the same person twice. */
+    @Test
+    fun `a sharer's screen takes the spotlight rather than their camera`() = runTest {
+        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
+        val controller = createController(rtcService = rtcService)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+        val call = rtcService.lastSession?.lastCall!!
+
+        call.tiles.value = aRoster(aTile(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.SCREEN_SHARE), aTile(A_REMOTE_MEMBER_ID))
+        runCurrent()
+
+        assertThat(controller.state.value?.spotlightTileId).isEqualTo(MatrixRtcTileId(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.SCREEN_SHARE))
+        assertThat(controller.state.value?.tiles?.map { it.id.kind }).containsExactly(MatrixRtcTileKind.SCREEN_SHARE, MatrixRtcTileKind.PERSON).inOrder()
+    }
+
+    /** Never ourselves: the core never ranks our own tile, so alone there is nobody to spotlight. */
     @Test
     fun `the spotlight is never us, and empties when we are alone`() = runTest {
         val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
@@ -864,16 +888,31 @@ class DefaultElementCallControllerTest {
         val call = rtcService.lastSession?.lastCall!!
 
         call.participants.value = listOf(aCameraParticipant(A_LOCAL_MEMBER_ID, isLocal = true, isCameraMuted = false))
-        call.emit(MatrixRtcCallEvent.ActiveSpeakers(listOf(MatrixRtcSpeakingMember(A_LOCAL_MEMBER_ID, level = 0.8f))))
         runCurrent()
-        assertThat(controller.state.value?.spotlightMemberId).isNull()
+        assertThat(controller.state.value?.spotlightTileId).isNull()
+        assertThat(controller.state.value?.ownTile?.id?.memberId).isEqualTo(A_LOCAL_MEMBER_ID)
+    }
 
-        call.participants.value = listOf(
-            aCameraParticipant(A_LOCAL_MEMBER_ID, isLocal = true, isCameraMuted = false),
-            aCameraParticipant(A_REMOTE_MEMBER_ID, isLocal = false, isCameraMuted = false),
-        )
+    /**
+     * The core publishes our tile only once our membership reaches its roster, which is after the
+     * transport first lists us. Without the fallback every join would open on an empty stage.
+     */
+    @Test
+    fun `our own tile comes from the transport until the core publishes it`() = runTest {
+        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
+        val controller = createController(rtcService = rtcService)
+        controller.setMicrophonePermissionGranted(true)
         runCurrent()
-        assertThat(controller.state.value?.spotlightMemberId).isEqualTo(A_REMOTE_MEMBER_ID)
+        val call = rtcService.lastSession?.lastCall!!
+
+        call.participants.value = listOf(aCameraParticipant(A_LOCAL_MEMBER_ID, isLocal = true, isCameraMuted = true))
+        runCurrent()
+        assertThat(controller.state.value?.ownTile?.hasVideo).isFalse()
+
+        call.localState.value = MatrixRtcLocalState(tile = aTile(A_LOCAL_MEMBER_ID, hasVideo = true, isSpeaking = true), isScreenSharing = false)
+        runCurrent()
+        assertThat(controller.state.value?.ownTile?.hasVideo).isTrue()
+        assertThat(controller.state.value?.ownTile?.isSpeaking).isTrue()
     }
 
     /**
@@ -955,18 +994,18 @@ class DefaultElementCallControllerTest {
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
         val call = rtcService.lastSession?.lastCall!!
-        call.participants.value = listOf(aCameraParticipant(A_REMOTE_MEMBER_ID, isLocal = false, isCameraMuted = true))
+        call.tiles.value = aRoster(aTile(A_REMOTE_MEMBER_ID, hasVideo = false))
         runCurrent()
 
         // Maximized, audio only, foreground: the one case it is for.
         assertThat(audioDeviceController.proximityBlankingAllowed).isTrue()
 
         // Someone turns a camera on - now there is something to look at.
-        call.participants.value = listOf(aCameraParticipant(A_REMOTE_MEMBER_ID, isLocal = false, isCameraMuted = false))
+        call.tiles.value = aRoster(aTile(A_REMOTE_MEMBER_ID, hasVideo = true))
         runCurrent()
         assertThat(audioDeviceController.proximityBlankingAllowed).isFalse()
 
-        call.participants.value = listOf(aCameraParticipant(A_REMOTE_MEMBER_ID, isLocal = false, isCameraMuted = true))
+        call.tiles.value = aRoster(aTile(A_REMOTE_MEMBER_ID, hasVideo = false))
         runCurrent()
         assertThat(audioDeviceController.proximityBlankingAllowed).isTrue()
 
@@ -1001,22 +1040,22 @@ class DefaultElementCallControllerTest {
         val call = rtcService.lastSession?.lastCall!!
 
         // Audio only: the bar.
-        call.participants.value = listOf(aCameraParticipant(A_REMOTE_MEMBER_ID, isLocal = false, isCameraMuted = true))
+        call.tiles.value = aRoster(aTile(A_REMOTE_MEMBER_ID, hasVideo = false))
         runCurrent()
         assertThat(controller.state.value?.hasVideo).isFalse()
 
         // Someone turns a camera on: the tile.
-        call.participants.value = listOf(aCameraParticipant(A_REMOTE_MEMBER_ID, isLocal = false, isCameraMuted = false))
+        call.tiles.value = aRoster(aTile(A_REMOTE_MEMBER_ID, hasVideo = true))
         runCurrent()
         assertThat(controller.state.value?.hasVideo).isTrue()
 
         // A screen share counts too, even with every camera off.
-        call.participants.value = listOf(aSharingParticipant(A_REMOTE_MEMBER_ID))
+        call.tiles.value = aRoster(aTile(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.SCREEN_SHARE), aTile(A_REMOTE_MEMBER_ID, hasVideo = true))
         runCurrent()
         assertThat(controller.state.value?.hasVideo).isTrue()
 
         // And back off again.
-        call.participants.value = listOf(aCameraParticipant(A_REMOTE_MEMBER_ID, isLocal = false, isCameraMuted = true))
+        call.tiles.value = aRoster(aTile(A_REMOTE_MEMBER_ID, hasVideo = false))
         runCurrent()
         assertThat(controller.state.value?.hasVideo).isFalse()
     }

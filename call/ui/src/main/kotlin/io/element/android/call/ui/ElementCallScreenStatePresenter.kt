@@ -18,13 +18,11 @@ import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.ElementCallVersion
-import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.ImmutableMap
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
-import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.coroutines.flow.Flow
@@ -58,33 +56,18 @@ fun rememberElementCallScreenState(
 
     val current = snapshot
 
-    // Derived from the media roster rather than tracked separately, and it treats us like anyone
-    // else: publishing raises a stream against our own member id, so our camera appears here by
-    // the same route a peer's does. Muted streams are excluded, which is what makes a tile vanish
-    // when someone turns their camera off - ours included, since disabling mutes the track.
+    val tiles = current?.callTiles() ?: persistentListOf()
+
+    // One stream per tile, by the tile's own member and kind: a sharer's camera and screen are two
+    // streams, and keying by member would draw one of them into the other's tile. A tile without
+    // video opens nothing, which is what makes a tile go to its avatar when a camera turns off.
     //
-    // The flows come from the call and are stable per member, so rebuilding this map on
+    // The flows come from the call and are stable per stream, so rebuilding this map on
     // recomposition does not disturb a tile that is already drawing.
-    // Keyed by tile rather than by member, because a member sharing their screen has two of them.
-    val videoFrames = if (current == null) {
-        persistentMapOf()
-    } else {
-        buildMap {
-            current.participants.forEach { participant ->
-                if (participant.publishes(MatrixRtcStreamKind.CAMERA)) {
-                    put(participant.memberId, controller.videoFrames(participant.memberId, MatrixRtcStreamKind.CAMERA))
-                }
-                // Ours is published but never drawn - see toCallTiles - so there is no stream to
-                // open for it either.
-                if (!participant.isLocal && participant.publishes(MatrixRtcStreamKind.SCREEN_SHARE)) {
-                    put(
-                        screenShareTileId(participant.memberId),
-                        controller.videoFrames(participant.memberId, MatrixRtcStreamKind.SCREEN_SHARE),
-                    )
-                }
-            }
-        }.toImmutableMap()
-    }
+    val videoFrames = tiles
+        .filter { it.hasVideo }
+        .associate { it.tileId to controller.videoFrames(it.memberId, it.streamKind) }
+        .toImmutableMap()
 
     fun handleEvent(event: ElementCallScreenEvent) {
         when (event) {
@@ -103,6 +86,7 @@ fun rememberElementCallScreenState(
             ElementCallScreenEvent.ToggleTileStats -> controller.toggleTileStats()
             is ElementCallScreenEvent.SetVideoConstraints ->
                 controller.setVideoConstraints(event.memberId, event.kind, event.constraints)
+            is ElementCallScreenEvent.SetComposedTiles -> controller.setComposedTiles(event.tileIds)
             ElementCallScreenEvent.ToggleScreenShare -> {
                 if (current?.isScreenSharing == true) {
                     controller.setScreenShareEnabled(token = null)
@@ -120,18 +104,23 @@ fun rememberElementCallScreenState(
         }
     }
 
-    val tiles = current?.participants
-        ?.flatMap {
-            it.toCallTiles(
-                roomMembers = current.roomMembers,
-                activeSpeakerIds = current.activeSpeakerIds,
-                isFrontCamera = current.isFrontCamera,
-            )
-        }
-        ?.toImmutableList()
-        ?: persistentListOf()
-
     return current.toState(videoFrames = videoFrames, tiles = tiles, eventSink = ::handleEvent)
+}
+
+/**
+ * Our own tile first, then the core's ranking untouched.
+ *
+ * First because the self view has to go somewhere and the core has no opinion: last would put us on
+ * the final page of a big call, and first is where iOS puts it. Our mute and camera come from the
+ * call rather than from the core's tile, so a tap shows on the badge before the round trip does.
+ */
+private fun ElementCallSnapshot.callTiles(): ImmutableList<CallTileData> {
+    val own = ownTile?.let {
+        it.copy(isHero = false, isMicrophoneMuted = isMicrophoneMuted, hasVideo = isCameraEnabled)
+            .toCallTileData(roomMembers, isLocal = true, isFrontCamera = isFrontCamera)
+    }
+    val ranked = tiles.map { it.toCallTileData(roomMembers, isLocal = false, isFrontCamera = isFrontCamera) }
+    return (listOfNotNull(own) + ranked).toImmutableList()
 }
 
 /**
@@ -142,7 +131,7 @@ fun rememberElementCallScreenState(
  */
 private fun ElementCallSnapshot?.toState(
     videoFrames: ImmutableMap<String, Flow<MatrixRtcVideoFrame>>,
-    tiles: ImmutableList<CallParticipant>,
+    tiles: ImmutableList<CallTileData>,
     eventSink: (ElementCallScreenEvent) -> Unit,
 ) = ElementCallScreenState(
     connection = this?.connection ?: ElementCallConnection.RequestingPermission,
@@ -151,7 +140,6 @@ private fun ElementCallSnapshot?.toState(
     audioLevels = this?.audioLevels ?: persistentMapOf(),
     receiveStats = this?.receiveStats ?: persistentMapOf(),
     frameEncryption = this?.frameEncryption ?: persistentMapOf(),
-    activeSpeakerIds = this?.activeSpeakerIds ?: persistentSetOf(),
     isMicrophoneMuted = this?.isMicrophoneMuted == true,
     isAudioTestToneEnabled = this?.isAudioTestToneEnabled == true,
     audioDevices = this?.audioDevices ?: persistentListOf(),
@@ -168,7 +156,7 @@ private fun ElementCallSnapshot?.toState(
     isDm = this?.isDm == true,
     connectedAtElapsedMs = this?.connectedAtElapsedMs,
     tiles = tiles,
-    spotlightMemberId = this?.spotlightMemberId,
+    spotlightTileId = this?.spotlightTileId?.let { id -> tiles.firstOrNull { it.id == id }?.tileId },
     libraryVersion = ElementCallVersion.library,
     coreVersion = ElementCallVersion.core,
     eventSink = eventSink,

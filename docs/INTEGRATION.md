@@ -429,12 +429,25 @@ Then, in this order:
    event flow has no replay, and the event that matters most — `Ended` — arrives exactly when a call is short-lived
    enough for the gap to catch it. In Compose, launch your collectors `UNDISPATCHED` so they are subscribed by the
    time the launcher returns rather than merely queued.
-2. **Sweep the existing roster.** `mediaSession.participants()` — anything already publishing before you connected
-   raises no `StreamStarted`, so a member who was speaking when you joined is silent forever otherwise.
+2. **Read `participants()` once**, for your own row before the core publishes your local state. It is the whole
+   call every time — the cost the tile roster's detail window exists to avoid — so never re-read it per event. Who
+   to draw and who to hear both follow `nextRoster()` (§11).
 3. Publish your own microphone (§8).
 
 `participants()` is the transport's roster and is a different thing from the core's membership projection. Both are
 legitimate and they can differ; log which layer a surprising row came from.
+
+**What to draw is the tile roster, not `participants()`.** `nextRoster()` / `roster()` give every remote tile — one per
+camera, one more per screen share — ranked and damped by the core; `nextLocalState()` / `localState()` give your own
+tile, which is never in the ranked list, and the sharing flag. Both long-poll with the latest value winning, so pump
+each from one coroutine, seeded from its pull. The semantics are the reviewed contract,
+`element-call-feature-hq/plans/002.rust_rtc_media_roster_model/contract.md`; three things bite silently:
+
+- A tile's identity is `(memberId, kind)`. Join `detail` to `order` by it, never by index: `setDetailWindow` makes
+  `detail` a subsequence.
+- Render `order` as given. It already carries the hysteresis; a re-sort, or a spotlight damper of your own, fights it.
+- `localState()` is null until your membership reaches the core's roster, later than `participants()` lists you.
+  Build your own tile from your `participants()` row until then, or every join opens on an empty stage.
 
 Two Rust-side deployment notes: Android honours only the AAR's bundled root certificates, so a deployment fronted by
 an enterprise CA fails the TLS handshake with no way to install trust (`FEEDBACK.md` item 3); and the AAR ships no
@@ -654,14 +667,13 @@ the one counter that names it directly.
 Allocate nothing per frame here. `frame.data` is already a fresh array on every call at 100 frames a second per
 member; wrapping it to meter it doubles that, and this is the one path where a GC pause is audible.
 
-**Two sources decide when to start playback, and they race.** The `StreamStarted` event and your initial
-`participants()` sweep will both fire for anyone already publishing when you connect. Claim the member in a
-concurrent set *before* opening the stream, not after — two callers past a check on the playback map each end up
-with a reader and an `AudioTrack` on the same member, playing their audio twice and slightly out of step. Release
-the claim if opening fails, so a later `StreamStarted` can retry.
-
-**Skip your own member id.** Your own publications now raise `StreamStarted` too; without the guard you play your
-own voice back.
+**Playback follows the tile roster, not the event stream.** Every remote person tile in `nextRoster().order` is a
+candidate: on each roster, open `audioStream(memberId, MICROPHONE)` for candidates you have no player for — it
+returns `null` at once for a member with no microphone track, so the retries cost nothing and a microphone that
+appears later is picked up on the roster it changes — and stop the player of anyone gone from the order
+(`RustMatrixRtcCall.followPlayback`). `StreamStarted` and `StreamStopped` are still emitted, but a consumer that lags
+the event stream by more than its buffer loses events silently, and a lost `StreamStarted` used to leave a member
+silent for the rest of the call. The roster is a latest-value push and cannot be lagged.
 
 Stop playback on `StreamStopped`, `ParticipantLeft` and `Ended`, and drop that member's cached video flows at the
 same time — a member who left will not come back under that id.
@@ -672,8 +684,12 @@ takes the whole app down.
 
 ### Telling a starved stream from a silent one
 
-Poll `mediaSession.receiveStats(memberId, kind)` about once a second (RTCP reports arrive at roughly that rate, so
-faster only repeats values). Null means "no report yet", which is not zero.
+Poll about once a second (RTCP reports arrive at roughly that rate, so faster only repeats values), and poll **the
+streams you draw, in one call**: `mediaSession.receiveStatsFor(streams)` takes a list of `FfiStreamRef(memberId, kind)`
+and answers every entry in one round trip, in request order, `stats == null` where a single `receiveStats` would
+return null ("no report yet", which is not zero). This library asks for each composed tile's own stream plus its
+member's microphone — the set the layout declares through `setComposedTiles` — so a call of two hundred costs one
+call a second for the twenty tiles on screen, not two per member (`RustMatrixRtcCall.pollReceiveStats`).
 
 Read the counters together, because each alone lies:
 

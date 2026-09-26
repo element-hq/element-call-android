@@ -78,11 +78,11 @@ data class FrameSample(val framesPerInterval: Int, val width: Int, val height: I
 internal fun CallTileStatsOverlay(
     counter: TileFrameCounter,
     receiveStats: MatrixRtcReceiveStats?,
+    audioStats: MatrixRtcReceiveStats?,
     frameEncryption: MatrixRtcFrameEncryptionState?,
     requestedWidth: Int,
     requestedHeight: Int,
     isReachable: Boolean,
-    hasMicrophone: Boolean,
     modifier: Modifier = Modifier,
 ) {
     var sample by remember { mutableStateOf(FrameSample(0, 0, 0)) }
@@ -121,6 +121,12 @@ internal fun CallTileStatsOverlay(
             StatLine("$bitrateKbps kbps · ${receiveStats.packetsLost} lost")
             StatLine("jit ${(receiveStats.jitter * 1000).toInt()}ms · drop ${receiveStats.framesDropped}")
         }
+        // The microphone's own counters, because "concealed" is the one number that separates audio
+        // that is silent from audio that is fabricated - see MatrixRtcReceiveStats.concealedFraction.
+        if (audioStats != null) {
+            val concealed = audioStats.concealedFraction?.let { "${(it * 100).toInt()}%" } ?: "?"
+            StatLine("mic ${audioStats.packetsLost} lost · $concealed concealed")
+        }
         if (frameEncryption != null) {
             StatLine("e2ee ${frameEncryption.name.lowercase()}")
         }
@@ -129,13 +135,6 @@ internal fun CallTileStatsOverlay(
         // is the only signal the FFI gives us about which SFU is carrying whom.
         if (!isReachable) {
             StatLine("UNREACHABLE")
-        }
-        // The name pill draws a mute badge for this too, because "cannot be heard" is what a viewer
-        // needs from a badge. Here the question is why, and "they muted" and "we were never given
-        // their audio" are different answers - the second one is a fault, and the far end will be
-        // hearing them perfectly well while we say they are muted.
-        if (!hasMicrophone) {
-            StatLine("NO MIC STREAM")
         }
     }
 }

@@ -19,12 +19,17 @@ import io.element.android.call.api.ElementCallVersion
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
 import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcStreamRef
+import io.element.android.call.api.rtc.MatrixRtcTile
+import io.element.android.call.api.rtc.MatrixRtcTileId
+import io.element.android.call.api.rtc.MatrixRtcTileKind
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.id.UserId
 import io.element.android.call.test.A_ROOM_ID
 import io.element.android.call.test.FakeElementCallController
 import io.element.android.call.test.aCameraParticipant
 import io.element.android.call.test.aSharingParticipant
+import io.element.android.call.test.aTile
 import io.element.android.call.test.audio.aSpeaker
 import io.element.android.call.tests.testutils.WarmUpRule
 import io.element.android.call.tests.testutils.consumeItemsUntilPredicate
@@ -230,6 +235,7 @@ class ElementCallScreenStateTest {
             state.eventSink(ElementCallScreenEvent.Minimize)
             state.eventSink(ElementCallScreenEvent.ToggleTileStats)
             state.eventSink(ElementCallScreenEvent.SetVideoConstraints(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.CAMERA, constraints))
+            state.eventSink(ElementCallScreenEvent.SetComposedTiles(setOf(MatrixRtcTileId(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.PERSON))))
             state.eventSink(ElementCallScreenEvent.HangUp)
 
             assertThat(controller.switchCameraCount).isEqualTo(1)
@@ -237,8 +243,9 @@ class ElementCallScreenStateTest {
             assertThat(controller.maximizedCalls).containsExactly(false)
             assertThat(controller.toggleTileStatsCount).isEqualTo(1)
             assertThat(controller.videoConstraints).containsExactly(
-                FakeElementCallController.VideoStreamRef(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.CAMERA) to constraints,
+                MatrixRtcStreamRef(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.CAMERA) to constraints,
             )
+            assertThat(controller.composedTiles).containsExactly(setOf(MatrixRtcTileId(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.PERSON)))
             assertThat(controller.hangUpCount).isEqualTo(1)
             cancelAndIgnoreRemainingEvents()
         }
@@ -259,7 +266,6 @@ class ElementCallScreenStateTest {
                     aCameraParticipant(A_LOCAL_MEMBER_ID, isLocal = true, isCameraMuted = false),
                     aCameraParticipant(A_REMOTE_MEMBER_ID, isLocal = false, isCameraMuted = false),
                 ),
-                spotlightMemberId = A_REMOTE_MEMBER_ID,
             ),
         )
 
@@ -268,35 +274,82 @@ class ElementCallScreenStateTest {
 
             assertThat(state.tiles).hasSize(2)
             // The remote is spotlighted, so only we are left in the strip.
-            assertThat(state.spotlightParticipant?.memberId).isEqualTo(A_REMOTE_MEMBER_ID)
-            assertThat(state.stripParticipants.map { it.memberId }).containsExactly(A_LOCAL_MEMBER_ID)
+            assertThat(state.spotlightTile?.memberId).isEqualTo(A_REMOTE_MEMBER_ID)
+            assertThat(state.stripTiles.map { it.memberId }).containsExactly(A_LOCAL_MEMBER_ID)
             cancelAndIgnoreRemainingEvents()
         }
     }
 
-    /** The controller's choice is respected, and a stale choice falls back to any remote rather than to us. */
+    /**
+     * Our own tile first, then the core's order exactly as given: the core already ranked and damped
+     * it, so a re-sort here would fight it. The spotlight is the head of that order, never us.
+     */
     @Test
-    fun `the spotlight follows the controller and never lands on us`() = runTest {
+    fun `our own tile comes first and the core's order is kept after it`() = runTest {
+        val participants = listOf(
+            aCameraParticipant(A_LOCAL_MEMBER_ID, isLocal = true, isCameraMuted = false),
+            aCameraParticipant(A_REMOTE_MEMBER_ID, isLocal = false, isCameraMuted = false),
+            aCameraParticipant(ANOTHER_REMOTE_MEMBER_ID, isLocal = false, isCameraMuted = false),
+        )
         val controller = FakeElementCallController(
             initialState = aConnectedSnapshot(
-                participants = listOf(
-                    aCameraParticipant(A_LOCAL_MEMBER_ID, isLocal = true, isCameraMuted = false),
-                    aCameraParticipant(A_REMOTE_MEMBER_ID, isLocal = false, isCameraMuted = false),
-                    aCameraParticipant(ANOTHER_REMOTE_MEMBER_ID, isLocal = false, isCameraMuted = false),
-                ),
-                spotlightMemberId = ANOTHER_REMOTE_MEMBER_ID,
+                participants = participants,
+                // Not the participant order: the core put the other remote first.
+                tiles = listOf(aTile(ANOTHER_REMOTE_MEMBER_ID), aTile(A_REMOTE_MEMBER_ID)),
             ),
         )
 
         moleculeFlow(RecompositionMode.Immediate) { rememberElementCallScreenState(controller, aNavigator()) }.test {
-            assertThat(awaitItem().spotlightParticipant?.memberId).isEqualTo(ANOTHER_REMOTE_MEMBER_ID)
+            val state = awaitItem()
 
-            // A spotlight on ourselves is never drawn as one.
-            controller.state.value = controller.state.value?.copy(spotlightMemberId = A_LOCAL_MEMBER_ID)
-            val state = consumeItemsUntilPredicate { it.spotlightMemberId == A_LOCAL_MEMBER_ID }.last()
+            assertThat(state.tiles.map { it.memberId }).containsExactly(A_LOCAL_MEMBER_ID, ANOTHER_REMOTE_MEMBER_ID, A_REMOTE_MEMBER_ID).inOrder()
+            assertThat(state.spotlightTile?.memberId).isEqualTo(ANOTHER_REMOTE_MEMBER_ID)
+            assertThat(state.stripTiles.map { it.memberId }).containsExactly(A_LOCAL_MEMBER_ID, A_REMOTE_MEMBER_ID).inOrder()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
 
-            assertThat(state.spotlightParticipant?.memberId).isEqualTo(A_REMOTE_MEMBER_ID)
-            assertThat(state.stripParticipants.map { it.memberId }).containsExactly(A_LOCAL_MEMBER_ID, ANOTHER_REMOTE_MEMBER_ID)
+    /** The local user acts on their own tile, so a tap has to show before the core's tile catches up. */
+    @Test
+    fun `our own mute and camera come from the call rather than the core's tile`() = runTest {
+        val controller = FakeElementCallController(
+            initialState = aConnectedSnapshot(
+                participants = listOf(aCameraParticipant(A_LOCAL_MEMBER_ID, isLocal = true, isCameraMuted = false)),
+            ).copy(isMicrophoneMuted = true, isCameraEnabled = false),
+        )
+
+        moleculeFlow(RecompositionMode.Immediate) { rememberElementCallScreenState(controller, aNavigator()) }.test {
+            val own = awaitItem().tiles.single()
+
+            assertThat(own.isLocal).isTrue()
+            assertThat(own.isMuted).isTrue()
+            assertThat(own.hasVideo).isFalse()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    /**
+     * A member's camera tile is the same tile whether or not they are sharing: same key, so the same
+     * composable and the same renderer carry on while their screen comes and goes.
+     */
+    @Test
+    fun `a camera tile keeps its identity when a share starts and stops`() = runTest {
+        val controller = FakeElementCallController(
+            initialState = aConnectedSnapshot(tiles = listOf(aTile(A_REMOTE_MEMBER_ID))),
+        )
+
+        moleculeFlow(RecompositionMode.Immediate) { rememberElementCallScreenState(controller, aNavigator()) }.test {
+            val before = awaitItem().tiles.single().tileId
+
+            controller.state.value = controller.state.value?.copy(
+                tiles = listOf(aTile(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.SCREEN_SHARE), aTile(A_REMOTE_MEMBER_ID)).toImmutableList(),
+            )
+            val sharing = consumeItemsUntilPredicate { it.tiles.size == 2 }.last()
+            assertThat(sharing.tiles.single { !it.isScreenShare }.tileId).isEqualTo(before)
+
+            controller.state.value = controller.state.value?.copy(tiles = listOf(aTile(A_REMOTE_MEMBER_ID)).toImmutableList())
+            val after = consumeItemsUntilPredicate { it.tiles.size == 1 }.last()
+            assertThat(after.tiles.single().tileId).isEqualTo(before)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -316,8 +369,8 @@ class ElementCallScreenStateTest {
         moleculeFlow(RecompositionMode.Immediate) { rememberElementCallScreenState(controller, aNavigator()) }.test {
             val state = awaitItem()
 
-            assertThat(state.spotlightParticipant).isNull()
-            assertThat(state.stripParticipants.map { it.memberId }).containsExactly(A_LOCAL_MEMBER_ID)
+            assertThat(state.spotlightTile).isNull()
+            assertThat(state.stripTiles.map { it.memberId }).containsExactly(A_LOCAL_MEMBER_ID)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -393,23 +446,24 @@ class ElementCallScreenStateTest {
                     aSharingParticipant(A_REMOTE_MEMBER_ID),
                     aCameraParticipant(ANOTHER_REMOTE_MEMBER_ID, isLocal = false, isCameraMuted = false),
                 ),
-                // The controller spotlights whoever is talking; the screen still wins.
-                spotlightMemberId = ANOTHER_REMOTE_MEMBER_ID,
             ),
         )
 
         moleculeFlow(RecompositionMode.Immediate) { rememberElementCallScreenState(controller, aNavigator()) }.test {
             val state = awaitItem()
 
-            assertThat(state.spotlightParticipant?.isScreenShare).isTrue()
-            assertThat(state.spotlightParticipant?.tileId).isEqualTo("$A_REMOTE_MEMBER_ID#SCREEN_SHARE")
+            assertThat(state.spotlightTile?.isScreenShare).isTrue()
+            assertThat(state.spotlightTile?.tileId).isEqualTo("$A_REMOTE_MEMBER_ID#SCREEN_SHARE")
             // The sharer is still shown - only their screen was promoted, not them.
-            assertThat(state.stripParticipants.map { it.tileId }).containsExactly(A_REMOTE_MEMBER_ID, ANOTHER_REMOTE_MEMBER_ID)
+            assertThat(state.stripTiles.map { it.tileId }).containsExactly(A_REMOTE_MEMBER_ID, ANOTHER_REMOTE_MEMBER_ID)
             cancelAndIgnoreRemainingEvents()
         }
     }
 
-    /** Our own screen is published but never drawn: nobody needs to be shown their own screen. */
+    /**
+     * Our own screen is published but never drawn: nobody needs to be shown their own screen. The core
+     * makes no tile for it; this pins that the own tile we build is only ever our camera.
+     */
     @Test
     fun `our own screen share does not become a tile`() = runTest {
         val controller = FakeElementCallController(
@@ -494,7 +548,7 @@ class ElementCallScreenStateTest {
 
             assertThat(state.layout).isEqualTo(CallLayout.OneToOne)
             // The other person is the one who fills the screen, never us.
-            assertThat(state.spotlightParticipant?.memberId).isEqualTo(A_REMOTE_MEMBER_ID)
+            assertThat(state.spotlightTile?.memberId).isEqualTo(A_REMOTE_MEMBER_ID)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -537,7 +591,7 @@ class ElementCallScreenStateTest {
 
             assertThat(state.tiles).hasSize(3)
             assertThat(state.layout).isEqualTo(CallLayout.Group)
-            assertThat(state.spotlightParticipant?.isScreenShare).isTrue()
+            assertThat(state.spotlightTile?.isScreenShare).isTrue()
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -564,16 +618,19 @@ class ElementCallScreenStateTest {
         }
     }
 
+    /** The core's tiles default to its shape for [participants]; pass [tiles] to rank them yourself. */
     private fun aConnectedSnapshot(
         participants: List<MatrixRtcParticipant> = emptyList(),
-        spotlightMemberId: String? = null,
+        tiles: List<MatrixRtcTile> = participants.previewTiles(),
         isDm: Boolean = false,
     ) = ElementCallSnapshot(
         callData = ElementCallData(roomId = A_ROOM_ID, isAudioCall = true),
         connection = ElementCallConnection.Connected,
         isMicrophonePermissionGranted = true,
         participants = participants.toImmutableList(),
-        spotlightMemberId = spotlightMemberId,
+        tiles = tiles.toImmutableList(),
+        ownTile = participants.previewOwnTile(),
+        isCameraEnabled = participants.previewOwnTile()?.hasVideo == true,
         isDm = isDm,
     )
 

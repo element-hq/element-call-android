@@ -13,10 +13,10 @@ import io.element.android.call.api.rtc.MatrixRtcAudioLevel
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
+import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.ImmutableMap
-import kotlinx.collections.immutable.ImmutableSet
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.Flow
 
@@ -36,10 +36,11 @@ data class ElementCallScreenState(
     /** Meter readings by member id, ours included: what we capture and what we decode. */
     val audioLevels: ImmutableMap<String, MatrixRtcAudioLevel>,
     /**
-     * RTP receive counters by member id, for remote members only. Empty until the transport's first
-     * report, so a member missing here is not yet known rather than receiving nothing.
+     * RTP receive counters by remote stream - each composed tile's, and its member's microphone.
+     * Empty until the transport's first report, so a stream missing here is not yet known rather than
+     * receiving nothing.
      */
-    val receiveStats: ImmutableMap<String, MatrixRtcReceiveStats>,
+    val receiveStats: ImmutableMap<MatrixRtcStreamRef, MatrixRtcReceiveStats>,
     /**
      * Last per-member frame-encryption state the core has reported.
      *
@@ -48,14 +49,6 @@ data class ElementCallScreenState(
      * encrypts to the SFU either way. This is only about media being *also* encrypted end to end.
      */
     val frameEncryption: ImmutableMap<String, MatrixRtcFrameEncryptionState>,
-    /**
-     * Who the transport currently hears, by member id.
-     *
-     * The SFU derives this from the RTP audio level header, which end-to-end encryption leaves
-     * readable - so a member can be an active speaker here while [audioLevels] shows us nothing,
-     * which is precisely what a broken key looks like.
-     */
-    val activeSpeakerIds: ImmutableSet<String>,
     val isMicrophoneMuted: Boolean,
     /** Whether we are publishing a test tone instead of the microphone. */
     val isAudioTestToneEnabled: Boolean,
@@ -86,8 +79,8 @@ data class ElementCallScreenState(
     /** Whether tiles are showing their debug readout. Toggled by long-pressing a tile. */
     val isTileStatsVisible: Boolean,
     /**
-     * Video by member id, for the members currently publishing a camera - ourselves included. Empty
-     * before media connects, and a member absent from it has no video to show.
+     * Video by [CallTileData.tileId], for the tiles that have video - ourselves included. Empty
+     * before media connects, and a tile absent from it has no video to show.
      *
      * Flows rather than the latest frames, which is the unusual part of this state class and is
      * deliberate: a frame held in state would recompose the whole screen thirty times a second. Each
@@ -102,15 +95,16 @@ data class ElementCallScreenState(
     /** When media first connected, on the elapsed-realtime clock, or null while connecting. */
     val connectedAtElapsedMs: Long?,
     /**
-     * [participants], joined with the room so they have names and faces, in the order they are drawn.
+     * What is drawn, in the order it is drawn: our own tile first, then the core's ranking, joined with
+     * the room so they have names and faces. A member sharing their screen is two of them.
      *
      * Kept alongside the raw [participants] rather than replacing them: the diagnostics screen wants
      * the RTC layer's own view, unmixed with anything the room says, because telling those two apart
      * is the point of it.
      */
-    val tiles: ImmutableList<CallParticipant>,
-    /** Who the controller has settled on for the big tile. See `ElementCallSnapshot.spotlightMemberId`. */
-    val spotlightMemberId: String?,
+    val tiles: ImmutableList<CallTileData>,
+    /** The [CallTileData.tileId] of the big tile. See `ElementCallSnapshot.spotlightTileId`. */
+    val spotlightTileId: String?,
     /**
      * What the overflow menu shows: the library version and the core it was built against. Carried in
      * state rather than read from `ElementCallVersion` where they are drawn, so previews and screenshots
@@ -121,25 +115,14 @@ data class ElementCallScreenState(
     val eventSink: (ElementCallScreenEvent) -> Unit,
 ) {
     /**
-     * Who gets the big tile: a shared screen if there is one, else whoever the SFU currently hears,
-     * else any remote member.
+     * Who gets the big tile: the head of the core's ranking, so a shared screen when there is one and
+     * otherwise whoever the core's damped ranking puts first.
      *
-     * A screen wins outright and is not subject to the speaker hysteresis. Somebody shares a screen
-     * *in order for it to be looked at*, and a call where the spotlight flicks off it every time
-     * someone speaks would be actively worse than one that never moved at all.
-     *
-     * **Never ourselves**, and null rather than falling back to us when we are alone. We are already
-     * in the strip, so spotlighting us draws the same person twice - which reads as a bug, and is one
-     * on the video path too, since it means two tiles collecting one member's frames.
-     *
-     * The design agrees: the spotlight is always someone else, and "You" only ever appears in the
-     * strip. A call with nobody else in it yet has nobody to spotlight, and says so by showing only
-     * the strip.
+     * **Never ourselves**, and null when we are alone: the core never ranks our own tile. We are
+     * already in the strip, so spotlighting us would draw the same person twice.
      */
-    val spotlightParticipant: CallParticipant?
-        get() = tiles.firstOrNull { it.isScreenShare }
-            ?: tiles.firstOrNull { it.memberId == spotlightMemberId && !it.isLocal }
-            ?: tiles.firstOrNull { !it.isLocal }
+    val spotlightTile: CallTileData?
+        get() = spotlightTileId?.let { id -> tiles.firstOrNull { it.tileId == id } }
 
     /**
      * Everyone the strip below the spotlight shows: everyone *except* whoever is in the spotlight.
@@ -149,8 +132,8 @@ data class ElementCallScreenState(
      * a highlight - the same face, twice, one above the other - so they are excluded here. Put them
      * back by using [tiles] instead if the strip ever grows enough for the highlight to make sense.
      */
-    val stripParticipants: ImmutableList<CallParticipant>
-        get() = tiles.filterNot { it.tileId == spotlightParticipant?.tileId }.toImmutableList()
+    val stripTiles: ImmutableList<CallTileData>
+        get() = tiles.filterNot { it.tileId == spotlightTile?.tileId }.toImmutableList()
 
     /**
      * Which arrangement the screen draws: the other person full-bleed with us as a thumbnail, or the
