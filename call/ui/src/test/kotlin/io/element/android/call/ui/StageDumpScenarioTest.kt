@@ -207,7 +207,7 @@ class StageDumpScenarioTest : RobolectricTest() {
     private fun verify(name: String, actual: String) {
         val recorded = File("src/test/resources/scenarios/$name.dump.txt")
         if (System.getenv("ELEMENT_CALL_RECORD_DUMPS") != null) {
-            recorded.parentFile.mkdirs()
+            recorded.parentFile?.mkdirs()
             recorded.writeText(actual)
             return
         }
