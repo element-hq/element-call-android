@@ -21,6 +21,7 @@ import io.element.android.call.ui.A_BLUETOOTH_HEADSET
 import io.element.android.call.ui.A_REMOTE_MEMBER_ID
 import io.element.android.call.ui.A_SPEAKER
 import io.element.android.call.ui.aCallSnapshot
+import io.element.android.call.ui.aCrowdMemberId
 import io.element.android.call.ui.aCrowdParticipant
 import io.element.android.call.ui.aLocalParticipant
 import io.element.android.call.ui.aRemoteCameraParticipant
@@ -93,6 +94,33 @@ enum class SampleFixture(val key: String, val title: String, val description: St
         override fun snapshot() = aConnected(
             participants = listOf(aLocalParticipant(), aSharingParticipant(A_REMOTE_MEMBER_ID, userId = UserId("@bob:example.org")), aStaleParticipant()),
         )
+    },
+    TWO_SHARES(
+        key = "two_shares",
+        title = "Two people sharing their screens",
+        description = "Two heroes stacked in the spotlight: swipe, or the arrows in landscape, to switch.",
+    ) {
+        override fun snapshot() = aConnected(
+            participants = listOf(
+                aLocalParticipant(),
+                aSharingParticipant(A_REMOTE_MEMBER_ID, userId = UserId("@bob:example.org")),
+                aSharingParticipant(aCrowdMemberId(1), userId = UserId("@carol:example.org")),
+                aStaleParticipant(),
+            ) + (2..CROWD_SIZE).map { aCrowdParticipant(it) },
+        ).copy(memberCount = CROWD_SIZE + 3)
+    },
+    LISTEN_MODE(
+        key = "listen_mode",
+        title = "Twelve people, one talking",
+        description = "Past ten remote members with no hero the speaker is spotlit, and held when they stop.",
+    ) {
+        override fun snapshot() = aConnected(
+            participants = listOf(aLocalParticipant()) + (1..12).map { index ->
+                val member = aCrowdParticipant(index)
+                if (index % 3 == 0) member.copy(streams = member.streams + MatrixRtcStreamState(MatrixRtcStreamKind.CAMERA, isMuted = false)) else member
+            },
+            speakingIds = setOf(aCrowdMemberId(6)),
+        ).copy(memberCount = 13)
     },
     MUTED(
         key = "muted",

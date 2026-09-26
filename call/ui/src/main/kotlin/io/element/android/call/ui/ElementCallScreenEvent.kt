@@ -62,6 +62,9 @@ sealed interface ElementCallScreenEvent {
      */
     data class SetDetailWindow(val window: MatrixRtcDetailWindow) : ElementCallScreenEvent
 
+    /** Show this hero in the spotlight: a settled swipe on the stack, an arrow, or a screen reader's action. */
+    data class ShowHero(val tileId: String) : ElementCallScreenEvent
+
     /**
      * Start or stop sharing the screen.
      *

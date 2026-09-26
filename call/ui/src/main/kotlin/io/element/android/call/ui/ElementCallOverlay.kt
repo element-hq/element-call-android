@@ -47,8 +47,10 @@ import androidx.core.content.ContextCompat
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.ElementCallSnapshot
+import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.ui.theme.ElementCallStyle
 import io.element.android.call.ui.theme.ElementCallTheme
@@ -100,12 +102,38 @@ fun ElementCallOverlay(
         // nothing else. This is also the whole of the PiP implementation, because the call is ours:
         // the WebView path has to ask Element Call over the widget API whether it may enter PiP, and
         // hangs the call up if the answer is no.
+        // What the spotlight shows is remembered here, above every window that draws the call, so
+        // the hero shown and the speaker held survive rotation and minimising, and Picture in
+        // Picture and the floating tile show what the spotlight showed (spec 003 R67, R68).
+        val spotlightMemory = rememberCallSpotlightMemory()
         val isInPictureInPicture by controller.isInPictureInPicture.collectAsState()
+        UnmountedStageWindow(controller = controller, current = current, spotlightMemory = spotlightMemory, isInPictureInPicture = isInPictureInPicture)
         if (isInPictureInPicture) {
-            ElementCallPictureInPictureContent(call = current, videoFrames = controller::videoFrames)
+            ElementCallPictureInPictureContent(call = current, videoFrames = controller::videoFrames, spotlightId = spotlightMemory.spotlightId)
         } else {
-            CallInApp(controller = controller, current = current, modifier = modifier, content = content)
+            CallInApp(controller = controller, current = current, spotlightMemory = spotlightMemory, modifier = modifier, content = content)
         }
+    }
+}
+
+/**
+ * The detail window while the stage is unmounted - minimised, or in Picture in Picture: the head of
+ * the order plus the tile shown, and nothing else composed (contract B8). The stage declares its own
+ * while it is mounted, and this must not compete with it.
+ */
+@Composable
+private fun UnmountedStageWindow(
+    controller: ElementCallController,
+    current: ElementCallSnapshot,
+    spotlightMemory: CallSpotlightMemory,
+    isInPictureInPicture: Boolean,
+) {
+    val isStageMounted = current.isMaximized && !isInPictureInPicture
+    val shown = current.pictureInPictureCandidate(spotlightMemory.spotlightId)?.id
+    LaunchedEffect(isStageMounted, shown) {
+        if (isStageMounted) return@LaunchedEffect
+        controller.setComposedTiles(setOfNotNull(shown))
+        controller.setDetailWindow(MatrixRtcDetailWindow(ranks = HEAD_RANGE, also = setOfNotNull(shown)))
     }
 }
 
@@ -113,6 +141,7 @@ fun ElementCallOverlay(
 private fun CallInApp(
     controller: ElementCallController,
     current: ElementCallSnapshot,
+    spotlightMemory: CallSpotlightMemory,
     modifier: Modifier = Modifier,
     content: @Composable (Modifier) -> Unit,
 ) {
@@ -252,6 +281,7 @@ private fun CallInApp(
                 isVisible = isMinimizedAsTile,
                 call = current,
                 videoFrames = controller::videoFrames,
+                spotlightId = spotlightMemory.spotlightId,
                 onClick = { controller.setMaximized(true) },
             )
 
@@ -259,6 +289,7 @@ private fun CallInApp(
                 isMaximized = current.isMaximized,
                 controller = controller,
                 navigator = navigator,
+                spotlightMemory = spotlightMemory,
             )
         }
     }
@@ -277,6 +308,7 @@ private fun FloatingCall(
     isVisible: Boolean,
     call: ElementCallSnapshot,
     videoFrames: (memberId: String, kind: MatrixRtcStreamKind) -> Flow<MatrixRtcVideoFrame>,
+    spotlightId: MatrixRtcTileId?,
     onClick: () -> Unit,
 ) {
     AnimatedVisibility(
@@ -289,6 +321,7 @@ private fun FloatingCall(
             videoFrames = videoFrames,
             onClick = onClick,
             modifier = Modifier.systemBarsPadding(),
+            spotlightId = spotlightId,
         )
     }
 }
@@ -309,13 +342,14 @@ private fun MaximizedCall(
     isMaximized: Boolean,
     controller: ElementCallController,
     navigator: ElementCallNavigator,
+    spotlightMemory: CallSpotlightMemory,
 ) {
     AnimatedVisibility(
         visible = isMaximized,
         enter = fadeIn(MAXIMIZE_FADE_SPEC) + scaleIn(MAXIMIZE_SCALE_SPEC, initialScale = MAXIMIZE_SCALE, transformOrigin = FROM_THE_BAR),
         exit = fadeOut(MAXIMIZE_FADE_SPEC) + scaleOut(MAXIMIZE_SCALE_SPEC, targetScale = MAXIMIZE_SCALE, transformOrigin = FROM_THE_BAR),
     ) {
-        val state = rememberElementCallScreenState(controller = controller, navigator = navigator)
+        val state = rememberElementCallScreenState(controller = controller, navigator = navigator, spotlightMemory = spotlightMemory)
         ElementCallScreen(state = state, modifier = Modifier.fillMaxSize())
     }
 }

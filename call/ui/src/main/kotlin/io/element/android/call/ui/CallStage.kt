@@ -14,6 +14,7 @@ import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.animateScrollBy
@@ -24,10 +25,19 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.FloatState
@@ -40,16 +50,21 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.traversalIndex
@@ -63,6 +78,9 @@ import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.ui.theme.ElementCallTheme
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.ImmutableMap
+import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -127,6 +145,9 @@ internal fun CallStage(
             }
         }
         val spotlightTileId = state.spotlightTileId
+        // The listen-mode speaker is a keyed sibling like any grid tile, so promotion is a slide and
+        // never a remount (R37); the hero stack is a pager over tiles that are never in the grid (R17).
+        val stickyTileId = (state.spotlight as? CallSpotlight.Choice.Speaker)?.tileId
         val gridTileIds = state.gridTiles.map { it.tileId }
         val heroIds = state.heroes
         val layout = remember(gridTileIds, spotlightTileId, heroIds, metrics, arrangement) {
@@ -171,26 +192,37 @@ internal fun CallStage(
         val lingerScope = rememberCoroutineScope()
         val lingerJobs = remember { mutableMapOf<String, Job>() }
         val lastBand = remember { SetRef() }
+        val lastHidden = remember { SetRef() }
         val currentEventSink by rememberUpdatedState(state.eventSink)
-        val tilesById = remember(state.tiles) { state.tiles.associateBy { it.tileId } }
-        LaunchedEffect(bandIds) {
-            (bandIds - lastBand.value).forEach { id ->
+        val tilesById = remember(state.tiles) { state.tiles.associateBy { it.tileId }.toImmutableMap() }
+        val hiddenIds = layout.hiddenTileIds
+        LaunchedEffect(bandIds, hiddenIds) {
+            fun constrain(id: String, constraints: MatrixRtcVideoConstraints) {
+                val tile = tilesById[id] ?: return
+                if (!tile.isLocal && tile.hasVideo) {
+                    currentEventSink(ElementCallScreenEvent.SetVideoConstraints(tile.memberId, tile.streamKind, constraints))
+                }
+            }
+            val back = bandIds - lastBand.value + (lastHidden.value - hiddenIds)
+            back.forEach { id ->
                 lingerJobs.remove(id)?.cancel()
                 retainedIds.remove(id)
             }
-            (lastBand.value - bandIds).forEach { id ->
+            // A hero no longer shown is hidden by the arrangement, so it is outside the band and
+            // released after the linger like any other (R24); its page is gone, so it is paused here.
+            (hiddenIds - lastHidden.value).forEach { constrain(it, MatrixRtcVideoConstraints.Paused) }
+            val gone = lastBand.value - bandIds + (hiddenIds - lastHidden.value)
+            gone.forEach { id ->
                 retainedIds[id] = Unit
                 lingerJobs[id] = lingerScope.launch {
                     delay(RELEASE_LINGER_MS)
                     retainedIds.remove(id)
                     lingerJobs.remove(id)
-                    val tile = tilesById[id] ?: return@launch
-                    if (!tile.isLocal && tile.hasVideo) {
-                        currentEventSink(ElementCallScreenEvent.SetVideoConstraints(tile.memberId, tile.streamKind, MatrixRtcVideoConstraints.Released))
-                    }
+                    constrain(id, MatrixRtcVideoConstraints.Released)
                 }
             }
             lastBand.value = bandIds
+            lastHidden.value = hiddenIds
         }
         val composedGridIds by remember(layout) { derivedStateOf { bandIds + retainedIds.keys } }
 
@@ -219,7 +251,7 @@ internal fun CallStage(
         val lastSlots = remember { mutableMapOf<String, TileSlot>() }
         layout.tiles.forEach { (tileId, rect) -> lastSlots[tileId] = TileSlot(rect, isSticky = false) }
         val spotlightRect = layout.spotlight
-        if (spotlightTileId != null && spotlightRect != null) lastSlots[spotlightTileId] = TileSlot(spotlightRect, isSticky = true)
+        if (stickyTileId != null && spotlightRect != null) lastSlots[stickyTileId] = TileSlot(spotlightRect, isSticky = true)
 
         // Who has just left and has not finished fading out. Their tile plays them out and removes
         // itself when it has; parked beyond the band it does so in a frame.
@@ -255,11 +287,24 @@ internal fun CallStage(
             )
         }
         state.tiles.forEach { tile ->
-            val isComposed = tile.tileId == spotlightTileId || tile.tileId in composedGridIds && tile.tileId !in layout.hiddenTileIds
+            val isComposed = tile.tileId == stickyTileId || tile.tileId in composedGridIds && tile.tileId !in hiddenIds
             if (!isComposed) return@forEach
             key(tile.tileId) { Placed(tile, isPresent = true) }
         }
         leavers.values.forEach { tile -> key(tile.tileId) { Placed(tile, isPresent = false) } }
+
+        val choice = state.spotlight
+        if (choice is CallSpotlight.Choice.Hero && spotlightRect != null && heroIds.isNotEmpty()) {
+            HeroSpotlight(
+                heroIds = heroIds,
+                shownId = choice.tileId,
+                rect = spotlightRect,
+                scrollOffset = scrollOffset,
+                isLandscape = metrics.isLandscape,
+                tilesById = tilesById,
+                state = state,
+            )
+        }
 
         // Anchored to the spotlight *slot* rather than to whoever is in it, so it stays put while
         // people move through the slot underneath it; not drawn without one (open question Q1).
@@ -423,6 +468,174 @@ private fun PlacedTile(
                 interactionSource = remember { MutableInteractionSource() },
             ),
     )
+}
+
+/**
+ * The spotlight over the hero stack: a pager in the model's order showing one hero at a time,
+ * exactly the shown one composed and receiving video (R19, R20, R24). The pager is driven from the
+ * shown hero's identity, so a stack reordering under it scrolls, without animation, to where that
+ * hero now is: identity is the truth and the page index follows (R21). A settled swipe names the
+ * hero it landed on (R22); the pager does not wrap (R23).
+ *
+ * Chrome by orientation (contract B2): a "1 of n" pill and dots in portrait, arrows in landscape.
+ * Screen readers step the stack through custom actions in both, and the arrows are focusable too
+ * (R25). A vertical drag here never reaches the grid's scrollable (R64).
+ */
+@Composable
+private fun HeroSpotlight(
+    heroIds: ImmutableList<String>,
+    shownId: String,
+    rect: Rect,
+    scrollOffset: FloatState,
+    isLandscape: Boolean,
+    tilesById: ImmutableMap<String, CallTileData>,
+    state: ElementCallScreenState,
+) {
+    val shownIndex = heroIds.indexOf(shownId).coerceAtLeast(0)
+    val currentHeroIds by rememberUpdatedState(heroIds)
+    val pagerState = rememberPagerState(initialPage = shownIndex) { currentHeroIds.size }
+    LaunchedEffect(shownIndex, heroIds) {
+        if (pagerState.currentPage != shownIndex && !pagerState.isScrollInProgress) pagerState.scrollToPage(shownIndex)
+    }
+    val currentEventSink by rememberUpdatedState(state.eventSink)
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.settledPage }.collect { page ->
+            currentHeroIds.getOrNull(page)?.let { currentEventSink(ElementCallScreenEvent.ShowHero(it)) }
+        }
+    }
+    val show = { index: Int -> heroIds.getOrNull(index)?.let { state.eventSink(ElementCallScreenEvent.ShowHero(it)) } != null }
+    val nextLabel = stringResource(R.string.element_call_a11y_next_hero)
+    val previousLabel = stringResource(R.string.element_call_a11y_previous_hero)
+    Box(
+        modifier = Modifier
+            .animatedSlot(rect, isSticky = true, scrollOffset = scrollOffset)
+            .zIndex(SPOTLIGHT_Z_INDEX)
+            .scrollable(rememberScrollableState { it }, Orientation.Vertical)
+            .semantics {
+                traversalIndex = 0f
+                customActions = listOf(
+                    CustomAccessibilityAction(nextLabel) { show(shownIndex + 1) },
+                    CustomAccessibilityAction(previousLabel) { show(shownIndex - 1) },
+                )
+            },
+    ) {
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize(),
+            key = { page -> currentHeroIds.getOrNull(page) ?: page },
+            beyondViewportPageCount = 0,
+        ) { page ->
+            val tile = currentHeroIds.getOrNull(page)?.let { tilesById[it] } ?: return@HorizontalPager
+            ReportVideoConstraints(tile = tile, slot = rect, hasVideo = state.videoFrames[tile.tileId] != null, isLive = true, eventSink = state.eventSink)
+            CallTile(
+                tile = tile,
+                videoFrames = state.videoFrames[tile.tileId],
+                appearance = CallTileAppearance.Spotlight,
+                stats = state.tileStats(tile, rect),
+                showName = !isLandscape,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .testTag(ElementCallTestTags.tile(tile.tileId))
+                    .combinedClickable(
+                        onClick = {},
+                        onLongClick = { state.eventSink(ElementCallScreenEvent.ToggleTileStats) },
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() },
+                    ),
+            )
+        }
+        if (heroIds.size > 1) {
+            HeroPositionPill(
+                position = shownIndex + 1,
+                count = heroIds.size,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(14.dp)
+                    .testTag(ElementCallTestTags.HERO_INDICATOR),
+            )
+            if (isLandscape) {
+                HeroArrow(
+                    icon = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
+                    contentDescription = previousLabel,
+                    enabled = shownIndex > 0,
+                    onClick = { show(shownIndex - 1) },
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .padding(8.dp)
+                        .testTag(ElementCallTestTags.HERO_PREVIOUS),
+                )
+                HeroArrow(
+                    icon = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
+                    contentDescription = nextLabel,
+                    enabled = shownIndex < heroIds.size - 1,
+                    onClick = { show(shownIndex + 1) },
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(8.dp)
+                        .testTag(ElementCallTestTags.HERO_NEXT),
+                )
+            } else {
+                HeroDots(
+                    count = heroIds.size,
+                    shownIndex = shownIndex,
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 10.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun HeroPositionPill(position: Int, count: Int, modifier: Modifier = Modifier) {
+    Text(
+        text = stringResource(R.string.element_call_hero_position, position, count),
+        style = ElementCallTheme.typography.bodySmMedium,
+        color = ElementCallTheme.colors.onOverlay,
+        modifier = modifier
+            .clip(RoundedCornerShape(percent = 50))
+            .background(ElementCallTheme.colors.overlayScrim)
+            .padding(horizontal = 10.dp, vertical = 5.dp),
+    )
+}
+
+@Composable
+private fun HeroDots(count: Int, shownIndex: Int, modifier: Modifier = Modifier) {
+    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+        repeat(count) { index ->
+            Box(
+                modifier = Modifier
+                    .size(if (index == shownIndex) 8.dp else 6.dp)
+                    .clip(CircleShape)
+                    .background(ElementCallTheme.colors.onOverlay.copy(alpha = if (index == shownIndex) 1f else 0.5f))
+                    .border(1.dp, ElementCallTheme.colors.overlayScrim, CircleShape),
+            )
+        }
+    }
+}
+
+@Composable
+private fun HeroArrow(
+    icon: ImageVector,
+    contentDescription: String,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    IconButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier,
+        colors = IconButtonDefaults.iconButtonColors(
+            containerColor = ElementCallTheme.colors.overlayScrim,
+            contentColor = ElementCallTheme.colors.onOverlay,
+            disabledContainerColor = ElementCallTheme.colors.overlayScrim.copy(alpha = 0.3f),
+            disabledContentColor = ElementCallTheme.colors.onOverlay.copy(alpha = 0.4f),
+        ),
+    ) {
+        Icon(imageVector = icon, contentDescription = contentDescription)
+    }
 }
 
 /** How many the core counts in the slot, which is not always how many tiles there are. */

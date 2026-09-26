@@ -66,6 +66,8 @@ fun CallTile(
      * [SPOTLIGHT_CAMERA_FIT], a grid tile fills and crops (spec 003 R11, R15, R16).
      */
     fit: Float = appearance.fitFor(tile),
+    /** False for the landscape spotlight, which carries the count and the position and no name (open question Q2). */
+    showName: Boolean = true,
 ) {
     // One per tile, for the life of the tile. Emphatically *not* keyed on [stats], which is rebuilt on
     // every recomposition: keying on it gave every recomposition a fresh counter, so the overlay read
@@ -118,12 +120,14 @@ fun CallTile(
             }
         }
 
-        NamePill(
-            tile = tile,
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(6.dp),
-        )
+        if (showName) {
+            NamePill(
+                tile = tile,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(6.dp),
+            )
+        }
         if (tile.isHandRaised) {
             HandRaisedBadge(
                 modifier = Modifier

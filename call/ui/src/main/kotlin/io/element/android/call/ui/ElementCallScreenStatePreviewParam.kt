@@ -327,8 +327,8 @@ fun anElementCallScreenState(
     // Derived rather than passed, so a preview cannot describe a call whose tiles disagree with its
     // participants - which is exactly the sort of state the real presenter can never produce.
     tiles = previewCallTiles(participants, activeSpeakerIds, handRaisedIds, isFrontCamera),
-    // The first hero, as the presenter chooses it: a shared screen, and otherwise nothing (spec 003 R3).
-    spotlightTileId = previewCallTiles(participants, activeSpeakerIds, handRaisedIds, isFrontCamera).firstOrNull { it.isHero && !it.isLocal }?.tileId,
+    // As the presenter chooses it with nothing remembered: the first hero, the speaker past the threshold, else nothing.
+    spotlight = CallSpotlight.choose(previewCallTiles(participants, activeSpeakerIds, handRaisedIds, isFrontCamera), shownHeroId = null, lastSpeakerId = null),
     libraryVersion = libraryVersion,
     coreVersion = coreVersion,
     eventSink = eventSink,

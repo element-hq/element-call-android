@@ -39,6 +39,7 @@ import kotlinx.coroutines.flow.Flow
 fun rememberElementCallScreenState(
     controller: ElementCallController,
     navigator: ElementCallNavigator,
+    spotlightMemory: CallSpotlightMemory = rememberCallSpotlightMemory(),
 ): ElementCallScreenState {
     val snapshot by controller.state.collectAsState()
 
@@ -57,6 +58,24 @@ fun rememberElementCallScreenState(
     val current = snapshot
 
     val tiles = current?.callTiles() ?: persistentListOf()
+
+    // The spotlight is a way of looking, so it is chosen here rather than by the controller, which
+    // runs with no UI; what it needs to remember lives above the screen (spec 003 R7, R20, R67).
+    val spotlight = CallSpotlight.choose(tiles, spotlightMemory.shownHeroId, spotlightMemory.lastSpeakerId, spotlightMemory.lastHeroes)
+    val heroes = tiles.filter { it.isHero && !it.isLocal }.map { it.tileId }
+    LaunchedEffect(spotlight, heroes) {
+        when (spotlight) {
+            is CallSpotlight.Choice.Hero -> {
+                spotlightMemory.shownHeroId = spotlight.tileId
+                // Cleared with a hero, and below the threshold: the held speaker is listen mode's (R9).
+                spotlightMemory.lastSpeakerId = null
+            }
+            is CallSpotlight.Choice.Speaker -> spotlightMemory.lastSpeakerId = spotlight.tileId
+            CallSpotlight.Choice.None -> spotlightMemory.lastSpeakerId = null
+        }
+        spotlightMemory.lastHeroes = heroes
+        spotlightMemory.spotlightId = spotlight.tileId?.let { id -> tiles.firstOrNull { it.tileId == id }?.id }
+    }
 
     // One stream per tile, by the tile's own member and kind: a sharer's camera and screen are two
     // streams, and keying by member would draw one of them into the other's tile. A tile without
@@ -88,6 +107,9 @@ fun rememberElementCallScreenState(
                 controller.setVideoConstraints(event.memberId, event.kind, event.constraints)
             is ElementCallScreenEvent.SetComposedTiles -> controller.setComposedTiles(event.tileIds)
             is ElementCallScreenEvent.SetDetailWindow -> controller.setDetailWindow(event.window)
+            is ElementCallScreenEvent.ShowHero -> {
+                if (event.tileId in heroes) spotlightMemory.shownHeroId = event.tileId
+            }
             ElementCallScreenEvent.ToggleScreenShare -> {
                 if (current?.isScreenSharing == true) {
                     controller.setScreenShareEnabled(token = null)
@@ -105,7 +127,7 @@ fun rememberElementCallScreenState(
         }
     }
 
-    return current.toState(videoFrames = videoFrames, tiles = tiles, eventSink = ::handleEvent)
+    return current.toState(videoFrames = videoFrames, tiles = tiles, spotlight = spotlight, eventSink = ::handleEvent)
 }
 
 /**
@@ -134,6 +156,7 @@ private fun ElementCallSnapshot.callTiles(): ImmutableList<CallTileData> {
 private fun ElementCallSnapshot?.toState(
     videoFrames: ImmutableMap<String, Flow<MatrixRtcVideoFrame>>,
     tiles: ImmutableList<CallTileData>,
+    spotlight: CallSpotlight.Choice,
     eventSink: (ElementCallScreenEvent) -> Unit,
 ) = ElementCallScreenState(
     connection = this?.connection ?: ElementCallConnection.RequestingPermission,
@@ -157,9 +180,7 @@ private fun ElementCallSnapshot?.toState(
     isDm = this?.isDm == true,
     connectedAtElapsedMs = this?.connectedAtElapsedMs,
     tiles = tiles,
-    // The first hero, until the spotlight selection (heroes as a stack, the listen-mode speaker)
-    // replaces it. Never the rank head: with no hero there is no spotlight (spec 003 R3).
-    spotlightTileId = tiles.firstOrNull { it.isHero && !it.isLocal }?.tileId,
+    spotlight = spotlight,
     libraryVersion = ElementCallVersion.library,
     coreVersion = ElementCallVersion.core,
     eventSink = eventSink,

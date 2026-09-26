@@ -96,11 +96,10 @@ data class ElementCallScreenState(
      */
     val tiles: ImmutableList<CallTileData>,
     /**
-     * The [CallTileData.tileId] shown in the spotlight, or null when nothing is: a hero, or in a
-     * large call with no hero, the speaker. The layout's choice, never the head of the ranking
-     * (spec 003 R3).
+     * What the spotlight shows: a hero, or in a large call with no hero the speaker, or nothing.
+     * The layout's choice, never the head of the ranking (spec 003 R3). See [CallSpotlight].
      */
-    val spotlightTileId: String?,
+    val spotlight: CallSpotlight.Choice,
     /**
      * What the overflow menu shows: the library version and the core it was built against. Carried in
      * state rather than read from `ElementCallVersion` where they are drawn, so previews and screenshots
@@ -110,6 +109,8 @@ data class ElementCallScreenState(
     val coreVersion: String,
     val eventSink: (ElementCallScreenEvent) -> Unit,
 ) {
+    val spotlightTileId: String? get() = spotlight.tileId
+
     /** The tile in the spotlight. Never ourselves (spec 003 R2). */
     val spotlightTile: CallTileData?
         get() = spotlightTileId?.let { id -> tiles.firstOrNull { it.tileId == id } }
