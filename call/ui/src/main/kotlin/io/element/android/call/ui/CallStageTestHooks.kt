@@ -38,6 +38,9 @@ internal class CallStageTestHooks {
     var eventSink: (ElementCallScreenEvent) -> Unit = {}
     var scrollTo: (Float) -> Unit = {}
 
+    /** As a fling would, rather than jumping: what a person watching a scenario on a device expects. */
+    var animateScrollTo: (Float) -> Unit = {}
+
     /** Stands in for the system bar inset the control bar is padded by, which a JVM has none of. */
     var bottomInset: Dp? = null
 }

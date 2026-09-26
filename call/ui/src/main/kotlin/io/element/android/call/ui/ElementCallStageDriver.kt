@@ -21,8 +21,8 @@ class ElementCallStageDriver {
     /** Whether a stage is currently drawn, and so has anything to drive. */
     val isStageMounted: Boolean get() = hooks.isMounted
 
-    /** Scroll the grid to [offsetDp] from the top, clamped as a user's scroll would be. */
-    fun scrollTo(offsetDp: Float) = hooks.scrollTo(offsetDp * density)
+    /** Scroll the grid to [offsetDp] from the top, animated as a swipe would be and clamped as a user's scroll would be. */
+    fun scrollTo(offsetDp: Float) = hooks.animateScrollTo(offsetDp * density)
 
     fun showNextHero() = showHero(1)
 
