@@ -80,8 +80,8 @@ changelog reaches `main` afterwards through an ordinary reviewed pull request. T
 - **Minor** (`0.2.1` → `0.3.0`) for anything else. At `0.x` this is also where breaking changes go, which is why
   every such pull request wants the `pr-api` label: `.github/release.yml` gives it its own "⚠️ API Changes"
   heading precisely so a host reads it before bumping.
-- **A prerelease** (`0.3.0-rc.1`) when a host should try it first. The core this library pins is itself a
-  prerelease (`matrix-rust-rtc` `0.3.0-rc.2`); a stable version here would present that edge as settled, so
+- **A prerelease** (`0.3.0-rc.1`) when a host should try it first. The core this library pins (`MATRIX_RTC_VERSION`
+  in `gradle.properties`) is itself a prerelease; a stable version here would present that edge as settled, so
   **the first stable release waits for the core to reach one.** Until then, release `0.1.0-rc.N`.
 
 ### 2. Dry run

@@ -12,8 +12,8 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 ## Unreleased
 
-- **Needs matrix-rust-rtc with the call tile roster** (`MediaSession.nextRoster`). Until it is released and pinned,
-  build it with `./tools/rtc/build-rust-rtc`.
+- Core: matrix-rust-rtc `0.4.0-rc.1` (the call tile roster, `MediaSession.nextRoster`). A host's Ivy repository over
+  the core's release asset (README, "Consuming a release") must point at the `v0.4.0-rc.1` asset.
 - A tile's kind is a `MatrixRtcTileKind` - `PERSON` or `SCREEN_SHARE` - not a stream kind: `MatrixRtcTileId.kind`,
   with `videoStreamKind` for the stream a tile draws. `MatrixRtcParticipant.cameraTile()` is `personTile()`.
 - `MatrixRtcCall` gains `tiles` and `localState`. A fake or a host transport implementing it must supply both.
