@@ -26,7 +26,9 @@ import androidx.compose.ui.viewinterop.AndroidView
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.ui.TileFrameCounter
 import io.element.android.call.ui.theme.ElementCallTheme
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.withContext
 import livekit.org.webrtc.JavaI420Buffer
 import livekit.org.webrtc.VideoFrame
 import timber.log.Timber
@@ -87,15 +89,24 @@ fun CallVideoRenderer(
     LaunchedEffect(isAttached, frames) {
         if (!isAttached) return@LaunchedEffect
         var lastSize = IntSize.Zero
-        frames.collect { frame ->
-            frameCounter?.onFrame(frame.width, frame.height)
-            val size = frame.displayedSize()
-            if (size != lastSize) {
-                lastSize = size
-                videoSize = size
-                currentOnVideoSizeChange?.invoke(size)
+        val composition = coroutineContext
+        // Off the main thread: a frame only has to reach the renderer, whose own GL thread draws it,
+        // and thirty frames a second per tile hopping through the main thread is time a scroll or an
+        // animation needed. The render call is thread-safe; a new frame size, which is rare, is
+        // reported back on the composition's thread.
+        withContext(Dispatchers.Default) {
+            frames.collect { frame ->
+                frameCounter?.onFrame(frame.width, frame.height)
+                val size = frame.displayedSize()
+                if (size != lastSize) {
+                    lastSize = size
+                    withContext(composition) {
+                        videoSize = size
+                        currentOnVideoSizeChange?.invoke(size)
+                    }
+                }
+                handle.render(frame)
             }
-            handle.render(frame)
         }
     }
 

@@ -144,7 +144,7 @@ internal enum class CallTileVisibility {
     }
 }
 
-private fun Rect.inflateVertically(by: Float) = Rect(left, top - by, right, bottom + by)
+internal fun Rect.inflateVertically(by: Float) = Rect(left, top - by, right, bottom + by)
 
 /** The grid tiles whose rect overlaps [viewport] extended by [reach] above and below, in content coordinates. */
 internal fun CallStageLayout.tilesWithin(viewport: Rect, reach: Float): Set<String> {

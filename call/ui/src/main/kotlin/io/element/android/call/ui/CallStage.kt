@@ -47,6 +47,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.FloatState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -58,6 +59,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -162,8 +164,8 @@ internal fun CallStage(
         // its scroll offset are untouched, so leaving returns to the position it had (003 R63, 000 R26).
         val fullscreenId = state.fullscreenTileId
         val fullscreenRect = Rect(0f, 0f, width, height)
-        val gridTileIds = state.gridTiles.map { it.tileId }
-        val heroIds = state.heroes
+        val gridTileIds = remember(state.tiles, spotlightTileId) { state.gridTiles.map { it.tileId } }
+        val heroIds = remember(state.tiles) { state.heroes }
         val layout = remember(gridTileIds, spotlightTileId, heroIds, metrics, arrangement) {
             arrangement.compute(CallStageLayout.Input(gridTileIds, spotlightTileId, heroIds, metrics))
         }
@@ -179,27 +181,34 @@ internal fun CallStage(
             if (excess > 0f) scrollable.animateScrollBy(-excess)
         }
 
-        // Which tiles are on screen, within half a viewport of it, and within one viewport of it -
-        // as sets that only change when a tile crosses an edge, so scrolling by a pixel recomposes
-        // nothing and a tile crossing recomposes the tiles whose state changed.
+        // The composed band, as a set that only changes when a tile crosses its edge, so scrolling by
+        // a pixel recomposes nothing here. Whether a composed tile is on screen is the tile's own
+        // question (see Placed): a tile crossing the viewport's edge recomposes itself and nothing
+        // else, where a stage-wide set would recompose the whole stage at every edge a fling crosses.
         val viewport = { Rect(0f, scrollOffset.floatValue, width, scrollOffset.floatValue + height) }
         // While a tile fills the stage nobody is looking at the others: they leave the band, are
         // paused at once and released after the linger, and come straight back on the way out (000 R17, R18).
-        val visibleIds by remember(layout, fullscreenId) {
-            derivedStateOf { if (fullscreenId != null) emptySet() else layout.tilesWithin(viewport(), reach = 0f) }
-        }
-        val nearIds by remember(layout, fullscreenId) {
-            derivedStateOf { if (fullscreenId != null) emptySet() else layout.tilesWithin(viewport(), reach = height * CallTileVisibility.LIVE_HYSTERESIS) }
-        }
         val bandIds by remember(layout, fullscreenId) {
             derivedStateOf { if (fullscreenId != null) emptySet() else layout.tilesWithin(viewport(), reach = height * CallTileVisibility.BAND_REACH) }
         }
 
         // After the stage flips between portrait and landscape, the grid tile that was first visible
-        // before it is still visible (R66): the offset is re-seated on its row rather than reset.
+        // before it is still visible (R66): the offset is re-seated on its row rather than reset. The
+        // tile is found in the arrangement being left, at the offset of that moment, read without
+        // observing it so a scroll does not recompose the stage.
         val firstVisibleId = remember { StringRef() }
-        firstVisibleId.value = visibleIds.minByOrNull { layout.tiles.getValue(it).top } ?: firstVisibleId.value
+        val previous = remember { PreviousLayout() }
         val isLandscape = metrics.isLandscape
+        val previousLayout = previous.layout
+        if (previousLayout != null && previous.isLandscape != isLandscape) {
+            val offset = Snapshot.withoutReadObservation { scrollOffset.floatValue }
+            val seen = Rect(0f, offset, previous.width, offset + previous.height)
+            firstVisibleId.value = previousLayout.tiles.filterValues { it.overlaps(seen) }.minByOrNull { it.value.top }?.key
+        }
+        previous.layout = layout
+        previous.width = width
+        previous.height = height
+        previous.isLandscape = isLandscape
         val seenOrientation = remember { BooleanRef(isLandscape) }
         LaunchedEffect(isLandscape) {
             if (seenOrientation.value == isLandscape) return@LaunchedEffect
@@ -288,7 +297,12 @@ internal fun CallStage(
         // itself when it has; parked beyond the band it does so in a frame.
         val leavers = remember { mutableStateMapOf<String, CallTileData>() }
         val lastTiles = remember { TilesRef() }
+        // Every tile the stage has seen in the call. A tile composed for the first time because it
+        // scrolled into reach is already in the call and appears in place, at full opacity; only a
+        // tile that has just joined fades in (R38, R49: never a blank while scrolling).
+        val knownIds = remember { state.tiles.mapTo(mutableSetOf()) { it.tileId } }
         LaunchedEffect(state.tiles) {
+            state.tiles.mapTo(knownIds) { it.tileId }
             val present = state.tiles.map { it.tileId }.toSet()
             lastTiles.value.forEach { tile -> if (tile.tileId !in present) leavers[tile.tileId] = tile }
             present.forEach { leavers.remove(it) }
@@ -308,6 +322,9 @@ internal fun CallStage(
                 hooks.heroes = heroIds
                 hooks.eventSink = state.eventSink
                 hooks.scrollTo = { target -> scrollOffset.floatValue = target.coerceIn(0f, layout.maxScroll(height)) }
+                hooks.animateScrollTo = { target ->
+                    lingerScope.launch { scrollable.animateScrollBy(target.coerceIn(0f, layout.maxScroll(height)) - scrollOffset.floatValue) }
+                }
             }
             DisposableEffect(Unit) {
                 onDispose {
@@ -322,9 +339,26 @@ internal fun CallStage(
         @Composable
         fun Placed(tile: CallTileData, isPresent: Boolean) {
             val slot = lastSlots[tile.tileId] ?: return
-            // The sticky speaker is live unless something else fills the stage (000 R17).
-            val isLive = if (slot.isSticky) fullscreenId == null || slot.isFullscreen else tile.tileId in visibleIds
-            val isNear = slot.isSticky || tile.tileId in nearIds
+            // The sticky speaker is live unless something else fills the stage (000 R17); a grid
+            // tile while its rect overlaps the viewport, and near while within half a viewport of it.
+            val isVisible = remember(slot, fullscreenId, width, height) {
+                derivedStateOf {
+                    when {
+                        slot.isSticky -> fullscreenId == null || slot.isFullscreen
+                        fullscreenId != null -> false
+                        else -> slot.rect.overlaps(viewport())
+                    }
+                }
+            }
+            val isNear = remember(slot, fullscreenId, width, height) {
+                derivedStateOf {
+                    when {
+                        slot.isSticky -> true
+                        fullscreenId != null -> false
+                        else -> slot.rect.overlaps(viewport().inflateVertically(height * CallTileVisibility.LIVE_HYSTERESIS))
+                    }
+                }
+            }
             PlacedTile(
                 tile = tile,
                 videoFrames = state.videoFrames[tile.tileId],
@@ -335,16 +369,21 @@ internal fun CallStage(
                 },
                 slot = slot,
                 scrollOffset = scrollOffset,
-                isVisible = isLive,
+                isVisible = isVisible,
                 isNear = isNear,
                 isPresent = isPresent,
                 onExit = { leavers.remove(tile.tileId) },
+                isArrival = tile.tileId !in knownIds,
                 stats = state.tileStats(tile, slot.rect),
                 onLongPress = { state.eventSink(ElementCallScreenEvent.ToggleTileStats) },
                 traversalIndex = if (slot.isSticky) 0f else 1f + (gridIndex[tile.tileId] ?: gridTileIds.size),
                 eventSink = state.eventSink,
             )
         }
+        // The whole grid moves as one layer: a scroll changes this translation and nothing else, so no
+        // tile is re-placed or recomposed for it. Sticky slots counter-translate in their own
+        // placement (animatedSlot), which is the only placement a scroll reaches.
+        Box(modifier = Modifier.fillMaxSize().graphicsLayer { translationY = -scrollOffset.floatValue }) {
         state.tiles.forEach { tile ->
             val isComposed = tile.tileId == stickyTileId ||
                 tile.tileId == fullscreenId && tile.tileId !in heroIds ||
@@ -399,6 +438,7 @@ internal fun CallStage(
                         .padding(14.dp),
                 )
             }
+        }
         }
     }
 }
@@ -477,20 +517,21 @@ private fun PlacedTile(
     appearance: CallTileAppearance,
     slot: TileSlot,
     scrollOffset: FloatState,
-    isVisible: Boolean,
-    isNear: Boolean,
+    isVisible: State<Boolean>,
+    isNear: State<Boolean>,
     isPresent: Boolean,
     onExit: () -> Unit,
+    /** Whether this tile has just joined the call, rather than scrolled into reach: only an arrival fades in. */
+    isArrival: Boolean,
     stats: TileStats?,
     onLongPress: () -> Unit,
     traversalIndex: Float,
     eventSink: (ElementCallScreenEvent) -> Unit,
 ) {
-    // Zero on the first composition, so a tile grows into place rather than being there abruptly -
-    // except under inspection, where the animation never runs and starting at zero would mean every
-    // preview and screenshot of this screen showed nothing at all.
+    // Zero on the first composition of a member who has just joined, so they grow into place rather
+    // than being there abruptly. Not under inspection, where the animation never runs.
     val isInspecting = LocalInspectionMode.current
-    val presence = remember { Animatable(if (isInspecting) 1f else 0f) }
+    val presence = remember { Animatable(if (isInspecting || !isArrival) 1f else 0f) }
     val currentOnExit by rememberUpdatedState(onExit)
     LaunchedEffect(isPresent) {
         if (isInspecting) return@LaunchedEffect
@@ -504,7 +545,7 @@ private fun PlacedTile(
             currentOnExit()
         }
     }
-    val isLive = rememberLive(isVisible, isNear)
+    val isLive = rememberLive(isVisible.value, isNear.value)
     // In fullscreen only: pinch from fitted up to 4x, drag the zoomed picture within its edges, and
     // both reset when fullscreen ends (000 R14, R22 to R24). Under fitted the scale clamps to fitted
     // and never leaves fullscreen.
@@ -886,8 +927,11 @@ private fun Modifier.animatedSlot(
             )
         )
         layout(placeable.width, placeable.height) {
-            val shift = scrollOffset.floatValue * (1f - stickyFactor.value)
-            placeable.place(current.left.roundToInt(), (current.top - shift).roundToInt())
+            // The grid's layer is translated by the offset; a sticky slot undoes it. A grid tile at
+            // rest does not read the offset at all, so a scroll does not re-place it.
+            val factor = stickyFactor.value
+            val shift = if (factor == 0f) 0f else scrollOffset.floatValue * factor
+            placeable.place(current.left.roundToInt(), (current.top + shift).roundToInt())
         }
     }
 }
@@ -899,6 +943,13 @@ private data class TileSlot(val rect: Rect, val isSticky: Boolean, val isFullscr
 private class LayoutRef {
     var value: CallStageLayout? = null
     var viewportHeight: Float = 0f
+}
+
+private class PreviousLayout {
+    var layout: CallStageLayout? = null
+    var width: Float = 0f
+    var height: Float = 0f
+    var isLandscape: Boolean = false
 }
 
 private class StringRef {
