@@ -50,7 +50,18 @@ internal class CallTextureView(context: Context) : TextureView(context), Texture
         surfaceTextureListener = this
     }
 
+    /** Told when the view's size changes, so the last frame can be drawn again at the new shape (000 R15). */
+    var onResized: (() -> Unit)? = null
+
     fun onFrame(frame: VideoFrame) = eglRenderer.onFrame(frame)
+
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+        super.onSizeChanged(w, h, oldw, oldh)
+        if (w <= 0 || h <= 0) return
+        if (w == oldw && h == oldh) return
+        updateLayoutAspectRatio(w, h)
+        onResized?.invoke()
+    }
 
     fun setMirror(isMirrored: Boolean) = eglRenderer.setMirror(isMirrored)
 

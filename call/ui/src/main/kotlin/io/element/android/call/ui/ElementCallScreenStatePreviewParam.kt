@@ -258,6 +258,22 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
                 activeSpeakerIds = setOf(aCrowdMemberId(2)),
                 videoFrames = mapOf(A_REMOTE_MEMBER_ID to emptyFlow()),
             ),
+            // A tile filling the stage (spec 000): without the HUD, and with it.
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
+                memberCount = 4,
+                participants = listOf(aLocalParticipant(), aRemoteParticipant()) + (1..2).map { aCrowdParticipant(it) },
+                videoFrames = mapOf(A_REMOTE_MEMBER_ID to emptyFlow()),
+                fullscreenTileId = A_REMOTE_MEMBER_ID,
+            ),
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
+                memberCount = 4,
+                participants = listOf(aLocalParticipant(), aRemoteParticipant(isMuted = true)) + (1..2).map { aCrowdParticipant(it) },
+                videoFrames = mapOf(A_REMOTE_MEMBER_ID to emptyFlow()),
+                fullscreenTileId = A_REMOTE_MEMBER_ID,
+                isFullscreenChromeVisible = true,
+            ),
             // A share in the spotlight over a scrolled grid, with a hand raised in it (R40).
             anElementCallScreenState(
                 connection = ElementCallConnection.Connected,
@@ -302,6 +318,8 @@ fun anElementCallScreenState(
     // Fixed rather than the stamped ones, so the screenshots do not change at every release.
     libraryVersion: String = "0.4.0",
     coreVersion: String = "0.3.0",
+    fullscreenTileId: String? = null,
+    isFullscreenChromeVisible: Boolean = false,
     eventSink: (ElementCallScreenEvent) -> Unit = {},
 ) = ElementCallScreenState(
     connection = connection,
@@ -329,6 +347,8 @@ fun anElementCallScreenState(
     tiles = previewCallTiles(participants, activeSpeakerIds, handRaisedIds, isFrontCamera),
     // As the presenter chooses it with nothing remembered: the first hero, the speaker past the threshold, else nothing.
     spotlight = CallSpotlight.choose(previewCallTiles(participants, activeSpeakerIds, handRaisedIds, isFrontCamera), shownHeroId = null, lastSpeakerId = null),
+    fullscreenTileId = fullscreenTileId,
+    isFullscreenChromeVisible = isFullscreenChromeVisible,
     libraryVersion = libraryVersion,
     coreVersion = coreVersion,
     eventSink = eventSink,

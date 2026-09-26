@@ -65,6 +65,15 @@ sealed interface ElementCallScreenEvent {
     /** Show this hero in the spotlight: a settled swipe on the stack, an arrow, or a screen reader's action. */
     data class ShowHero(val tileId: String) : ElementCallScreenEvent
 
+    /** A double tap on a tile, or a screen reader's action: fill the stage with it, or leave if it already does (spec 000 R1, R2). */
+    data class ToggleFullscreen(val tileId: String) : ElementCallScreenEvent
+
+    /** A single tap on the fullscreen tile shows and hides the HUD (000 R8, R9). */
+    data object ToggleFullscreenChrome : ElementCallScreenEvent
+
+    /** The HUD's close button: leaves fullscreen, never the call (000 R12). */
+    data object ExitFullscreen : ElementCallScreenEvent
+
     /**
      * Start or stop sharing the screen.
      *

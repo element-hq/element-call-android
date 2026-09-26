@@ -42,6 +42,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.movableContentOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -55,6 +56,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.PreviewParameter
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.audio.CallAudioDeviceType
@@ -88,11 +90,20 @@ fun ElementCallScreen(
             // row clear of it (R44).
             val bottomInset = LocalCallStageTestHooks.current?.bottomInset ?: WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
             val controlsClearance = CONTROLS_HEIGHT + bottomInset
+            // Movable, because the three arrangements below compose the stage from three call sites and
+            // a plain lambda would give each its own stage: the scroll offset, the linger and the rest
+            // of what the stage remembers would reset on every rotation and on the way in and out of
+            // fullscreen (spec 003 R63, R66).
+            val movableStage = remember {
+                movableContentOf { current: ElementCallScreenState, clearance: Dp, stageModifier: Modifier ->
+                    CallStage(state = current, controlsClearance = clearance, modifier = stageModifier)
+                }
+            }
             val stage = @Composable { stageModifier: Modifier ->
                 if (state.tiles.isEmpty()) {
                     ConnectingPlaceholder(state)
                 } else {
-                    CallStage(state = state, controlsClearance = controlsClearance, modifier = stageModifier)
+                    movableStage(state, controlsClearance, stageModifier)
                 }
             }
             val controls = @Composable { controlsModifier: Modifier ->
@@ -106,7 +117,25 @@ fun ElementCallScreen(
                 }
             }
 
-            if (isLandscape) {
+            val fullscreen = state.fullscreenTile
+            if (fullscreen != null) {
+                // A tile filling the stage, with no chrome but the HUD when asked for (spec 000 R1, R8).
+                // The stage keeps the status bar clear and takes the rest in both orientations.
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .statusBarsPadding(),
+                ) {
+                    stage(Modifier.fillMaxSize())
+                    if (state.isFullscreenChromeVisible) {
+                        CallFullscreenChrome(
+                            tile = fullscreen,
+                            onExitFullscreen = { state.eventSink(ElementCallScreenEvent.ExitFullscreen) },
+                            controls = controls,
+                        )
+                    }
+                }
+            } else if (isLandscape) {
                 // Held sideways there is not enough height to spend two bars' worth of it on chrome -
                 // stacked, the top bar and the controls take about two fifths of a phone's landscape
                 // height, which is exactly the height the video wanted. So they float over the stage

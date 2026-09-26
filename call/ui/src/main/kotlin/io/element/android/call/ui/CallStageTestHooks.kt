@@ -33,6 +33,7 @@ internal class CallStageTestHooks {
     /** The grid tiles composed: within the band, or beyond it inside the linger. */
     var composedGridIds: Set<String> = emptySet()
     var spotlightTileId: String? = null
+    var fullscreenTileId: String? = null
     var heroes: List<String> = emptyList()
     var eventSink: (ElementCallScreenEvent) -> Unit = {}
     var scrollTo: (Float) -> Unit = {}

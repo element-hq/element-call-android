@@ -21,11 +21,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -68,6 +71,8 @@ fun CallTile(
     fit: Float = appearance.fitFor(tile),
     /** False for the landscape spotlight, which carries the count and the position and no name (open question Q2). */
     showName: Boolean = true,
+    /** The zoom and pan applied to the picture in fullscreen (000 R14). */
+    videoTransform: VideoTransform = VideoTransform.None,
 ) {
     // One per tile, for the life of the tile. Emphatically *not* keyed on [stats], which is rebuilt on
     // every recomposition: keying on it gave every recomposition a fresh counter, so the overlay read
@@ -80,7 +85,7 @@ fun CallTile(
     // Animated because the same tile changes appearance in place, and a corner snapping while the
     // tile is still travelling to its new rectangle reads as a glitch on top of the move.
     val corner by animateDpAsState(
-        targetValue = if (appearance == CallTileAppearance.Spotlight) SPOTLIGHT_CORNER else TILE_CORNER,
+        targetValue = if (appearance == CallTileAppearance.Grid) TILE_CORNER else SPOTLIGHT_CORNER,
         label = "tileCorner",
     )
     val shape = RoundedCornerShape(corner)
@@ -102,7 +107,15 @@ fun CallTile(
             CallVideoRenderer(
                 frames = videoFrames,
                 isMirrored = tile.isVideoMirrored,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    // Scaled pixels are fine for a zoom: the constraint asks the sender for more at the same time (000 R13).
+                    .graphicsLayer {
+                        scaleX = videoTransform.scale
+                        scaleY = videoTransform.scale
+                        translationX = videoTransform.offset.x
+                        translationY = videoTransform.offset.y
+                    },
                 frameCounter = frameCounter,
                 fit = fit,
             )
@@ -115,7 +128,7 @@ fun CallTile(
                 ElementCallAvatar(
                     userId = tile.userId,
                     roomMember = tile.roomMember,
-                    size = if (appearance == CallTileAppearance.Spotlight) ElementCallAvatarSize.Spotlight else ElementCallAvatarSize.Tile,
+                    size = if (appearance == CallTileAppearance.Grid) ElementCallAvatarSize.Tile else ElementCallAvatarSize.Spotlight,
                 )
             }
         }
@@ -167,11 +180,23 @@ enum class CallTileAppearance {
 
     /** In the spotlight: a share fitted entirely (R15), a camera cropped only partially (R16). */
     Spotlight,
+
+    /** Filling the stage (spec 000): square, unnamed, the whole picture with black bars (000 R5). */
+    Fullscreen,
     ;
 
     internal fun fitFor(tile: CallTileData): Float = when (this) {
         Grid -> 0f
         Spotlight -> if (tile.isScreenShare) 1f else SPOTLIGHT_CAMERA_FIT
+        Fullscreen -> 1f
+    }
+}
+
+/** How the picture is zoomed and panned inside its tile: fitted and centred by default. */
+@Immutable
+data class VideoTransform(val scale: Float, val offset: Offset) {
+    companion object {
+        val None = VideoTransform(scale = 1f, offset = Offset.Zero)
     }
 }
 
@@ -197,7 +222,7 @@ data class TileStats(
  * rather than a guess (R54).
  */
 @Composable
-private fun NamePill(tile: CallTileData, modifier: Modifier = Modifier) {
+internal fun NamePill(tile: CallTileData, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(percent = 50))

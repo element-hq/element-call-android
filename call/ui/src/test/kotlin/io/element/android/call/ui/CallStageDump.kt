@@ -43,9 +43,14 @@ internal object CallStageDump {
             "ranks $ranks also ${also.ifEmpty { "-" }}"
         }
         val spotlight = hooks.spotlightTileId?.let { id -> roster.order.firstOrNull { it.id.tileId() == id }?.let { tokens[it.id] } } ?: "-"
+        val fullscreen = hooks.fullscreenTileId?.let { id ->
+            if (id == call.localMemberId) "own" else roster.order.firstOrNull { it.id.tileId() == id }?.let { tokens[it.id] }
+        } ?: "-"
         val out = StringBuilder()
         out.append("== ${formatTime(timeMs)} $source\n")
-        out.append("window $windowText  composed ${call.composedTiles.lastOrNull()?.size ?: 0}  subscribed $subscribed  spotlight $spotlight  fullscreen -\n")
+        out.append(
+            "window $windowText  composed ${call.composedTiles.lastOrNull()?.size ?: 0}  subscribed $subscribed  spotlight $spotlight  fullscreen $fullscreen\n"
+        )
         out.append(row("rank", "slot", "rect", "vis", "detail", "constraints"))
         out.append(ownRow(call.localMemberId, layout, offset, hooks))
         roster.order.forEachIndexed { rank, ref ->
@@ -66,6 +71,8 @@ internal object CallStageDump {
 
     private fun placement(id: String, layout: CallStageLayout?, offset: Float, hooks: CallStageTestHooks): Pair<String, String> {
         if (layout == null) return "hidden" to "-"
+        if (id == hooks.fullscreenTileId) return "full" to rect(0f, offset, hooks.stageSize.width.toFloat(), hooks.stageSize.height.toFloat())
+        if (hooks.fullscreenTileId != null) return "hidden" to "-"
         val spotlight = layout.spotlight
         if (id == hooks.spotlightTileId && spotlight != null) {
             return "spot" to rect(spotlight.left, spotlight.top + offset, spotlight.width, spotlight.height)
@@ -78,7 +85,7 @@ internal object CallStageDump {
     private fun visibility(id: String, hooks: CallStageTestHooks, isMounted: Boolean): String = when {
         !isMounted -> "released"
         id in hooks.liveIds -> "live"
-        id in hooks.composedGridIds || id == hooks.spotlightTileId -> "paused"
+        id in hooks.composedGridIds || id == hooks.spotlightTileId || id == hooks.fullscreenTileId -> "paused"
         else -> "released"
     }
 

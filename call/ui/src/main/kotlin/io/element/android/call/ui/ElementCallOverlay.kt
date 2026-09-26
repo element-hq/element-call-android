@@ -16,6 +16,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
@@ -107,8 +108,8 @@ fun ElementCallOverlay(
         // Picture and the floating tile show what the spotlight showed (spec 003 R67, R68).
         val spotlightMemory = rememberCallSpotlightMemory()
         val isInPictureInPicture by controller.isInPictureInPicture.collectAsState()
-        UnmountedStageWindow(controller = controller, current = current, spotlightMemory = spotlightMemory, isInPictureInPicture = isInPictureInPicture)
         if (isInPictureInPicture) {
+            UnmountedStageWindow(controller = controller, current = current, spotlightMemory = spotlightMemory, isStageMounted = false)
             ElementCallPictureInPictureContent(call = current, videoFrames = controller::videoFrames, spotlightId = spotlightMemory.spotlightId)
         } else {
             CallInApp(controller = controller, current = current, spotlightMemory = spotlightMemory, modifier = modifier, content = content)
@@ -119,16 +120,16 @@ fun ElementCallOverlay(
 /**
  * The detail window while the stage is unmounted - minimised, or in Picture in Picture: the head of
  * the order plus the tile shown, and nothing else composed (contract B8). The stage declares its own
- * while it is mounted, and this must not compete with it.
+ * while it is mounted, and this must not compete with it: [isStageMounted] is false only once the
+ * stage is gone, exit animation included, or the two would take turns for as long as it runs.
  */
 @Composable
 private fun UnmountedStageWindow(
     controller: ElementCallController,
     current: ElementCallSnapshot,
     spotlightMemory: CallSpotlightMemory,
-    isInPictureInPicture: Boolean,
+    isStageMounted: Boolean,
 ) {
-    val isStageMounted = current.isMaximized && !isInPictureInPicture
     val shown = current.pictureInPictureCandidate(spotlightMemory.spotlightId)?.id
     LaunchedEffect(isStageMounted, shown) {
         if (isStageMounted) return@LaunchedEffect
@@ -285,8 +286,17 @@ private fun CallInApp(
                 onClick = { controller.setMaximized(true) },
             )
 
+            // The stage counts as mounted until its exit animation has finished, see UnmountedStageWindow.
+            val maximizedState = remember { MutableTransitionState(current.isMaximized) }
+            maximizedState.targetState = current.isMaximized
+            UnmountedStageWindow(
+                controller = controller,
+                current = current,
+                spotlightMemory = spotlightMemory,
+                isStageMounted = maximizedState.currentState || maximizedState.targetState,
+            )
             MaximizedCall(
-                isMaximized = current.isMaximized,
+                visibleState = maximizedState,
                 controller = controller,
                 navigator = navigator,
                 spotlightMemory = spotlightMemory,
@@ -339,13 +349,13 @@ private fun FloatingCall(
  */
 @Composable
 private fun MaximizedCall(
-    isMaximized: Boolean,
+    visibleState: MutableTransitionState<Boolean>,
     controller: ElementCallController,
     navigator: ElementCallNavigator,
     spotlightMemory: CallSpotlightMemory,
 ) {
     AnimatedVisibility(
-        visible = isMaximized,
+        visibleState = visibleState,
         enter = fadeIn(MAXIMIZE_FADE_SPEC) + scaleIn(MAXIMIZE_SCALE_SPEC, initialScale = MAXIMIZE_SCALE, transformOrigin = FROM_THE_BAR),
         exit = fadeOut(MAXIMIZE_FADE_SPEC) + scaleOut(MAXIMIZE_SCALE_SPEC, targetScale = MAXIMIZE_SCALE, transformOrigin = FROM_THE_BAR),
     ) {

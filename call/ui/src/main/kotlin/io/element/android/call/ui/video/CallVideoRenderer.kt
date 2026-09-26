@@ -104,6 +104,9 @@ fun CallVideoRenderer(
         factory = { context ->
             CallTextureView(context).apply {
                 handle.attach(this)
+                // A surface that only repaints when a frame arrives stretches the last one it drew to
+                // whatever shape it has reached; the last frame is drawn again at each new size (000 R15).
+                onResized = { handle.rerender() }
                 isAttached = true
             }
         },
@@ -134,17 +137,31 @@ private class RendererHandle {
     private val lock = Any()
     private var renderer: CallTextureView? = null
 
+    /** The last frame handed over, retained, so it can be drawn again when the view changes shape. */
+    private var lastFrame: MatrixRtcVideoFrame? = null
+
     fun attach(renderer: CallTextureView) = synchronized(lock) {
         this.renderer = renderer
     }
 
     fun render(frame: MatrixRtcVideoFrame) = synchronized(lock) {
+        if (frame.retain()) {
+            lastFrame?.release()
+            lastFrame = frame
+        }
+        renderer?.render(frame)
+    }
+
+    fun rerender() = synchronized(lock) {
+        val frame = lastFrame ?: return@synchronized
         renderer?.render(frame)
     }
 
     fun release() = synchronized(lock) {
         renderer?.release()
         renderer = null
+        lastFrame?.release()
+        lastFrame = null
     }
 }
 

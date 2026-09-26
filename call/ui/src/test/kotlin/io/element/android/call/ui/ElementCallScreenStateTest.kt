@@ -589,6 +589,69 @@ class ElementCallScreenStateTest {
         }
     }
 
+    /** Double tap fills the stage with the tile and again brings it back; the HUD starts hidden and a tap shows it (spec 000 R1, R2, R8, R9). */
+    @Test
+    fun `fullscreen is entered and left by the toggle, with the HUD hidden on entry`() = runTest {
+        val controller = FakeElementCallController(
+            initialState = aConnectedSnapshot(
+                participants = listOf(
+                    aCameraParticipant(A_LOCAL_MEMBER_ID, isLocal = true, isCameraMuted = false),
+                    aCameraParticipant(A_REMOTE_MEMBER_ID, isLocal = false, isCameraMuted = false),
+                ),
+            ),
+        )
+
+        moleculeFlow(RecompositionMode.Immediate) { rememberElementCallScreenState(controller, aNavigator()) }.test {
+            val initial = awaitItem()
+            assertThat(initial.fullscreenTileId).isNull()
+
+            initial.eventSink(ElementCallScreenEvent.ToggleFullscreen(A_REMOTE_MEMBER_ID))
+            val entered = consumeItemsUntilPredicate { it.fullscreenTileId == A_REMOTE_MEMBER_ID }.last()
+            assertThat(entered.fullscreenTile?.memberId).isEqualTo(A_REMOTE_MEMBER_ID)
+            assertThat(entered.isFullscreenChromeVisible).isFalse()
+
+            entered.eventSink(ElementCallScreenEvent.ToggleFullscreenChrome)
+            val withChrome = consumeItemsUntilPredicate { it.isFullscreenChromeVisible }.last()
+            assertThat(withChrome.fullscreenTileId).isEqualTo(A_REMOTE_MEMBER_ID)
+
+            withChrome.eventSink(ElementCallScreenEvent.ToggleFullscreen(A_REMOTE_MEMBER_ID))
+            // Two state writes, so possibly two emissions: the settled one has both.
+            consumeItemsUntilPredicate { it.fullscreenTileId == null && !it.isFullscreenChromeVisible }
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    /** The HUD's close button leaves fullscreen and nothing else (000 R12), and the tile leaving ends it by itself (000 R19). */
+    @Test
+    fun `fullscreen ends on the close button and when the tile leaves the call`() = runTest {
+        val controller = FakeElementCallController(
+            initialState = aConnectedSnapshot(
+                participants = listOf(
+                    aCameraParticipant(A_LOCAL_MEMBER_ID, isLocal = true, isCameraMuted = false),
+                    aCameraParticipant(A_REMOTE_MEMBER_ID, isLocal = false, isCameraMuted = false),
+                ),
+            ),
+        )
+
+        moleculeFlow(RecompositionMode.Immediate) { rememberElementCallScreenState(controller, aNavigator()) }.test {
+            val initial = awaitItem()
+            initial.eventSink(ElementCallScreenEvent.ToggleFullscreen(A_REMOTE_MEMBER_ID))
+            val entered = consumeItemsUntilPredicate { it.fullscreenTileId == A_REMOTE_MEMBER_ID }.last()
+
+            entered.eventSink(ElementCallScreenEvent.ExitFullscreen)
+            val left = consumeItemsUntilPredicate { it.fullscreenTileId == null }.last()
+            assertThat(controller.hangUpCount).isEqualTo(0)
+            assertThat(controller.maximizedCalls).isEmpty()
+
+            left.eventSink(ElementCallScreenEvent.ToggleFullscreen(A_REMOTE_MEMBER_ID))
+            consumeItemsUntilPredicate { it.fullscreenTileId == A_REMOTE_MEMBER_ID }
+            controller.state.value = controller.state.value?.copy(roster = emptyList<MatrixRtcTile>().previewRoster())
+            val gone = consumeItemsUntilPredicate { it.fullscreenTileId == null }.last()
+            assertThat(gone.tiles.map { it.memberId }).containsExactly(A_LOCAL_MEMBER_ID)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     /** The core's tiles default to its shape for [participants]; pass [tiles] to rank them yourself. */
     private fun aConnectedSnapshot(
         participants: List<MatrixRtcParticipant> = emptyList(),
