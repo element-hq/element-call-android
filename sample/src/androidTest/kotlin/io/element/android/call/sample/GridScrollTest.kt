@@ -12,7 +12,7 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTouchInput
-import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.swipeUp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
 import io.element.android.call.ui.ElementCallTestTags
@@ -22,32 +22,30 @@ import org.junit.Test
 import org.junit.runner.RunWith
 
 /**
- * A swipe on a strip tile pages the strip rather than being eaten by the tile's own gestures. The
- * strip's scrolling and the tiles' click and long press share one touch pipeline, and only a device
- * arbitrates it the way a finger does.
+ * A vertical swipe on a grid tile scrolls the grid rather than being eaten by the tile's own
+ * gestures (spec 003 R26). The grid's scrolling and the tiles' click and long press share one
+ * touch pipeline, and only a device arbitrates it the way a finger does.
  */
 @RunWith(AndroidJUnit4::class)
-class StripPagingTest {
+class GridScrollTest {
     @get:Rule
     val composeRule = createEmptyComposeRule()
 
     @Test
-    fun swipingAStripTilePagesTheStrip() {
+    fun swipingAGridTileScrollsTheGrid() {
         launchSample(SampleFixture.LARGE_CALL).use {
-            // Member 2 is spotlighted. The strip follows the tile order: our own tile, then the
-            // members with a camera, so member 4 is the first remote tile on the first page.
-            val tag = ElementCallTestTags.tile(aCrowdMemberId(4))
+            val tag = ElementCallTestTags.tile(aCrowdMemberId(1))
             val before = composeRule.onNodeWithTag(tag).getBoundsInRoot()
 
-            composeRule.onNodeWithTag(tag).performTouchInput { swipeLeft() }
+            composeRule.onNodeWithTag(tag).performTouchInput { swipeUp() }
             composeRule.waitForIdle()
 
-            // Paged away: either the tile has left the first page and is no longer composed at all
-            // (tiles more than a page away are not), or it is still composed and has moved left.
+            // Scrolled away: either the tile has left the band and is no longer composed at all, or
+            // it is still composed and has moved up.
             val remaining = composeRule.onAllNodesWithTag(tag).fetchSemanticsNodes()
             if (remaining.isNotEmpty()) {
                 val after = composeRule.onNodeWithTag(tag).getBoundsInRoot()
-                assertThat(after.left.value).isLessThan(before.left.value)
+                assertThat(after.top.value).isLessThan(before.top.value)
             }
         }
     }

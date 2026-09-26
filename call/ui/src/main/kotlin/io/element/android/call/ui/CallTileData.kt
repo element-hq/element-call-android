@@ -12,6 +12,7 @@ import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTile
 import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcTileKind
+import io.element.android.call.api.rtc.MatrixRtcTileRef
 import io.element.android.call.api.rtc.id.UserId
 
 /**
@@ -50,6 +51,14 @@ data class CallTileData(
      * alone is not enough to tell two of them apart. See [tileId].
      */
     val streamKind: MatrixRtcStreamKind = MatrixRtcStreamKind.CAMERA,
+    /** Drawn only ever in the spotlight, never in the grid (spec 003 R17). On the reference, so known without detail. */
+    val isHero: Boolean = false,
+    /**
+     * Whether the core has sent this tile's full record. False for a tile outside the detail window,
+     * which is drawn from its reference: a name and an avatar, no badge, no ring, no video (R54).
+     */
+    val hasDetail: Boolean = true,
+    val isHandRaised: Boolean = false,
 ) {
     /**
      * [MatrixRtcTile.id] as one string, for a keyed list and a test tag.
@@ -108,5 +117,34 @@ fun MatrixRtcTile.toCallTileData(
         isVideoMirrored = isLocal && !isScreenShare && isFrontCamera,
         isReachable = isReachable,
         streamKind = id.kind.videoStreamKind,
+        isHero = isHero,
+        hasDetail = true,
+        isHandRaised = !isScreenShare && handRaisedAtMs != null,
+    )
+}
+
+/**
+ * Build the tile model for a remote tile from its place in the order, with its full record when
+ * the core has sent one and from the reference alone when it has not: the tile is placed and named
+ * either way, and never blank (R54).
+ */
+fun MatrixRtcTileRef.toCallTileData(
+    detail: MatrixRtcTile?,
+    roomMembers: Map<UserId, ElementCallRoomMember>,
+    isFrontCamera: Boolean,
+): CallTileData {
+    if (detail != null) return detail.toCallTileData(roomMembers, isLocal = false, isFrontCamera = isFrontCamera).copy(isHero = isHero)
+    return CallTileData(
+        memberId = id.memberId,
+        userId = userId,
+        roomMember = roomMembers[userId],
+        isLocal = false,
+        isMuted = false,
+        isActiveSpeaker = false,
+        hasVideo = false,
+        isVideoMirrored = false,
+        streamKind = id.kind.videoStreamKind,
+        isHero = isHero,
+        hasDetail = false,
     )
 }

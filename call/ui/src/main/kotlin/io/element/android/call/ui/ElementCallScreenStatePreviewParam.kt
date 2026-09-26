@@ -184,7 +184,7 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
                     A_REMOTE_MEMBER_ID to emptyFlow(),
                 ),
             ),
-            // A DM where the other side has no camera: their avatar fills the area instead.
+            // A DM where the other side has no camera: two equal tiles, theirs an avatar (spec 003 R35).
             anElementCallScreenState(
                 connection = ElementCallConnection.Connected,
                 memberCount = 2,
@@ -194,8 +194,7 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
                 isCameraPermissionGranted = true,
                 videoFrames = mapOf(A_LOCAL_MEMBER_ID to emptyFlow()),
             ),
-            // A DM with our camera off and the other side muted: the thumbnail keeps its place as an
-            // avatar with no switch button, and the mute badge is the only chrome on the big tile.
+            // A DM with our camera off and the other side muted: two avatars, the mute on their pill.
             anElementCallScreenState(
                 connection = ElementCallConnection.Connected,
                 memberCount = 2,
@@ -204,15 +203,14 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
                 isCameraPermissionGranted = true,
                 videoFrames = mapOf(A_REMOTE_MEMBER_ID to emptyFlow()),
             ),
-            // A DM that a third person has joined: back to the group layout, whatever the room says.
+            // A DM that a third person has joined: three tiles fall to the two-column grid on a phone (R36).
             anElementCallScreenState(
                 connection = ElementCallConnection.Connected,
                 memberCount = 3,
                 participants = listOf(aLocalParticipant(), aRemoteParticipant(), aStaleParticipant()),
                 isDm = true,
             ),
-            // Twelve people: past what the grid can hold legibly, so the strip is a scrolling row of
-            // fixed-size tiles and the spotlight has the rest. Only the first few strip tiles fit.
+            // Twelve people and no hero: every tile the same size in a grid that scrolls (R3, R26).
             anElementCallScreenState(
                 connection = ElementCallConnection.Connected,
                 memberCount = 12,
@@ -224,8 +222,8 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
                     aCrowdMemberId(2) to emptyFlow(),
                 ),
             ),
-            // Fifty people. The screen should look no different from twelve - the same first page,
-            // more dots - because everything past the next page is not composed at all.
+            // Fifty people. The screen should look no different from twelve, because everything
+            // beyond a viewport of the visible rows is not composed at all (R47).
             anElementCallScreenState(
                 connection = ElementCallConnection.Connected,
                 memberCount = 50,
@@ -239,12 +237,34 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
                 memberCount = 1,
                 participants = listOf(aLocalParticipant()),
             ),
-            // Someone sharing their screen: the share is the hero and takes the spotlight, their camera stays in the strip.
+            // Someone sharing their screen: the share is the hero and takes the spotlight, their camera stays in the grid (R17, R18).
             anElementCallScreenState(
                 connection = ElementCallConnection.Connected,
                 memberCount = 3,
                 participants = listOf(aLocalParticipant(), aRemoteSharingParticipant(), aStaleParticipant()),
                 videoFrames = mapOf("$A_REMOTE_MEMBER_ID#SCREEN_SHARE" to emptyFlow(), A_REMOTE_MEMBER_ID to emptyFlow()),
+            ),
+            // Four and six people: the two-column grid, rows from the top, a partial row left-aligned (R29, R30).
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
+                memberCount = 4,
+                participants = listOf(aLocalParticipant(), aRemoteParticipant()) + (1..2).map { aCrowdParticipant(it) },
+                videoFrames = mapOf(A_REMOTE_MEMBER_ID to emptyFlow()),
+            ),
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
+                memberCount = 6,
+                participants = listOf(aLocalParticipant(), aRemoteParticipant()) + (1..4).map { aCrowdParticipant(it) },
+                activeSpeakerIds = setOf(aCrowdMemberId(2)),
+                videoFrames = mapOf(A_REMOTE_MEMBER_ID to emptyFlow()),
+            ),
+            // A share in the spotlight over a scrolled grid, with a hand raised in it (R40).
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
+                memberCount = 12,
+                participants = listOf(aLocalParticipant(), aRemoteSharingParticipant()) + (1..10).map { aCrowdParticipant(it) },
+                handRaisedIds = setOf(aCrowdMemberId(1)),
+                videoFrames = mapOf("$A_REMOTE_MEMBER_ID#SCREEN_SHARE" to emptyFlow()),
             ),
         )
 }
@@ -257,6 +277,7 @@ fun anElementCallScreenState(
     receiveStats: Map<MatrixRtcStreamRef, MatrixRtcReceiveStats> = emptyMap(),
     frameEncryption: Map<String, MatrixRtcFrameEncryptionState> = emptyMap(),
     activeSpeakerIds: Set<String> = emptySet(),
+    handRaisedIds: Set<String> = emptySet(),
     isMicrophoneMuted: Boolean = false,
     isAudioTestToneEnabled: Boolean = false,
     audioDevices: List<CallAudioDevice> = listOf(AN_EARPIECE, A_SPEAKER),
@@ -305,9 +326,9 @@ fun anElementCallScreenState(
     connectedAtElapsedMs = connectedAtElapsedMs,
     // Derived rather than passed, so a preview cannot describe a call whose tiles disagree with its
     // participants - which is exactly the sort of state the real presenter can never produce.
-    tiles = previewCallTiles(participants, activeSpeakerIds, isFrontCamera),
-    // The head of the ranking, which is what the controller spotlights.
-    spotlightTileId = previewCallTiles(participants, activeSpeakerIds, isFrontCamera).firstOrNull { !it.isLocal }?.tileId,
+    tiles = previewCallTiles(participants, activeSpeakerIds, handRaisedIds, isFrontCamera),
+    // The first hero, as the presenter chooses it: a shared screen, and otherwise nothing (spec 003 R3).
+    spotlightTileId = previewCallTiles(participants, activeSpeakerIds, handRaisedIds, isFrontCamera).firstOrNull { it.isHero && !it.isLocal }?.tileId,
     libraryVersion = libraryVersion,
     coreVersion = coreVersion,
     eventSink = eventSink,
@@ -407,11 +428,12 @@ fun aStaleParticipant() = MatrixRtcParticipant(
 private fun previewCallTiles(
     participants: List<MatrixRtcParticipant>,
     speakingIds: Set<String>,
+    handRaisedIds: Set<String>,
     isFrontCamera: Boolean,
 ) = (listOfNotNull(participants.previewOwnTile()?.let { it.copy(isSpeaking = it.id.memberId in speakingIds) }) + participants.previewTiles(speakingIds))
     .map { tile ->
         val participant = participants.first { it.memberId == tile.id.memberId }
-        tile.toCallTileData(
+        tile.copy(handRaisedAtMs = if (tile.id.memberId in handRaisedIds) 1L else null).toCallTileData(
             roomMembers = emptyMap(),
             isLocal = participant.isLocal,
             isFrontCamera = isFrontCamera,

@@ -13,6 +13,9 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.rememberScrollableState
+import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -25,6 +28,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.shape.CircleShape
@@ -77,25 +81,35 @@ fun ElementCallScreen(
     ) {
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val isLandscape = maxWidth > maxHeight
-            val tiles = @Composable { tilesModifier: Modifier, pipInsets: PaddingValues ->
+            // The control bar floats over the bottom of the stage in both orientations (spec 003
+            // R43), so the stage is told how much of its bottom the bar covers and scrolls its last
+            // row clear of it (R44).
+            val controlsClearance = CONTROLS_HEIGHT + WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
+            val stage = @Composable { stageModifier: Modifier ->
                 if (state.tiles.isEmpty()) {
                     ConnectingPlaceholder(state)
                 } else {
-                    CallTileLayout(state = state, modifier = tilesModifier, pipInsets = pipInsets)
+                    CallStage(state = state, controlsClearance = controlsClearance, modifier = stageModifier)
+                }
+            }
+            val controls = @Composable { controlsModifier: Modifier ->
+                Box(
+                    modifier = controlsModifier
+                        .fillMaxWidth()
+                        // Behind the floating controls, so they stay readable over a bright tile.
+                        .background(Brush.verticalGradient(listOf(Color.Transparent, ElementCallTheme.colors.controlsScrim))),
+                ) {
+                    CallControlsBar(state, modifier = Modifier.systemBarsPadding())
                 }
             }
 
             if (isLandscape) {
                 // Held sideways there is not enough height to spend two bars' worth of it on chrome -
                 // stacked, the top bar and the controls take about two fifths of a phone's landscape
-                // height, which is exactly the height the video wanted. So they float over the tiles
-                // instead, as the design shows, with a scrim under the controls to keep them legible
-                // against whatever happens to be behind them.
+                // height, which is exactly the height the video wanted. So they float over the stage
+                // instead, as the design shows.
                 Box(modifier = Modifier.fillMaxSize()) {
-                    // The controls float over the tiles here, so the one-to-one thumbnail is told to
-                    // keep clear of them - the other person may run under the scrim, we should not.
-                    val controlsInset = CONTROLS_HEIGHT + WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
-                    tiles(Modifier.fillMaxSize(), PaddingValues(bottom = controlsInset))
+                    stage(Modifier.fillMaxSize())
                     CallTopBar(state, modifier = Modifier.systemBarsPadding())
                     // Stacked so a share that is still running when the call becomes one-to-one does
                     // not draw its banner through the duration.
@@ -109,35 +123,27 @@ fun ElementCallScreen(
                         ScreenShareBanner(state = state)
                         CallDurationLabel(state = state)
                     }
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            // Behind the floating landscape controls, so they stay readable over a bright tile.
-                            .background(Brush.verticalGradient(listOf(Color.Transparent, ElementCallTheme.colors.controlsScrim))),
-                    ) {
-                        CallControlsBar(state, modifier = Modifier.systemBarsPadding())
-                    }
+                    controls(Modifier.align(Alignment.BottomCenter))
                 }
             } else {
+                // The top bar stays above the stage in portrait; only the controls float over it.
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .systemBarsPadding(),
+                        .statusBarsPadding(),
                 ) {
                     CallTopBar(state)
                     ScreenShareBanner(state = state, modifier = Modifier.align(Alignment.CenterHorizontally))
                     Box(modifier = Modifier.weight(1f)) {
-                        // Nothing floats over the tiles in portrait, so the thumbnail needs no inset.
-                        tiles(Modifier.fillMaxSize(), PaddingValues(0.dp))
+                        stage(Modifier.fillMaxSize())
                         CallDurationLabel(
                             state = state,
                             modifier = Modifier
                                 .align(Alignment.TopCenter)
                                 .padding(top = 12.dp),
                         )
+                        controls(Modifier.align(Alignment.BottomCenter))
                     }
-                    CallControlsBar(state)
                 }
             }
         }
@@ -186,15 +192,15 @@ private fun CallTopBar(state: ElementCallScreenState, modifier: Modifier = Modif
 }
 
 /**
- * How long the call has run, over the top of the other person's picture.
+ * How long the call has run, over the top of the stage.
  *
- * Only in a one-to-one call. The design puts it there because there is nothing else to say about a
+ * Only in a direct message. The design puts it there because there is nothing else to say about a
  * call with two people in it; a group call has the member count in the spotlight instead.
  */
 @Composable
 private fun CallDurationLabel(state: ElementCallScreenState, modifier: Modifier = Modifier) {
     val isConnected = state.connection is ElementCallConnection.Connected || state.connection is ElementCallConnection.Degraded
-    if (state.layout != CallLayout.OneToOne || !isConnected) return
+    if (!state.isDm || !isConnected) return
     Text(
         text = rememberCallDuration(state.connectedAtElapsedMs),
         style = ElementCallTheme.typography.bodyMdMedium,
@@ -297,6 +303,9 @@ private fun CallControlsBar(state: ElementCallScreenState, modifier: Modifier = 
         // sharing on - do not fit across a small phone with room to breathe between them. See BUTTON_SIZE.
         modifier = modifier
             .fillMaxWidth()
+            // A drag that starts on the bar does not scroll the grid it floats over (spec 003 R45):
+            // a state that reports every delta consumed leaves nothing for the stage's scrollable.
+            .scrollable(rememberScrollableState { it }, Orientation.Vertical)
             .padding(horizontal = 8.dp, vertical = 20.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
@@ -331,17 +340,13 @@ private fun CallControlsBar(state: ElementCallScreenState, modifier: Modifier = 
                 isActive = state.isScreenSharing,
             )
         }
-        // In a one-to-one call this lives on our thumbnail instead - see CallTileLayout - which is
-        // both where the design puts it and one fewer button to fit across the bar.
-        if (state.layout == CallLayout.Group) {
-            RoundCallButton(
-                onClick = { state.eventSink(ElementCallScreenEvent.SwitchCamera) },
-                icon = ElementCallTheme.icons.switchCamera,
-                contentDescription = stringResource(R.string.element_call_a11y_switch_camera),
-                isActive = false,
-                enabled = state.isCameraEnabled,
-            )
-        }
+        RoundCallButton(
+            onClick = { state.eventSink(ElementCallScreenEvent.SwitchCamera) },
+            icon = ElementCallTheme.icons.switchCamera,
+            contentDescription = stringResource(R.string.element_call_a11y_switch_camera),
+            isActive = false,
+            enabled = state.isCameraEnabled,
+        )
         RoundCallButton(
             onClick = { state.eventSink(ElementCallScreenEvent.HangUp) },
             icon = ElementCallTheme.icons.endCall,
@@ -429,7 +434,7 @@ private fun ElementCallConnection.label(): String = when (this) {
     ElementCallConnection.Ended -> stringResource(R.string.element_call_call_ended)
 }
 
-/** The controls bar's height: its vertical padding either side of a button. Read by the landscape thumbnail inset. */
+/** The controls bar's height: its vertical padding either side of a button. What the stage keeps its last row clear of. */
 private val CONTROLS_HEIGHT = 20.dp + BUTTON_SIZE + 20.dp
 
 /** An icon button's width plus the bar's own padding, kept clear on both sides of the title. */

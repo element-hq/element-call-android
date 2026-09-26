@@ -87,6 +87,7 @@ fun rememberElementCallScreenState(
             is ElementCallScreenEvent.SetVideoConstraints ->
                 controller.setVideoConstraints(event.memberId, event.kind, event.constraints)
             is ElementCallScreenEvent.SetComposedTiles -> controller.setComposedTiles(event.tileIds)
+            is ElementCallScreenEvent.SetDetailWindow -> controller.setDetailWindow(event.window)
             ElementCallScreenEvent.ToggleScreenShare -> {
                 if (current?.isScreenSharing == true) {
                     controller.setScreenShareEnabled(token = null)
@@ -108,18 +109,19 @@ fun rememberElementCallScreenState(
 }
 
 /**
- * Our own tile first, then the core's ranking untouched.
+ * Our own tile first, then the core's order untouched: every reference, with its record where the
+ * window let one through (spec 003 R1, R54).
  *
- * First because the self view has to go somewhere and the core has no opinion: last would put us on
- * the final page of a big call, and first is where iOS puts it. Our mute and camera come from the
- * call rather than from the core's tile, so a tap shows on the badge before the round trip does.
+ * First because the self view has to go somewhere and the core has no opinion: last would put us at
+ * the end of a big call, and first is where iOS puts it. Our mute and camera come from the call
+ * rather than from the core's tile, so a tap shows on the badge before the round trip does.
  */
 private fun ElementCallSnapshot.callTiles(): ImmutableList<CallTileData> {
     val own = ownTile?.let {
         it.copy(isHero = false, isMicrophoneMuted = isMicrophoneMuted, hasVideo = isCameraEnabled)
             .toCallTileData(roomMembers, isLocal = true, isFrontCamera = isFrontCamera)
     }
-    val ranked = roster.ranked.map { it.toCallTileData(roomMembers, isLocal = false, isFrontCamera = isFrontCamera) }
+    val ranked = roster.order.map { ref -> ref.toCallTileData(roster.detail[ref.id], roomMembers, isFrontCamera = isFrontCamera) }
     return (listOfNotNull(own) + ranked).toImmutableList()
 }
 
@@ -155,7 +157,9 @@ private fun ElementCallSnapshot?.toState(
     isDm = this?.isDm == true,
     connectedAtElapsedMs = this?.connectedAtElapsedMs,
     tiles = tiles,
-    spotlightTileId = tiles.firstOrNull { !it.isLocal }?.tileId,
+    // The first hero, until the spotlight selection (heroes as a stack, the listen-mode speaker)
+    // replaces it. Never the rank head: with no hero there is no spotlight (spec 003 R3).
+    spotlightTileId = tiles.firstOrNull { it.isHero && !it.isLocal }?.tileId,
     libraryVersion = ElementCallVersion.library,
     coreVersion = ElementCallVersion.core,
     eventSink = eventSink,

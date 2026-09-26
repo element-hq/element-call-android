@@ -8,6 +8,7 @@
 package io.element.android.call.ui
 
 import io.element.android.call.api.audio.CallAudioDevice
+import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
@@ -54,6 +55,12 @@ sealed interface ElementCallScreenEvent {
      * is the only thing that knows, whenever the set changes; the call polls statistics for these.
      */
     data class SetComposedTiles(val tileIds: Set<MatrixRtcTileId>) : ElementCallScreenEvent
+
+    /**
+     * Which tiles the layout needs full records for: the composed band as a rank range, plus the
+     * tiles it draws out of rank. Sent by the layout with [SetComposedTiles], from the same set.
+     */
+    data class SetDetailWindow(val window: MatrixRtcDetailWindow) : ElementCallScreenEvent
 
     /**
      * Start or stop sharing the screen.

@@ -141,6 +141,12 @@ internal enum class CallTileVisibility {
 
 private fun Rect.inflateVertically(by: Float) = Rect(left, top - by, right, bottom + by)
 
+/** The grid tiles whose rect overlaps [viewport] extended by [reach] above and below, in content coordinates. */
+internal fun CallStageLayout.tilesWithin(viewport: Rect, reach: Float): Set<String> {
+    val area = viewport.inflateVertically(reach)
+    return tiles.filterValues { it.overlaps(area) }.keys
+}
+
 private fun computeRankedGrid(input: CallStageLayout.Input): CallStageLayout {
     val metrics = input.metrics
     if (metrics.width <= 0f || metrics.height <= 0f) return CallStageLayout.Empty
@@ -285,6 +291,3 @@ private fun placeRows(
 /** The last row clears the control bar when scrolled to the end (R44); never shorter than the stage. */
 private fun contentHeight(lastRowBottom: Float, metrics: CallStageMetrics): Float =
     maxOf(lastRowBottom + metrics.margin + metrics.controlsClearance, metrics.height)
-
-/** Rows of the grid area, in content coordinates: for finding the row a tile is on. */
-internal fun CallStageLayout.rowTopOf(tileId: String): Float? = tiles[tileId]?.top

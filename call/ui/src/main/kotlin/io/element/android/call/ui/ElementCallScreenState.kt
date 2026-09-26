@@ -86,7 +86,7 @@ data class ElementCallScreenState(
     val videoFrames: ImmutableMap<String, Flow<MatrixRtcVideoFrame>>,
     /** The room's display name, or null until it has been read. */
     val roomName: String?,
-    /** Whether the room is a DM. False until the room has been read. See [layout]. */
+    /** Whether the room is a DM. False until the room has been read. Decides whether the duration is shown over the stage. */
     val isDm: Boolean,
     /** When media first connected, on the elapsed-realtime clock, or null while connecting. */
     val connectedAtElapsedMs: Long?,
@@ -95,7 +95,11 @@ data class ElementCallScreenState(
      * the room so they have names and faces. A member sharing their screen is two of them.
      */
     val tiles: ImmutableList<CallTileData>,
-    /** The [CallTileData.tileId] of the big tile. See `ElementCallSnapshot.spotlightTileId`. */
+    /**
+     * The [CallTileData.tileId] shown in the spotlight, or null when nothing is: a hero, or in a
+     * large call with no hero, the speaker. The layout's choice, never the head of the ranking
+     * (spec 003 R3).
+     */
     val spotlightTileId: String?,
     /**
      * What the overflow menu shows: the library version and the core it was built against. Carried in
@@ -106,54 +110,18 @@ data class ElementCallScreenState(
     val coreVersion: String,
     val eventSink: (ElementCallScreenEvent) -> Unit,
 ) {
-    /**
-     * Who gets the big tile: the head of the core's ranking, so a shared screen when there is one and
-     * otherwise whoever the core's damped ranking puts first.
-     *
-     * **Never ourselves**, and null when we are alone: the core never ranks our own tile. We are
-     * already in the strip, so spotlighting us would draw the same person twice.
-     */
+    /** The tile in the spotlight. Never ourselves (spec 003 R2). */
     val spotlightTile: CallTileData?
         get() = spotlightTileId?.let { id -> tiles.firstOrNull { it.tileId == id } }
 
-    /**
-     * Everyone the strip below the spotlight shows: everyone *except* whoever is in the spotlight.
-     *
-     * The mockup does draw the spotlighted member a second time in the strip, with a highlight to
-     * say that is who is spotlighted. On a real two-party call that reads as a glitch rather than as
-     * a highlight - the same face, twice, one above the other - so they are excluded here. Put them
-     * back by using [tiles] instead if the strip ever grows enough for the highlight to make sense.
-     */
-    val stripTiles: ImmutableList<CallTileData>
-        get() = tiles.filterNot { it.tileId == spotlightTile?.tileId }.toImmutableList()
+    /** Every remote hero, in the model's order: the spotlight's stack (spec 003 R19, R20). */
+    val heroes: ImmutableList<String>
+        get() = tiles.filter { it.isHero && !it.isLocal }.map { it.tileId }.toImmutableList()
 
     /**
-     * Which arrangement the screen draws: the other person full-bleed with us as a thumbnail, or the
-     * spotlight and strip.
-     *
-     * One-to-one is only for a DM with exactly the two of us in it, each on a single camera tile.
-     * Every other shape falls back to the group layout on purpose, and each clause is one of them:
-     * alone before the other side has joined there is nobody to fill the screen with; a third member
-     * has nowhere to go in a two-tile layout; and a shared screen is a third tile, which the group
-     * layout already knows to spotlight. Our own share never makes a tile, so sharing *from* a DM
-     * stays one-to-one.
-     *
-     * Derived rather than stored so it can never disagree with [tiles], and so the flip between the
-     * two is a change of rectangles for the same tiles rather than a change of screen.
+     * What the grid places, in order: our own tile first, then the model's order with every hero
+     * and the spotlit tile removed (spec 003 R1, R17). The UI never re-sorts.
      */
-    val layout: CallLayout
-        get() = if (isDm && hasOneToOneTiles) CallLayout.OneToOne else CallLayout.Group
-
-    /** Exactly the two of us, each on a single camera tile. */
-    private val hasOneToOneTiles: Boolean
-        get() = tiles.size == 2 && tiles.count { it.isLocal } == 1 && tiles.none { it.isScreenShare }
-}
-
-/** How the tiles are arranged. See [ElementCallScreenState.layout]. */
-enum class CallLayout {
-    /** The other person fills the screen, we are a thumbnail over them. */
-    OneToOne,
-
-    /** Whoever is talking large, everyone else in a strip. */
-    Group,
+    val gridTiles: ImmutableList<CallTileData>
+        get() = tiles.filterNot { it.isHero || it.tileId == spotlightTileId }.toImmutableList()
 }
