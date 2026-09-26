@@ -189,7 +189,7 @@ private data class FloatingTile(
  * and an empty rectangle.
  */
 private fun ElementCallSnapshot.floatingTile(): FloatingTile? {
-    val remote = tiles.firstOrNull()
+    val remote = roster.ranked.firstOrNull()
     val chosen = remote ?: ownTile ?: return null
     val isLocal = remote == null
     val hasVideo = if (isLocal) isCameraEnabled else chosen.hasVideo

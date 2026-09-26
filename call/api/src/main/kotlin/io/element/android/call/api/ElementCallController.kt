@@ -8,6 +8,7 @@
 package io.element.android.call.api
 
 import io.element.android.call.api.audio.CallAudioDevice
+import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTileId
@@ -93,6 +94,13 @@ interface ElementCallController {
 
     /** Tell the call which tiles the screen composes, so it only polls statistics for those. See [MatrixRtcCall.setComposedTiles]. */
     fun setComposedTiles(tileIds: Set<MatrixRtcTileId>)
+
+    /**
+     * Tell the call which tiles the screen needs full records for, so the roster costs what is drawn
+     * rather than the whole call. Kept and replayed to a call that connects later. See
+     * [MatrixRtcCall.setDetailWindow].
+     */
+    fun setDetailWindow(window: MatrixRtcDetailWindow)
 
     /** End the call and publish a leave membership. */
     fun hangUp()

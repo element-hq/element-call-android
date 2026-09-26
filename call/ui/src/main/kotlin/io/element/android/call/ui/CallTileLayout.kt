@@ -261,7 +261,7 @@ internal fun CallTileLayout(
                         ElementCallScreenEvent.SetVideoConstraints(
                             memberId = tile.memberId,
                             kind = tile.streamKind,
-                            constraints = MatrixRtcVideoConstraints.NotVisible,
+                            constraints = MatrixRtcVideoConstraints.Paused,
                         )
                     )
                 }
@@ -452,9 +452,9 @@ private fun ReportVideoConstraints(
         if (!hasVideo) return@LaunchedEffect
         val constraints = if (isVisible) {
             if (width <= 0 || height <= 0) return@LaunchedEffect
-            MatrixRtcVideoConstraints(isVisible = true, widthPx = width, heightPx = height)
+            MatrixRtcVideoConstraints.live(widthPx = width, heightPx = height)
         } else {
-            MatrixRtcVideoConstraints.NotVisible
+            MatrixRtcVideoConstraints.Paused
         }
         currentEventSink(
             ElementCallScreenEvent.SetVideoConstraints(

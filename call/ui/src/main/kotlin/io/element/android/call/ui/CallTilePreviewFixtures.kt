@@ -12,6 +12,8 @@ import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTile
 import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcTileKind
+import io.element.android.call.api.rtc.MatrixRtcTileRef
+import io.element.android.call.api.rtc.MatrixRtcTileRoster
 import io.element.android.call.api.rtc.personTile
 
 /**
@@ -35,6 +37,12 @@ fun List<MatrixRtcParticipant>.previewTiles(speakingIds: Set<String> = emptySet(
         .sortedWith(compareByDescending<MatrixRtcTile> { it.isSpeaking }.thenByDescending { it.hasVideo })
     return shares + cameras
 }
+
+/** These tiles as a roster in the order given, with detail for every one: the core's default window. */
+fun List<MatrixRtcTile>.previewRoster() = MatrixRtcTileRoster(
+    order = map { MatrixRtcTileRef(it.id, it.userId, it.isHero) },
+    detail = associateBy { it.id },
+)
 
 /** Our own tile for these participants, as the core would publish it. */
 fun List<MatrixRtcParticipant>.previewOwnTile(): MatrixRtcTile? = firstOrNull { it.isLocal }?.personTile()

@@ -35,7 +35,6 @@ import io.element.android.call.tests.testutils.WarmUpRule
 import io.element.android.call.tests.testutils.consumeItemsUntilPredicate
 import io.element.android.call.tests.testutils.consumeItemsUntilTimeout
 import kotlinx.collections.immutable.persistentMapOf
-import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
@@ -226,7 +225,7 @@ class ElementCallScreenStateTest {
     @Test
     fun `the remaining controls are forwarded as they are`() = runTest {
         val controller = FakeElementCallController(initialState = aConnectedSnapshot())
-        val constraints = MatrixRtcVideoConstraints(isVisible = true, widthPx = 320, heightPx = 240)
+        val constraints = MatrixRtcVideoConstraints.live(widthPx = 320, heightPx = 240)
 
         moleculeFlow(RecompositionMode.Immediate) { rememberElementCallScreenState(controller, aNavigator()) }.test {
             val state = awaitItem()
@@ -342,12 +341,12 @@ class ElementCallScreenStateTest {
             val before = awaitItem().tiles.single().tileId
 
             controller.state.value = controller.state.value?.copy(
-                tiles = listOf(aTile(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.SCREEN_SHARE), aTile(A_REMOTE_MEMBER_ID)).toImmutableList(),
+                roster = listOf(aTile(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.SCREEN_SHARE), aTile(A_REMOTE_MEMBER_ID)).previewRoster(),
             )
             val sharing = consumeItemsUntilPredicate { it.tiles.size == 2 }.last()
             assertThat(sharing.tiles.single { !it.isScreenShare }.tileId).isEqualTo(before)
 
-            controller.state.value = controller.state.value?.copy(tiles = listOf(aTile(A_REMOTE_MEMBER_ID)).toImmutableList())
+            controller.state.value = controller.state.value?.copy(roster = listOf(aTile(A_REMOTE_MEMBER_ID)).previewRoster())
             val after = consumeItemsUntilPredicate { it.tiles.size == 1 }.last()
             assertThat(after.tiles.single().tileId).isEqualTo(before)
             cancelAndIgnoreRemainingEvents()
@@ -627,7 +626,7 @@ class ElementCallScreenStateTest {
         callData = ElementCallData(roomId = A_ROOM_ID, isAudioCall = true),
         connection = ElementCallConnection.Connected,
         isMicrophonePermissionGranted = true,
-        tiles = tiles.toImmutableList(),
+        roster = tiles.previewRoster(),
         ownTile = participants.previewOwnTile(),
         isCameraEnabled = participants.previewOwnTile()?.hasVideo == true,
         isDm = isDm,

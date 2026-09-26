@@ -17,6 +17,7 @@ import io.element.android.call.api.ElementCallRoomContext
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
 import io.element.android.call.api.rtc.MatrixRtcCallEvent
 import io.element.android.call.api.rtc.MatrixRtcCallIntent
+import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcElementCallCompat
 import io.element.android.call.api.rtc.MatrixRtcEndReason
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionDiagnostic
@@ -36,6 +37,7 @@ import io.element.android.call.test.FakeElementCallRoomContextProvider
 import io.element.android.call.test.FakeMatrixRtcService
 import io.element.android.call.test.aRoster
 import io.element.android.call.test.aTile
+import io.element.android.call.test.aWindowedRoster
 import io.element.android.call.test.audio.FakeAudioFocus
 import io.element.android.call.test.audio.FakeCallAudioDeviceController
 import io.element.android.call.test.audio.aBluetoothHeadset
@@ -840,46 +842,41 @@ class DefaultElementCallControllerTest {
     }
 
     /**
-     * The spotlight is the head of the core's order and nothing else.
-     *
-     * Speaker events used to move it here, behind a dwell of our own; the core now damps the speaking
-     * input it ranks on and no speaker event reaches this layer at all.
+     * The roster reaches the snapshot whole: the order with every reference, and the records the
+     * window let through. A tile outside the window is a reference the screen can still place, not
+     * a tile that vanished.
      */
     @Test
-    fun `the spotlight is the head of the order`() = runTest {
+    fun `the roster reaches the snapshot whole, references included`() = runTest {
         val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
         val controller = createController(rtcService = rtcService)
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
         val call = rtcService.lastSession?.lastCall!!
 
-        call.tiles.value = aRoster(aTile(A_REMOTE_MEMBER_ID), aTile(ANOTHER_REMOTE_MEMBER_ID))
+        call.tiles.value = aWindowedRoster(
+            aTile(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.SCREEN_SHARE),
+            aTile(A_REMOTE_MEMBER_ID),
+            aTile(ANOTHER_REMOTE_MEMBER_ID),
+            detailFor = setOf(
+                MatrixRtcTileId(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.SCREEN_SHARE),
+                MatrixRtcTileId(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.PERSON),
+            ),
+        )
         runCurrent()
-        assertThat(controller.state.value?.spotlightTileId).isEqualTo(MatrixRtcTileId(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.PERSON))
 
-        call.tiles.value = aRoster(aTile(ANOTHER_REMOTE_MEMBER_ID, isSpeaking = true), aTile(A_REMOTE_MEMBER_ID))
-        runCurrent()
-        assertThat(controller.state.value?.spotlightTileId?.memberId).isEqualTo(ANOTHER_REMOTE_MEMBER_ID)
+        val roster = controller.state.value?.roster!!
+        assertThat(roster.order.map { it.id.kind })
+            .containsExactly(MatrixRtcTileKind.SCREEN_SHARE, MatrixRtcTileKind.PERSON, MatrixRtcTileKind.PERSON)
+            .inOrder()
+        assertThat(roster.order.map { it.isHero }).containsExactly(true, false, false).inOrder()
+        assertThat(roster.detail.keys.map { it.memberId }).containsExactly(A_REMOTE_MEMBER_ID, A_REMOTE_MEMBER_ID)
+        assertThat(roster.ranked.map { it.id.kind }).containsExactly(MatrixRtcTileKind.SCREEN_SHARE, MatrixRtcTileKind.PERSON).inOrder()
     }
 
+    /** Never ourselves: the core never ranks our own tile, so alone the order is empty. */
     @Test
-    fun `a sharer's screen takes the spotlight rather than their camera`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService)
-        controller.setMicrophonePermissionGranted(true)
-        runCurrent()
-        val call = rtcService.lastSession?.lastCall!!
-
-        call.tiles.value = aRoster(aTile(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.SCREEN_SHARE), aTile(A_REMOTE_MEMBER_ID))
-        runCurrent()
-
-        assertThat(controller.state.value?.spotlightTileId).isEqualTo(MatrixRtcTileId(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.SCREEN_SHARE))
-        assertThat(controller.state.value?.tiles?.map { it.id.kind }).containsExactly(MatrixRtcTileKind.SCREEN_SHARE, MatrixRtcTileKind.PERSON).inOrder()
-    }
-
-    /** Never ourselves: the core never ranks our own tile, so alone there is nobody to spotlight. */
-    @Test
-    fun `the spotlight is never us, and empties when we are alone`() = runTest {
+    fun `the order never holds us, and is empty when we are alone`() = runTest {
         val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
         val controller = createController(rtcService = rtcService)
         controller.setMicrophonePermissionGranted(true)
@@ -888,8 +885,40 @@ class DefaultElementCallControllerTest {
 
         call.localState.value = MatrixRtcLocalState(tile = aTile(A_LOCAL_MEMBER_ID, hasVideo = true), isScreenSharing = false)
         runCurrent()
-        assertThat(controller.state.value?.spotlightTileId).isNull()
+        assertThat(controller.state.value?.roster?.order).isEmpty()
         assertThat(controller.state.value?.ownTile?.id?.memberId).isEqualTo(A_LOCAL_MEMBER_ID)
+    }
+
+    /**
+     * The layout declares its window before media is up, exactly as it declares the composed set,
+     * so the window has to survive until the call exists and reach it - and not outlive the call.
+     */
+    @Test
+    fun `the detail window reaches the call, including one that connects later, and not the next call`() = runTest {
+        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
+        val controller = createController(rtcService = rtcService)
+        val window = MatrixRtcDetailWindow(ranks = 0 until 6, also = setOf(MatrixRtcTileId(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.SCREEN_SHARE)))
+        controller.setDetailWindow(window)
+
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+        val call = rtcService.lastSession?.lastCall!!
+        assertThat(call.detailWindows).containsExactly(window)
+
+        val scrolled = MatrixRtcDetailWindow(ranks = 4 until 12)
+        controller.setDetailWindow(scrolled)
+        assertThat(call.detailWindows).containsExactly(window, scrolled).inOrder()
+
+        controller.hangUp()
+        runCurrent()
+        controller.startCall(ElementCallData(roomId = A_ROOM_ID, isAudioCall = true))
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+        val nextCall = rtcService.lastSession?.lastCall!!
+        assertThat(nextCall).isNotSameInstanceAs(call)
+        assertThat(nextCall.detailWindows).isEmpty()
+        // The composed set is replayed whatever it holds; what matters is that the last call's is not.
+        assertThat(nextCall.composedTiles).containsExactly(emptySet<MatrixRtcTileId>())
     }
 
     /**

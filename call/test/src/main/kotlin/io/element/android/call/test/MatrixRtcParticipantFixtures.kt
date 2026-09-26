@@ -79,3 +79,9 @@ fun aRoster(vararg tiles: MatrixRtcTile) = MatrixRtcTileRoster(
     order = tiles.map { MatrixRtcTileRef(it.id, it.userId, it.isHero) },
     detail = tiles.associateBy { it.id },
 )
+
+/** A roster ranked in the order given, with detail only for [detailFor]: the rest arrive as references. */
+fun aWindowedRoster(vararg tiles: MatrixRtcTile, detailFor: Set<MatrixRtcTileId>) = MatrixRtcTileRoster(
+    order = tiles.map { MatrixRtcTileRef(it.id, it.userId, it.isHero) },
+    detail = tiles.filter { it.id in detailFor }.associateBy { it.id },
+)

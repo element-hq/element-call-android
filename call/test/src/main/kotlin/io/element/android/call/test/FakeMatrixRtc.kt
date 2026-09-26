@@ -10,6 +10,7 @@ package io.element.android.call.test
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
 import io.element.android.call.api.rtc.MatrixRtcCall
 import io.element.android.call.api.rtc.MatrixRtcCallEvent
+import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcElementCallCompat
 import io.element.android.call.api.rtc.MatrixRtcLeaveReason
 import io.element.android.call.api.rtc.MatrixRtcLocalState
@@ -27,6 +28,7 @@ import io.element.android.call.api.rtc.MatrixRtcTransport
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.api.rtc.id.RoomId
+import io.element.android.call.api.rtc.windowed
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -104,7 +106,35 @@ class FakeMatrixRtcCall : MatrixRtcCall {
     private val _events = MutableSharedFlow<MatrixRtcCallEvent>(extraBufferCapacity = 8)
     override val events: Flow<MatrixRtcCallEvent> = _events
 
+    /**
+     * Set directly for a roster with detail for everything, the core's default window; or through
+     * [pushRoster] for one the declared window narrows, as the core would.
+     */
     override val tiles = MutableStateFlow(MatrixRtcTileRoster.EMPTY)
+
+    /** Every window [setDetailWindow] was given, in order. */
+    val detailWindows = mutableListOf<MatrixRtcDetailWindow>()
+
+    val detailWindow: MatrixRtcDetailWindow? get() = detailWindows.lastOrNull()
+
+    /** The last roster pushed, before the window narrowed it: what a re-declared window is applied to. */
+    private var pushedRoster: MatrixRtcTileRoster? = null
+
+    /**
+     * Publish [roster] as the core would: the order whole, detail only inside the declared window.
+     * With no window declared, detail for everything.
+     */
+    fun pushRoster(roster: MatrixRtcTileRoster) {
+        pushedRoster = roster
+        tiles.value = detailWindow?.let { roster.windowed(it) } ?: roster
+    }
+
+    override fun setDetailWindow(window: MatrixRtcDetailWindow) {
+        detailWindows += window
+        // The core republishes on every declaration, so a tile that has entered the window arrives
+        // with its record without a roster change.
+        pushedRoster?.let { tiles.value = it.windowed(window) }
+    }
 
     override val localState = MutableStateFlow<MatrixRtcLocalState?>(null)
 

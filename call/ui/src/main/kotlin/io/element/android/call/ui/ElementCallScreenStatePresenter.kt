@@ -119,7 +119,7 @@ private fun ElementCallSnapshot.callTiles(): ImmutableList<CallTileData> {
         it.copy(isHero = false, isMicrophoneMuted = isMicrophoneMuted, hasVideo = isCameraEnabled)
             .toCallTileData(roomMembers, isLocal = true, isFrontCamera = isFrontCamera)
     }
-    val ranked = tiles.map { it.toCallTileData(roomMembers, isLocal = false, isFrontCamera = isFrontCamera) }
+    val ranked = roster.ranked.map { it.toCallTileData(roomMembers, isLocal = false, isFrontCamera = isFrontCamera) }
     return (listOfNotNull(own) + ranked).toImmutableList()
 }
 
@@ -155,7 +155,7 @@ private fun ElementCallSnapshot?.toState(
     isDm = this?.isDm == true,
     connectedAtElapsedMs = this?.connectedAtElapsedMs,
     tiles = tiles,
-    spotlightTileId = this?.spotlightTileId?.let { id -> tiles.firstOrNull { it.id == id }?.tileId },
+    spotlightTileId = tiles.firstOrNull { !it.isLocal }?.tileId,
     libraryVersion = ElementCallVersion.library,
     coreVersion = ElementCallVersion.core,
     eventSink = eventSink,

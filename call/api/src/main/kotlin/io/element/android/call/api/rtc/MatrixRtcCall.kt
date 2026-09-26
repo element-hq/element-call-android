@@ -65,12 +65,22 @@ interface MatrixRtcCall : AutoCloseable {
     val receiveStats: StateFlow<Map<MatrixRtcStreamRef, MatrixRtcReceiveStats>>
 
     /**
-     * Declare which tiles the UI currently composes - on screen or within a page of it.
+     * Declare which tiles the UI currently composes - on screen or within reach of it.
      *
-     * Contract C12's "declare what you compose": what the stats poll is bounded to, so a call of two
-     * hundred costs one round trip a second for the twenty tiles drawn rather than one per member.
+     * What the stats poll is bounded to, so a call of two hundred costs one round trip a second for
+     * the twenty tiles drawn rather than one per member. Not the detail window: that is
+     * [setDetailWindow], and the layout sends both from the same composed set.
      */
     fun setComposedTiles(tileIds: Set<MatrixRtcTileId>)
+
+    /**
+     * Declare which tiles [tiles] carries full records for: a rank range plus explicit identities.
+     *
+     * Contract C12. The core republishes the roster on every declaration, at once, and drops the
+     * delivery when nothing changed, so a changed window costs one delivery and an unchanged one
+     * costs nothing. Callers still deduplicate by value: a scroll must not declare per pixel.
+     */
+    fun setDetailWindow(window: MatrixRtcDetailWindow)
 
     /**
      * Whether our microphone is currently muted.

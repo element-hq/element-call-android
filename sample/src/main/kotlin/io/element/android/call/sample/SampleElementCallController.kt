@@ -12,6 +12,7 @@ import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.audio.CallAudioDevice
+import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTileId
@@ -120,6 +121,11 @@ class SampleElementCallController(
 
     override fun setComposedTiles(tileIds: Set<MatrixRtcTileId>) {
         // Nothing to poll: the harness has no transport.
+    }
+
+    override fun setDetailWindow(window: MatrixRtcDetailWindow) {
+        // The fixtures carry detail for everything; logged so the window a layout asks for can be read off.
+        Timber.d("Sample: detail window $window")
     }
 
     override fun setVideoConstraints(memberId: String, kind: MatrixRtcStreamKind, constraints: MatrixRtcVideoConstraints) {

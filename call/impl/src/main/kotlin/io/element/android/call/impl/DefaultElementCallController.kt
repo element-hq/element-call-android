@@ -20,6 +20,7 @@ import io.element.android.call.api.audio.CallAudioDeviceController
 import io.element.android.call.api.rtc.MatrixRtcCall
 import io.element.android.call.api.rtc.MatrixRtcCallEvent
 import io.element.android.call.api.rtc.MatrixRtcCallIntent
+import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcElementCallCompat
 import io.element.android.call.api.rtc.MatrixRtcLeaveReason
 import io.element.android.call.api.rtc.MatrixRtcNotificationType
@@ -184,6 +185,7 @@ internal class DefaultElementCallController(
     private var session: MatrixRtcSession? = null
     private var call: MatrixRtcCall? = null
     private var composedTiles: Set<MatrixRtcTileId> = emptySet()
+    private var detailWindow: MatrixRtcDetailWindow? = null
 
     /**
      * Begin a call. Does nothing if one is already running, including for the same room: rejoining
@@ -439,6 +441,13 @@ internal class DefaultElementCallController(
         call?.setComposedTiles(tileIds)
     }
 
+    override fun setDetailWindow(window: MatrixRtcDetailWindow) {
+        // Same reason as the composed set: the stage is usually mounted before the media is, and the
+        // core's default window is the whole call.
+        detailWindow = window
+        call?.setDetailWindow(window)
+    }
+
     override fun hangUp() {
         scope.launch { endCall(leave = true) }
     }
@@ -494,6 +503,7 @@ internal class DefaultElementCallController(
         }
         call = connected
         connected.setComposedTiles(composedTiles)
+        detailWindow?.let { connected.setDetailWindow(it) }
         // A child of the session scope rather than this coroutine: the shared flows have to outlive
         // any one tile's collection, and are torn down with the call in endCall().
         videoSharingScope = CoroutineScope(scope.coroutineContext + SupervisorJob())
@@ -572,7 +582,7 @@ internal class DefaultElementCallController(
         // The core's count query rather than members.size: the projection behind members can sit at
         // zero for a whole call. See MatrixRtcSession.memberCount.
         observe { session.memberCount.collect { value -> updateState { it.copy(memberCount = value) } } }
-        observe { call.tiles.collect { value -> updateState { it.copy(tiles = value.ranked.toImmutableList()) } } }
+        observe { call.tiles.collect { value -> updateState { it.copy(roster = value) } } }
         observe {
             call.localState
                 .map { it?.tile }
@@ -661,6 +671,10 @@ internal class DefaultElementCallController(
             leavingCall = call
             session = null
             call = null
+            // The next call's screen declares afresh; a window from this one would be about tiles
+            // that no longer exist.
+            composedTiles = emptySet()
+            detailWindow = null
             _state.value = null
         }
 

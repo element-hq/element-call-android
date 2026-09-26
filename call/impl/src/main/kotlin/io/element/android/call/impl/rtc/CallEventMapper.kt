@@ -8,6 +8,7 @@
 package io.element.android.call.impl.rtc
 
 import io.element.android.call.api.rtc.MatrixRtcCallEvent
+import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcEndReason
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionDiagnostic
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
@@ -155,6 +156,12 @@ internal fun MatrixRtcTileKind.map(): FfiTileKind = when (this) {
 }
 
 internal fun FfiTileId.map() = MatrixRtcTileId(memberId = memberId, kind = kind.map())
+
+internal fun MatrixRtcTileId.map() = FfiTileId(memberId = memberId, kind = kind.map())
+
+/** The FFI's `(offset, len)` for a window's rank range; an empty range is a zero-length window at zero. */
+internal fun MatrixRtcDetailWindow.rankRange(): Pair<UInt, UInt> =
+    if (ranks.isEmpty()) 0u to 0u else ranks.first.toUInt() to (ranks.last - ranks.first + 1).toUInt()
 
 internal fun FfiTileRef.map() = MatrixRtcTileRef(id = id.map(), userId = UserId(userId), isHero = hero)
 
