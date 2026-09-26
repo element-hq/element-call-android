@@ -7,6 +7,7 @@
 
 package io.element.android.call.sample
 
+import android.content.pm.ActivityInfo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -52,7 +53,14 @@ class SampleActivity : ComponentActivity() {
         }
 
         setContent {
-            SampleApp(controller = controller, initialScenario = scenario)
+            SampleApp(
+                controller = controller,
+                initialScenario = scenario,
+                // The manifest handles orientation changes itself, so the call and the player survive the turn.
+                onRotate = { isLandscape ->
+                    requestedOrientation = if (isLandscape) ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                },
+            )
         }
     }
 

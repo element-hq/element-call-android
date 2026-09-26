@@ -67,7 +67,8 @@ for the three layers (local core, library from source inside Element X, library 
 - Screenshot tests: `./gradlew :tests:uitests:verifyPaparazziDebug` (recording is CI's job, see `docs/screenshot_testing.md`)
 - The sample on a device: `./gradlew :sample:installDebug`; its gesture and pixel tests: `./gradlew :sample:connectedDebugAndroidTest`
 - A layout scenario on the device: `adb shell am start -n io.element.android.call.sample/.SampleActivity --es scenario 004_scroll_and_rank`
-  (the corpus is `call/test/src/main/resources/scenarios/`, vendored from feature-hq `plans/003.call_layout/scenarios/`;
+  (the corpus is `call/test/src/main/resources/scenarios/`, vendored from feature-hq `plans/003.call_layout/scenarios/`,
+  played under a scrubber with every action performed, rotation included;
   a copy that differs is a review finding). The same files run on the JVM through the real controller and the real
   stage in `StageDumpScenarioTest`, one text dump per frame under `call/ui/src/test/resources/scenarios/`; re-record
   with `ELEMENT_CALL_RECORD_DUMPS=1 ./gradlew :call:ui:testDebugUnitTest --tests '*StageDump*'` and review the diff.

@@ -37,6 +37,8 @@ import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
 import io.element.android.call.test.scenario.MatrixRtcScenario
 import io.element.android.call.ui.ElementCallOverlay
+import io.element.android.call.ui.ElementCallStageDriver
+import io.element.android.call.ui.ElementCallStageDriverProvider
 import kotlinx.collections.immutable.toImmutableList
 
 /**
@@ -51,29 +53,34 @@ fun SampleApp(
     controller: SampleElementCallController,
     modifier: Modifier = Modifier,
     initialScenario: MatrixRtcScenario? = null,
+    /** A scenario's `rotate` frame, which only the Activity can perform. */
+    onRotate: (isLandscape: Boolean) -> Unit = {},
 ) {
     var isStyleOverridden by rememberSaveable { mutableStateOf(false) }
     val fixtures = remember { SampleFixture.entries.toImmutableList() }
-    var player by remember { mutableStateOf(initialScenario?.let { SampleScenarioPlayer(controller, it) }) }
+    val driver = remember { ElementCallStageDriver() }
+    var player by remember { mutableStateOf(initialScenario?.let { SampleScenarioPlayer(controller, it, driver, onRotate) }) }
     MaterialTheme(colorScheme = darkColorScheme()) {
         Box(modifier = modifier) {
-            ElementCallOverlay(
-                controller = controller,
-                // Null is the library's defaults; the override is the proof that the port reaches every colour.
-                style = if (isStyleOverridden) rememberLoudElementCallStyle() else null,
-            ) { contentModifier ->
-                SampleHomeScreen(
-                    fixtures = fixtures,
-                    scenarios = SampleActivity.SCENARIOS.toImmutableList(),
-                    isStyleOverridden = isStyleOverridden,
-                    onToggleStyle = { isStyleOverridden = !isStyleOverridden },
-                    onOpen = {
-                        player = null
-                        controller.start(it.snapshot())
-                    },
-                    onOpenScenario = { name -> player = SampleScenarioPlayer(controller, MatrixRtcScenario.load(name)) },
-                    modifier = contentModifier,
-                )
+            ElementCallStageDriverProvider(driver) {
+                ElementCallOverlay(
+                    controller = controller,
+                    // Null is the library's defaults; the override is the proof that the port reaches every colour.
+                    style = if (isStyleOverridden) rememberLoudElementCallStyle() else null,
+                ) { contentModifier ->
+                    SampleHomeScreen(
+                        fixtures = fixtures,
+                        scenarios = SampleActivity.SCENARIOS.toImmutableList(),
+                        isStyleOverridden = isStyleOverridden,
+                        onToggleStyle = { isStyleOverridden = !isStyleOverridden },
+                        onOpen = {
+                            player = null
+                            controller.start(it.snapshot())
+                        },
+                        onOpenScenario = { name -> player = SampleScenarioPlayer(controller, MatrixRtcScenario.load(name), driver, onRotate) },
+                        modifier = contentModifier,
+                    )
+                }
             }
             player?.let { current ->
                 ScenarioScrubber(
