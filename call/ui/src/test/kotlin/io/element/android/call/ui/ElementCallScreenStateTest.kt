@@ -627,7 +627,6 @@ class ElementCallScreenStateTest {
         callData = ElementCallData(roomId = A_ROOM_ID, isAudioCall = true),
         connection = ElementCallConnection.Connected,
         isMicrophonePermissionGranted = true,
-        participants = participants.toImmutableList(),
         tiles = tiles.toImmutableList(),
         ownTile = participants.previewOwnTile(),
         isCameraEnabled = participants.previewOwnTile()?.hasVideo == true,

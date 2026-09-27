@@ -136,7 +136,6 @@ private fun ElementCallSnapshot?.toState(
 ) = ElementCallScreenState(
     connection = this?.connection ?: ElementCallConnection.RequestingPermission,
     memberCount = this?.memberCount ?: 0,
-    participants = this?.participants ?: persistentListOf(),
     audioLevels = this?.audioLevels ?: persistentMapOf(),
     receiveStats = this?.receiveStats ?: persistentMapOf(),
     frameEncryption = this?.frameEncryption ?: persistentMapOf(),

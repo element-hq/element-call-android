@@ -285,7 +285,6 @@ fun anElementCallScreenState(
 ) = ElementCallScreenState(
     connection = connection,
     memberCount = memberCount,
-    participants = participants.toImmutableList(),
     audioLevels = audioLevels.toImmutableMap(),
     receiveStats = receiveStats.toImmutableMap(),
     frameEncryption = frameEncryption.toImmutableMap(),

@@ -11,7 +11,6 @@ import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
-import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
@@ -27,12 +26,9 @@ data class ElementCallScreenState(
      * compatibility mode - the core is fed a membership in all three.
      *
      * Zero until the first snapshot arrives, which on a call we have joined is a passing state rather
-     * than a claim that the call is empty. [participants] is the transport's answer to the same
-     * question: later, but derived from media actually flowing.
+     * than a claim that the call is empty.
      */
     val memberCount: Int,
-    /** Everyone the media session sees in the call, us included. Empty until media connects. */
-    val participants: ImmutableList<MatrixRtcParticipant>,
     /** Meter readings by member id, ours included: what we capture and what we decode. */
     val audioLevels: ImmutableMap<String, MatrixRtcAudioLevel>,
     /**
@@ -97,10 +93,6 @@ data class ElementCallScreenState(
     /**
      * What is drawn, in the order it is drawn: our own tile first, then the core's ranking, joined with
      * the room so they have names and faces. A member sharing their screen is two of them.
-     *
-     * Kept alongside the raw [participants] rather than replacing them: the diagnostics screen wants
-     * the RTC layer's own view, unmixed with anything the room says, because telling those two apart
-     * is the point of it.
      */
     val tiles: ImmutableList<CallTileData>,
     /** The [CallTileData.tileId] of the big tile. See `ElementCallSnapshot.spotlightTileId`. */

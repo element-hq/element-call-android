@@ -50,7 +50,6 @@ fun aCallSnapshot(
     isMicrophoneMuted = isMicrophoneMuted,
     connectedAtElapsedMs = connectedAtElapsedMs,
     isMaximized = isMaximized,
-    participants = participants.toImmutableList(),
     tiles = participants.previewTiles(speakingIds).toImmutableList(),
     ownTile = participants.previewOwnTile(),
 )

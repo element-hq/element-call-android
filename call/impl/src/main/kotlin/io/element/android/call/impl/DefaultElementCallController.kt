@@ -573,7 +573,6 @@ internal class DefaultElementCallController(
         // The core's count query rather than members.size: the projection behind members can sit at
         // zero for a whole call. See MatrixRtcSession.memberCount.
         observe { session.memberCount.collect { value -> updateState { it.copy(memberCount = value) } } }
-        observe { call.participants.collect { value -> updateState { it.copy(participants = value.toImmutableList()) } } }
         observe { call.tiles.collect { value -> updateState { it.copy(tiles = value.ranked.toImmutableList()) } } }
         observe {
             combine(call.localState, call.participants) { local, participants ->

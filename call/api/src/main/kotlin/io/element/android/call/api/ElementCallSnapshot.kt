@@ -10,7 +10,6 @@ package io.element.android.call.api
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
-import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcTile
@@ -52,7 +51,7 @@ data class ElementCallSnapshot(
      */
     val isDm: Boolean = false,
     /**
-     * Room profiles by user id, for putting names and faces to [participants].
+     * Room profiles by user id, for putting names and faces to [tiles] and [ownTile].
      *
      * The RTC layer only ever knows a member id and a user id, so this is the join between the call
      * and the room. Empty, or missing an entry, is normal rather than exceptional - the member list
@@ -64,15 +63,9 @@ data class ElementCallSnapshot(
      * compatibility mode - the core is fed a membership in all three.
      *
      * Zero until the first snapshot arrives, which on a call we have joined is a passing state rather
-     * than a claim that the call is empty. [participants] is the transport's answer to the same
-     * question: later, but derived from media actually flowing.
+     * than a claim that the call is empty.
      */
     val memberCount: Int = 0,
-    /**
-     * The transport's roster as read at connect, us included: a diagnostics view, not kept live.
-     * Everything drawn, and everything heard, follows [tiles] and [ownTile] instead.
-     */
-    val participants: ImmutableList<MatrixRtcParticipant> = persistentListOf(),
     /** Meter readings by member id, ours included: what we capture and what we decode. */
     val audioLevels: ImmutableMap<String, MatrixRtcAudioLevel> = persistentMapOf(),
     /**
@@ -98,7 +91,7 @@ data class ElementCallSnapshot(
      * Our camera tile, or null before media connects.
      *
      * The core only publishes it once our membership reaches its roster, so until then it is built
-     * from our row in [participants]: otherwise every join would open on an empty stage.
+     * from our row in the transport's roster: otherwise every join would open on an empty stage.
      */
     val ownTile: MatrixRtcTile? = null,
     /** Whether the microphone is muted, and before the media connects whether it will be published muted. */
