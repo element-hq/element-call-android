@@ -27,7 +27,7 @@ interface MatrixRtcSession : AutoCloseable {
      *
      * This is the core's membership projection, not the media roster: it is built from the MSC4354
      * sticky events in the room, so it is populated before - and independently of - anything being
-     * published. [MatrixRtcCall.participants] is the transport's view of the same call.
+     * published.
      *
      * Known to under-report on the current library: see [memberCount], and item 7 in
      * `libraries/rustrtc/FEEDBACK.md`. Prefer [memberCount] wherever a count is all that is needed.

@@ -25,15 +25,6 @@ sealed interface MatrixRtcCallEvent {
 
     data class StreamUnmuted(val memberId: String, val kind: MatrixRtcStreamKind) : MatrixRtcCallEvent
 
-    /**
-     * Who the transport currently hears, and how loudly.
-     *
-     * The level comes from the RTP audio-level header, which survives frame encryption, so it says
-     * something [MatrixRtcAudioLevel] cannot: it is measured at the sender rather than on the PCM
-     * our own jitter buffer handed us.
-     */
-    data class ActiveSpeakers(val speakers: List<MatrixRtcSpeakingMember>) : MatrixRtcCallEvent
-
     /** The transport is still up but struggling. */
     data class MediaConnectionDegraded(val degraded: Boolean) : MatrixRtcCallEvent
 
@@ -74,12 +65,6 @@ sealed interface MatrixRtcCallEvent {
 
     data class Ended(val reason: MatrixRtcEndReason) : MatrixRtcCallEvent
 }
-
-/** One member the transport currently hears, with [level] from 0f to 1f. */
-data class MatrixRtcSpeakingMember(
-    val memberId: String,
-    val level: Float,
-)
 
 sealed interface MatrixRtcEndReason {
     data object Left : MatrixRtcEndReason

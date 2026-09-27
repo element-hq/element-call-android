@@ -67,6 +67,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.ui.theme.ElementCallTheme
@@ -114,7 +116,7 @@ internal fun CallTileLayout(
     // By tile rather than by member: a member sharing their screen is two tiles, and keying on the
     // member id would make them collide - one composable reused for both, and two collectors on what
     // the video path believes is a single stream.
-    val spotlightTileId = state.spotlightParticipant?.tileId
+    val spotlightTileId = state.spotlightTile?.tileId
     val layout = state.layout
 
     // Who is drawn right now: the members of the call, plus anyone who has just left and has not
@@ -123,15 +125,15 @@ internal fun CallTileLayout(
     //
     // Seeded rather than left for the effect below to fill, so that a screenshot test - which
     // renders a composition without ever running one - draws the call rather than an empty screen.
-    val rendered = remember { mutableStateListOf<CallParticipant>().apply { addAll(state.tiles) } }
+    val rendered = remember { mutableStateListOf<CallTileData>().apply { addAll(state.tiles) } }
     LaunchedEffect(state.tiles) {
-        state.tiles.forEach { participant ->
-            val index = rendered.indexOfFirst { it.tileId == participant.tileId }
+        state.tiles.forEach { tile ->
+            val index = rendered.indexOfFirst { it.tileId == tile.tileId }
             // Every snapshot rebuilds the tiles, so most of these are equal values in new objects:
             // writing those would invalidate the list, and everything reading it, for nothing.
             when {
-                index < 0 -> rendered.add(participant)
-                rendered[index] != participant -> rendered[index] = participant
+                index < 0 -> rendered.add(tile)
+                rendered[index] != tile -> rendered[index] = tile
             }
         }
     }
@@ -247,6 +249,12 @@ internal fun CallTileLayout(
             // the tile already sent, which the call layer drops.
             val parkedTiles = remember { mutableSetOf<String>() }
             LaunchedEffect(composedIds) {
+                // The same set, told to the call, which polls statistics for these tiles and no others.
+                state.eventSink(
+                    ElementCallScreenEvent.SetComposedTiles(
+                        state.tiles.filter { it.tileId in composedIds }.map { it.id }.toSet()
+                    )
+                )
                 val parked = state.tiles.filter { it.tileId !in composedIds && state.videoFrames[it.tileId] != null }
                 parked.filter { parkedTiles.add(it.tileId) }.forEach { tile ->
                     state.eventSink(
@@ -280,37 +288,37 @@ internal fun CallTileLayout(
                 )
             }
 
-            rendered.forEach { participant ->
+            rendered.forEach { tile ->
                 // A leaver is always composed, wherever they were: their tile is what plays them
                 // out, and removes itself when it has. Parked far away it does so in a frame.
-                val isComposed = participant.tileId in composedIds || participant.tileId !in slots
+                val isComposed = tile.tileId in composedIds || tile.tileId !in slots
                 if (!isComposed) return@forEach
-                key(participant.tileId) {
-                    val tileSlot = lastSlots[participant.tileId] ?: TileSlot(rect = Rect.Zero, inStrip = false)
+                key(tile.tileId) {
+                    val tileSlot = lastSlots[tile.tileId] ?: TileSlot(rect = Rect.Zero, inStrip = false)
                     val slot = tileSlot.rect
                     // Drawn while on screen, and for a moment after leaving it, so that scrolling a
                     // tile back and forth over the edge does not build and tear down its renderer
                     // each time. The same answer goes to the SFU, so a fling does not send a burst of
                     // visible/not-visible flips either.
-                    val isDrawn = rememberDrawn(isVisible = participant.tileId in visibleIds)
+                    val isDrawn = rememberDrawn(isVisible = tile.tileId in visibleIds)
                     // Tell the core how big this really is, so a thumbnail stops receiving the
                     // sender's best layer - or that it is off screen, so it can stop sending at all.
                     // Keyed on the *target* slot rather than the animated one, so promotion sends one
                     // message rather than one per frame of the animation.
                     ReportVideoConstraints(
-                        participant = participant,
+                        tile = tile,
                         slot = slot,
-                        hasVideo = state.videoFrames[participant.tileId] != null,
+                        hasVideo = state.videoFrames[tile.tileId] != null,
                         isVisible = isDrawn,
                         eventSink = state.eventSink,
                     )
-                    CallTile(
-                        participant = participant,
-                        videoFrames = state.videoFrames[participant.tileId],
-                        isSpotlight = participant.tileId == spotlightTileId,
+                    PlacedTile(
+                        tile = tile,
+                        videoFrames = state.videoFrames[tile.tileId],
+                        isSpotlight = tile.tileId == spotlightTileId,
                         appearance = when {
                             layout != CallLayout.OneToOne -> CallTileAppearance.Card
-                            participant.isLocal -> CallTileAppearance.Thumbnail
+                            tile.isLocal -> CallTileAppearance.Thumbnail
                             else -> CallTileAppearance.FullBleed
                         },
                         slot = slot,
@@ -318,12 +326,21 @@ internal fun CallTileLayout(
                         stripScroll = stripScroll,
                         scrollable = scrollable,
                         isDrawn = isDrawn,
-                        isPresent = state.tiles.any { it.tileId == participant.tileId },
-                        onExit = { rendered.removeAll { it.tileId == participant.tileId } },
+                        isPresent = state.tiles.any { it.tileId == tile.tileId },
+                        onExit = { rendered.removeAll { it.tileId == tile.tileId } },
                         stats = if (state.isTileStatsVisible) {
                             TileStats(
-                                receiveStats = state.receiveStats[participant.memberId],
-                                frameEncryption = state.frameEncryption[participant.memberId],
+                                receiveStats = state.receiveStats[MatrixRtcStreamRef(tile.memberId, tile.streamKind)],
+                                // A screen is nobody's voice: its owner's audio is read off their camera tile.
+                                audioStats = if (tile.isScreenShare) {
+                                    null
+                                } else {
+                                    state.receiveStats[MatrixRtcStreamRef(
+                                        tile.memberId,
+                                        MatrixRtcStreamKind.MICROPHONE
+                                    )]
+                                },
+                                frameEncryption = state.frameEncryption[tile.memberId],
                                 requestedWidth = slot.width.roundToInt(),
                                 requestedHeight = slot.height.roundToInt(),
                             )
@@ -422,7 +439,7 @@ private fun SwitchCameraButton(onClick: () -> Unit, modifier: Modifier = Modifie
  */
 @Composable
 private fun ReportVideoConstraints(
-    participant: CallParticipant,
+    tile: CallTileData,
     slot: Rect,
     hasVideo: Boolean,
     isVisible: Boolean,
@@ -431,7 +448,7 @@ private fun ReportVideoConstraints(
     val width = slot.width.roundToInt()
     val height = slot.height.roundToInt()
     val currentEventSink by rememberUpdatedState(eventSink)
-    LaunchedEffect(participant.tileId, participant.streamKind, hasVideo, isVisible, width, height) {
+    LaunchedEffect(tile.tileId, tile.streamKind, hasVideo, isVisible, width, height) {
         if (!hasVideo) return@LaunchedEffect
         val constraints = if (isVisible) {
             if (width <= 0 || height <= 0) return@LaunchedEffect
@@ -441,8 +458,8 @@ private fun ReportVideoConstraints(
         }
         currentEventSink(
             ElementCallScreenEvent.SetVideoConstraints(
-                memberId = participant.memberId,
-                kind = participant.streamKind,
+                memberId = tile.memberId,
+                kind = tile.streamKind,
                 constraints = constraints,
             )
         )
@@ -482,8 +499,8 @@ private fun rememberDrawn(isVisible: Boolean): Boolean {
  * [rememberDrawn].
  */
 @Composable
-private fun CallTile(
-    participant: CallParticipant,
+private fun PlacedTile(
+    tile: CallTileData,
     videoFrames: Flow<MatrixRtcVideoFrame>?,
     isSpotlight: Boolean,
     appearance: CallTileAppearance,
@@ -527,20 +544,20 @@ private fun CallTile(
     // back as an avatar for their fade-out.
     val frames = (videoFrames ?: lastFrames.value.takeIf { !isPresent })?.takeIf { isDrawn }
 
-    CallParticipantTile(
-        participant = participant,
+    CallTile(
+        tile = tile,
         videoFrames = frames,
         isSpotlight = isSpotlight,
         appearance = appearance,
         stats = stats,
         modifier = Modifier
-            .testTag(ElementCallTestTags.tile(participant.tileId))
+            .testTag(ElementCallTestTags.tile(tile.tileId))
             .animatedSlot(slot, inStrip = inStrip, scroll = stripScroll)
             // We are always drawn on top. The one-to-one thumbnail overlaps the other person, and
             // the tiles are composed in arrival order, so without this whoever joined first would
             // win. Harmless in a grid, where nothing overlaps - and it means that when the other
             // person leaves a one-to-one call they fade out over us rather than under us.
-            .zIndex(if (participant.isLocal) LOCAL_Z_INDEX else 0f)
+            .zIndex(if (tile.isLocal) LOCAL_Z_INDEX else 0f)
             .graphicsLayer {
                 val progress = presence.value
                 alpha = progress
@@ -1030,8 +1047,13 @@ private fun gridSlots(
         slots[spotlightTileId] = area
         return slots
     }
-    // Nobody spotlighted - which is what being alone in a call looks like, since the spotlight is
-    // never ourselves - so the grid has the lot.
+    // Alone in the call: our own tile is all there is, and a 4:3 grid cell would leave half a phone
+    // empty around it. It gets the area, as a spotlight with no strip does.
+    if (spotlightTileId == null && strip.size == 1) {
+        slots[strip.single()] = area
+        return slots
+    }
+    // Nobody spotlighted, and more than one tile: the grid has the lot.
     if (spotlightTileId == null) {
         val grid = bestGrid(strip.size, width, height, spacing) ?: return slots
         placeGrid(slots, strip, grid, area, spacing)

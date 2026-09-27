@@ -34,8 +34,9 @@ class StripPagingTest {
     @Test
     fun swipingAStripTilePagesTheStrip() {
         launchSample(SampleFixture.LARGE_CALL).use {
-            // Member 2 is spotlighted, so member 1 is the first strip tile.
-            val tag = ElementCallTestTags.tile(aCrowdMemberId(1))
+            // Member 2 is spotlighted. The strip follows the tile order: our own tile, then the
+            // members with a camera, so member 4 is the first remote tile on the first page.
+            val tag = ElementCallTestTags.tile(aCrowdMemberId(4))
             val before = composeRule.onNodeWithTag(tag).getBoundsInRoot()
 
             composeRule.onNodeWithTag(tag).performTouchInput { swipeLeft() }

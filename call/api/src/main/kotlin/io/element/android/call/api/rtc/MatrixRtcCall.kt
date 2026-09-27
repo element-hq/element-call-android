@@ -34,7 +34,17 @@ interface MatrixRtcCall : AutoCloseable {
 
     val events: Flow<MatrixRtcCallEvent>
 
-    val participants: StateFlow<List<MatrixRtcParticipant>>
+    /**
+     * The remote tiles, ranked and damped by the core. Pushed, and never republished unchanged.
+     */
+    val tiles: StateFlow<MatrixRtcTileRoster>
+
+    /**
+     * Our own tile and screen-sharing state. Null until our membership is on the core's roster: the
+     * core adds us to the call from our membership, not from the transport, so this can trail the
+     * media connecting.
+     */
+    val localState: StateFlow<MatrixRtcLocalState?>
 
     /**
      * How loud each member is, keyed by member id, ours included.
@@ -45,13 +55,22 @@ interface MatrixRtcCall : AutoCloseable {
     val audioLevels: StateFlow<Map<String, MatrixRtcAudioLevel>>
 
     /**
-     * RTP receive counters per remote member, refreshed while media is connected.
+     * RTP receive counters per remote stream, refreshed while media is connected: the stream of every
+     * tile declared through [setComposedTiles], plus the microphone of each of those members.
      *
-     * This is what [audioLevels] cannot tell you: whether packets are actually arriving. A member
+     * This is what [audioLevels] cannot tell you: whether packets are actually arriving. A stream
      * appears once the transport has its first RTCP report, so an entry missing early in a call means
-     * "not known yet" rather than "nothing received".
+     * "not known yet" rather than "nothing received". Nothing is polled for a tile nobody composes.
      */
-    val receiveStats: StateFlow<Map<String, MatrixRtcReceiveStats>>
+    val receiveStats: StateFlow<Map<MatrixRtcStreamRef, MatrixRtcReceiveStats>>
+
+    /**
+     * Declare which tiles the UI currently composes - on screen or within a page of it.
+     *
+     * Contract C12's "declare what you compose": what the stats poll is bounded to, so a call of two
+     * hundred costs one round trip a second for the twenty tiles drawn rather than one per member.
+     */
+    fun setComposedTiles(tileIds: Set<MatrixRtcTileId>)
 
     /**
      * Whether our microphone is currently muted.
@@ -80,10 +99,10 @@ interface MatrixRtcCall : AutoCloseable {
     val isFrontCamera: StateFlow<Boolean>
 
     /**
-     * Whether we are capturing and publishing the screen, see [setScreenShareEnabled].
+     * Whether our screen-share publication is up and unmuted, see [setScreenShareEnabled].
      *
-     * Goes false on its own if the user stops the share from the system UI, which is a thing they can
-     * do at any moment from outside the app and which nothing else would report.
+     * [MatrixRtcLocalState.isScreenSharing], so it goes false on its own if the user stops the share
+     * from the system UI: the capturer turns that stop into an unpublish.
      */
     val isScreenSharing: StateFlow<Boolean>
 
@@ -100,10 +119,10 @@ interface MatrixRtcCall : AutoCloseable {
      *
      * Emits nothing, rather than failing, for a stream that is not being published - including
      * ourselves with the camera off. A member who starts publishing later needs a fresh collection:
-     * this does not wait around for a stream that does not exist yet, so drive it from
-     * [participants] and the [MatrixRtcCallEvent.StreamStarted] events that change it.
+     * this does not wait around for a stream that does not exist yet, so drive it from the tiles'
+     * `hasVideo`, which [tiles] and [localState] republish when a stream starts.
      *
-     * @param memberId whose stream, as [participants] names them.
+     * @param memberId whose stream, as [MatrixRtcTileId.memberId] names them.
      * @param kind which of the member's video streams. A member can publish a camera and a screen at
      * once, and they are two independent streams that happen to share a member id.
      */

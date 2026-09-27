@@ -12,15 +12,12 @@ import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.audio.CallAudioDevice
-import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
-import io.element.android.call.api.rtc.MatrixRtcStreamState
+import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.test.ElementCallTestPattern
-import kotlinx.collections.immutable.ImmutableList
-import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -88,11 +85,11 @@ class SampleElementCallController(
     }
 
     override fun setMicrophoneMuted(muted: Boolean) = update {
-        it.copy(isMicrophoneMuted = muted, participants = it.participants.withLocalStream(MatrixRtcStreamKind.MICROPHONE, isMuted = muted))
+        it.copy(isMicrophoneMuted = muted, ownTile = it.ownTile?.copy(isMicrophoneMuted = muted))
     }
 
     override fun setCameraEnabled(enabled: Boolean) = update {
-        it.copy(isCameraEnabled = enabled, participants = it.participants.withLocalStream(MatrixRtcStreamKind.CAMERA, isMuted = !enabled))
+        it.copy(isCameraEnabled = enabled, ownTile = it.ownTile?.copy(hasVideo = enabled))
     }
 
     override fun switchCamera() = update { it.copy(isFrontCamera = !it.isFrontCamera) }
@@ -119,11 +116,10 @@ class SampleElementCallController(
             pattern.frames()
         }
 
-    override fun setScreenShareEnabled(token: MatrixRtcScreenCaptureToken?) = update {
-        it.copy(
-            isScreenSharing = token != null,
-            participants = it.participants.withLocalStream(MatrixRtcStreamKind.SCREEN_SHARE, isMuted = token == null),
-        )
+    override fun setScreenShareEnabled(token: MatrixRtcScreenCaptureToken?) = update { it.copy(isScreenSharing = token != null) }
+
+    override fun setComposedTiles(tileIds: Set<MatrixRtcTileId>) {
+        // Nothing to poll: the harness has no transport.
     }
 
     override fun setVideoConstraints(memberId: String, kind: MatrixRtcStreamKind, constraints: MatrixRtcVideoConstraints) {
@@ -139,12 +135,4 @@ class SampleElementCallController(
     private fun update(block: (ElementCallSnapshot) -> ElementCallSnapshot) {
         _state.update { it?.let(block) }
     }
-
-    /** Our own participant with one stream set the given way, added if we were not publishing it. */
-    private fun ImmutableList<MatrixRtcParticipant>.withLocalStream(kind: MatrixRtcStreamKind, isMuted: Boolean): ImmutableList<MatrixRtcParticipant> =
-        map { participant ->
-            if (!participant.isLocal) return@map participant
-            val others = participant.streams.filterNot { it.kind == kind }
-            participant.copy(streams = others + MatrixRtcStreamState(kind, isMuted = isMuted))
-        }.toImmutableList()
 }

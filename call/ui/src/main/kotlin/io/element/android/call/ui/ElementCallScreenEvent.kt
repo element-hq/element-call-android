@@ -9,6 +9,7 @@ package io.element.android.call.ui
 
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 
 sealed interface ElementCallScreenEvent {
@@ -47,6 +48,12 @@ sealed interface ElementCallScreenEvent {
         val kind: MatrixRtcStreamKind,
         val constraints: MatrixRtcVideoConstraints,
     ) : ElementCallScreenEvent
+
+    /**
+     * Which tiles the layout composes - on screen or within a page of it. Sent by the layout, which
+     * is the only thing that knows, whenever the set changes; the call polls statistics for these.
+     */
+    data class SetComposedTiles(val tileIds: Set<MatrixRtcTileId>) : ElementCallScreenEvent
 
     /**
      * Start or stop sharing the screen.

@@ -13,6 +13,8 @@ import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcStreamRef
+import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import kotlinx.coroutines.awaitCancellation
@@ -47,15 +49,12 @@ class FakeElementCallController(
     var toggleTileStatsCount = 0
         private set
 
-    /** One member's one video stream, which is what [videoFrames] is keyed by. */
-    data class VideoStreamRef(val memberId: String, val kind: MatrixRtcStreamKind)
-
     /** Every stream asked for, in order, so a test can see what a screen opened. */
-    val videoFramesRequests = mutableListOf<VideoStreamRef>()
+    val videoFramesRequests = mutableListOf<MatrixRtcStreamRef>()
 
     /** Every share request, in order: a token to start, null to stop. */
     val screenShareTokens = mutableListOf<MatrixRtcScreenCaptureToken?>()
-    val videoConstraints = mutableListOf<Pair<VideoStreamRef, MatrixRtcVideoConstraints>>()
+    val videoConstraints = mutableListOf<Pair<MatrixRtcStreamRef, MatrixRtcVideoConstraints>>()
     var hangUpCount = 0
         private set
 
@@ -64,7 +63,7 @@ class FakeElementCallController(
      * layout keys its collection on the instance, so a fresh flow per call would look like a stream
      * being reopened.
      */
-    private val videoFlows = mutableMapOf<VideoStreamRef, Flow<MatrixRtcVideoFrame>>()
+    private val videoFlows = mutableMapOf<MatrixRtcStreamRef, Flow<MatrixRtcVideoFrame>>()
 
     override fun setInPictureInPicture(isInPictureInPicture: Boolean) {
         this.isInPictureInPicture.value = isInPictureInPicture
@@ -111,7 +110,7 @@ class FakeElementCallController(
     }
 
     override fun videoFrames(memberId: String, kind: MatrixRtcStreamKind): Flow<MatrixRtcVideoFrame> {
-        val ref = VideoStreamRef(memberId, kind)
+        val ref = MatrixRtcStreamRef(memberId, kind)
         videoFramesRequests += ref
         return videoFlows.getOrPut(ref) { flow { awaitCancellation() } }
     }
@@ -120,8 +119,15 @@ class FakeElementCallController(
         screenShareTokens += token
     }
 
+    /** Every set [setComposedTiles] was given, in order. */
+    val composedTiles = mutableListOf<Set<MatrixRtcTileId>>()
+
+    override fun setComposedTiles(tileIds: Set<MatrixRtcTileId>) {
+        composedTiles += tileIds
+    }
+
     override fun setVideoConstraints(memberId: String, kind: MatrixRtcStreamKind, constraints: MatrixRtcVideoConstraints) {
-        videoConstraints += VideoStreamRef(memberId, kind) to constraints
+        videoConstraints += MatrixRtcStreamRef(memberId, kind) to constraints
     }
 
     override fun hangUp() {

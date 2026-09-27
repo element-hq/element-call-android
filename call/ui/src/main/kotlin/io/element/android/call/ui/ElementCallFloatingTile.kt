@@ -66,7 +66,7 @@ import kotlin.math.roundToInt
  * out-of-app mode, so the system only shrinks the Activity once the user has left the app entirely.
  * Floating over *our own* content while the user carries on scrolling a timeline is something only
  * the app can draw, which is why this is hand-rolled rather than delegated. Native PiP still covers
- * the moment the user leaves - see `ElementCallPictureInPictureView` - and the two hand over to each other.
+ * the moment the user leaves - see `ElementCallPictureInPictureContent` - and the two hand over to each other.
  *
  * Draggable and corner-snapping, because a fixed thumbnail eventually covers the one thing the user
  * wants to read, and because every messenger that has this behaves the same way, so the gesture needs
@@ -180,8 +180,8 @@ private data class FloatingTile(
 )
 
 /**
- * Who the floating tile shows, following the same order of preference as the spotlight: a shared
- * screen, then whoever is being spotlighted, then anyone else.
+ * Who the floating tile shows: the spotlight, so a shared screen when there is one and otherwise the
+ * head of the core's ranking.
  *
  * Falls back to *ourselves* when there is nobody else yet, which the spotlight deliberately does not.
  * The spotlight refuses because the full screen already draws us in the strip, so spotlighting us
@@ -189,27 +189,14 @@ private data class FloatingTile(
  * and an empty rectangle.
  */
 private fun ElementCallSnapshot.floatingTile(): FloatingTile? {
-    val sharer = participants.firstOrNull { participant ->
-        !participant.isLocal && participant.streams.any { it.kind == MatrixRtcStreamKind.SCREEN_SHARE && !it.isMuted }
-    }
-    if (sharer != null) {
-        return FloatingTile(
-            memberId = sharer.memberId,
-            kind = MatrixRtcStreamKind.SCREEN_SHARE,
-            isMirrored = false,
-            userId = sharer.userId,
-            roomMember = roomMembers[sharer.userId],
-        )
-    }
-
-    val remote = participants.firstOrNull { it.memberId == spotlightMemberId && !it.isLocal }
-        ?: participants.firstOrNull { !it.isLocal }
-    val chosen = remote ?: participants.firstOrNull { it.isLocal } ?: return null
-    val hasCamera = chosen.streams.any { it.kind == MatrixRtcStreamKind.CAMERA && !it.isMuted }
+    val remote = tiles.firstOrNull()
+    val chosen = remote ?: ownTile ?: return null
+    val isLocal = remote == null
+    val hasVideo = if (isLocal) isCameraEnabled else chosen.hasVideo
     return FloatingTile(
-        memberId = chosen.memberId.takeIf { hasCamera },
-        kind = MatrixRtcStreamKind.CAMERA,
-        isMirrored = chosen.isLocal && isFrontCamera,
+        memberId = chosen.id.memberId.takeIf { hasVideo },
+        kind = chosen.id.kind.videoStreamKind,
+        isMirrored = isLocal && isFrontCamera,
         userId = chosen.userId,
         roomMember = roomMembers[chosen.userId],
     )

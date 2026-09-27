@@ -1147,7 +1147,8 @@ that the two can be read against each other on one device.
 | `sendToDeviceMessage(<type> index N to [<recipients>])` | what we told the far end to decrypt with, against what our own cryptor encrypts with |
 | `feeding N sticky event(s) for <room>: [<member>=<membership>]` | a snapshot of joins from one carrying a departure the core ignored |
 | `N member(s) in <room>/<slot>` | the core's membership projection from the media roster, which can legitimately differ |
-| `rx <member> - N pkts, N lost, N% invented, jitter Ns` | a starved stream from a silent one |
+| `rx audio <member> - N pkts, N lost, N% invented, jitter Ns` | a starved audio stream from a silent one; only for members whose tile is composed |
+| `rx video <member>/<kind> - N pkts, N lost, N decoded, N dropped` | a decode stall (frames flat, packets climbing) from a delivery one, per composed camera or screen |
 | `audio <in\|out> - N frames, level N, realtime Nx` | capture or playback being alive from it being merely negotiated, and a loop keeping up with real time from one starving |
 | `audio in <member> - N new AudioTrack under-runs (N total)` | a crackle we caused from one the network caused |
 | `<member> publishes no microphone stream ... streams: <kinds>` | a member who muted themselves from one whose audio never reached us |

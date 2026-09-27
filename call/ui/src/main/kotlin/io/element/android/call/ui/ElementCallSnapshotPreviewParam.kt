@@ -39,7 +39,7 @@ fun aCallSnapshot(
     connectedAtElapsedMs: Long? = null,
     isMaximized: Boolean = false,
     participants: List<MatrixRtcParticipant> = emptyList(),
-    spotlightMemberId: String? = null,
+    speakingIds: Set<String> = emptySet(),
 ) = ElementCallSnapshot(
     callData = ElementCallData(
         roomId = RoomId("!aRoom:example.org"),
@@ -50,6 +50,6 @@ fun aCallSnapshot(
     isMicrophoneMuted = isMicrophoneMuted,
     connectedAtElapsedMs = connectedAtElapsedMs,
     isMaximized = isMaximized,
-    participants = participants.toImmutableList(),
-    spotlightMemberId = spotlightMemberId,
+    tiles = participants.previewTiles(speakingIds).toImmutableList(),
+    ownTile = participants.previewOwnTile(),
 )
