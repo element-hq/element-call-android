@@ -221,7 +221,7 @@ private fun NamePill(tile: CallTileData, modifier: Modifier = Modifier) {
             )
         }
         Text(
-            text = if (tile.isScreenShare) stringResource(R.string.element_call_shared_screen_name, tile.displayName) else tile.displayName,
+            text = if (tile.isScreenShare) stringResource(R.string.element_call_shared_screen_name, tile.displayName) else tile.label(),
             style = ElementCallTheme.typography.bodySmMedium,
             color = ElementCallTheme.colors.onOverlay,
             maxLines = 1,
@@ -257,7 +257,7 @@ private fun CallTileData.accessibilityDescription(): String {
         if (isActiveSpeaker) add(stringResource(R.string.element_call_a11y_speaking))
         if (isHandRaised) add(stringResource(R.string.element_call_a11y_hand_raised))
     }
-    return (listOf(displayName) + states).joinToString(", ")
+    return (listOf(label()) + states).joinToString(", ")
 }
 
 /** A camera in the spotlight is drawn halfway between fill and fit (spec 003 R16, contract B7). */
@@ -277,3 +277,11 @@ internal fun CallTilePreview(@PreviewParameter(CallTileDataPreviewParam::class) 
         modifier = Modifier.size(width = 180.dp, height = 135.dp),
     )
 }
+
+/**
+ * What a person's tile is called: their name, and "You" on our own, as on iOS (feature-hq 003
+ * contract B15). Our own name on our own tile reads as someone else in the call. The avatar keeps
+ * the initial and colour of who we are.
+ */
+@Composable
+private fun CallTileData.label(): String = if (isLocal) stringResource(R.string.element_call_you) else displayName

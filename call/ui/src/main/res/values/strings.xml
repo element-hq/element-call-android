@@ -23,6 +23,8 @@
     <string name="element_call_a11y_selected">Selected</string>
     <string name="element_call_action_stop">Stop</string>
     <string name="element_call_audio_output_title">Audio output</string>
+    <!-- Our own tile's name. -->
+    <string name="element_call_you">You</string>
     <string name="element_call_shared_screen_name">%1$s’s screen</string>
     <string name="element_call_a11y_muted">Muted</string>
     <string name="element_call_a11y_speaking">Speaking</string>
