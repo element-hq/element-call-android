@@ -116,6 +116,14 @@ internal fun CallStage(
     state: ElementCallScreenState,
     /** How much of the stage's bottom the control bar floats over, which the last row scrolls clear of (R43, R44). */
     controlsClearance: Dp,
+    /**
+     * How much of the stage's top the top bar floats over. The grid is arranged below it, while a
+     * fullscreen tile takes the stage from [fullscreenTop]. The stage keeps its bounds whether or
+     * not a tile fills it, so nothing already drawn moves when one starts to (000 R7).
+     */
+    topClearance: Dp,
+    /** Where a fullscreen tile starts, keeping the status bar clear (000 R1). */
+    fullscreenTop: Dp,
     modifier: Modifier = Modifier,
     arrangement: CallStageArrangement = CallStageArrangement.RankedGrid,
 ) {
@@ -139,12 +147,15 @@ internal fun CallStage(
             // Not while a tile fills the stage: a drag there pans the picture (000 R23).
             .scrollable(scrollable, Orientation.Vertical, reverseDirection = true, enabled = state.fullscreenTileId == null),
     ) {
+        val density = LocalDensity.current
+        val gridTop = with(density) { topClearance.toPx() }
+        // From here on, coordinates are those of the area under the top bar, which is what the
+        // arrangement divides up; only a fullscreen tile reaches above it.
         val width = constraints.maxWidth.toFloat()
-        val height = constraints.maxHeight.toFloat()
+        val height = constraints.maxHeight.toFloat() - gridTop
         // Nothing is drawn into an area with no room in it: a tile composed at nothing and then
         // grown would animate in from the corner, and would build a GL renderer nobody can see.
         if (width <= 0f || height <= 0f) return@BoxWithConstraints
-        val density = LocalDensity.current
         val metrics = remember(width, height, density, controlsClearance) {
             with(density) {
                 CallStageMetrics(
@@ -163,7 +174,7 @@ internal fun CallStage(
         // Fullscreen is a placement over the arrangement, not an arrangement: the grid's rects and
         // its scroll offset are untouched, so leaving returns to the position it had (003 R63, 000 R26).
         val fullscreenId = state.fullscreenTileId
-        val fullscreenRect = Rect(0f, 0f, width, height)
+        val fullscreenRect = Rect(0f, with(density) { fullscreenTop.toPx() } - gridTop, width, height)
         val gridTileIds = remember(state.tiles, spotlightTileId) { state.gridTiles.map { it.tileId } }
         val heroIds = remember(state.tiles) { state.heroes }
         val layout = remember(gridTileIds, spotlightTileId, heroIds, metrics, arrangement) {
@@ -175,7 +186,7 @@ internal fun CallStage(
         // Someone leaving can shorten the grid past the offset; ease back to the new end rather than
         // showing an empty area below the last row (R42). A swipe in the meantime takes precedence.
         LaunchedEffect(layout.contentHeight, fullscreenId) {
-            // The stage grows by the top bar while fullscreen; clamping to that would rewind the grid on the way out.
+            // Not while fullscreen: the grid waits where it was left for the way out (R63).
             if (fullscreenId != null) return@LaunchedEffect
             val excess = scrollOffset.floatValue - layout.maxScroll(height)
             if (excess > 0f) scrollable.animateScrollBy(-excess)
@@ -383,7 +394,7 @@ internal fun CallStage(
         // The whole grid moves as one layer: a scroll changes this translation and nothing else, so no
         // tile is re-placed or recomposed for it. Sticky slots counter-translate in their own
         // placement (animatedSlot), which is the only placement a scroll reaches.
-        Box(modifier = Modifier.fillMaxSize().graphicsLayer { translationY = -scrollOffset.floatValue }) {
+        Box(modifier = Modifier.fillMaxSize().graphicsLayer { translationY = gridTop - scrollOffset.floatValue }) {
         state.tiles.forEach { tile ->
             val isComposed = tile.tileId == stickyTileId ||
                 tile.tileId == fullscreenId && tile.tileId !in heroIds ||
