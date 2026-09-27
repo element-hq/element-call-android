@@ -88,10 +88,8 @@ data class ElementCallSnapshot(
      */
     val tiles: ImmutableList<MatrixRtcTile> = persistentListOf(),
     /**
-     * Our camera tile, or null before media connects.
-     *
-     * The core only publishes it once our membership reaches its roster, so until then it is built
-     * from our row in the transport's roster: otherwise every join would open on an empty stage.
+     * Our camera tile, as the core publishes it: null until our membership reaches the core's roster,
+     * which can be a moment after media connects.
      */
     val ownTile: MatrixRtcTile? = null,
     /** Whether the microphone is muted, and before the media connects whether it will be published muted. */

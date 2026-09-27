@@ -35,20 +35,14 @@ interface MatrixRtcCall : AutoCloseable {
     val events: Flow<MatrixRtcCallEvent>
 
     /**
-     * The transport's view, one row per membership, ourselves included, **as read at connect**: a
-     * diagnostics pull, the whole call every time, so it is not kept live. What to draw is [tiles],
-     * and whose audio plays follows [tiles] too.
-     */
-    val participants: StateFlow<List<MatrixRtcParticipant>>
-
-    /**
      * The remote tiles, ranked and damped by the core. Pushed, and never republished unchanged.
      */
     val tiles: StateFlow<MatrixRtcTileRoster>
 
     /**
-     * Our own tile and screen-sharing state. Null until our membership is on the core's roster, which
-     * is later than [participants] first lists us.
+     * Our own tile and screen-sharing state. Null until our membership is on the core's roster: the
+     * core adds us to the call from our membership, not from the transport, so this can trail the
+     * media connecting.
      */
     val localState: StateFlow<MatrixRtcLocalState?>
 
@@ -125,10 +119,10 @@ interface MatrixRtcCall : AutoCloseable {
      *
      * Emits nothing, rather than failing, for a stream that is not being published - including
      * ourselves with the camera off. A member who starts publishing later needs a fresh collection:
-     * this does not wait around for a stream that does not exist yet, so drive it from
-     * [participants] and the [MatrixRtcCallEvent.StreamStarted] events that change it.
+     * this does not wait around for a stream that does not exist yet, so drive it from the tiles'
+     * `hasVideo`, which [tiles] and [localState] republish when a stream starts.
      *
-     * @param memberId whose stream, as [participants] names them.
+     * @param memberId whose stream, as [MatrixRtcTileId.memberId] names them.
      * @param kind which of the member's video streams. A member can publish a camera and a screen at
      * once, and they are two independent streams that happen to share a member id.
      */

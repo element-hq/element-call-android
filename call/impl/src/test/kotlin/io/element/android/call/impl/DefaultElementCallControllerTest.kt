@@ -34,7 +34,6 @@ import io.element.android.call.test.A_ROOM_ID
 import io.element.android.call.test.FakeElementCallLifecycleListener
 import io.element.android.call.test.FakeElementCallRoomContextProvider
 import io.element.android.call.test.FakeMatrixRtcService
-import io.element.android.call.test.aCameraParticipant
 import io.element.android.call.test.aRoster
 import io.element.android.call.test.aTile
 import io.element.android.call.test.audio.FakeAudioFocus
@@ -887,32 +886,10 @@ class DefaultElementCallControllerTest {
         runCurrent()
         val call = rtcService.lastSession?.lastCall!!
 
-        call.participants.value = listOf(aCameraParticipant(A_LOCAL_MEMBER_ID, isLocal = true, isCameraMuted = false))
+        call.localState.value = MatrixRtcLocalState(tile = aTile(A_LOCAL_MEMBER_ID, hasVideo = true), isScreenSharing = false)
         runCurrent()
         assertThat(controller.state.value?.spotlightTileId).isNull()
         assertThat(controller.state.value?.ownTile?.id?.memberId).isEqualTo(A_LOCAL_MEMBER_ID)
-    }
-
-    /**
-     * The core publishes our tile only once our membership reaches its roster, which is after the
-     * transport first lists us. Without the fallback every join would open on an empty stage.
-     */
-    @Test
-    fun `our own tile comes from the transport until the core publishes it`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService)
-        controller.setMicrophonePermissionGranted(true)
-        runCurrent()
-        val call = rtcService.lastSession?.lastCall!!
-
-        call.participants.value = listOf(aCameraParticipant(A_LOCAL_MEMBER_ID, isLocal = true, isCameraMuted = true))
-        runCurrent()
-        assertThat(controller.state.value?.ownTile?.hasVideo).isFalse()
-
-        call.localState.value = MatrixRtcLocalState(tile = aTile(A_LOCAL_MEMBER_ID, hasVideo = true, isSpeaking = true), isScreenSharing = false)
-        runCurrent()
-        assertThat(controller.state.value?.ownTile?.hasVideo).isTrue()
-        assertThat(controller.state.value?.ownTile?.isSpeaking).isTrue()
     }
 
     /**

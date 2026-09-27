@@ -14,11 +14,9 @@ import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcKeyRejection
 import io.element.android.call.api.rtc.MatrixRtcLocalState
 import io.element.android.call.api.rtc.MatrixRtcMembership
-import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
-import io.element.android.call.api.rtc.MatrixRtcStreamState
 import io.element.android.call.api.rtc.MatrixRtcTile
 import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcTileKind
@@ -32,11 +30,9 @@ import org.matrix.rtc.FfiFrameEncryptionDiagnostic
 import org.matrix.rtc.FfiFrameEncryptionState
 import org.matrix.rtc.FfiKeyRejection
 import org.matrix.rtc.FfiLocalState
-import org.matrix.rtc.FfiParticipant
 import org.matrix.rtc.FfiReceiveStats
 import org.matrix.rtc.FfiStreamKind
 import org.matrix.rtc.FfiStreamRef
-import org.matrix.rtc.FfiStreamState
 import org.matrix.rtc.FfiStreamStats
 import org.matrix.rtc.FfiTileId
 import org.matrix.rtc.FfiTileKind
@@ -147,20 +143,6 @@ internal fun MatrixRtcStreamKind.map(): FfiStreamKind = when (this) {
     MatrixRtcStreamKind.SCREEN_SHARE_AUDIO -> FfiStreamKind.SCREEN_SHARE_AUDIO
     MatrixRtcStreamKind.DATA -> FfiStreamKind.DATA
 }
-
-internal fun FfiParticipant.map() = MatrixRtcParticipant(
-    memberId = memberId,
-    userId = UserId(userId),
-    deviceId = deviceId,
-    isLocal = isLocal,
-    isReachable = reachable,
-    streams = streams.map { it.map() },
-)
-
-internal fun FfiStreamState.map() = MatrixRtcStreamState(
-    kind = kind.map(),
-    isMuted = muted,
-)
 
 internal fun FfiTileKind.map(): MatrixRtcTileKind = when (this) {
     FfiTileKind.PERSON -> MatrixRtcTileKind.PERSON

@@ -15,7 +15,6 @@ import io.element.android.call.api.rtc.MatrixRtcCallEvent
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionDiagnostic
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcLocalState
-import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
@@ -81,9 +80,6 @@ internal class RustMatrixRtcCall(
 ) : MatrixRtcCall {
     private val _events = MutableSharedFlow<MatrixRtcCallEvent>(extraBufferCapacity = 32)
     override val events: SharedFlow<MatrixRtcCallEvent> = _events
-
-    private val _participants = MutableStateFlow(emptyList<MatrixRtcParticipant>())
-    override val participants: StateFlow<List<MatrixRtcParticipant>> = _participants
 
     private val _isMicrophoneMuted = MutableStateFlow(false)
     override val isMicrophoneMuted: StateFlow<Boolean> = _isMicrophoneMuted
@@ -272,24 +268,8 @@ internal class RustMatrixRtcCall(
     fun start() {
         pumpEvents()
         pumpTiles()
-        seedParticipants()
         followPlayback()
         pollReceiveStats()
-    }
-
-    /**
-     * The transport's roster, read once: the whole call every time, which is the cost the tile
-     * roster's detail window exists to avoid, so it is never pumped or re-read per event. What it
-     * seeds is our own row, for the tile we draw before the core publishes our local state.
-     */
-    private fun seedParticipants() {
-        callScope.launch {
-            val participants = withContext(ffiDispatcher) {
-                runCatchingExceptions { mediaSession.participants().map { it.map() } }.getOrDefault(emptyList())
-            }
-            Timber.i("MatrixRTC: media roster ${participants.size}: ${participants.map { "${it.memberId}${if (it.isLocal) " (self)" else ""}" }}")
-            _participants.value = participants
-        }
     }
 
     /**
