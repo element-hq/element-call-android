@@ -17,6 +17,9 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
   became `suspend`, `WidgetDriverHandle.send` stopped being one), so this library built against 26.09.08 fails at
   runtime on 26.09.26 and the other way round: a host on 26.09.26 needs this version, and one still on an older SDK
   has to move with it.
+- The turnkey transport (`ElementCallSdkTransport`) reads room state and to-device messages from the SDK instead of
+  the widget-driver stopgap. Media keys are now received for the whole session, not only while a call's driver runs,
+  and their sender's device and trust come from the SDK's encryption info rather than from the key message.
 
 ## 0.1.0-rc.5 - 2026-09-25
 

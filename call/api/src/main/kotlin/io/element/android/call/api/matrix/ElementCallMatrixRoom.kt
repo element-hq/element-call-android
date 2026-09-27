@@ -18,9 +18,9 @@ import kotlinx.coroutines.flow.Flow
  *
  * Obtained from [ElementCallMatrixTransport.openRoom] and given back with [close] once the call has
  * left. The methods the released Rust SDK does not expose - delayed events (MSC4140), sticky events
- * (MSC4354), a room-state feed with full events - are today carried by the widget-driver stopgap in
- * `element-call-matrix`; when the SDK gains them, that implementation changes and this interface does
- * not.
+ * (MSC4354), a room event send that answers with its id - are today carried by the widget-driver
+ * stopgap in `element-call-matrix`; when the SDK gains them, that implementation changes and this
+ * interface does not.
  *
  * Failures are [ElementCallMatrixException]s, so a caller can tell a homeserver refusal from a room
  * that is not open.

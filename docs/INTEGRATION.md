@@ -204,9 +204,8 @@ because the two halves have genuinely different rules.
 
 ### Session-scoped: media keys (`SessionStateFeeder.kt`)
 
-*On the released SDK the source is the bridge's `ToDeviceRelay`, fed by whichever room bridge is live, rather
-than a client-wide subscription; the rules below are unchanged, and so is the feeder - see `FEEDBACK.md`,
-"Widget-driver stopgap", for what that costs.*
+*The turnkey transport subscribes client-wide (`Client.subscribeToCustomToDeviceMessages`, SDK 26.09.26), so a
+key arrives whether or not a call is running, with the SDK's attested sender, sending device and shield state.*
 
 Media keys arrive over to-device, and **to-device delivery cannot be caught up on** — the SDK hands each message to
 whoever is subscribed at that moment and then forgets it. Subscribe for the whole Matrix session, not per call, or
