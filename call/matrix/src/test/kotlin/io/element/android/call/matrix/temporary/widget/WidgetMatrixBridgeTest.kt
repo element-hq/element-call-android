@@ -12,7 +12,6 @@ import com.google.common.truth.Truth.assertThat
 import io.element.android.call.api.matrix.ElementCallDelayedEventAction
 import io.element.android.call.api.matrix.ElementCallMatrixException
 import io.element.android.call.api.rtc.MatrixRtcEventTypes
-import io.element.android.call.api.rtc.id.DeviceId
 import io.element.android.call.api.rtc.id.EventId
 import io.element.android.call.api.rtc.id.UserId
 import io.element.android.call.test.A_ROOM_ID
@@ -59,12 +58,13 @@ class WidgetMatrixBridgeTest {
         val granted = capabilitiesReply.response()["capabilities"]!!.jsonArray.map { it.jsonPrimitive.content }
         assertThat(granted).containsExactlyElementsIn(WidgetCapabilityGrant.capabilityStrings)
         assertThat(granted).containsAtLeast(
-            "org.matrix.msc2762.receive.state_event:org.matrix.msc3401.call.member",
-            "org.matrix.msc3819.send.to_device:io.element.call.encryption_keys",
+            "org.matrix.msc2762.send.state_event:org.matrix.msc3401.call.member",
             "org.matrix.msc2762.send.event:org.matrix.msc4075.rtc.notification",
             "org.matrix.msc4157.send.delayed_event",
         )
-        assertThat(granted).hasSize(14)
+        // Nothing read: room state and to-device come from the SDK.
+        assertThat(granted.filter { ".receive." in it || "to_device" in it }).isEmpty()
+        assertThat(granted).hasSize(9)
         assertThat(start.isCompleted).isFalse()
 
         val notifyReply = driver.deliver(toWidget(NOTIFY_CAPABILITIES, "cap-2", approvedCapabilities()))
@@ -128,6 +128,21 @@ class WidgetMatrixBridgeTest {
     }
 
     @Test
+    fun `state and to-device pushed by the driver are answered and otherwise ignored`() = runTest {
+        val driver = FakeWidgetDriver()
+        negotiatedBridge(driver)
+        val sentBefore = driver.sentMessages.size
+
+        // Room state and to-device come from the SDK; a machine still pushing them must not be left waiting.
+        val state = driver.deliver(toWidget(UPDATE_STATE, "s-1", buildJsonObject { put("state", JsonArray(emptyList())) }))
+        val toDevice = driver.deliver(toWidget(SEND_TO_DEVICE, "t-1", buildJsonObject { put("type", MatrixRtcEventTypes.ENCRYPTION_KEY_ELEMENT_CALL) }))
+
+        assertThat(state.response()).isEmpty()
+        assertThat(toDevice.response()).isEmpty()
+        assertThat(driver.sentMessages.size).isEqualTo(sentBefore + 2)
+    }
+
+    @Test
     fun `messages for another widget and malformed messages are ignored without stopping the bridge`() = runTest {
         val driver = FakeWidgetDriver()
         negotiatedBridge(driver)
@@ -141,182 +156,6 @@ class WidgetMatrixBridgeTest {
 
         assertThat(echo.string("requestId")).isEqualTo("n-1")
         assertThat(driver.sentMessages.size).isEqualTo(sentBefore + 1)
-    }
-
-    // State
-
-    @Test
-    fun `state deltas become whole snapshots, through both doors, without duplicates`() = runTest {
-        val driver = FakeWidgetDriver()
-        val bridge = negotiatedBridge(driver)
-
-        bridge.stateEvents(A_MEMBER_TYPE).test {
-            // The initial read after negotiation: two members in one message, one snapshot.
-            driver.deliver(
-                toWidget(
-                    UPDATE_STATE,
-                    "s-1",
-                    stateBatch(
-                        stateEvent(ALICE_KEY, "\$alice1", ALICE, aMembership("ALICEDEV")),
-                        stateEvent(BOB_KEY, "\$bob1", BOB, aMembership("BOBDEV")),
-                    )
-                )
-            )
-            val first = awaitItem()
-            assertThat(first.map { it.stateKey }).containsExactly(ALICE_KEY, BOB_KEY)
-            assertThat(first.single { it.stateKey == ALICE_KEY }.timestampMs).isEqualTo(A_TIMESTAMP)
-            assertThat(first.single { it.stateKey == ALICE_KEY }.sender).isEqualTo(ALICE)
-
-            // A state event in the timeline arrives as send_event and replaces the entry for its key.
-            driver.deliver(toWidget(SEND_EVENT, "s-2", stateEvent(ALICE_KEY, "\$alice2", ALICE, aMembership("ALICEDEV", expires = 7_200_000))))
-            val second = awaitItem()
-            assertThat(second).hasSize(2)
-            assertThat(second.single { it.stateKey == ALICE_KEY }.eventId).isEqualTo(EventId("\$alice2"))
-
-            // The same change through the other door is not a change.
-            driver.deliver(toWidget(UPDATE_STATE, "s-3", stateBatch(stateEvent(ALICE_KEY, "\$alice2", ALICE, aMembership("ALICEDEV", expires = 7_200_000)))))
-            expectNoEvents()
-
-            // A departure is a present event with empty content, and it stays in the snapshot.
-            driver.deliver(toWidget(SEND_EVENT, "s-4", stateEvent(BOB_KEY, "\$bob2", BOB, buildJsonObject {})))
-            val third = awaitItem()
-            assertThat(third).hasSize(2)
-            assertThat(third.single { it.stateKey == BOB_KEY }.contentJson).isEqualTo("{}")
-        }
-    }
-
-    @Test
-    fun `a late subscriber gets the current state at once, and nothing for a type with none`() = runTest {
-        val driver = FakeWidgetDriver()
-        val bridge = negotiatedBridge(driver)
-        driver.deliver(toWidget(UPDATE_STATE, "s-1", stateBatch(stateEvent(ALICE_KEY, "\$alice1", ALICE, aMembership("ALICEDEV")))))
-
-        bridge.stateEvents(A_MEMBER_TYPE).test {
-            assertThat(awaitItem().map { it.stateKey }).containsExactly(ALICE_KEY)
-            expectNoEvents()
-        }
-        // Never an empty list: the feeder would read it as a deserted call.
-        bridge.stateEvents("m.room.topic").test {
-            expectNoEvents()
-        }
-    }
-
-    /**
-     * Ruma reads `m.call.member` as an alias of the unstable name, so the machine lets both through and
-     * the wire type can be either. Both land in the one bucket the feeder subscribes to, with the
-     * spelling they arrived in; a genuinely different type does not.
-     */
-    @Test
-    fun `both spellings of the member type share one bucket and other types stay out of it`() = runTest {
-        val driver = FakeWidgetDriver()
-        val bridge = negotiatedBridge(driver)
-
-        bridge.stateEvents(A_MEMBER_TYPE).test {
-            driver.deliver(
-                toWidget(
-                    UPDATE_STATE,
-                    "s-1",
-                    stateBatch(
-                        stateEvent(ALICE_KEY, "\$alice1", ALICE, aMembership("ALICEDEV")),
-                        stateEvent(BOB_KEY, "\$bob1", BOB, aMembership("BOBDEV"), type = MatrixRtcEventTypes.MEMBER_ELEMENT_CALL_STATE),
-                        stateEvent("", "\$topic1", ALICE, buildJsonObject { put("topic", "hello") }, type = "m.room.topic"),
-                    )
-                )
-            )
-            val snapshot = awaitItem()
-            assertThat(snapshot.map { it.stateKey }).containsExactly(ALICE_KEY, BOB_KEY)
-            assertThat(snapshot.single { it.stateKey == BOB_KEY }.eventType).isEqualTo(MatrixRtcEventTypes.MEMBER_ELEMENT_CALL_STATE)
-        }
-    }
-
-    @Test
-    fun `feeds complete when the bridge stops`() = runTest {
-        val driver = FakeWidgetDriver()
-        val bridge = negotiatedBridge(driver)
-
-        bridge.stateEvents(A_MEMBER_TYPE).test {
-            bridge.toDeviceMessages().test {
-                bridge.stop()
-                awaitComplete()
-            }
-            awaitComplete()
-        }
-    }
-
-    // To-device
-
-    @Test
-    fun `an encrypted to-device message is trusted and names its device from the content`() = runTest {
-        val driver = FakeWidgetDriver()
-        val bridge = negotiatedBridge(driver)
-
-        bridge.toDeviceMessages().test {
-            driver.deliver(toWidget(SEND_TO_DEVICE, "t-1", toDeviceData(BOB, encrypted = true, content = aLegacyKey(deviceId = "BOBDEV"))))
-            val topLevel = awaitItem()
-            assertThat(topLevel.eventType).isEqualTo(MatrixRtcEventTypes.ENCRYPTION_KEY_ELEMENT_CALL)
-            assertThat(topLevel.senderId).isEqualTo(BOB)
-            assertThat(topLevel.content).contains("\"keys\"")
-            val info = topLevel.encryptionInfo!!
-            assertThat(info.senderId).isEqualTo(BOB)
-            assertThat(info.senderDeviceId).isEqualTo(DeviceId("BOBDEV"))
-            assertThat(info.isSenderCrossSigned).isTrue()
-
-            // Element Call has since moved the device inside `member`, as `claimed_device_id`.
-            driver.deliver(toWidget(SEND_TO_DEVICE, "t-2", toDeviceData(BOB, encrypted = true, content = aLegacyKey(claimedDeviceId = "BOBDEV2"))))
-            assertThat(awaitItem().encryptionInfo?.senderDeviceId).isEqualTo(DeviceId("BOBDEV2"))
-
-            driver.deliver(toWidget(SEND_TO_DEVICE, "t-3", toDeviceData(BOB, encrypted = true, content = aLegacyKey(memberDeviceId = "BOBDEV3"))))
-            assertThat(awaitItem().encryptionInfo?.senderDeviceId).isEqualTo(DeviceId("BOBDEV3"))
-        }
-    }
-
-    @Test
-    fun `a cleartext to-device message carries no encryption info`() = runTest {
-        val driver = FakeWidgetDriver()
-        val bridge = negotiatedBridge(driver)
-
-        bridge.toDeviceMessages().test {
-            driver.deliver(toWidget(SEND_TO_DEVICE, "t-1", toDeviceData(BOB, encrypted = false, content = aLegacyKey(deviceId = "BOBDEV"))))
-            assertThat(awaitItem().encryptionInfo).isNull()
-
-            // No `encrypted` at all reads as cleartext too.
-            driver.deliver(toWidget(SEND_TO_DEVICE, "t-2", toDeviceData(BOB, encrypted = null, content = aLegacyKey(deviceId = "BOBDEV"))))
-            assertThat(awaitItem().encryptionInfo).isNull()
-        }
-    }
-
-    /**
-     * A stale membership (a client that died mid-call on a homeserver refusing delayed events) leaves
-     * the sender with two live ones. The device comes from the key message alone, whatever the
-     * memberships say: the core checks the key against the membership, so the bridge must not read the
-     * device off the membership and make that check pass by construction.
-     */
-    @Test
-    fun `the sender device comes from the key message, never from the memberships`() = runTest {
-        val driver = FakeWidgetDriver()
-        val bridge = negotiatedBridge(driver)
-        driver.deliver(
-            toWidget(
-                UPDATE_STATE,
-                "s-1",
-                stateBatch(
-                    // Bob: one live membership.
-                    stateEvent(BOB_KEY, "\$bob1", BOB, aMembership("BOBDEV")),
-                    // Dave: a stale membership next to the live one.
-                    stateEvent("_${DAVE.value}_DAVE1_m.call", "\$dave1", DAVE, aMembership("DAVE1")),
-                    stateEvent("_${DAVE.value}_DAVE2_m.call", "\$dave2", DAVE, aMembership("DAVE2")),
-                )
-            )
-        )
-
-        bridge.toDeviceMessages().test {
-            driver.deliver(toWidget(SEND_TO_DEVICE, "t-1", toDeviceData(DAVE, encrypted = true, content = aLegacyKey(claimedDeviceId = "DAVE2"))))
-            assertThat(awaitItem().encryptionInfo?.senderDeviceId).isEqualTo(DeviceId("DAVE2"))
-            driver.deliver(toWidget(SEND_TO_DEVICE, "t-2", toDeviceData(DAVE, encrypted = true, content = aLegacyKey())))
-            assertThat(awaitItem().encryptionInfo?.senderDeviceId).isNull()
-            driver.deliver(toWidget(SEND_TO_DEVICE, "t-3", toDeviceData(BOB, encrypted = true, content = aLegacyKey())))
-            assertThat(awaitItem().encryptionInfo?.senderDeviceId).isNull()
-        }
     }
 
     // Our requests
@@ -447,49 +286,6 @@ class WidgetMatrixBridgeTest {
     }
 
     @Test
-    fun `a to-device send nests user, device and content, and reports the failures per recipient`() = runTest {
-        val driver = FakeWidgetDriver()
-        val bridge = negotiatedBridge(driver)
-        val messages = mapOf(
-            BOB to mapOf(DeviceId("BOBDEV") to A_CONTENT, DeviceId("BOBDEV2") to A_CONTENT),
-            CAROL to mapOf(DeviceId("CARDEV") to A_CONTENT),
-        )
-
-        val result = async { bridge.sendToDeviceMessage(MatrixRtcEventTypes.ENCRYPTION_KEY_ELEMENT_CALL, messages) }
-        val sent = driver.awaitSent()
-        assertThat(sent.string("action")).isEqualTo(SEND_TO_DEVICE)
-        assertThat(sent.data().string("type")).isEqualTo(MatrixRtcEventTypes.ENCRYPTION_KEY_ELEMENT_CALL)
-        val wireMessages = sent.data()["messages"]!!.jsonObject
-        assertThat(wireMessages.keys).containsExactly(BOB.value, CAROL.value)
-        assertThat(wireMessages[BOB.value]!!.jsonObject.keys).containsExactly("BOBDEV", "BOBDEV2")
-        assertThat(wireMessages[BOB.value]!!.jsonObject["BOBDEV"]!!.jsonObject).isEqualTo(json.parseToJsonElement(A_CONTENT).jsonObject)
-        driver.givenIncomingMessage(
-            responseTo(
-                sent,
-                buildJsonObject {
-                    putJsonObject("failures") {
-                        putJsonArray(BOB.value) { add("BOBDEV2") }
-                    }
-                },
-            )
-        )
-
-        assertThat(result.await().getOrThrow()).isEqualTo(mapOf(BOB to listOf(DeviceId("BOBDEV2"))))
-    }
-
-    /** The machine omits `failures` entirely when everyone was served. */
-    @Test
-    fun `a to-device send with no failures reports none`() = runTest {
-        val driver = FakeWidgetDriver()
-        val bridge = negotiatedBridge(driver)
-
-        val result = async { bridge.sendToDeviceMessage(MatrixRtcEventTypes.ENCRYPTION_KEY_ELEMENT_CALL, mapOf(BOB to mapOf(DeviceId("BOBDEV") to A_CONTENT))) }
-        driver.givenIncomingMessage(responseTo(driver.awaitSent(), buildJsonObject {}))
-
-        assertThat(result.await().getOrThrow()).isEmpty()
-    }
-
-    @Test
     fun `a homeserver error carries its errcode, status and message`() = runTest {
         val driver = FakeWidgetDriver()
         val bridge = negotiatedBridge(driver)
@@ -552,19 +348,16 @@ class WidgetMatrixBridgeTest {
     }
 
     @Test
-    fun `a dying driver fails what is in flight and ends the feeds`() = runTest {
+    fun `a dying driver fails what is in flight`() = runTest {
         val driver = FakeWidgetDriver()
         val bridge = negotiatedBridge(driver)
 
-        bridge.stateEvents(A_MEMBER_TYPE).test {
-            val result = async { bridge.sendDelayedEvent(A_MEMBER_TYPE, A_STATE_KEY, A_CONTENT, 8_000uL) }
-            driver.awaitSent()
+        val result = async { bridge.sendDelayedEvent(A_MEMBER_TYPE, A_STATE_KEY, A_CONTENT, 8_000uL) }
+        driver.awaitSent()
 
-            driver.givenDriverStopped()
+        driver.givenDriverStopped()
 
-            assertThat(result.await().exceptionOrNull()).isInstanceOf(ElementCallMatrixException.NotRunning::class.java)
-            awaitComplete()
-        }
+        assertThat(result.await().exceptionOrNull()).isInstanceOf(ElementCallMatrixException.NotRunning::class.java)
     }
 
     @Test
@@ -576,7 +369,10 @@ class WidgetMatrixBridgeTest {
         val result = bridge.sendDelayedEvent(A_MEMBER_TYPE, A_STATE_KEY, A_CONTENT, 8_000uL)
 
         assertThat(result.exceptionOrNull()).isInstanceOf(ElementCallMatrixException.NotRunning::class.java)
-        bridge.toDeviceMessages().test { awaitComplete() }
+        // Stopped, not just this send: the next one is refused without reaching the driver.
+        val sentBefore = driver.sentMessages.size
+        assertThat(bridge.sendRoomEvent(A_NOTIFICATION_TYPE, A_CONTENT).exceptionOrNull()).isInstanceOf(ElementCallMatrixException.NotRunning::class.java)
+        assertThat(driver.sentMessages.size).isEqualTo(sentBefore)
     }
 
     // Stopping
@@ -662,64 +458,6 @@ class WidgetMatrixBridgeTest {
     private fun approvedCapabilities() = buildJsonObject {
         putJsonArray("requested") { WidgetCapabilityGrant.capabilityStrings.forEach { add(it) } }
         putJsonArray("approved") { WidgetCapabilityGrant.capabilityStrings.forEach { add(it) } }
-    }
-
-    private fun stateBatch(vararg events: JsonObject) = buildJsonObject {
-        put("state", JsonArray(events.toList()))
-    }
-
-    private fun stateEvent(
-        stateKey: String,
-        eventId: String,
-        sender: UserId,
-        content: JsonObject,
-        type: String = A_MEMBER_TYPE,
-    ) = buildJsonObject {
-        put("type", type)
-        put("state_key", stateKey)
-        put("sender", sender.value)
-        put("event_id", eventId)
-        put("origin_server_ts", A_TIMESTAMP)
-        put("room_id", A_ROOM_ID.value)
-        put("content", content)
-    }
-
-    private fun aMembership(deviceId: String, expires: Long = 3_600_000) = buildJsonObject {
-        putJsonArray("memberships") {
-            add(
-                buildJsonObject {
-                    put("application", "m.call")
-                    put("device_id", deviceId)
-                    put("expires", expires)
-                }
-            )
-        }
-    }
-
-    private fun toDeviceData(sender: UserId, encrypted: Boolean?, content: JsonObject) = buildJsonObject {
-        put("type", MatrixRtcEventTypes.ENCRYPTION_KEY_ELEMENT_CALL)
-        put("sender", sender.value)
-        put("content", content)
-        if (encrypted != null) put("encrypted", encrypted)
-    }
-
-    private fun aLegacyKey(deviceId: String? = null, claimedDeviceId: String? = null, memberDeviceId: String? = null) = buildJsonObject {
-        putJsonArray("keys") {
-            add(
-                buildJsonObject {
-                    put("index", 0)
-                    put("key", "c2VjcmV0")
-                }
-            )
-        }
-        put("room_id", A_ROOM_ID.value)
-        if (deviceId != null) put("device_id", deviceId)
-        if (claimedDeviceId != null || memberDeviceId != null) {
-            putJsonObject("member") {
-                if (claimedDeviceId != null) put("claimed_device_id", claimedDeviceId)
-                if (memberDeviceId != null) put("device_id", memberDeviceId)
-            }
-        }
     }
 
     private fun JsonObject.string(key: String): String? = this[key]?.jsonPrimitive?.content

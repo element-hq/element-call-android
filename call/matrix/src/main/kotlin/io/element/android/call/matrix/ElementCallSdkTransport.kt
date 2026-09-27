@@ -16,16 +16,12 @@ import io.element.android.call.api.rtc.id.DeviceId
 import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.call.api.rtc.id.UserId
 import io.element.android.call.matrix.temporary.widget.SdkWidgetDriver
-import io.element.android.call.matrix.temporary.widget.ToDeviceRelay
-import io.element.android.call.matrix.temporary.widget.WidgetBridgeRegistry
 import io.element.android.call.matrix.temporary.widget.WidgetCapabilityGrant
 import io.element.android.call.matrix.temporary.widget.WidgetMatrixBridge
 import io.element.android.call.matrix.util.childScope
 import io.element.android.call.matrix.util.runCatchingExceptions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.withContext
 import org.matrix.rustcomponents.sdk.Client
 import org.matrix.rustcomponents.sdk.Room
@@ -54,14 +50,6 @@ class ElementCallSdkTransport(
     override val deviceId: DeviceId = DeviceId(client.deviceId())
     override val homeserverUrl: String = client.homeserver()
 
-    /**
-     * Temporary: the widget-driver stopgap (`docs/FEEDBACK.md`, "Widget-driver stopgap"). A driver is per
-     * room and per call while to-device messaging is per session, so the live bridges are kept here and
-     * the relay fans their to-device feeds into one session-long stream.
-     */
-    private val bridges = WidgetBridgeRegistry()
-    private val toDeviceRelay = ToDeviceRelay()
-
     override fun userIdServerName(): String = client.userIdServerName()
 
     override suspend fun getUrl(url: String): Result<String> = withContext(dispatchers.io) {
@@ -83,33 +71,38 @@ class ElementCallSdkTransport(
 
     override suspend fun openRoom(roomId: RoomId): Result<ElementCallMatrixRoom> = runCatchingExceptions {
         val room = client.getRoom(roomId.value) ?: error("Not a joined room: $roomId")
-        val bridge = openBridge(room, roomId)
         SdkElementCallMatrixRoom(
             roomId = roomId,
             room = room,
-            bridge = bridge,
+            bridge = openBridge(room, roomId),
             dispatchers = dispatchers,
-            onClose = { bridges.unregister(roomId, bridge) },
         )
     }.mapSdkFailure()
 
-    override fun toDeviceMessages(eventTypes: Set<String>): Flow<ElementCallToDeviceMessage> = toDeviceRelay.subscribe(eventTypes)
+    override fun toDeviceMessages(eventTypes: Set<String>): Flow<ElementCallToDeviceMessage> = client.toDeviceMessageUpdates(eventTypes, dispatchers)
 
-    override suspend fun sendToDeviceMessage(eventType: String, messages: Map<UserId, Map<DeviceId, String>>): Result<Map<UserId, List<DeviceId>>> {
-        // A to-device message is not scoped to a room: any live bridge carries it. None live means no
-        // call, and no call has no keys to send.
-        val bridge = bridges.any() ?: return Result.failure(IllegalStateException("No open room to send $eventType through"))
-        return bridge.sendToDeviceMessage(eventType, messages)
-    }
+    /**
+     * Encrypted, always: the SDK's send encrypts for every listed device, and a media key is never sent
+     * in the clear. One send per distinct content, so the usual case - the same key to everyone - is one.
+     */
+    override suspend fun sendToDeviceMessage(eventType: String, messages: Map<UserId, Map<DeviceId, String>>): Result<Map<UserId, List<DeviceId>>> =
+        withContext(dispatchers.io) {
+            runCatchingExceptions {
+                messages.groupedByContent()
+                    .flatMap { (content, recipients) -> client.sendEncryptedToDeviceMessage(eventType, recipients, content).failures.toRecipients().entries }
+                    .groupBy({ it.key }, { it.value })
+                    .mapValues { (_, deviceIds) -> deviceIds.flatten() }
+            }.mapSdkFailure()
+        }
 
     /**
      * Temporary: drives the SDK's widget machine in-process for the operations the released bindings do
-     * not expose, and suspends until it has negotiated its capabilities, so that the join finds a bridge
-     * ready to carry the delayed event.
+     * not expose - delayed events, and a room event that answers with its id - and suspends until it has
+     * negotiated its capabilities, so that the join finds a bridge ready to carry the delayed event.
      *
-     * The only place a bridge is made, and the one seam to unpick: when the bindings gain delayed events,
-     * a room-state feed and to-device messaging, [SdkElementCallMatrixRoom] calls them directly and this
-     * function, the bridge, the registry and the relay go.
+     * The only place a bridge is made, and the one seam to unpick: when the bindings gain delayed events
+     * and `Room.sendRaw` returns the event id, [SdkElementCallMatrixRoom] calls them directly and this
+     * function and the bridge go. Room state and to-device already go to the SDK.
      */
     private suspend fun openBridge(room: Room, roomId: RoomId): WidgetMatrixBridge {
         val widgetId = "matrixrtc-${UUID.randomUUID()}"
@@ -134,15 +127,10 @@ class ElementCallSdkTransport(
             driver = driver,
             parentScope = bridgeScope,
         )
-        // Before start(): a key arriving during negotiation must not find nobody listening.
-        bridge.toDeviceMessages()
-            .onEach { toDeviceRelay.publish(it) }
-            .launchIn(bridgeScope)
         bridge.start().onFailure {
             bridge.stop()
             driver.close()
         }.getOrThrow()
-        bridges.register(bridge)
         return bridge
     }
 

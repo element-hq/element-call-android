@@ -1074,10 +1074,11 @@ kind of thing gets diagnosed.
 The library builds against the **released** Kotlin bindings (`org.matrix.rustcomponents:sdk-android`, the version
 Element X `develop` pins). Those lack the entry points the native call stack needs, so
 `call/matrix/…/temporary/widget/` drives the SDK's *widget driver* in-process (no web view) as the Matrix bridge
-for exactly them. The widget machine already implements delayed events, a room-state feed and encrypted to-device
-messaging for Element Call web; `WidgetMatrixBridge` speaks its JSON API through `WidgetDriver.send` /
-`incomingMessages`. Everything else - `sendStateEventRaw`, the OpenID token, members, encryption state - stays on
-the released SDK. Same design as Element X iOS (`ElementCallMatrix/Widget/`).
+for exactly them. The widget machine implements delayed events and a room event send that answers with its id
+for Element Call web; `WidgetMatrixBridge` speaks its JSON API through `WidgetDriver.send` / `incomingMessages`.
+Everything else - `sendStateEventRaw`, the room-state feed, to-device messaging, the OpenID token, members,
+encryption state - is on the released SDK. Element X iOS (`ElementCallMatrix/Widget/`) still bridges state and
+to-device too.
 
 **The shape that makes it disposable.** The Matrix port (`ElementCallMatrixTransport` and `ElementCallMatrixRoom`
 in `call/api/…/matrix/`) is the one place listing the gap; `MatrixRtcCommandSender`, `RoomStateFeeder` and
@@ -1085,53 +1086,49 @@ in `call/api/…/matrix/`) is the one place listing the gap; `MatrixRtcCommandSe
 annotated `@ElementCallTemporaryApi`, and a Konsist rule keeps the package inside `call/matrix`. Retiring the
 stopgap is:
 
-1. When the Kotlin bindings expose them, call the SDK directly from `SdkElementCallMatrixRoom` and
-   `ElementCallSdkTransport` (`sendDelayedEvent`, `updateDelayedEvent`, `stateEvents`, `stickyEvents`,
-   `sendStickyEvent`, `sendToDeviceMessage`, `toDeviceMessages`; the SDK-backed versions the spike once had are
-   in Element X commit `8a2e944437`, the last one before the bridge landed, in `JoinedRustRoom.kt` and
-   `RustMatrixClient.kt`).
-2. Delete `call/matrix/…/temporary/widget/` (driver, bridge, capability grant, relay, registry), drop
+1. When the Kotlin bindings expose them, call the SDK directly from `SdkElementCallMatrixRoom`
+   (`sendDelayedEvent`, `updateDelayedEvent`, `sendRoomEvent`, `stickyEvents`, `sendStickyEvent`), as
+   `stateEvents` (`SdkRoomState.kt`) and the transport's to-device (`SdkToDevice.kt`) already do.
+2. Delete `call/matrix/…/temporary/widget/` (driver, bridge, capability grant), drop
    `onSessionEnded` from `RustMatrixRtcSession`, and lift the compat pin in `DefaultElementCallController` so
    `ElementCallOptions.elementCallCompat` is obeyed. The `RustWidgetDriver` recv-loop hardening the spike made in
    Element X is a genuine bug fix for the WebView call too and can go to Element X on its own.
 
-**Missing from the released FFI** (each retires part of the bridge; all of them retire it):
+**Landed in SDK 26.09.26** and used directly: `Room.subscribeToStateEvents` (matrix-rust-sdk #6979, the full list
+per type after every sync that changed it), `Client.subscribeToCustomToDeviceMessages` (#6980, with the attested
+sender, sending device and shield state) and `Client.sendEncryptedToDeviceMessage` (#6981, one content to many
+devices, per-recipient failures; the transport sends once per distinct content).
+
+**Still missing from the released FFI** (each retires part of the bridge; all of them retire it):
 
 - `Room.sendDelayedEvent` / `sendDelayedStateEvent` (returning the delay id) and `updateDelayedEvent(cancel|restart)`.
-- A room-state feed: `Room.subscribeToStateEvents(eventType)` delivering the full list per change with `event_id`,
-  `sender`, `state_key`, `origin_server_ts` and content.
-- `Client.sendToDeviceMessage(eventType, messages, encrypt)` returning per-recipient failures.
-- `Client.subscribeToToDeviceMessages(eventTypes)` delivering the **encryption info**: attested sender, sender device
-  id and cross-signing status. The widget path delivers `{type, content, sender, encrypted}` only.
 - `Room.sendStickyRaw` (MSC4354) for the sticky-event compat modes; until then calls are pinned to the state-event
   mode (`DefaultElementCallController`; `ElementCallOptions.elementCallCompat` is read but not obeyed).
 - `Room.sendRaw` returning the event id (matrix-rust-sdk item 9). It exists and sends, but resolves to unit, and the
   core keeps the id of a raised hand's `m.reaction` to redact it later - so the message-like room event (the MSC4075
   notification of the state-event mode too, a plain room event since core v0.3.0-rc.1) goes through the widget
   machine's `send_event`, which answers with the id, until `sendRaw` does. `Room.redact` already lowers the hand.
+  Merged as matrix-rust-sdk #7094, after 26.09.26 was cut: the next SDK bump moves `sendRoomEvent` to the SDK.
+- Not the bridge's, but the same bump: `Client.discoverRtcTransports` (#7060) can replace `call/impl`'s
+  `RtcTransportDiscovery`, which reads the MSC4143 endpoint and the well-known by hand.
 
-**Trust relaxation while the stopgap is in place.** The core drops a media key whose sender is not cross-signed
-and the mapper drops one without a sender device. Through the widget driver neither is knowable, so the bridge
-takes the device from the key message content (`device_id`, `member.claimed_device_id` or `member.device_id`) and
-treats an encrypted message as cross-signed. The driver already drops cleartext in an encrypted room and attests
-the sender of an encrypted message, so this is the trust level embedded Element Call web has today. It lives only
-in `WidgetMatrixBridge.deliverToDevice`; `EncryptionKeyMapper` and the core keep their strict checks. A key naming
-no device reaches the core without one and is rejected there: the core checks the device against the membership,
-so the bridge never reads it off the membership. Once the SDK reports the sending device, the bridge passes that.
+**Trust comes from the SDK.** The core drops a media key whose sender is not cross-signed and the mapper drops
+one without a sender device. Both come from the SDK's `EventEncryptionInfo`: the attested sender, the sending
+device, and `isSenderCrossSigned` from the lax shield - false for an unsigned device, a verification violation, a
+mismatched sender or a message sent in the clear, true for one merely unconfirmed (`SdkToDevice.kt`). A message
+that arrived in the clear has no encryption info and is refused by the key path. The widget-era relaxation (the
+device read off the key content, every encrypted message taken as cross-signed) is gone.
 
 **Wire details worth knowing.** The machine's request enum is adjacently tagged (`action` tag, `data` content):
 a message whose `data` precedes `action` is buffered by serde and its raw JSON fields then fail with "invalid
-type: newtype struct". The bridge builds its envelopes with `action` before `data`. Live state arrives through
-two doors - the sync state block as `update_state`, timeline-borne state as a `toWidget` `send_event` with a
-`state_key` - and the same change can come through both, so the bridge dedupes on `event_id`. `send_to_device`
-omits `failures` entirely when everyone was served. The machine keeps at most 15 unanswered requests of its own
+type: newtype struct". The bridge builds its envelopes with `action` before `data`. The grant reads nothing,
+so the machine pushes no state or to-device; whatever `toWidget` request it does make is still acked. The machine keeps at most 15 unanswered requests of its own
 with a 10 s timeout, so every `toWidget` request is answered inline. `WidgetDriver.run()` returns only once its
 handle is dropped and the machine next emits; on Android cancelling the bridge's scope drops the Rust future,
 and a `supported_api_versions` poke makes the pending `recv()` return so the handle is released.
 
-**Other limits.** To-device messages are only received while a driver runs for some room, so a key rotated by a
-peer between our calls is lost; peers re-send on join. Only state the sync asked for reaches the driver's initial
-`update_state`; the call member type is in sliding sync's default `required_state`, so it is there.
+**Other limits.** The SDK stores only the state the sync asks for, so `stateEvents` sees a custom type only if it
+is in the sliding sync `required_state`; the call member type is in the default one, so it is there.
 
 ## Host-side log lines worth keeping
 

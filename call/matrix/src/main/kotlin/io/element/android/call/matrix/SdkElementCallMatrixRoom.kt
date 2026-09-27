@@ -32,11 +32,11 @@ import uniffi.matrix_sdk_base.EncryptionState
 /**
  * One joined SDK [Room] as the call sees it.
  *
- * What the released bindings expose goes straight to them: the state event, the room info, the members.
- * What they do not - delayed events, sticky events, the room-state feed - goes through the widget-driver
- * [bridge], which is the temporary part; when the bindings catch up the bridge goes and the methods
- * below call the SDK instead, with nothing in `call/impl` learning about it. The bridge is for what the
- * SDK lacks and nothing else. A redaction goes to the SDK; the message-like room event goes through the
+ * What the released bindings expose goes straight to them: the state event and the room-state feed,
+ * the room info, the members. What they do not - delayed events, sticky events - goes through the
+ * widget-driver [bridge], which is the temporary part; when the bindings catch up the bridge goes and
+ * the methods below call the SDK instead, with nothing in `call/impl` learning about it. The bridge is
+ * for what the SDK lacks and nothing else. A redaction goes to the SDK; the message-like room event goes through the
  * bridge only because `Room.sendRaw` returns no event id and the core needs it to lower a raised hand
  * (`docs/FEEDBACK.md`, matrix-rust-sdk item 9) - it moves to the SDK the day `sendRaw` returns one.
  */
@@ -45,7 +45,6 @@ internal class SdkElementCallMatrixRoom(
     private val room: Room,
     private val bridge: WidgetMatrixBridge,
     private val dispatchers: ElementCallDispatchers,
-    private val onClose: () -> Unit,
 ) : ElementCallMatrixRoom {
     private val roomInfo: Flow<RoomInfo> = room.roomInfoUpdates(dispatchers)
 
@@ -110,11 +109,10 @@ internal class SdkElementCallMatrixRoom(
 
     override fun stickyEvents(): Flow<List<ElementCallStickyEvent>> = bridge.stickyEvents()
 
-    override fun stateEvents(eventType: String): Flow<List<ElementCallRoomStateEvent>> = bridge.stateEvents(eventType)
+    override fun stateEvents(eventType: String): Flow<List<ElementCallRoomStateEvent>> = room.stateEventUpdates(eventType, dispatchers)
 
     override suspend fun close() {
         bridge.stop()
-        onClose()
         room.close()
     }
 }

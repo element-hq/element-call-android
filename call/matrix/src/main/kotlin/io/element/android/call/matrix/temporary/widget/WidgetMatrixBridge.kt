@@ -5,25 +5,19 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
-// Temporary: widget-driver stopgap. The released SDK bindings lack delayed events, a room-state feed
-// and to-device messaging, but their widget driver implements all of them for Element Call web. This
-// speaks the widget API to that driver in-process, with no web view. Delete this package once the
-// bindings gain the entry points listed in `docs/FEEDBACK.md`, "Widget-driver stopgap", and have
-// `SdkElementCallMatrixRoom` call them directly.
+// Temporary: widget-driver stopgap. The released SDK bindings lack delayed events and a room event send
+// that answers with its id, but their widget driver implements both for Element Call web. This speaks
+// the widget API to that driver in-process, with no web view. Room state and to-device messaging have
+// left it for the SDK (26.09.26). Delete this package once the bindings gain the entry points listed in
+// `docs/FEEDBACK.md`, "Widget-driver stopgap", and have `SdkElementCallMatrixRoom` call them directly.
 
 package io.element.android.call.matrix.temporary.widget
 
 import io.element.android.call.api.matrix.ElementCallDelayedEventAction
-import io.element.android.call.api.matrix.ElementCallEventEncryptionInfo
 import io.element.android.call.api.matrix.ElementCallMatrixException
-import io.element.android.call.api.matrix.ElementCallRoomStateEvent
 import io.element.android.call.api.matrix.ElementCallStickyEvent
-import io.element.android.call.api.matrix.ElementCallToDeviceMessage
-import io.element.android.call.api.rtc.MatrixRtcEventTypes
-import io.element.android.call.api.rtc.id.DeviceId
 import io.element.android.call.api.rtc.id.EventId
 import io.element.android.call.api.rtc.id.RoomId
-import io.element.android.call.api.rtc.id.UserId
 import io.element.android.call.matrix.ElementCallTemporaryApi
 import io.element.android.call.matrix.util.runCatchingExceptions
 import kotlinx.coroutines.CancellationException
@@ -32,15 +26,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onCompletion
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -52,11 +42,9 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
-import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonArray
 import timber.log.Timber
@@ -71,15 +59,11 @@ import kotlin.time.Duration.Companion.seconds
  * Wire protocol (verified against the SDK's widget machine): every message is
  * `{api, widgetId, requestId, action, data}`; a response echoes the request with a `response` key.
  * With `initAfterContentLoad` off the driver opens with a `capabilities` request, calls the
- * capabilities provider, confirms with `notify_capabilities`, then pushes the current room state.
- * Requests sent before that are silently dropped, and the driver keeps at most 15 unanswered
- * requests of its own, so everything it sends is answered inline.
+ * capabilities provider and confirms with `notify_capabilities`. Requests sent before that are
+ * silently dropped, and the driver keeps at most 15 unanswered requests of its own, so everything it
+ * sends is answered inline - including anything it pushes that the bridge no longer reads.
  *
- * State arrives as deltas (`update_state` from sync, `send_event` for timeline-borne state) while the
- * core wants the full state on every tick. Room state is replace-only, a leave being a present `{}`
- * event, so the latest event per state key *is* the full state and the map below re-emits it whole.
- *
- * [parentScope] is where the driver's loops and the feeds run. The bridge makes its own child of it
+ * [parentScope] is where the driver's loops run. The bridge makes its own child of it
  * so [stop] can cancel the loops without cancelling the caller; a child of the client session scope
  * rather than of the call's, because the leave itself still goes through the bridge.
  */
@@ -103,14 +87,6 @@ internal class WidgetMatrixBridge(
     private val lifecycleMutex = Mutex()
 
     private val pending = ConcurrentHashMap<String, CompletableDeferred<JsonObject>>()
-
-    /** Canonical event type -> state key -> latest event: the current state of every type we receive. */
-    private val stateByType = ConcurrentHashMap<String, MutableStateFlow<Map<String, ElementCallRoomStateEvent>>>()
-
-    private val toDevice = MutableSharedFlow<ElementCallToDeviceMessage>(extraBufferCapacity = 64)
-
-    /** Completed once and for all by [tearDown]; the feeds end on it. */
-    private val stopped = CompletableDeferred<Unit>()
 
     // Lifecycle
 
@@ -216,64 +192,15 @@ internal class WidgetMatrixBridge(
         return request(UPDATE_DELAYED_EVENT, data).map { }
     }
 
-    suspend fun sendToDeviceMessage(eventType: String, messages: Map<UserId, Map<DeviceId, String>>): Result<Map<UserId, List<DeviceId>>> {
-        val wireMessages = buildJsonObject {
-            for ((userId, devices) in messages) {
-                put(
-                    userId.value,
-                    buildJsonObject {
-                        for ((deviceId, contentJson) in devices) {
-                            val content = parseObject(contentJson)
-                                ?: return Result.failure(ElementCallMatrixException.InvalidResponse("content is not a JSON object"))
-                            put(deviceId.value, content)
-                        }
-                    },
-                )
-            }
-        }
-        val data = buildJsonObject {
-            put("type", eventType)
-            put("messages", wireMessages)
-        }
-        return request(SEND_TO_DEVICE, data).map { response ->
-            // Omitted entirely when nobody failed.
-            val failures = response["failures"] as? JsonObject ?: return@map emptyMap()
-            failures.entries.mapNotNull { (userId, devices) ->
-                val deviceIds = (devices as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.let(::DeviceId) } ?: return@mapNotNull null
-                runCatchingExceptions { UserId(userId) }.getOrNull()?.let { it to deviceIds }
-            }.toMap()
-        }
-    }
-
     // The signature mirrors the port's; the widget API has no sticky events to send them through.
     @Suppress("UnusedParameter")
     suspend fun sendStickyEvent(eventType: String, contentJson: String, durationMs: ULong): Result<String> {
         return Result.failure(ElementCallMatrixException.NotSupported("MSC4354 sticky event $eventType"))
     }
 
-    // Feeds
-
     fun stickyEvents(): Flow<List<ElementCallStickyEvent>> {
         Timber.w("WidgetBridge: sticky events are not available through the widget driver, no sticky snapshot will be fed for $roomId")
         return emptyFlow()
-    }
-
-    fun stateEvents(eventType: String): Flow<List<ElementCallRoomStateEvent>> {
-        return stateFlow(canonicalType(eventType))
-            // Never an empty list: the feeder reads that as "not synced".
-            .filter { it.isNotEmpty() }
-            .map { it.values.toList() }
-            .untilStopped()
-    }
-
-    fun toDeviceMessages(): Flow<ElementCallToDeviceMessage> = toDevice.untilStopped()
-
-    /** Ends when the bridge does, so a collector is not left waiting on a driver that is gone. */
-    private fun <T> Flow<T>.untilStopped(): Flow<T> = channelFlow {
-        if (stopped.isCompleted) return@channelFlow
-        val upstream = launch { collect { send(it) } }
-        stopped.await()
-        upstream.cancel()
     }
 
     // Requests
@@ -353,10 +280,7 @@ internal class WidgetMatrixBridge(
                 putJsonArray("capabilities") { WidgetCapabilityGrant.capabilityStrings.forEach { add(it) } }
             }
             NOTIFY_CAPABILITIES -> didNegotiate(approved = (data["approved"] as? JsonArray)?.size ?: 0)
-            UPDATE_STATE -> applyStateEvents((data["state"] as? JsonArray)?.filterIsInstance<JsonObject>().orEmpty())
-            // A state event in the timeline comes through here rather than as update_state.
-            SEND_EVENT -> if (data.containsKey("state_key")) applyStateEvents(listOf(data))
-            SEND_TO_DEVICE -> deliverToDevice(data)
+            // State and to-device come from the SDK now; anything else the machine pushes is only acked.
             else -> Unit
         }
 
@@ -412,118 +336,12 @@ internal class WidgetMatrixBridge(
         }
     }
 
-    /** Fails everything in flight and ends every feed. Call under [lifecycleMutex]. */
+    /** Fails everything in flight. Call under [lifecycleMutex]. */
     private fun tearDown() {
         phase.value = Phase.STOPPED
         for (requestId in pending.keys.toList()) {
             pending.remove(requestId)?.completeExceptionally(ElementCallMatrixException.NotRunning(roomId))
         }
-        stopped.complete(Unit)
-    }
-
-    // State
-
-    /**
-     * State events arrived (initial read, sync state block or timeline): remember the latest per state
-     * key and hand subscribers the whole state of each changed type once, however many events the
-     * batch held. Emitting per event made the first tick show one member instead of two.
-     */
-    private fun applyStateEvents(events: List<JsonObject>) {
-        val changes = mutableMapOf<String, MutableMap<String, ElementCallRoomStateEvent>>()
-        for (mapped in events.mapNotNull { it.toStateEvent() }) {
-            val type = canonicalType(mapped.eventType)
-            val held = stateByType[type]?.value?.get(mapped.stateKey)
-            // The same change through both doors.
-            if (mapped.eventId != null && held?.eventId == mapped.eventId) continue
-            changes.getOrPut(type) { mutableMapOf() }[mapped.stateKey] = mapped
-        }
-        for ((type, perKey) in changes) {
-            stateFlow(type).update { it + perKey }
-        }
-    }
-
-    private fun stateFlow(canonicalType: String) = stateByType.getOrPut(canonicalType) { MutableStateFlow(emptyMap()) }
-
-    /**
-     * Ruma treats `m.call.member` as an alias of `org.matrix.msc3401.call.member`, so the machine's
-     * filter lets both spellings through and the wire type can be either. One bucket for both, keyed
-     * on the unstable name; the event itself keeps the spelling it arrived with.
-     */
-    private fun canonicalType(eventType: String): String = when (eventType) {
-        in MatrixRtcEventTypes.MEMBER_ELEMENT_CALL_STATE_TYPES -> MatrixRtcEventTypes.MEMBER_ELEMENT_CALL_STATE_UNSTABLE
-        else -> eventType
-    }
-
-    private fun malformedStateEvent(): ElementCallRoomStateEvent? {
-        Timber.w("WidgetBridge: ignoring a malformed state event")
-        return null
-    }
-
-    private fun JsonObject.toStateEvent(): ElementCallRoomStateEvent? {
-        val eventType = string("type") ?: return malformedStateEvent()
-        val stateKey = string("state_key") ?: return malformedStateEvent()
-        val sender = string("sender")?.let { runCatchingExceptions { UserId(it) }.getOrNull() } ?: return malformedStateEvent()
-        val content = this["content"] as? JsonObject ?: return malformedStateEvent()
-        return ElementCallRoomStateEvent(
-            eventType = eventType,
-            stateKey = stateKey,
-            sender = sender,
-            contentJson = encode(content),
-            eventId = string("event_id")?.let { runCatchingExceptions { EventId(it) }.getOrNull() },
-            timestampMs = (this["origin_server_ts"] as? JsonPrimitive)?.longOrNull,
-        )
-    }
-
-    // To-device
-
-    /**
-     * The driver hands over `{type, content, sender, encrypted}` only: it has already dropped cleartext
-     * in an encrypted room and attested the sender of an encrypted message, but reports neither the
-     * sender's device nor whether it is cross-signed. The device is the one the key message claims, and
-     * an encrypted message is taken as cross-signed - the trust Element Call web gets through this same
-     * driver (FEEDBACK.md, "Widget-driver stopgap"). A message naming no device is passed on without
-     * one: the core checks the device against the membership, so it must not come from the membership.
-     */
-    private suspend fun deliverToDevice(data: JsonObject) {
-        val eventType = data.string("type")
-        val sender = data.string("sender")?.let { runCatchingExceptions { UserId(it) }.getOrNull() }
-        val content = data["content"] as? JsonObject
-        if (eventType == null || sender == null || content == null) {
-            Timber.w("WidgetBridge: ignoring a malformed to-device message")
-            return
-        }
-        val wasEncrypted = (data["encrypted"] as? JsonPrimitive)?.booleanOrNull ?: false
-        val deviceId = claimedDeviceId(content)
-        if (deviceId == null) {
-            // Field names only, never values: which shape of key message the peer speaks.
-            Timber.i("WidgetBridge: $eventType from $sender names no device (fields: ${content.keys.sorted()})")
-        }
-        toDevice.emit(
-            ElementCallToDeviceMessage(
-                eventType = eventType,
-                senderId = sender,
-                content = encode(content),
-                encryptionInfo = if (wasEncrypted) {
-                    ElementCallEventEncryptionInfo(
-                        senderId = sender,
-                        senderDeviceId = deviceId?.let(::DeviceId),
-                        senderCurve25519Key = null,
-                        isSenderCrossSigned = true,
-                    )
-                } else {
-                    null
-                },
-            )
-        )
-    }
-
-    /**
-     * The device the key message claims to come from: older Element Call wrote it at the top level
-     * (`device_id`), Element Web writes `member.claimed_device_id` and matrix-rust-rtc writes both.
-     */
-    private fun claimedDeviceId(content: JsonObject): String? {
-        return content.string("device_id")
-            ?: (content["member"] as? JsonObject)?.let { it.string("claimed_device_id") ?: it.string("device_id") }
     }
 
     // JSON
@@ -549,13 +367,11 @@ internal class WidgetMatrixBridge(
 
         // fromWidget actions
         const val SEND_EVENT = "send_event"
-        const val SEND_TO_DEVICE = "send_to_device"
         const val UPDATE_DELAYED_EVENT = "org.matrix.msc4157.update_delayed_event"
         const val SUPPORTED_API_VERSIONS = "supported_api_versions"
 
         // toWidget actions
         const val CAPABILITIES = "capabilities"
         const val NOTIFY_CAPABILITIES = "notify_capabilities"
-        const val UPDATE_STATE = "update_state"
     }
 }
