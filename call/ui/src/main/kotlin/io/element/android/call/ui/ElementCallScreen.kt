@@ -13,6 +13,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.rememberScrollableState
 import androidx.compose.foundation.gestures.scrollable
@@ -100,7 +101,7 @@ fun ElementCallScreen(
                         // Behind the floating controls, so they stay readable over a bright tile.
                         .background(Brush.verticalGradient(listOf(Color.Transparent, ElementCallTheme.colors.controlsScrim))),
                 ) {
-                    CallControlsBar(state, modifier = Modifier.systemBarsPadding())
+                    CallControlsBar(state, isCompact = isLandscape, modifier = Modifier.systemBarsPadding())
                 }
             }
 
@@ -298,17 +299,24 @@ private fun ConnectingPlaceholder(state: ElementCallScreenState) {
 }
 
 @Composable
-private fun CallControlsBar(state: ElementCallScreenState, modifier: Modifier = Modifier) {
+private fun CallControlsBar(
+    state: ElementCallScreenState,
+    /**
+     * Held sideways the buttons sit together in the middle, as the design has them, rather than
+     * spread across a width that is twice what they need. Upright they spread: six of them - a
+     * group call with screen sharing on - only just fit across a small phone. See BUTTON_SIZE.
+     */
+    isCompact: Boolean,
+    modifier: Modifier = Modifier,
+) {
     Row(
-        // Tighter than it looks like it should be, because six 52dp buttons - a group call with screen
-        // sharing on - do not fit across a small phone with room to breathe between them. See BUTTON_SIZE.
         modifier = modifier
             .fillMaxWidth()
             // A drag that starts on the bar does not scroll the grid it floats over (spec 003 R45):
             // a state that reports every delta consumed leaves nothing for the stage's scrollable.
             .scrollable(rememberScrollableState { it }, Orientation.Vertical)
             .padding(horizontal = 8.dp, vertical = 20.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
+        horizontalArrangement = if (isCompact) Arrangement.spacedBy(COMPACT_BUTTON_GAP, Alignment.CenterHorizontally) else Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         RoundCallButton(
@@ -391,13 +399,17 @@ private fun RoundCallButton(
         ?: if (isActive) ElementCallTheme.colors.controlActiveBackground else ElementCallTheme.colors.bgSubtleSecondary
     val resolvedTint = tint
         ?: if (isActive) ElementCallTheme.colors.controlActiveContent else ElementCallTheme.colors.iconPrimary
+    // A dark button over a dark tile would be only its icon; the ring tells it apart from what it
+    // floats over, as the design draws it. The light and the coloured ones stand out on their own.
+    val hasRing = background == null && !isActive
     IconButton(
         onClick = onClick,
         enabled = enabled,
         modifier = Modifier
             .size(BUTTON_SIZE)
             .clip(CircleShape)
-            .background(resolvedBackground),
+            .background(resolvedBackground)
+            .then(if (hasRing) Modifier.border(1.dp, ElementCallTheme.colors.borderControl, CircleShape) else Modifier),
     ) {
         Icon(
             imageVector = icon,
@@ -415,6 +427,9 @@ private fun RoundCallButton(
  * change size with the layout or the host's options.
  */
 private val BUTTON_SIZE = 48.dp
+
+/** Between the buttons when they sit together in the middle of a landscape bar. */
+private val COMPACT_BUTTON_GAP = 16.dp
 
 /** What the placeholder says about the connection while there is nobody to show. */
 @Composable

@@ -36,6 +36,8 @@ data class ElementCallColors(
     val borderActiveSpeaker: Color,
     /** The hairline around our own thumbnail. */
     val borderThumbnail: Color,
+    /** The ring around an inactive control button, which tells it apart from the tile it floats over. */
+    val borderControl: Color,
     /** The hang-up button. */
     val hangUp: Color,
     /** The screen-sharing indicator in the minimized bar. */
@@ -72,6 +74,7 @@ data class ElementCallColors(
             bgSubtleSecondary = Color(0xFF1D1F24),
             borderActiveSpeaker = Color(0xFF003D29),
             borderThumbnail = Color(0xFF3C3F44),
+            borderControl = Color(0xFF3C3F44),
             hangUp = Color(0xFFE5484D),
             sharingAccent = Color(0xFF25B39A),
             sharingBanner = Color(0xFF0F7B6C),
