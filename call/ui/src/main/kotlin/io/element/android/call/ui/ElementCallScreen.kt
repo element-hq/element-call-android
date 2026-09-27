@@ -303,8 +303,7 @@ private fun CallControlsBar(
     state: ElementCallScreenState,
     /**
      * Held sideways the buttons sit together in the middle, as the design has them, rather than
-     * spread across a width that is twice what they need. Upright they spread: six of them - a
-     * group call with screen sharing on - only just fit across a small phone. See BUTTON_SIZE.
+     * spread across a width that is twice what they need. Upright they spread across the phone.
      */
     isCompact: Boolean,
     modifier: Modifier = Modifier,
@@ -420,13 +419,11 @@ private fun RoundCallButton(
 }
 
 /**
- * 48dp rather than the 52 this started at: screen share made six buttons in a group call, and six
- * 52dp circles come to 312dp, which leaves nothing between them on a 360dp phone. Still at the 48dp
- * minimum touch target, so nothing is harder to hit - only closer together. A one-to-one call has
- * five and could afford more, as does a host that leaves screen sharing off, but the bar should not
- * change size with the layout or the host's options.
+ * As the design has it. The bar holds at most five - microphone, camera, audio output, screen share,
+ * hang up; switching camera is on our own tile - and five 52dp circles leave room between them
+ * across a 360dp phone.
  */
-private val BUTTON_SIZE = 48.dp
+private val BUTTON_SIZE = 52.dp
 
 /** Between the buttons when they sit together in the middle of a landscape bar. */
 private val COMPACT_BUTTON_GAP = 16.dp

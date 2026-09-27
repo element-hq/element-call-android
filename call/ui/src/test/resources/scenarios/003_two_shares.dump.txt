@@ -1,7 +1,7 @@
 == 0s viewport 393x734 bottom 34
 window ranks - also -  composed 1  subscribed 0  spotlight -  fullscreen -
 rank slot                 rect                 vis      detail constraints
--    own        grid 0,0  8,8,377,604          live     -      -
+-    own        grid 0,0  8,8,377,600          live     -      -
 
 == 0s A#* Av B! C D E F
 window ranks 1..<7 also A#*,Av,B!,C,D,E,F  composed 8  subscribed 1  spotlight A#*  fullscreen -
