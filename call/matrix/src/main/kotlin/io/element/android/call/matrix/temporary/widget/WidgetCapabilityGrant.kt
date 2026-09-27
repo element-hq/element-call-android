@@ -59,7 +59,7 @@ internal object WidgetCapabilityGrant : WidgetCapabilitiesProvider {
      * does not name keep whatever the SDK parsed from the widget's own `capabilities` answer, and so that
      * this code names no field whose presence differs between SDK releases.
      */
-    override fun acquireCapabilities(capabilities: WidgetCapabilities): WidgetCapabilities {
+    override suspend fun acquireCapabilities(capabilities: WidgetCapabilities): WidgetCapabilities {
         val stateFilters = stateEventTypes.map { WidgetEventFilter.StateWithType(it) }
         val toDeviceFilters = toDeviceEventTypes.map { WidgetEventFilter.ToDevice(it) }
         return capabilities.copy(

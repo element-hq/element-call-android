@@ -107,7 +107,7 @@ test_composable_preview_scanner = "io.github.sergio-sastre.ComposablePreviewScan
 # Only call/matrix depends on it. The version here is the one the library is compiled against and is
 # declared as a plain `require` in the published POM; Element X pins its own SDK `strictly`. When
 # upgrading, run the SDK compatibility checks (see AGENTS.md).
-matrix_sdk = "org.matrix.rustcomponents:sdk-android:26.09.08"
+matrix_sdk = "org.matrix.rustcomponents:sdk-android:26.09.26"
 
 # Others
 serialization_json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization_json" }

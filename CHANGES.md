@@ -12,7 +12,11 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 ## Unreleased
 
-_Nothing yet._
+- `call/matrix` requires Matrix Rust SDK `org.matrix.rustcomponents:sdk-android` **26.09.26** (was 26.09.08), the
+  release Element X moved to. Its widget bindings changed binary shape (`WidgetCapabilitiesProvider.acquireCapabilities`
+  became `suspend`, `WidgetDriverHandle.send` stopped being one), so this library built against 26.09.08 fails at
+  runtime on 26.09.26 and the other way round: a host on 26.09.26 needs this version, and one still on an older SDK
+  has to move with it.
 
 ## 0.1.0-rc.5 - 2026-09-25
 
