@@ -568,6 +568,10 @@ private fun PlacedTile(
         scaleFactor = if (slot.isFullscreen) zoom.scale.quantisedToPowerOfTwo() else 1,
     )
     ReportLiveToHooks(tile.tileId, isLive)
+    // Above every other tile for the whole of the move, both ways: raised the moment fullscreen is
+    // entered, and lowered only once the way back has landed, never at its start (000 R7).
+    var isRaised by remember { mutableStateOf(slot.isFullscreen) }
+    if (slot.isFullscreen) isRaised = true
     // The change from cropped to fitted is travelled across the move, never applied at either end (000 R7).
     val fit by animateFloatAsState(targetValue = appearance.fitFor(tile), animationSpec = FIT_SPEC, label = "tileFit")
     val fullscreenLabel = stringResource(if (slot.isFullscreen) R.string.element_call_a11y_exit_fullscreen else R.string.element_call_a11y_enter_fullscreen)
@@ -599,13 +603,13 @@ private fun PlacedTile(
                     true
                 })
             }
-            .animatedSlot(slot.rect, isSticky = slot.isSticky, scrollOffset = scrollOffset)
+            .animatedSlot(slot.rect, isSticky = slot.isSticky, scrollOffset = scrollOffset, onArrive = { isRaised = slot.isFullscreen })
             // The spotlight draws over the grid passing underneath it (R27); we draw over the rest
             // for the moment a move overlaps; a tile filling the stage is above everything for the
             // whole of its move, including the tiles on their way out (000 R7).
             .zIndex(
                 when {
-                    slot.isFullscreen -> FULLSCREEN_Z_INDEX
+                    isRaised -> FULLSCREEN_Z_INDEX
                     slot.isSticky -> SPOTLIGHT_Z_INDEX
                     tile.isLocal -> LOCAL_Z_INDEX
                     else -> 0f
@@ -683,6 +687,9 @@ private fun HeroSpotlight(
     val previousLabel = stringResource(R.string.element_call_a11y_previous_hero)
     val fullscreenLabel = stringResource(if (isFullscreen) R.string.element_call_a11y_exit_fullscreen else R.string.element_call_a11y_enter_fullscreen)
     var zoom by remember(isFullscreen) { mutableStateOf(VideoTransform.None) }
+    // As for a grid tile: above everything until the way back from fullscreen has landed (000 R7).
+    var isRaised by remember { mutableStateOf(isFullscreen) }
+    if (isFullscreen) isRaised = true
     val transformable = rememberTransformableState { _, zoomChange, pan, _ ->
         val scale = (zoom.scale * zoomChange).coerceIn(1f, MAX_ZOOM)
         val maxX = (rect.width * scale - rect.width) / 2
@@ -691,8 +698,8 @@ private fun HeroSpotlight(
     }
     Box(
         modifier = Modifier
-            .animatedSlot(rect, isSticky = true, scrollOffset = scrollOffset)
-            .zIndex(if (isFullscreen) FULLSCREEN_Z_INDEX else SPOTLIGHT_Z_INDEX)
+            .animatedSlot(rect, isSticky = true, scrollOffset = scrollOffset, onArrive = { isRaised = isFullscreen })
+            .zIndex(if (isRaised) FULLSCREEN_Z_INDEX else SPOTLIGHT_Z_INDEX)
             .scrollable(rememberScrollableState { it }, Orientation.Vertical)
             .then(if (isFullscreen) Modifier.transformable(transformable) else Modifier)
             .semantics {
@@ -913,9 +920,15 @@ private fun Modifier.animatedSlot(
     slot: Rect,
     isSticky: Boolean,
     scrollOffset: FloatState,
+    /** Told when the move to [slot] has finished; not told when a newer slot cancelled it. */
+    onArrive: (() -> Unit)? = null,
 ): Modifier {
     val bounds = remember { Animatable(slot, Rect.VectorConverter) }
-    LaunchedEffect(slot) { bounds.animateTo(slot, SLOT_SPEC) }
+    val currentOnArrived by rememberUpdatedState(onArrive)
+    LaunchedEffect(slot) {
+        bounds.animateTo(slot, SLOT_SPEC)
+        currentOnArrived?.invoke()
+    }
     val stickyFactor = remember { Animatable(if (isSticky) 1f else 0f) }
     LaunchedEffect(isSticky) { stickyFactor.animateTo(if (isSticky) 1f else 0f, STICKY_SPEC) }
     return layout { measurable, _ ->
