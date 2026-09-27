@@ -42,6 +42,8 @@ import io.element.android.call.ui.ElementCallOverlay
 import io.element.android.call.ui.ElementCallStageDriver
 import io.element.android.call.ui.ElementCallStageDriverProvider
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.flow.dropWhile
+import kotlinx.coroutines.flow.first
 
 /**
  * The host, reduced to what a host does: wrap its content in [ElementCallOverlay] and decide the style.
@@ -62,6 +64,12 @@ fun SampleApp(
     val fixtures = remember { SampleFixture.entries.toImmutableList() }
     val driver = remember { ElementCallStageDriver() }
     var player by remember { mutableStateOf(initialScenario?.let { SampleScenarioPlayer(controller, it, driver, onRotate) }) }
+    // Hanging up ends the scenario with the call: once the call it started is gone, so is its bar.
+    LaunchedEffect(player) {
+        if (player == null) return@LaunchedEffect
+        controller.state.dropWhile { it == null }.first { it == null }
+        player = null
+    }
     MaterialTheme(colorScheme = darkColorScheme()) {
         Box(modifier = modifier) {
             ElementCallStageDriverProvider(driver) {
