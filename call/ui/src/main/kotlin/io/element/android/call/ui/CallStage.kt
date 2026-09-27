@@ -1030,10 +1030,17 @@ private val FIT_SPEC = spring<Float>(
     stiffness = Spring.StiffnessMediumLow,
 )
 
-/** [SLOT_SPEC]'s twin for a scalar, so the two motions it is summed with stay one motion. */
-private val STICKY_SPEC = spring<Float>(
+/**
+ * [SLOT_SPEC]'s twin for a scalar, so the two motions it is summed with stay one motion.
+ *
+ * The factor multiplies the scroll offset, so where a spring stops and snaps is a distance on
+ * screen: the default 0.01 is a 30 px jump at the end of the move for a grid scrolled 3000 px.
+ * This threshold keeps the snap under half a pixel for offsets up to 50 000 px.
+ */
+private val STICKY_SPEC = spring(
     dampingRatio = Spring.DampingRatioNoBouncy,
     stiffness = Spring.StiffnessMediumLow,
+    visibilityThreshold = 1f / 100_000,
 )
 
 /** Short: this is an acknowledgement that someone arrived, not an event in its own right. */
