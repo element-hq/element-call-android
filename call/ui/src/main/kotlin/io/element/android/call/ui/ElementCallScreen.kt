@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -311,6 +312,8 @@ private fun CallControlsBar(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            // Held sideways the bar is the buttons alone, so a drag beside them reaches the strip under it.
+            .then(if (isCompact) Modifier.wrapContentWidth(Alignment.CenterHorizontally) else Modifier)
             // A drag that starts on the bar does not scroll the grid it floats over (spec 003 R45):
             // a state that reports every delta consumed leaves nothing for the stage's scrollable.
             .scrollable(rememberScrollableState { it }, Orientation.Vertical)
