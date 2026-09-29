@@ -12,8 +12,11 @@ package io.element.android.call.ui
 import android.Manifest
 import android.app.Application
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.test.AndroidComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -104,6 +107,50 @@ class ElementCallOverlayTest : RobolectricTest() {
         assertThat(activity?.isFinishing).isTrue()
     }
 
+    /** The host's own back handlers, registered after the overlay's when the call starts, must not win over it. */
+    @Test
+    fun `back on a call maximized over a host back handler minimizes it`() = runAndroidComposeUiTest<ComponentActivity> {
+        val controller = FakeElementCallController()
+        val host = HostBack()
+        setOverlay(controller, host)
+        controller.state.value = aConnectedSnapshot(isMaximized = true)
+        waitForIdle()
+
+        pressBack()
+
+        assertThat(controller.maximizedCalls).containsExactly(false)
+        assertThat(host.count).isEqualTo(0)
+    }
+
+    /** A screen the host opens while the call is minimized registers its handler later still. */
+    @Test
+    fun `back on a call maximized after the host added a back handler minimizes it`() = runAndroidComposeUiTest<ComponentActivity> {
+        val controller = FakeElementCallController(initialState = aConnectedSnapshot(isMaximized = false))
+        val host = HostBack(isRegistered = mutableStateOf(false))
+        setOverlay(controller, host)
+        host.isRegistered.value = true
+        waitForIdle()
+        controller.state.value = aConnectedSnapshot(isMaximized = true)
+        waitForIdle()
+
+        pressBack()
+
+        assertThat(controller.maximizedCalls).containsExactly(false)
+        assertThat(host.count).isEqualTo(0)
+    }
+
+    @Test
+    fun `back on a minimized call reaches the host back handler`() = runAndroidComposeUiTest<ComponentActivity> {
+        val controller = FakeElementCallController(initialState = aConnectedSnapshot(isMaximized = false))
+        val host = HostBack()
+        setOverlay(controller, host)
+
+        pressBack()
+
+        assertThat(controller.maximizedCalls).isEmpty()
+        assertThat(host.count).isEqualTo(1)
+    }
+
     /** A voice call docks as a bar above the host's content, and tapping it brings the call back. */
     @Test
     fun `a minimized audio call docks as the bar over the host content`() = runAndroidComposeUiTest<ComponentActivity> {
@@ -174,11 +221,24 @@ class ElementCallOverlayTest : RobolectricTest() {
         waitForIdle()
     }
 
-    private fun AndroidComposeUiTest<ComponentActivity>.setOverlay(controller: FakeElementCallController) {
+    /** A host screen's own back handler, as Element X's room screen has. */
+    private class HostBack(val isRegistered: MutableState<Boolean> = mutableStateOf(true)) {
+        var count = 0
+            private set
+
+        fun onBack() {
+            count++
+        }
+    }
+
+    private fun AndroidComposeUiTest<ComponentActivity>.setOverlay(controller: FakeElementCallController, hostBack: HostBack? = null) {
         setContent {
             CompositionLocalProvider(LocalInspectionMode provides true) {
                 ElementCallOverlay(controller = controller) { modifier ->
                     Text(text = HOST_CONTENT, modifier = modifier)
+                    if (hostBack != null && hostBack.isRegistered.value) {
+                        BackHandler(onBack = hostBack::onBack)
+                    }
                 }
             }
         }
