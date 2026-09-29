@@ -23,6 +23,8 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
   with `videoStreamKind` for the stream a tile draws. `MatrixRtcParticipant.cameraTile()` is `personTile()`.
 - `MatrixRtcCall` gains `tiles` and `localState`. A fake or a host transport implementing it must supply both.
   `MatrixRtcTileRef` carries `userId`, so a tile outside the detail window still has a name and an avatar.
+- `ElementCallOverlay` takes a nullable controller. Compose it always, with `null` before there is one: switching
+  between it and bare content rebuilds the host's content and loses its state.
 - `ElementCallSnapshot`: `roster` (every remote tile in rank order, with full records for the declared detail window)
   and `ownTile` added; `tiles` and `spotlightMemberId`/`spotlightTileId` are gone. The spotlight is the layout's
   choice, not the head of the ranking. `activeSpeakerIds` is removed; speaking is `MatrixRtcTile.isSpeaking`.
