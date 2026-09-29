@@ -12,6 +12,10 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 ## Unreleased
 
+_Nothing yet._
+
+## 0.1.0-rc.6 - 2026-09-29
+
 - `call/matrix` requires Matrix Rust SDK `org.matrix.rustcomponents:sdk-android` **26.09.26** (was 26.09.08), the
   release Element X moved to. Its widget bindings changed binary shape (`WidgetCapabilitiesProvider.acquireCapabilities`
   became `suspend`, `WidgetDriverHandle.send` stopped being one), so this library built against 26.09.08 fails at
@@ -61,6 +65,20 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 - `toCallTiles` and `screenShareTileId` are gone; build a `CallTileData` (formerly `CallParticipant`) with `MatrixRtcTile.toCallTileData`.
 - Composables renamed: `CallParticipantTile` is `CallTile`, and `ElementCallPictureInPictureView` is
   `ElementCallPictureInPictureContent`. Same parameters.
+
+
+
+### What's Changed
+
+✨ Features
+* Feat: New grid-layout with hero spotlight when needed by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/29
+
+🐛 Bugfixes
+* Minimize a maximized call on back before the host's back handlers by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/31
+* Fix: The composer draft of EXA is lost when a call is started by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/32
+
+
+**Full Changelog**: https://github.com/element-hq/element-call-android/compare/v0.1.0-rc.5...v0.1.0-rc.6
 
 ## 0.1.0-rc.5 - 2026-09-25
 
