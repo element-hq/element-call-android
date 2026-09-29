@@ -13,7 +13,6 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
-import io.element.android.call.ui.A_REMOTE_MEMBER_ID
 import io.element.android.call.ui.ElementCallTestTags
 import org.junit.Rule
 import org.junit.Test
@@ -33,7 +32,7 @@ class VideoPixelsTest {
     @Test
     fun aVideoTileDrawsTheColourBars() {
         launchSample(SampleFixture.ONE_TO_ONE).use {
-            val tile = composeRule.onNodeWithTag(ElementCallTestTags.tile(A_REMOTE_MEMBER_ID))
+            val tile = composeRule.onNodeWithTag(ElementCallTestTags.tile(SampleFixture.memberIdOf("Bob")))
 
             // The first frame takes a moment: the GL thread has to come up and the pattern runs at 15fps.
             var colours = 0

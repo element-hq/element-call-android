@@ -28,7 +28,8 @@ import androidx.compose.ui.unit.dp
 import kotlinx.collections.immutable.ImmutableList
 
 /**
- * The picker: one row per fixture, and the style switch. Deliberately plain, so that whatever the call
+ * The picker: the style switch, then the fixtures by category and the scenarios, the sections the iOS
+ * catalogue has. Deliberately plain, so that whatever the call
  * draws over it is unmistakably the call's.
  */
 @Composable
@@ -40,6 +41,7 @@ fun SampleHomeScreen(
     onOpen: (SampleFixture) -> Unit,
     onOpenScenario: (String) -> Unit,
     modifier: Modifier = Modifier,
+    launchError: String? = null,
 ) {
     Surface(modifier = modifier.fillMaxSize()) {
         LazyColumn(modifier = Modifier.safeDrawingPadding()) {
@@ -75,26 +77,45 @@ fun SampleHomeScreen(
                 }
                 HorizontalDivider()
             }
-            items(fixtures, key = { it.key }) { fixture ->
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onOpen(fixture) }
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                ) {
-                    Text(text = fixture.title, style = MaterialTheme.typography.bodyLarge)
+            if (launchError != null) {
+                item {
                     Text(
-                        text = fixture.description,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = fixture.key,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline,
+                        text = launchError,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                     )
                 }
-                HorizontalDivider()
+            }
+            SampleFixture.Category.entries.forEach { category ->
+                item(key = category.name) {
+                    Text(
+                        text = category.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    )
+                }
+                items(fixtures.filter { it.category == category }, key = { it.key }) { fixture ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onOpen(fixture) }
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                    ) {
+                        Text(text = fixture.title, style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            text = fixture.description,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            text = fixture.key,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.outline,
+                        )
+                    }
+                    HorizontalDivider()
+                }
             }
             item {
                 Text(

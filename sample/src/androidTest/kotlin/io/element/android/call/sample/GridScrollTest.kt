@@ -26,7 +26,6 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.google.common.truth.Truth.assertThat
 import io.element.android.call.ui.ElementCallTestTags
 import io.element.android.call.ui.R
-import io.element.android.call.ui.aCrowdMemberId
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -43,8 +42,9 @@ class GridScrollTest {
 
     @Test
     fun swipingAGridTileScrollsTheGrid() {
-        launchSample(SampleFixture.LARGE_CALL).use {
-            val tag = ElementCallTestTags.tile(aCrowdMemberId(1))
+        launchSample(SampleFixture.LISTEN_MODE).use {
+            // Near the top of the grid, so it is composed before the swipe.
+            val tag = ElementCallTestTags.tile(SampleFixture.memberIdOf("Dan"))
             val before = composeRule.onNodeWithTag(tag).getBoundsInRoot()
 
             composeRule.onNodeWithTag(tag).performTouchInput { swipeUp() }

@@ -41,6 +41,7 @@ import io.element.android.call.test.scenario.MatrixRtcScenario
 import io.element.android.call.ui.ElementCallOverlay
 import io.element.android.call.ui.ElementCallStageDriver
 import io.element.android.call.ui.ElementCallStageDriverProvider
+import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.dropWhile
 import kotlinx.coroutines.flow.first
@@ -55,8 +56,11 @@ import kotlinx.coroutines.flow.first
 @Composable
 fun SampleApp(
     controller: SampleElementCallController,
+    scenarios: ImmutableList<String>,
     modifier: Modifier = Modifier,
     initialScenario: MatrixRtcScenario? = null,
+    /** What the launch intent asked for and the sample does not have, shown over the picker. */
+    launchError: String? = null,
     /** A scenario's `rotate` frame, which only the Activity can perform. */
     onRotate: (isLandscape: Boolean) -> Unit = {},
 ) {
@@ -80,7 +84,8 @@ fun SampleApp(
                 ) { contentModifier ->
                     SampleHomeScreen(
                         fixtures = fixtures,
-                        scenarios = SampleActivity.SCENARIOS.toImmutableList(),
+                        scenarios = scenarios,
+                        launchError = launchError,
                         isStyleOverridden = isStyleOverridden,
                         onToggleStyle = { isStyleOverridden = !isStyleOverridden },
                         onOpen = {

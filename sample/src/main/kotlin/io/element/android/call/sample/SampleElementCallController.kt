@@ -108,15 +108,13 @@ class SampleElementCallController(
 
     /**
      * One pattern per stream, stable for the life of the controller, as the real controller's flows are.
-     * Shared screens are landscape; cameras alternate by member, so both aspects are always on screen.
+     * Bob's and Erin's cameras are portrait and everything else landscape, as on iOS (feature-hq
+     * `harness/fixtures.md`), so both aspects are on the stage at once.
      */
     override fun videoFrames(memberId: String, kind: MatrixRtcStreamKind): Flow<MatrixRtcVideoFrame> =
         patterns.getOrPut(memberId to kind) {
-            val pattern = when {
-                kind == MatrixRtcStreamKind.SCREEN_SHARE -> ElementCallTestPattern.landscape()
-                memberId.hashCode() % 2 == 0 -> ElementCallTestPattern.portrait()
-                else -> ElementCallTestPattern.landscape()
-            }
+            val isPortrait = kind == MatrixRtcStreamKind.CAMERA && memberId in PORTRAIT_MEMBERS
+            val pattern = if (isPortrait) ElementCallTestPattern.portrait() else ElementCallTestPattern.landscape()
             pattern.frames()
         }
 
@@ -163,5 +161,9 @@ class SampleElementCallController(
 
     private fun update(block: (ElementCallSnapshot) -> ElementCallSnapshot) {
         _state.update { it?.let(block) }
+    }
+
+    private companion object {
+        val PORTRAIT_MEMBERS = setOf(SampleFixture.memberIdOf("Bob"), SampleFixture.memberIdOf("Erin"))
     }
 }
