@@ -92,8 +92,7 @@ class ElementCallStack private constructor(
 
         /**
          * The RTC core, in place of the Rust one over [transport]: for a harness that plays a
-         * scripted call through the real controller and the real screen, or a host with a core of
-         * its own. The default is the Rust core.
+         * scripted call through the real controller and the real screen. The default is the Rust core.
          */
         fun rtcService(service: MatrixRtcService) = apply { rtcService = service }
 
