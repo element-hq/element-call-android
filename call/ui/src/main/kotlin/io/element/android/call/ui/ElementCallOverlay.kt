@@ -37,9 +37,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.unit.dp
@@ -74,8 +76,9 @@ import timber.log.Timber
  * this is composed inside one. The controller keeps the `RequestingPermission` state and the
  * idempotent answers.
  *
- * @param controller the call to draw, from `ElementCallStack.controller`.
- * @param modifier applied to whatever is drawn at the root: the host's content, or the call over it.
+ * @param controller the call to draw, from `ElementCallStack.controller`, or null before there is one. Compose
+ * the overlay even then: switching between the overlay and bare content would rebuild the host's content.
+ * @param modifier applied at the root, around the host's content and the call over it.
  * @param style the host's design system, or null for the defaults. Read at draw time, so a host that
  * re-brands per session reaches the call.
  * @param content the host's own content, composed underneath with the bar's height consumed from its
@@ -83,36 +86,91 @@ import timber.log.Timber
  */
 @Composable
 fun ElementCallOverlay(
-    controller: ElementCallController,
+    controller: ElementCallController?,
     modifier: Modifier = Modifier,
     style: ElementCallStyle? = null,
     content: @Composable (Modifier) -> Unit,
 ) {
-    val call by controller.state.collectAsState()
-    val current = call
-    if (current == null) {
-        content(modifier)
-        return
-    }
-
-    ElementCallTheme(style = style) {
-        // A floating window is a couple of centimetres of screen. Everything that makes the call
-        // screen usable - controls, the top bar, the strip of other people, the app behind it - is
-        // either unreadable or untappable at that size, so PiP draws the one thing worth seeing and
-        // nothing else. This is also the whole of the PiP implementation, because the call is ours:
-        // the WebView path has to ask Element Call over the widget API whether it may enter PiP, and
-        // hangs the call up if the answer is no.
-        // What the spotlight shows is remembered here, above every window that draws the call, so
-        // the hero shown and the speaker held survive rotation and minimising, and Picture in
-        // Picture and the floating tile show what the spotlight showed (spec 003 R67, R68).
-        val spotlightMemory = rememberCallSpotlightMemory()
-        val isInPictureInPicture by controller.isInPictureInPicture.collectAsState()
-        UnmountedStageWindow(controller = controller, current = current, spotlightMemory = spotlightMemory, isInPictureInPicture = isInPictureInPicture)
-        if (isInPictureInPicture) {
-            ElementCallPictureInPictureContent(call = current, videoFrames = controller::videoFrames, spotlightId = spotlightMemory.spotlightId)
+    val current = controller?.state?.collectAsState()?.value
+    val isInPictureInPicture = controller?.isInPictureInPicture?.collectAsState()?.value == true
+    // How a minimized call shows itself depends on whether it has a picture. A voice call docks as
+    // a bar above the content, per the design; a video call floats as a draggable tile, because a
+    // 56dp strip is no way to show video and because the whole reason to minimize a video call is
+    // to keep watching it. Android's own picture-in-picture cannot do this job - it is an
+    // out-of-app mode and only starts once the user has left the app - so the in-app case has to
+    // be drawn by us, and native PiP takes over at the door. See `ElementCallFloatingTile`.
+    val isBarVisible = current != null && !current.isMaximized && !current.hasVideo
+    Column(modifier = modifier) {
+        val statusBarTopPadding = if (LocalInspectionMode.current) {
+            24.dp
         } else {
-            CallInApp(controller = controller, current = current, spotlightMemory = spotlightMemory, modifier = modifier, content = content)
+            scaffoldScrollableContentInsets.asPaddingValues().calculateTopPadding()
         }
+        // Animated in step with the bar so the content below slides rather than jumping the
+        // moment the bar is asked for: the same problem a connectivity banner above every screen
+        // has, and the same answer. Keyed on the call so a call starting docked does not slide.
+        val topWindowInset by key(current != null) {
+            animateDpAsState(
+                targetValue = if (isBarVisible) statusBarTopPadding + MINIMIZED_CALL_BAR_HEIGHT else 0.dp,
+                animationSpec = spring(stiffness = Spring.StiffnessMediumLow, visibilityThreshold = 1.dp),
+                label = "call-bar-insets-animation",
+            )
+        }
+
+        if (controller != null && current != null && !isInPictureInPicture) {
+            ElementCallTheme(style = style) {
+                AnimatedVisibility(
+                    visible = isBarVisible,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically(),
+                ) {
+                    ElementCallMinimizedBar(
+                        call = current,
+                        onToggleMicrophone = { controller.setMicrophoneMuted(!current.isMicrophoneMuted) },
+                        onHangUp = controller::hangUp,
+                        onClick = { controller.setMaximized(true) },
+                    )
+                }
+            }
+        }
+
+        Box {
+            // Always in this one place, and only hidden in PiP: this is the host's whole navigation
+            // tree, and composing it anywhere else would lose every screen's state and re-run every
+            // presenter.
+            Box(modifier = if (current != null && isInPictureInPicture) NotPlaced else Modifier, propagateMinConstraints = true) {
+                content(Modifier.consumeWindowInsets(PaddingValues(top = topWindowInset)))
+            }
+            if (controller != null && current != null) {
+                ElementCallTheme(style = style) {
+                    CallOverContent(controller = controller, current = current, isInPictureInPicture = isInPictureInPicture)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CallOverContent(
+    controller: ElementCallController,
+    current: ElementCallSnapshot,
+    isInPictureInPicture: Boolean,
+) {
+    // A floating window is a couple of centimetres of screen. Everything that makes the call
+    // screen usable - controls, the top bar, the strip of other people, the app behind it - is
+    // either unreadable or untappable at that size, so PiP draws the one thing worth seeing and
+    // nothing else. This is also the whole of the PiP implementation, because the call is ours:
+    // the WebView path has to ask Element Call over the widget API whether it may enter PiP, and
+    // hangs the call up if the answer is no.
+    // What the spotlight shows is remembered here, above every window that draws the call, so
+    // the hero shown and the speaker held survive rotation and minimising, and Picture in
+    // Picture and the floating tile show what the spotlight showed (spec 003 R67, R68).
+    val spotlightMemory = rememberCallSpotlightMemory()
+    UnmountedStageWindow(controller = controller, current = current, spotlightMemory = spotlightMemory, isInPictureInPicture = isInPictureInPicture)
+    if (isInPictureInPicture) {
+        ElementCallPictureInPictureContent(call = current, videoFrames = controller::videoFrames, spotlightId = spotlightMemory.spotlightId)
+    } else {
+        CallInApp(controller = controller, current = current, spotlightMemory = spotlightMemory)
     }
 }
 
@@ -142,8 +200,6 @@ private fun CallInApp(
     controller: ElementCallController,
     current: ElementCallSnapshot,
     spotlightMemory: CallSpotlightMemory,
-    modifier: Modifier = Modifier,
-    content: @Composable (Modifier) -> Unit,
 ) {
     val context = LocalContext.current
     val microphoneLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -231,64 +287,20 @@ private fun CallInApp(
     // blanks the screen deliberately, and this does not fight it.
     KeepScreenOn(keepScreenOn = current.isMaximized)
 
-    // How a minimized call shows itself depends on whether it has a picture. A voice call docks as
-    // a bar above the content, per the design; a video call floats as a draggable tile, because a
-    // 56dp strip is no way to show video and because the whole reason to minimize a video call is
-    // to keep watching it. Android's own picture-in-picture cannot do this job - it is an
-    // out-of-app mode and only starts once the user has left the app - so the in-app case has to
-    // be drawn by us, and native PiP takes over at the door. See `ElementCallFloatingTile`.
-    val isMinimizedAsTile = !current.isMaximized && current.hasVideo
-    val isBarVisible = !current.isMaximized && !isMinimizedAsTile
-    Column(modifier = modifier) {
-        val statusBarTopPadding = if (LocalInspectionMode.current) {
-            24.dp
-        } else {
-            scaffoldScrollableContentInsets.asPaddingValues().calculateTopPadding()
-        }
-        // Animated in step with the bar so the content below slides rather than jumping the
-        // moment the bar is asked for: the same problem a connectivity banner above every screen
-        // has, and the same answer.
-        val topWindowInset by animateDpAsState(
-            targetValue = if (isBarVisible) statusBarTopPadding + MINIMIZED_CALL_BAR_HEIGHT else 0.dp,
-            animationSpec = spring(stiffness = Spring.StiffnessMediumLow, visibilityThreshold = 1.dp),
-            label = "call-bar-insets-animation",
-        )
+    FloatingCall(
+        isVisible = !current.isMaximized && current.hasVideo,
+        call = current,
+        videoFrames = controller::videoFrames,
+        spotlightId = spotlightMemory.spotlightId,
+        onClick = { controller.setMaximized(true) },
+    )
 
-        AnimatedVisibility(
-            visible = isBarVisible,
-            enter = fadeIn() + expandVertically(),
-            exit = fadeOut() + shrinkVertically(),
-        ) {
-            ElementCallMinimizedBar(
-                call = current,
-                onToggleMicrophone = { controller.setMicrophoneMuted(!current.isMicrophoneMuted) },
-                onHangUp = controller::hangUp,
-                onClick = { controller.setMaximized(true) },
-            )
-        }
-
-        Box {
-            // Kept composed underneath rather than swapped out: this is the host's whole
-            // navigation tree, and tearing it down to show a call would lose every screen's
-            // scroll position and re-run every presenter when the call was minimized again.
-            content(Modifier.consumeWindowInsets(PaddingValues(top = topWindowInset)))
-
-            FloatingCall(
-                isVisible = isMinimizedAsTile,
-                call = current,
-                videoFrames = controller::videoFrames,
-                spotlightId = spotlightMemory.spotlightId,
-                onClick = { controller.setMaximized(true) },
-            )
-
-            MaximizedCall(
-                isMaximized = current.isMaximized,
-                controller = controller,
-                navigator = navigator,
-                spotlightMemory = spotlightMemory,
-            )
-        }
-    }
+    MaximizedCall(
+        isMaximized = current.isMaximized,
+        controller = controller,
+        navigator = navigator,
+        spotlightMemory = spotlightMemory,
+    )
 
     // After the host's content and only while maximized, so it registers last and wins over the host's handlers.
     if (current.isMaximized) {
@@ -353,6 +365,12 @@ private fun MaximizedCall(
         val state = rememberElementCallScreenState(controller = controller, navigator = navigator, spotlightMemory = spotlightMemory)
         ElementCallScreen(state = state, modifier = Modifier.fillMaxSize())
     }
+}
+
+/** Measured, so the call over it keeps its size, but never drawn. */
+private val NotPlaced = Modifier.layout { measurable, constraints ->
+    val placeable = measurable.measure(constraints)
+    layout(placeable.width, placeable.height) {}
 }
 
 /** The top edge, where the minimized bar is docked. */
