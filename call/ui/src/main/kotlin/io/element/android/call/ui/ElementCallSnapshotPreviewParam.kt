@@ -13,7 +13,6 @@ import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.id.RoomId
-import kotlinx.collections.immutable.toImmutableList
 
 open class ElementCallSnapshotPreviewParam : PreviewParameterProvider<ElementCallSnapshot> {
     override val values: Sequence<ElementCallSnapshot>
@@ -50,6 +49,6 @@ fun aCallSnapshot(
     isMicrophoneMuted = isMicrophoneMuted,
     connectedAtElapsedMs = connectedAtElapsedMs,
     isMaximized = isMaximized,
-    tiles = participants.previewTiles(speakingIds).toImmutableList(),
+    roster = participants.previewTiles(speakingIds).previewRoster(),
     ownTile = participants.previewOwnTile(),
 )

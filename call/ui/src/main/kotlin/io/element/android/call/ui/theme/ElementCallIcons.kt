@@ -9,6 +9,7 @@ package io.element.android.call.ui.theme
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bluetooth
+import androidx.compose.material.icons.rounded.FrontHand
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -48,6 +49,8 @@ data class ElementCallIcons(
     val participants: ImageVector,
     /** The top bar's more-options button, which opens the overflow menu. */
     val overflow: ImageVector,
+    /** A raised hand, on a tile whose member has one up. */
+    val handRaised: ImageVector,
 ) {
     companion object {
         /** The bundled defaults. Resolved in composition, as vector resources are. */
@@ -69,6 +72,7 @@ data class ElementCallIcons(
             selected = ImageVector.vectorResource(R.drawable.ic_element_call_check),
             participants = ImageVector.vectorResource(R.drawable.ic_element_call_user_profile),
             overflow = ImageVector.vectorResource(R.drawable.ic_element_call_overflow_vertical),
+            handRaised = Icons.Rounded.FrontHand,
         )
     }
 }

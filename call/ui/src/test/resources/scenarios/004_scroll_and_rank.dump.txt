@@ -1,0 +1,314 @@
+== 0s viewport 393x734 bottom 34
+window ranks - also -  composed 1  subscribed 0  spotlight -  fullscreen -
+rank slot                 rect                 vis      detail constraints
+-    own        grid 0,0  8,8,377,600          live     -      -
+
+== 0s A#* B C D E F G H I J K L M N O P Q R S T U V W X Y Z
+window ranks 1..<18 also A#*,B,C,D,E,F,G,H  composed 19  subscribed 0  spotlight A#*  fullscreen -
+rank slot                 rect                 vis      detail constraints
+-    own        grid 0,0  8,229,185,138        live     -      -
+0    A#*        spot      0,0,393,221          live     detail -
+1    B          grid 0,1  201,229,185,138      live     detail -
+2    C          grid 1,0  8,375,185,138        live     detail -
+3    D          grid 1,1  201,375,185,138      live     detail -
+4    E          grid 2,0  8,522,185,138        live     detail -
+5    F          grid 2,1  201,522,185,138      live     detail -
+6    G          grid 3,0  8,668,185,138        live     detail -
+7    H          grid 3,1  201,668,185,138      live     detail -
+8    I          grid 4,0  8,815,185,138        paused   detail -
+9    J          grid 4,1  201,815,185,138      paused   detail -
+10   K          grid 5,0  8,961,185,138        paused   detail -
+11   L          grid 5,1  201,961,185,138      paused   detail -
+12   M          grid 6,0  8,1107,185,138       paused   detail -
+13   N          grid 6,1  201,1107,185,138     paused   detail -
+14   O          grid 7,0  8,1254,185,138       paused   detail -
+15   P          grid 7,1  201,1254,185,138     paused   detail -
+16   Q          grid 8,0  8,1400,185,138       paused   detail -
+17   R          grid 8,1  201,1400,185,138     paused   detail -
+18   S          grid 9,0  8,1546,185,138       released ref    -
+19   T          grid 9,1  201,1546,185,138     released ref    -
+20   U          grid 10,0 8,1693,185,138       released ref    -
+21   V          grid 10,1 201,1693,185,138     released ref    -
+22   W          grid 11,0 8,1839,185,138       released ref    -
+23   X          grid 11,1 201,1839,185,138     released ref    -
+24   Y          grid 12,0 8,1986,185,138       released ref    -
+25   Z          grid 12,1 201,1986,185,138     released ref    -
+
+== 1s scroll 300
+window ranks 1..<22 also A#*,B,C,D,E,F,G,H  composed 23  subscribed 0  spotlight A#*  fullscreen -
+rank slot                 rect                 vis      detail constraints
+-    own        grid 0,0  8,229,185,138        live     -      -
+0    A#*        spot      0,300,393,221        live     detail -
+1    B          grid 0,1  201,229,185,138      live     detail -
+2    C          grid 1,0  8,375,185,138        live     detail -
+3    D          grid 1,1  201,375,185,138      live     detail -
+4    E          grid 2,0  8,522,185,138        live     detail -
+5    F          grid 2,1  201,522,185,138      live     detail -
+6    G          grid 3,0  8,668,185,138        live     detail -
+7    H          grid 3,1  201,668,185,138      live     detail -
+8    I          grid 4,0  8,815,185,138        live     detail -
+9    J          grid 4,1  201,815,185,138      live     detail -
+10   K          grid 5,0  8,961,185,138        live     detail -
+11   L          grid 5,1  201,961,185,138      live     detail -
+12   M          grid 6,0  8,1107,185,138       paused   detail -
+13   N          grid 6,1  201,1107,185,138     paused   detail -
+14   O          grid 7,0  8,1254,185,138       paused   detail -
+15   P          grid 7,1  201,1254,185,138     paused   detail -
+16   Q          grid 8,0  8,1400,185,138       paused   detail -
+17   R          grid 8,1  201,1400,185,138     paused   detail -
+18   S          grid 9,0  8,1546,185,138       paused   detail -
+19   T          grid 9,1  201,1546,185,138     paused   detail -
+20   U          grid 10,0 8,1693,185,138       paused   detail -
+21   V          grid 10,1 201,1693,185,138     paused   detail -
+22   W          grid 11,0 8,1839,185,138       released ref    -
+23   X          grid 11,1 201,1839,185,138     released ref    -
+24   Y          grid 12,0 8,1986,185,138       released ref    -
+25   Z          grid 12,1 201,1986,185,138     released ref    -
+
+== 2s tick
+window ranks 1..<22 also A#*,B,C,D,E,F,G,H  composed 23  subscribed 0  spotlight A#*  fullscreen -
+rank slot                 rect                 vis      detail constraints
+-    own        grid 0,0  8,229,185,138        live     -      -
+0    A#*        spot      0,300,393,221        live     detail -
+1    B          grid 0,1  201,229,185,138      live     detail -
+2    C          grid 1,0  8,375,185,138        live     detail -
+3    D          grid 1,1  201,375,185,138      live     detail -
+4    E          grid 2,0  8,522,185,138        live     detail -
+5    F          grid 2,1  201,522,185,138      live     detail -
+6    G          grid 3,0  8,668,185,138        live     detail -
+7    H          grid 3,1  201,668,185,138      live     detail -
+8    I          grid 4,0  8,815,185,138        live     detail -
+9    J          grid 4,1  201,815,185,138      live     detail -
+10   K          grid 5,0  8,961,185,138        live     detail -
+11   L          grid 5,1  201,961,185,138      live     detail -
+12   M          grid 6,0  8,1107,185,138       paused   detail -
+13   N          grid 6,1  201,1107,185,138     paused   detail -
+14   O          grid 7,0  8,1254,185,138       paused   detail -
+15   P          grid 7,1  201,1254,185,138     paused   detail -
+16   Q          grid 8,0  8,1400,185,138       paused   detail -
+17   R          grid 8,1  201,1400,185,138     paused   detail -
+18   S          grid 9,0  8,1546,185,138       paused   detail -
+19   T          grid 9,1  201,1546,185,138     paused   detail -
+20   U          grid 10,0 8,1693,185,138       paused   detail -
+21   V          grid 10,1 201,1693,185,138     paused   detail -
+22   W          grid 11,0 8,1839,185,138       released ref    -
+23   X          grid 11,1 201,1839,185,138     released ref    -
+24   Y          grid 12,0 8,1986,185,138       released ref    -
+25   Z          grid 12,1 201,1986,185,138     released ref    -
+
+== 3s A#* Y! B C D E F G H I J K L M N O P Q R S T U V W X Z
+window ranks 1..<22 also A#*,Y!,B,C,D,E,F,G  composed 24  subscribed 0  spotlight A#*  fullscreen -
+rank slot                 rect                 vis      detail constraints
+-    own        grid 0,0  8,229,185,138        live     -      -
+0    A#*        spot      0,300,393,221        live     detail -
+1    Y!         grid 0,1  201,229,185,138      live     detail -
+2    B          grid 1,0  8,375,185,138        live     detail -
+3    C          grid 1,1  201,375,185,138      live     detail -
+4    D          grid 2,0  8,522,185,138        live     detail -
+5    E          grid 2,1  201,522,185,138      live     detail -
+6    F          grid 3,0  8,668,185,138        live     detail -
+7    G          grid 3,1  201,668,185,138      live     detail -
+8    H          grid 4,0  8,815,185,138        live     detail -
+9    I          grid 4,1  201,815,185,138      live     detail -
+10   J          grid 5,0  8,961,185,138        live     detail -
+11   K          grid 5,1  201,961,185,138      live     detail -
+12   L          grid 6,0  8,1107,185,138       live     detail -
+13   M          grid 6,1  201,1107,185,138     paused   detail -
+14   N          grid 7,0  8,1254,185,138       paused   detail -
+15   O          grid 7,1  201,1254,185,138     paused   detail -
+16   P          grid 8,0  8,1400,185,138       paused   detail -
+17   Q          grid 8,1  201,1400,185,138     paused   detail -
+18   R          grid 9,0  8,1546,185,138       paused   detail -
+19   S          grid 9,1  201,1546,185,138     paused   detail -
+20   T          grid 10,0 8,1693,185,138       paused   detail -
+21   U          grid 10,1 201,1693,185,138     paused   detail -
+22   V          grid 11,0 8,1839,185,138       paused   ref    -
+23   W          grid 11,1 201,1839,185,138     released ref    -
+24   X          grid 12,0 8,1986,185,138       released ref    -
+25   Z          grid 12,1 201,1986,185,138     released ref    -
+
+== 4s tick
+window ranks 1..<22 also A#*,Y!,B,C,D,E,F,G  composed 24  subscribed 0  spotlight A#*  fullscreen -
+rank slot                 rect                 vis      detail constraints
+-    own        grid 0,0  8,229,185,138        live     -      -
+0    A#*        spot      0,300,393,221        live     detail -
+1    Y!         grid 0,1  201,229,185,138      live     detail -
+2    B          grid 1,0  8,375,185,138        live     detail -
+3    C          grid 1,1  201,375,185,138      live     detail -
+4    D          grid 2,0  8,522,185,138        live     detail -
+5    E          grid 2,1  201,522,185,138      live     detail -
+6    F          grid 3,0  8,668,185,138        live     detail -
+7    G          grid 3,1  201,668,185,138      live     detail -
+8    H          grid 4,0  8,815,185,138        live     detail -
+9    I          grid 4,1  201,815,185,138      live     detail -
+10   J          grid 5,0  8,961,185,138        live     detail -
+11   K          grid 5,1  201,961,185,138      live     detail -
+12   L          grid 6,0  8,1107,185,138       live     detail -
+13   M          grid 6,1  201,1107,185,138     paused   detail -
+14   N          grid 7,0  8,1254,185,138       paused   detail -
+15   O          grid 7,1  201,1254,185,138     paused   detail -
+16   P          grid 8,0  8,1400,185,138       paused   detail -
+17   Q          grid 8,1  201,1400,185,138     paused   detail -
+18   R          grid 9,0  8,1546,185,138       paused   detail -
+19   S          grid 9,1  201,1546,185,138     paused   detail -
+20   T          grid 10,0 8,1693,185,138       paused   detail -
+21   U          grid 10,1 201,1693,185,138     paused   detail -
+22   V          grid 11,0 8,1839,185,138       paused   ref    -
+23   W          grid 11,1 201,1839,185,138     released ref    -
+24   X          grid 12,0 8,1986,185,138       released ref    -
+25   Z          grid 12,1 201,1986,185,138     released ref    -
+
+== 5s scroll 320
+window ranks 1..<22 also A#*,Y!,B,C,D,E,F,G  composed 24  subscribed 0  spotlight A#*  fullscreen -
+rank slot                 rect                 vis      detail constraints
+-    own        grid 0,0  8,229,185,138        live     -      -
+0    A#*        spot      0,320,393,221        live     detail -
+1    Y!         grid 0,1  201,229,185,138      live     detail -
+2    B          grid 1,0  8,375,185,138        live     detail -
+3    C          grid 1,1  201,375,185,138      live     detail -
+4    D          grid 2,0  8,522,185,138        live     detail -
+5    E          grid 2,1  201,522,185,138      live     detail -
+6    F          grid 3,0  8,668,185,138        live     detail -
+7    G          grid 3,1  201,668,185,138      live     detail -
+8    H          grid 4,0  8,815,185,138        live     detail -
+9    I          grid 4,1  201,815,185,138      live     detail -
+10   J          grid 5,0  8,961,185,138        live     detail -
+11   K          grid 5,1  201,961,185,138      live     detail -
+12   L          grid 6,0  8,1107,185,138       live     detail -
+13   M          grid 6,1  201,1107,185,138     paused   detail -
+14   N          grid 7,0  8,1254,185,138       paused   detail -
+15   O          grid 7,1  201,1254,185,138     paused   detail -
+16   P          grid 8,0  8,1400,185,138       paused   detail -
+17   Q          grid 8,1  201,1400,185,138     paused   detail -
+18   R          grid 9,0  8,1546,185,138       paused   detail -
+19   S          grid 9,1  201,1546,185,138     paused   detail -
+20   T          grid 10,0 8,1693,185,138       paused   detail -
+21   U          grid 10,1 201,1693,185,138     paused   detail -
+22   V          grid 11,0 8,1839,185,138       paused   ref    -
+23   W          grid 11,1 201,1839,185,138     released ref    -
+24   X          grid 12,0 8,1986,185,138       released ref    -
+25   Z          grid 12,1 201,1986,185,138     released ref    -
+
+== 6s scroll 700
+window ranks 1..<26 also A#*,Y!,B,C,D,E,F,G  composed 27  subscribed 0  spotlight A#*  fullscreen -
+rank slot                 rect                 vis      detail constraints
+-    own        grid 0,0  8,229,185,138        live     -      -
+0    A#*        spot      0,700,393,221        live     detail -
+1    Y!         grid 0,1  201,229,185,138      live     detail -
+2    B          grid 1,0  8,375,185,138        live     detail -
+3    C          grid 1,1  201,375,185,138      live     detail -
+4    D          grid 2,0  8,522,185,138        live     detail -
+5    E          grid 2,1  201,522,185,138      live     detail -
+6    F          grid 3,0  8,668,185,138        live     detail -
+7    G          grid 3,1  201,668,185,138      live     detail -
+8    H          grid 4,0  8,815,185,138        live     detail -
+9    I          grid 4,1  201,815,185,138      live     detail -
+10   J          grid 5,0  8,961,185,138        live     detail -
+11   K          grid 5,1  201,961,185,138      live     detail -
+12   L          grid 6,0  8,1107,185,138       live     detail -
+13   M          grid 6,1  201,1107,185,138     live     detail -
+14   N          grid 7,0  8,1254,185,138       live     detail -
+15   O          grid 7,1  201,1254,185,138     live     detail -
+16   P          grid 8,0  8,1400,185,138       live     detail -
+17   Q          grid 8,1  201,1400,185,138     live     detail -
+18   R          grid 9,0  8,1546,185,138       paused   detail -
+19   S          grid 9,1  201,1546,185,138     paused   detail -
+20   T          grid 10,0 8,1693,185,138       paused   detail -
+21   U          grid 10,1 201,1693,185,138     paused   detail -
+22   V          grid 11,0 8,1839,185,138       paused   detail -
+23   W          grid 11,1 201,1839,185,138     paused   detail -
+24   X          grid 12,0 8,1986,185,138       paused   detail -
+25   Z          grid 12,1 201,1986,185,138     paused   detail -
+
+== 7s tick
+window ranks 1..<26 also A#*,Y!,B,C,D,E,F,G  composed 27  subscribed 0  spotlight A#*  fullscreen -
+rank slot                 rect                 vis      detail constraints
+-    own        grid 0,0  8,229,185,138        live     -      -
+0    A#*        spot      0,700,393,221        live     detail -
+1    Y!         grid 0,1  201,229,185,138      live     detail -
+2    B          grid 1,0  8,375,185,138        live     detail -
+3    C          grid 1,1  201,375,185,138      live     detail -
+4    D          grid 2,0  8,522,185,138        live     detail -
+5    E          grid 2,1  201,522,185,138      live     detail -
+6    F          grid 3,0  8,668,185,138        live     detail -
+7    G          grid 3,1  201,668,185,138      live     detail -
+8    H          grid 4,0  8,815,185,138        live     detail -
+9    I          grid 4,1  201,815,185,138      live     detail -
+10   J          grid 5,0  8,961,185,138        live     detail -
+11   K          grid 5,1  201,961,185,138      live     detail -
+12   L          grid 6,0  8,1107,185,138       live     detail -
+13   M          grid 6,1  201,1107,185,138     live     detail -
+14   N          grid 7,0  8,1254,185,138       live     detail -
+15   O          grid 7,1  201,1254,185,138     live     detail -
+16   P          grid 8,0  8,1400,185,138       live     detail -
+17   Q          grid 8,1  201,1400,185,138     live     detail -
+18   R          grid 9,0  8,1546,185,138       paused   detail -
+19   S          grid 9,1  201,1546,185,138     paused   detail -
+20   T          grid 10,0 8,1693,185,138       paused   detail -
+21   U          grid 10,1 201,1693,185,138     paused   detail -
+22   V          grid 11,0 8,1839,185,138       paused   detail -
+23   W          grid 11,1 201,1839,185,138     paused   detail -
+24   X          grid 12,0 8,1986,185,138       paused   detail -
+25   Z          grid 12,1 201,1986,185,138     paused   detail -
+
+== 9s tick
+window ranks 1..<26 also A#*,Y!,B,C,D,E,F,G  composed 27  subscribed 0  spotlight A#*  fullscreen -
+rank slot                 rect                 vis      detail constraints
+-    own        grid 0,0  8,229,185,138        live     -      -
+0    A#*        spot      0,700,393,221        live     detail -
+1    Y!         grid 0,1  201,229,185,138      live     detail -
+2    B          grid 1,0  8,375,185,138        live     detail -
+3    C          grid 1,1  201,375,185,138      live     detail -
+4    D          grid 2,0  8,522,185,138        live     detail -
+5    E          grid 2,1  201,522,185,138      live     detail -
+6    F          grid 3,0  8,668,185,138        live     detail -
+7    G          grid 3,1  201,668,185,138      live     detail -
+8    H          grid 4,0  8,815,185,138        live     detail -
+9    I          grid 4,1  201,815,185,138      live     detail -
+10   J          grid 5,0  8,961,185,138        live     detail -
+11   K          grid 5,1  201,961,185,138      live     detail -
+12   L          grid 6,0  8,1107,185,138       live     detail -
+13   M          grid 6,1  201,1107,185,138     live     detail -
+14   N          grid 7,0  8,1254,185,138       live     detail -
+15   O          grid 7,1  201,1254,185,138     live     detail -
+16   P          grid 8,0  8,1400,185,138       live     detail -
+17   Q          grid 8,1  201,1400,185,138     live     detail -
+18   R          grid 9,0  8,1546,185,138       paused   detail -
+19   S          grid 9,1  201,1546,185,138     paused   detail -
+20   T          grid 10,0 8,1693,185,138       paused   detail -
+21   U          grid 10,1 201,1693,185,138     paused   detail -
+22   V          grid 11,0 8,1839,185,138       paused   detail -
+23   W          grid 11,1 201,1839,185,138     paused   detail -
+24   X          grid 12,0 8,1986,185,138       paused   detail -
+25   Z          grid 12,1 201,1986,185,138     paused   detail -
+
+== 10s A#* Y! B C D E F G H I J K L M N O P Q R S T U V X Z
+window ranks 1..<25 also A#*,Y!,B,C,D,E,F,G  composed 26  subscribed 0  spotlight A#*  fullscreen -
+rank slot                 rect                 vis      detail constraints
+-    own        grid 0,0  8,229,185,138        live     -      -
+0    A#*        spot      0,700,393,221        live     detail -
+1    Y!         grid 0,1  201,229,185,138      live     detail -
+2    B          grid 1,0  8,375,185,138        live     detail -
+3    C          grid 1,1  201,375,185,138      live     detail -
+4    D          grid 2,0  8,522,185,138        live     detail -
+5    E          grid 2,1  201,522,185,138      live     detail -
+6    F          grid 3,0  8,668,185,138        live     detail -
+7    G          grid 3,1  201,668,185,138      live     detail -
+8    H          grid 4,0  8,815,185,138        live     detail -
+9    I          grid 4,1  201,815,185,138      live     detail -
+10   J          grid 5,0  8,961,185,138        live     detail -
+11   K          grid 5,1  201,961,185,138      live     detail -
+12   L          grid 6,0  8,1107,185,138       live     detail -
+13   M          grid 6,1  201,1107,185,138     live     detail -
+14   N          grid 7,0  8,1254,185,138       live     detail -
+15   O          grid 7,1  201,1254,185,138     live     detail -
+16   P          grid 8,0  8,1400,185,138       live     detail -
+17   Q          grid 8,1  201,1400,185,138     live     detail -
+18   R          grid 9,0  8,1546,185,138       paused   detail -
+19   S          grid 9,1  201,1546,185,138     paused   detail -
+20   T          grid 10,0 8,1693,185,138       paused   detail -
+21   U          grid 10,1 201,1693,185,138     paused   detail -
+22   V          grid 11,0 8,1839,185,138       paused   detail -
+23   X          grid 11,1 201,1839,185,138     paused   detail -
+24   Z          grid 12,0 8,1986,185,138       paused   detail -
+

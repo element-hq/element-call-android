@@ -17,4 +17,9 @@ object ElementCallTestTags {
 
     /** One tile in the call screen's layout, by its [CallTileData.tileId]. */
     fun tile(tileId: String): String = "element_call_tile_$tileId"
+
+    /** The hero stack's arrows, in landscape, and its "1 of n" position pill. */
+    const val HERO_PREVIOUS = "element_call_hero_previous"
+    const val HERO_NEXT = "element_call_hero_next"
+    const val HERO_INDICATOR = "element_call_hero_indicator"
 }

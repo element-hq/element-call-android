@@ -8,6 +8,7 @@
 package io.element.android.call.impl.rtc
 
 import com.google.common.truth.Truth.assertThat
+import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import org.junit.Test
 
@@ -21,9 +22,9 @@ import org.junit.Test
 class VideoConstraintsTest {
     @Test
     fun `constraints compare by value, so an unchanged size is recognisable`() {
-        val first = MatrixRtcVideoConstraints(isVisible = true, widthPx = 320, heightPx = 240)
-        val same = MatrixRtcVideoConstraints(isVisible = true, widthPx = 320, heightPx = 240)
-        val bigger = MatrixRtcVideoConstraints(isVisible = true, widthPx = 1280, heightPx = 720)
+        val first = MatrixRtcVideoConstraints.live(widthPx = 320, heightPx = 240)
+        val same = MatrixRtcVideoConstraints.live(widthPx = 320, heightPx = 240)
+        val bigger = MatrixRtcVideoConstraints.live(widthPx = 1280, heightPx = 720)
 
         // The de-duplication in RustMatrixRtcCall is a map lookup on this value, so value equality is
         // load-bearing rather than incidental.
@@ -32,11 +33,29 @@ class VideoConstraintsTest {
     }
 
     @Test
-    fun `a tile that is not drawn asks for nothing`() {
-        val hidden = MatrixRtcVideoConstraints.NotVisible
+    fun `a paused tile keeps its stream and asks for no size`() {
+        val paused = MatrixRtcVideoConstraints.Paused
 
-        assertThat(hidden.isVisible).isFalse()
-        assertThat(hidden.widthPx).isEqualTo(0)
-        assertThat(hidden.heightPx).isEqualTo(0)
+        assertThat(paused.isEnabled).isTrue()
+        assertThat(paused.isVisible).isFalse()
+        assertThat(paused.widthPx).isEqualTo(0)
+        assertThat(paused.heightPx).isEqualTo(0)
+    }
+
+    /** Released is the one demand that lets the stream go; it must not read as merely hidden. */
+    @Test
+    fun `a released tile is neither enabled nor visible`() {
+        val released = MatrixRtcVideoConstraints.Released
+
+        assertThat(released.isEnabled).isFalse()
+        assertThat(released.isVisible).isFalse()
+        assertThat(released).isNotEqualTo(MatrixRtcVideoConstraints.Paused)
+    }
+
+    @Test
+    fun `a window's rank range maps to the FFI's offset and length`() {
+        assertThat(MatrixRtcDetailWindow(ranks = 4 until 12).rankRange()).isEqualTo(4u to 8u)
+        assertThat(MatrixRtcDetailWindow(ranks = 0 until 8).rankRange()).isEqualTo(0u to 8u)
+        assertThat(MatrixRtcDetailWindow(ranks = IntRange.EMPTY).rankRange()).isEqualTo(0u to 0u)
     }
 }

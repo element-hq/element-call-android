@@ -23,8 +23,24 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
   with `videoStreamKind` for the stream a tile draws. `MatrixRtcParticipant.cameraTile()` is `personTile()`.
 - `MatrixRtcCall` gains `tiles` and `localState`. A fake or a host transport implementing it must supply both.
   `MatrixRtcTileRef` carries `userId`, so a tile outside the detail window still has a name and an avatar.
-- `ElementCallSnapshot`: `tiles` (remote, ranked) and `ownTile` added. `spotlightMemberId` becomes `spotlightTileId`,
-  the head of `tiles`. `activeSpeakerIds` is removed; speaking is `MatrixRtcTile.isSpeaking`.
+- `ElementCallSnapshot`: `roster` (every remote tile in rank order, with full records for the declared detail window)
+  and `ownTile` added; `tiles` and `spotlightMemberId`/`spotlightTileId` are gone. The spotlight is the layout's
+  choice, not the head of the ranking. `activeSpeakerIds` is removed; speaking is `MatrixRtcTile.isSpeaking`.
+- `ElementCallController.setDetailWindow` and `MatrixRtcCall.setDetailWindow` (`MatrixRtcDetailWindow(ranks, also)`):
+  the layout declares which tiles it needs full records for; a host transport implementing `MatrixRtcCall` must
+  supply it. Without a declaration the core sends detail for every tile.
+- `MatrixRtcVideoConstraints` gains `isEnabled`, with `live(w, h)`, `Paused` (was `NotVisible`) and `Released`;
+  `Released` lets a stream go rather than pausing it.
+- The call screen is the spec 003 layout: a two-column 4:3 grid scrolling vertically under a sticky 16:9 spotlight,
+  the control bar floating over it in both orientations. There is no spotlight without a hero unless the call has
+  more than ten remote members, and a direct message is a grid of two: the full-bleed one-to-one arrangement, its
+  `CallLayout`, `CallTileAppearance.FullBleed`/`Thumbnail` and `ElementCallScreenState.spotlightTileId` are gone.
+  `CallTile` takes `appearance` (`Grid`/`Spotlight`), `fit` and `showName` in place of `isSpotlight`.
+- `rememberElementCallScreenState` takes a `CallSpotlightMemory` (`rememberCallSpotlightMemory()` by default): what
+  the spotlight shows survives rotation and minimising, and `ElementCallPictureInPictureContent` and
+  `ElementCallFloatingTile` take the same `spotlightId` to show it (`pictureInPictureCandidate`).
+- `ElementCallStack.Builder.rtcService(service)` builds the stack over a `MatrixRtcService` of the host's own, or a
+  fake, in place of the Rust core.
 - A member sharing their screen is two tiles, the share a hero. Test tags and keys are unchanged
   (`memberId`, `memberId#SCREEN_SHARE`).
 - `isScreenSharing` now reflects the screen-share publication rather than what was asked for.

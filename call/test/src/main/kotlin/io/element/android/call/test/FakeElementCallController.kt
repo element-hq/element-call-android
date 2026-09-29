@@ -11,6 +11,7 @@ import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.audio.CallAudioDevice
+import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
@@ -124,6 +125,13 @@ class FakeElementCallController(
 
     override fun setComposedTiles(tileIds: Set<MatrixRtcTileId>) {
         composedTiles += tileIds
+    }
+
+    /** Every window [setDetailWindow] was given, in order. */
+    val detailWindows = mutableListOf<MatrixRtcDetailWindow>()
+
+    override fun setDetailWindow(window: MatrixRtcDetailWindow) {
+        detailWindows += window
     }
 
     override fun setVideoConstraints(memberId: String, kind: MatrixRtcStreamKind, constraints: MatrixRtcVideoConstraints) {

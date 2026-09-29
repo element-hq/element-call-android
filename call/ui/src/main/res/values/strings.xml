@@ -23,7 +23,16 @@
     <string name="element_call_a11y_selected">Selected</string>
     <string name="element_call_action_stop">Stop</string>
     <string name="element_call_audio_output_title">Audio output</string>
+    <!-- Our own tile's name. -->
+    <string name="element_call_you">You</string>
     <string name="element_call_shared_screen_name">%1$s’s screen</string>
+    <string name="element_call_a11y_muted">Muted</string>
+    <string name="element_call_a11y_speaking">Speaking</string>
+    <string name="element_call_a11y_hand_raised">Hand raised</string>
+    <string name="element_call_a11y_sharing_screen">Sharing their screen</string>
+    <string name="element_call_a11y_next_hero">Show the next spotlight</string>
+    <string name="element_call_a11y_previous_hero">Show the previous spotlight</string>
+    <string name="element_call_hero_position">(%1$d of %2$d)</string>
     <string name="element_call_sharing_your_screen">You’re sharing your screen</string>
     <string name="element_call_audio_device_bluetooth">Bluetooth</string>
     <string name="element_call_audio_device_usb">USB device</string>

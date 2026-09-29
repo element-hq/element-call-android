@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.api.rtc.id.UserId
 import io.element.android.call.ui.preview.ElementCallPreview
@@ -82,8 +83,10 @@ fun ElementCallFloatingTile(
     videoFrames: (memberId: String, kind: MatrixRtcStreamKind) -> Flow<MatrixRtcVideoFrame>,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    /** What the call screen's spotlight showed, which this follows (spec 003 R68). */
+    spotlightId: MatrixRtcTileId? = null,
 ) {
-    val tile = call.floatingTile() ?: return
+    val tile = call.floatingTile(spotlightId) ?: return
     var videoSize by remember(tile.memberId, tile.kind) { mutableStateOf<IntSize?>(null) }
     val targetSize = floatingTileSize(videoSize.takeIf { tile.memberId != null })
     val tileWidth by animateDpAsState(targetSize.width, RESIZE_SPEC, label = "floatingTileWidth")
@@ -179,26 +182,15 @@ private data class FloatingTile(
     val roomMember: ElementCallRoomMember?,
 )
 
-/**
- * Who the floating tile shows: the spotlight, so a shared screen when there is one and otherwise the
- * head of the core's ranking.
- *
- * Falls back to *ourselves* when there is nobody else yet, which the spotlight deliberately does not.
- * The spotlight refuses because the full screen already draws us in the strip, so spotlighting us
- * would draw the same person twice - there is no strip here, so the choice is between our own tile
- * and an empty rectangle.
- */
-private fun ElementCallSnapshot.floatingTile(): FloatingTile? {
-    val remote = tiles.firstOrNull()
-    val chosen = remote ?: ownTile ?: return null
-    val isLocal = remote == null
-    val hasVideo = if (isLocal) isCameraEnabled else chosen.hasVideo
+/** Who the floating tile shows: see [pictureInPictureCandidate]. */
+private fun ElementCallSnapshot.floatingTile(spotlightId: MatrixRtcTileId?): FloatingTile? {
+    val chosen = pictureInPictureCandidate(spotlightId) ?: return null
     return FloatingTile(
-        memberId = chosen.id.memberId.takeIf { hasVideo },
-        kind = chosen.id.kind.videoStreamKind,
-        isMirrored = isLocal && isFrontCamera,
+        memberId = chosen.id.memberId.takeIf { chosen.hasVideo },
+        kind = chosen.kind,
+        isMirrored = chosen.isLocal && isFrontCamera,
         userId = chosen.userId,
-        roomMember = roomMembers[chosen.userId],
+        roomMember = chosen.roomMember,
     )
 }
 

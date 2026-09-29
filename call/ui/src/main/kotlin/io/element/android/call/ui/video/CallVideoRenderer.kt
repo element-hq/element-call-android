@@ -18,7 +18,9 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.viewinterop.AndroidView
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
@@ -28,6 +30,7 @@ import kotlinx.coroutines.flow.Flow
 import livekit.org.webrtc.JavaI420Buffer
 import livekit.org.webrtc.VideoFrame
 import timber.log.Timber
+import kotlin.math.roundToInt
 
 /**
  * Draws one member's video, sized entirely by its caller.
@@ -47,6 +50,10 @@ import timber.log.Timber
  * @param frameCounter told about every frame drawn, for the debug overlay. Counts only - it must never
  * write Compose state, or reading the numbers would cost more than producing them.
  * @param onVideoSizeChange told the frame's size as displayed, rotation applied, when it changes.
+ * @param fit where between filling the box (0, the picture cropped to it) and fitting inside it
+ * (1, the whole picture, letterboxed) the video is drawn. A share in the spotlight fits entirely;
+ * a camera there is drawn halfway, so a portrait picture is cropped by half of what filling would
+ * crop (spec 003 R15, R16).
  */
 @Composable
 fun CallVideoRenderer(
@@ -55,6 +62,7 @@ fun CallVideoRenderer(
     modifier: Modifier = Modifier,
     frameCounter: TileFrameCounter? = null,
     onVideoSizeChange: ((IntSize) -> Unit)? = null,
+    fit: Float = 0f,
 ) {
     // Previews and Paparazzi have no GL context, and the renderer's init would try to make one.
     // A placeholder keeps every screenshot test that renders this screen alive.
@@ -72,25 +80,27 @@ fun CallVideoRenderer(
     val handle = remember { RendererHandle() }
     var isAttached by remember { mutableStateOf(false) }
     val currentOnVideoSizeChange by rememberUpdatedState(onVideoSizeChange)
+    // The frame's shape, which is what a fit is computed from. Written only when it changes, so the
+    // one relayout it costs happens once per stream rather than once per frame.
+    var videoSize by remember { mutableStateOf(IntSize.Zero) }
 
     LaunchedEffect(isAttached, frames) {
         if (!isAttached) return@LaunchedEffect
         var lastSize = IntSize.Zero
         frames.collect { frame ->
             frameCounter?.onFrame(frame.width, frame.height)
-            currentOnVideoSizeChange?.let { report ->
-                val size = frame.displayedSize()
-                if (size != lastSize) {
-                    lastSize = size
-                    report(size)
-                }
+            val size = frame.displayedSize()
+            if (size != lastSize) {
+                lastSize = size
+                videoSize = size
+                currentOnVideoSizeChange?.invoke(size)
             }
             handle.render(frame)
         }
     }
 
     AndroidView(
-        modifier = modifier,
+        modifier = modifier.fitVideo(fit, videoSize),
         factory = { context ->
             CallTextureView(context).apply {
                 handle.attach(this)
@@ -186,6 +196,29 @@ private fun CallTextureView.render(frame: MatrixRtcVideoFrame) {
         // and when the last goes the callback above releases the frame.
         videoFrame.release()
     }
+}
+
+/**
+ * Sizes the view between the box it is given (fill) and the frame's aspect fitted inside it (fit),
+ * centred. The renderer crops to whatever view it gets, so at 1 nothing is cropped and at 0 the
+ * box is filled; in between, the crop shrinks in proportion. Sizing the view rather than scaling
+ * its pixels is what keeps the picture sharp: a scaled `TextureView` would rasterise first.
+ */
+private fun Modifier.fitVideo(fit: Float, videoSize: IntSize): Modifier = layout { measurable, constraints ->
+    val boxWidth = constraints.maxWidth
+    val boxHeight = constraints.maxHeight
+    val canFit = fit > 0f && videoSize.width > 0 && videoSize.height > 0 && constraints.hasBoundedWidth && constraints.hasBoundedHeight
+    if (!canFit) {
+        val placeable = measurable.measure(constraints)
+        return@layout layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+    }
+    val scale = minOf(boxWidth / videoSize.width.toFloat(), boxHeight / videoSize.height.toFloat())
+    val fittedWidth = videoSize.width * scale
+    val fittedHeight = videoSize.height * scale
+    val width = (boxWidth + (fittedWidth - boxWidth) * fit).roundToInt().coerceIn(0, boxWidth)
+    val height = (boxHeight + (fittedHeight - boxHeight) * fit).roundToInt().coerceIn(0, boxHeight)
+    val placeable = measurable.measure(Constraints.fixed(width, height))
+    layout(boxWidth, boxHeight) { placeable.place((boxWidth - width) / 2, (boxHeight - height) / 2) }
 }
 
 private fun MatrixRtcVideoFrame.displayedSize(): IntSize =

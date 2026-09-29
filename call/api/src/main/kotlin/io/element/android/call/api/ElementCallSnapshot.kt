@@ -13,7 +13,7 @@ import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcTile
-import io.element.android.call.api.rtc.MatrixRtcTileId
+import io.element.android.call.api.rtc.MatrixRtcTileRoster
 import io.element.android.call.api.rtc.id.UserId
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.ImmutableMap
@@ -83,10 +83,13 @@ data class ElementCallSnapshot(
      */
     val frameEncryption: ImmutableMap<String, MatrixRtcFrameEncryptionState> = persistentMapOf(),
     /**
-     * The remote tiles, in the core's rank order: a member sharing their screen is two of them. Our
-     * own is [ownTile], never in here. Render in the order given; the core already damped it.
+     * The remote tiles: every one of them in the core's rank order, and full records for the ones
+     * inside the declared detail window ([ElementCallController.setDetailWindow]). A member sharing
+     * their screen is two of them. Our own is [ownTile], never in here. Render the order as given;
+     * the core already damped it. A tile without a record is drawn from its reference, as a name
+     * and an avatar, never dropped.
      */
-    val tiles: ImmutableList<MatrixRtcTile> = persistentListOf(),
+    val roster: MatrixRtcTileRoster = MatrixRtcTileRoster.EMPTY,
     /**
      * Our camera tile, as the core publishes it: null until our membership reaches the core's roster,
      * which can be a moment after media connects.
@@ -151,16 +154,6 @@ data class ElementCallSnapshot(
     val isTileStatsVisible: Boolean = false,
 ) {
     /**
-     * The tile the call screen gives its big slot to, or null when nobody else is here.
-     *
-     * The head of [tiles]: a hero ranks first, and otherwise the core's damped ranking is already
-     * the answer - a spotlight that followed raw speaker events would tear down and rebuild a video
-     * tile several times a second.
-     */
-    val spotlightTileId: MatrixRtcTileId?
-        get() = tiles.firstOrNull()?.id
-
-    /**
      * Whether anybody in the call is sending a picture - a camera or a screen, ours or theirs.
      *
      * Three separate decisions turn on this one fact, which is why it lives here rather than in any of
@@ -168,9 +161,14 @@ data class ElementCallSnapshot(
      * over to picture-in-picture, and the proximity sensor is left alone. All three follow from the
      * same thing being true - there is something to look at, so the user is looking at the screen
      * rather than holding it against their ear.
+     *
+     * Answered from the records inside the detail window, which is all the core sends: with the
+     * window narrowed to a scrolled grid, a camera outside it is not seen here. The core is asked
+     * for a call-wide flag (feature-hq `003` core feedback); until then the layout keeps the head of
+     * the order in its window so the tiles most likely to carry video are in it.
      */
     val hasVideo: Boolean
-        get() = isCameraEnabled || tiles.any { it.hasVideo }
+        get() = isCameraEnabled || roster.detail.values.any { it.hasVideo }
 }
 
 sealed interface ElementCallConnection {

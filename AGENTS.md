@@ -66,6 +66,11 @@ for the three layers (local core, library from source inside Element X, library 
 - Unit tests: `./gradlew test`
 - Screenshot tests: `./gradlew :tests:uitests:verifyPaparazziDebug` (recording is CI's job, see `docs/screenshot_testing.md`)
 - The sample on a device: `./gradlew :sample:installDebug`; its gesture and pixel tests: `./gradlew :sample:connectedDebugAndroidTest`
+- A layout scenario on the device: `adb shell am start -n io.element.android.call.sample/.SampleActivity --es scenario 004_scroll_and_rank`
+  (the corpus is `call/test/src/main/resources/scenarios/`, vendored from feature-hq `plans/003.call_layout/scenarios/`;
+  a copy that differs is a review finding). The same files run on the JVM through the real controller and the real
+  stage in `StageDumpScenarioTest`, one text dump per frame under `call/ui/src/test/resources/scenarios/`; re-record
+  with `ELEMENT_CALL_RECORD_DUMPS=1 ./gradlew :call:ui:testDebugUnitTest --tests '*StageDump*'` and review the diff.
 - Konsist, lint, detekt, ktlint, no-Compose check, docs TOC: `./gradlew runQualityChecks`
 - Everything CI runs, before a PR: `./tools/quality/check.sh`
 - Format: `./gradlew ktlintFormat`
@@ -129,7 +134,13 @@ until one does.
 - Test classes end with `Test`. Helpers live in `tests/testutils`; fakes for the library's own ports live in `call/test`.
 - Behaviour is tested where it lives: the call itself in `call/impl` (`DefaultElementCallControllerTest`, the real
   controller over the fakes), what the screen makes of a snapshot in `call/ui` (`ElementCallScreenStateTest`, over
-  `FakeElementCallController`). A test that drives a real controller through the screen tests two things at once.
+  `FakeElementCallController`). A test that drives a real controller through the screen tests two things at once;
+  the one that does so on purpose is `StageDumpScenarioTest`, because the detail window, the linger and the
+  constraints are what the layout and the call do *together*, and its output is a dump, not an assertion.
+- A snapshot carries the roster whole: `ElementCallSnapshot.roster.order` is every remote tile in rank order and
+  `roster.detail` the full records inside the declared window (`setDetailWindow`). A test that pushes a roster
+  through `FakeMatrixRtcCall.pushRoster` gets the window applied as the core would; `tiles.value = aRoster(...)`
+  is the core's default window, detail for everything.
 
 ### No DI framework, no Appyx, no Activity
 

@@ -37,4 +37,6 @@ dependencies {
 
     testCommonDependencies(libs, includeTestComposeView = true)
     testImplementation(projects.call.test)
+    // The scenario harness plays a scripted call through the real controller and the real screen.
+    testImplementation(projects.call.impl)
 }

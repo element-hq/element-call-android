@@ -12,6 +12,7 @@ import io.element.android.call.api.ElementCallDispatchers
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
 import io.element.android.call.api.rtc.MatrixRtcCall
 import io.element.android.call.api.rtc.MatrixRtcCallEvent
+import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionDiagnostic
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcLocalState
@@ -263,6 +264,7 @@ internal class RustMatrixRtcCall(
         // so their cached flows are dead weight from here on. All of them: a member who was sharing
         // their screen as well as their camera has one per kind.
         remoteVideoFlows.keys.removeAll { it.memberId == memberId }
+        appliedConstraints.keys.removeAll { it.memberId == memberId }
     }
 
     fun start() {
@@ -353,6 +355,22 @@ internal class RustMatrixRtcCall(
 
     override fun setComposedTiles(tileIds: Set<MatrixRtcTileId>) {
         composedTiles.value = tileIds
+    }
+
+    /** The last window declared, so a scroll that lands on the same rows costs the core nothing. */
+    private var declaredWindow: MatrixRtcDetailWindow? = null
+
+    override fun setDetailWindow(window: MatrixRtcDetailWindow) {
+        if (declaredWindow == window) return
+        declaredWindow = window
+        val (offset, length) = window.rankRange()
+        callScope.launch(ffiDispatcher) {
+            runCatchingExceptions {
+                mediaSession.setDetailWindow(offset, length, window.also.map { it.map() })
+            }.onFailure {
+                Timber.w(it, "MatrixRTC: could not declare the detail window")
+            }
+        }
     }
 
     /**
@@ -508,9 +526,9 @@ internal class RustMatrixRtcCall(
                 memberId,
                 kind.map(),
                 FfiMediaConstraints(
-                    // Still subscribed either way: `visible` is what tells the SFU it may stop
-                    // sending, and unsubscribing entirely is what closing the stream does.
-                    enabled = true,
+                    // The core's three demands: `enabled = false` releases the stream as far as the
+                    // transport allows, `visible = false` pauses the sender with the subscription kept.
+                    enabled = constraints.isEnabled,
                     visible = constraints.isVisible,
                     // Dimensions rather than a quality band. The layout knows the exact size it is
                     // drawing at, and a band would be our guess about that same number.
@@ -525,7 +543,11 @@ internal class RustMatrixRtcCall(
         }
         Timber.i(
             "MatrixRTC: constraints for $memberId $kind - " +
-                if (constraints.isVisible) "${constraints.widthPx}x${constraints.heightPx}" else "not visible"
+                when {
+                    !constraints.isEnabled -> "released"
+                    !constraints.isVisible -> "paused"
+                    else -> "${constraints.widthPx}x${constraints.heightPx}"
+                }
         )
     }.onFailure {
         Timber.w(it, "MatrixRTC: could not set video constraints for $memberId")

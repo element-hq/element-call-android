@@ -23,6 +23,7 @@ import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.dp
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
+import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.ui.preview.ElementCallPreview
 import io.element.android.call.ui.preview.PreviewsDayNight
@@ -54,11 +55,12 @@ fun ElementCallPictureInPictureContent(
     call: ElementCallSnapshot,
     videoFrames: (memberId: String, kind: MatrixRtcStreamKind) -> Flow<MatrixRtcVideoFrame>,
     modifier: Modifier = Modifier,
+    /** What the call screen's spotlight showed, which this follows (spec 003 R68). */
+    spotlightId: MatrixRtcTileId? = null,
 ) {
-    // The call screen's spotlight, reduced to a single winner: the head of the core's ranking.
-    val spotlit = call.tiles.firstOrNull()
+    val spotlit = call.pictureInPictureCandidate(spotlightId)?.takeIf { !it.isLocal }
     val memberId = spotlit?.id?.memberId
-    val kind = spotlit?.id?.kind?.videoStreamKind ?: MatrixRtcStreamKind.CAMERA
+    val kind = spotlit?.kind ?: MatrixRtcStreamKind.CAMERA
     val hasVideo = spotlit?.hasVideo == true
 
     Surface(modifier = modifier.fillMaxSize(), color = Color.Black) {

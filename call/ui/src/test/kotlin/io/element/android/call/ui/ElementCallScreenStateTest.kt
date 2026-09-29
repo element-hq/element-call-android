@@ -23,6 +23,7 @@ import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcTile
 import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcTileKind
+import io.element.android.call.api.rtc.MatrixRtcTileRoster
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.id.UserId
 import io.element.android.call.test.A_ROOM_ID
@@ -30,12 +31,12 @@ import io.element.android.call.test.FakeElementCallController
 import io.element.android.call.test.aCameraParticipant
 import io.element.android.call.test.aSharingParticipant
 import io.element.android.call.test.aTile
+import io.element.android.call.test.aWindowedRoster
 import io.element.android.call.test.audio.aSpeaker
 import io.element.android.call.tests.testutils.WarmUpRule
 import io.element.android.call.tests.testutils.consumeItemsUntilPredicate
 import io.element.android.call.tests.testutils.consumeItemsUntilTimeout
 import kotlinx.collections.immutable.persistentMapOf
-import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
@@ -226,7 +227,7 @@ class ElementCallScreenStateTest {
     @Test
     fun `the remaining controls are forwarded as they are`() = runTest {
         val controller = FakeElementCallController(initialState = aConnectedSnapshot())
-        val constraints = MatrixRtcVideoConstraints(isVisible = true, widthPx = 320, heightPx = 240)
+        val constraints = MatrixRtcVideoConstraints.live(widthPx = 320, heightPx = 240)
 
         moleculeFlow(RecompositionMode.Immediate) { rememberElementCallScreenState(controller, aNavigator()) }.test {
             val state = awaitItem()
@@ -252,14 +253,11 @@ class ElementCallScreenStateTest {
     }
 
     /**
-     * Nobody is drawn twice: the spotlight and the strip never show the same member.
-     *
-     * Both halves of what this cost are worth keeping pinned. Visually it reads as a glitch - the
-     * same face above itself. On the video path it was a crash: two tiles meant two collectors on a
-     * cold flow that opens one stream each.
+     * With no hero there is no spotlight and everyone is the same size in the grid (spec 003 R3):
+     * the rank head is never promoted on its own.
      */
     @Test
-    fun `the spotlighted member is not drawn again in the strip`() = runTest {
+    fun `with no hero there is no spotlight and everyone is in the grid`() = runTest {
         val controller = FakeElementCallController(
             initialState = aConnectedSnapshot(
                 participants = listOf(
@@ -273,16 +271,16 @@ class ElementCallScreenStateTest {
             val state = awaitItem()
 
             assertThat(state.tiles).hasSize(2)
-            // The remote is spotlighted, so only we are left in the strip.
-            assertThat(state.spotlightTile?.memberId).isEqualTo(A_REMOTE_MEMBER_ID)
-            assertThat(state.stripTiles.map { it.memberId }).containsExactly(A_LOCAL_MEMBER_ID)
+            assertThat(state.spotlightTile).isNull()
+            assertThat(state.heroes).isEmpty()
+            assertThat(state.gridTiles.map { it.memberId }).containsExactly(A_LOCAL_MEMBER_ID, A_REMOTE_MEMBER_ID).inOrder()
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     /**
      * Our own tile first, then the core's order exactly as given: the core already ranked and damped
-     * it, so a re-sort here would fight it. The spotlight is the head of that order, never us.
+     * it, so a re-sort here would fight it (spec 003 R1).
      */
     @Test
     fun `our own tile comes first and the core's order is kept after it`() = runTest {
@@ -303,8 +301,7 @@ class ElementCallScreenStateTest {
             val state = awaitItem()
 
             assertThat(state.tiles.map { it.memberId }).containsExactly(A_LOCAL_MEMBER_ID, ANOTHER_REMOTE_MEMBER_ID, A_REMOTE_MEMBER_ID).inOrder()
-            assertThat(state.spotlightTile?.memberId).isEqualTo(ANOTHER_REMOTE_MEMBER_ID)
-            assertThat(state.stripTiles.map { it.memberId }).containsExactly(A_LOCAL_MEMBER_ID, A_REMOTE_MEMBER_ID).inOrder()
+            assertThat(state.gridTiles.map { it.memberId }).containsExactly(A_LOCAL_MEMBER_ID, ANOTHER_REMOTE_MEMBER_ID, A_REMOTE_MEMBER_ID).inOrder()
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -342,12 +339,12 @@ class ElementCallScreenStateTest {
             val before = awaitItem().tiles.single().tileId
 
             controller.state.value = controller.state.value?.copy(
-                tiles = listOf(aTile(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.SCREEN_SHARE), aTile(A_REMOTE_MEMBER_ID)).toImmutableList(),
+                roster = listOf(aTile(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.SCREEN_SHARE), aTile(A_REMOTE_MEMBER_ID)).previewRoster(),
             )
             val sharing = consumeItemsUntilPredicate { it.tiles.size == 2 }.last()
             assertThat(sharing.tiles.single { !it.isScreenShare }.tileId).isEqualTo(before)
 
-            controller.state.value = controller.state.value?.copy(tiles = listOf(aTile(A_REMOTE_MEMBER_ID)).toImmutableList())
+            controller.state.value = controller.state.value?.copy(roster = listOf(aTile(A_REMOTE_MEMBER_ID)).previewRoster())
             val after = consumeItemsUntilPredicate { it.tiles.size == 1 }.last()
             assertThat(after.tiles.single().tileId).isEqualTo(before)
             cancelAndIgnoreRemainingEvents()
@@ -370,7 +367,7 @@ class ElementCallScreenStateTest {
             val state = awaitItem()
 
             assertThat(state.spotlightTile).isNull()
-            assertThat(state.stripTiles.map { it.memberId }).containsExactly(A_LOCAL_MEMBER_ID)
+            assertThat(state.gridTiles.map { it.memberId }).containsExactly(A_LOCAL_MEMBER_ID)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -432,14 +429,11 @@ class ElementCallScreenStateTest {
     }
 
     /**
-     * A shared screen takes the spotlight, and the person sharing it stays in the strip.
-     *
-     * The screen beats the active speaker outright rather than competing with them: somebody shares a
-     * screen in order for it to be looked at, and a spotlight that flicked away every time they spoke
-     * would be worse than one that never moved.
+     * A shared screen is a hero and takes the spotlight; the person sharing it stays in the grid
+     * like anyone else (spec 003 R9, R17, R18).
      */
     @Test
-    fun `a shared screen takes the spotlight and its owner stays in the strip`() = runTest {
+    fun `a shared screen takes the spotlight and its owner stays in the grid`() = runTest {
         val controller = FakeElementCallController(
             initialState = aConnectedSnapshot(
                 participants = listOf(
@@ -454,8 +448,9 @@ class ElementCallScreenStateTest {
 
             assertThat(state.spotlightTile?.isScreenShare).isTrue()
             assertThat(state.spotlightTile?.tileId).isEqualTo("$A_REMOTE_MEMBER_ID#SCREEN_SHARE")
+            assertThat(state.heroes).containsExactly("$A_REMOTE_MEMBER_ID#SCREEN_SHARE")
             // The sharer is still shown - only their screen was promoted, not them.
-            assertThat(state.stripTiles.map { it.tileId }).containsExactly(A_REMOTE_MEMBER_ID, ANOTHER_REMOTE_MEMBER_ID)
+            assertThat(state.gridTiles.map { it.tileId }).containsExactly(A_REMOTE_MEMBER_ID, ANOTHER_REMOTE_MEMBER_ID)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -527,12 +522,11 @@ class ElementCallScreenStateTest {
     }
 
     /**
-     * A DM with the two of us in it is drawn one-to-one: the room says it is a DM, and there are
-     * exactly two camera tiles. Both halves come from different places - the room and the media
-     * roster - and this is where they meet.
+     * A direct message is a grid of two like any other call (spec 003 R35): the other person
+     * full-bleed with us as a thumbnail is retired, and no room-type input reaches the layout.
      */
     @Test
-    fun `a DM call with one other person lays out one to one`() = runTest {
+    fun `a DM call with one other person is a grid of two`() = runTest {
         val controller = FakeElementCallController(
             initialState = aConnectedSnapshot(
                 participants = listOf(
@@ -546,74 +540,51 @@ class ElementCallScreenStateTest {
         moleculeFlow(RecompositionMode.Immediate) { rememberElementCallScreenState(controller, aNavigator()) }.test {
             val state = awaitItem()
 
-            assertThat(state.layout).isEqualTo(CallLayout.OneToOne)
-            // The other person is the one who fills the screen, never us.
-            assertThat(state.spotlightTile?.memberId).isEqualTo(A_REMOTE_MEMBER_ID)
+            assertThat(state.isDm).isTrue()
+            assertThat(state.spotlightTile).isNull()
+            assertThat(state.gridTiles.map { it.memberId }).containsExactly(A_LOCAL_MEMBER_ID, A_REMOTE_MEMBER_ID).inOrder()
             cancelAndIgnoreRemainingEvents()
         }
     }
 
-    /** A third person has nowhere to go in a two-tile layout, so a DM they have joined is drawn as a group. */
+    /**
+     * A tile outside the detail window is still placed, from its reference: named, avatar only, no
+     * badge and no video, never dropped (spec 003 R54). Its hero flag is on the reference, so a
+     * share is a hero whether or not its record has arrived.
+     */
     @Test
-    fun `a DM call with a third participant lays out as a group`() = runTest {
-        val controller = FakeElementCallController(
-            initialState = aConnectedSnapshot(
-                participants = listOf(
-                    aCameraParticipant(A_LOCAL_MEMBER_ID, isLocal = true, isCameraMuted = false),
-                    aCameraParticipant(A_REMOTE_MEMBER_ID, isLocal = false, isCameraMuted = false),
-                    aCameraParticipant(ANOTHER_REMOTE_MEMBER_ID, isLocal = false, isCameraMuted = false),
-                ),
-                isDm = true,
-            ),
+    fun `a tile outside the detail window is drawn from its reference`() = runTest {
+        val participants = listOf(
+            aCameraParticipant(A_LOCAL_MEMBER_ID, isLocal = true, isCameraMuted = false),
+            aSharingParticipant(A_REMOTE_MEMBER_ID),
+            aCameraParticipant(ANOTHER_REMOTE_MEMBER_ID, isLocal = false, isCameraMuted = false),
         )
-
-        moleculeFlow(RecompositionMode.Immediate) { rememberElementCallScreenState(controller, aNavigator()) }.test {
-            assertThat(awaitItem().layout).isEqualTo(CallLayout.Group)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    /** A shared screen is a third tile, and the group layout is the one that knows to spotlight it. */
-    @Test
-    fun `a DM call where the other person shares their screen lays out as a group`() = runTest {
         val controller = FakeElementCallController(
             initialState = aConnectedSnapshot(
-                participants = listOf(
-                    aCameraParticipant(A_LOCAL_MEMBER_ID, isLocal = true, isCameraMuted = false),
-                    aSharingParticipant(A_REMOTE_MEMBER_ID),
+                participants = participants,
+                roster = aWindowedRoster(
+                    aTile(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.SCREEN_SHARE),
+                    aTile(A_REMOTE_MEMBER_ID),
+                    aTile(ANOTHER_REMOTE_MEMBER_ID, isSpeaking = true),
+                    detailFor = setOf(MatrixRtcTileId(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.PERSON)),
                 ),
-                isDm = true,
             ),
         )
 
         moleculeFlow(RecompositionMode.Immediate) { rememberElementCallScreenState(controller, aNavigator()) }.test {
             val state = awaitItem()
 
-            assertThat(state.tiles).hasSize(3)
-            assertThat(state.layout).isEqualTo(CallLayout.Group)
-            assertThat(state.spotlightTile?.isScreenShare).isTrue()
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-
-    /** Two people in a room that is not a DM are still a group: the layout follows the room, not the head count. */
-    @Test
-    fun `a call in a room with one other person lays out as a group`() = runTest {
-        val controller = FakeElementCallController(
-            initialState = aConnectedSnapshot(
-                participants = listOf(
-                    aCameraParticipant(A_LOCAL_MEMBER_ID, isLocal = true, isCameraMuted = false),
-                    aCameraParticipant(A_REMOTE_MEMBER_ID, isLocal = false, isCameraMuted = false),
-                ),
-                isDm = false,
-            ),
-        )
-
-        moleculeFlow(RecompositionMode.Immediate) { rememberElementCallScreenState(controller, aNavigator()) }.test {
-            val state = awaitItem()
-
-            assertThat(state.isDm).isFalse()
-            assertThat(state.layout).isEqualTo(CallLayout.Group)
+            assertThat(state.tiles.map { it.tileId })
+                .containsExactly(A_LOCAL_MEMBER_ID, "$A_REMOTE_MEMBER_ID#SCREEN_SHARE", A_REMOTE_MEMBER_ID, ANOTHER_REMOTE_MEMBER_ID)
+                .inOrder()
+            val reference = state.tiles.single { it.memberId == ANOTHER_REMOTE_MEMBER_ID }
+            assertThat(reference.hasDetail).isFalse()
+            assertThat(reference.hasVideo).isFalse()
+            assertThat(reference.isActiveSpeaker).isFalse()
+            assertThat(reference.displayName).isNotEmpty()
+            assertThat(state.tiles.single { it.memberId == A_REMOTE_MEMBER_ID && !it.isScreenShare }.hasDetail).isTrue()
+            assertThat(state.heroes).containsExactly("$A_REMOTE_MEMBER_ID#SCREEN_SHARE")
+            assertThat(state.videoFrames.keys).doesNotContain(ANOTHER_REMOTE_MEMBER_ID)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -622,12 +593,13 @@ class ElementCallScreenStateTest {
     private fun aConnectedSnapshot(
         participants: List<MatrixRtcParticipant> = emptyList(),
         tiles: List<MatrixRtcTile> = participants.previewTiles(),
+        roster: MatrixRtcTileRoster = tiles.previewRoster(),
         isDm: Boolean = false,
     ) = ElementCallSnapshot(
         callData = ElementCallData(roomId = A_ROOM_ID, isAudioCall = true),
         connection = ElementCallConnection.Connected,
         isMicrophonePermissionGranted = true,
-        tiles = tiles.toImmutableList(),
+        roster = roster,
         ownTile = participants.previewOwnTile(),
         isCameraEnabled = participants.previewOwnTile()?.hasVideo == true,
         isDm = isDm,
