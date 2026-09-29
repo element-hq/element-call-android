@@ -231,10 +231,6 @@ private fun CallInApp(
     // blanks the screen deliberately, and this does not fight it.
     KeepScreenOn(keepScreenOn = current.isMaximized)
 
-    BackHandler(enabled = current.isMaximized) {
-        controller.setMaximized(false)
-    }
-
     // How a minimized call shows itself depends on whether it has a picture. A voice call docks as
     // a bar above the content, per the design; a video call floats as a draggable tile, because a
     // 56dp strip is no way to show video and because the whole reason to minimize a video call is
@@ -292,6 +288,11 @@ private fun CallInApp(
                 spotlightMemory = spotlightMemory,
             )
         }
+    }
+
+    // After the host's content and only while maximized, so it registers last and wins over the host's handlers.
+    if (current.isMaximized) {
+        BackHandler { controller.setMaximized(false) }
     }
 }
 
