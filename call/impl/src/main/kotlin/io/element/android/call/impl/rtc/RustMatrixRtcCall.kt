@@ -541,7 +541,7 @@ internal class RustMatrixRtcCall(
                 )
             )
         }
-        Timber.i(
+        Timber.d(
             "MatrixRTC: constraints for $memberId $kind - " +
                 when {
                     !constraints.isEnabled -> "released"

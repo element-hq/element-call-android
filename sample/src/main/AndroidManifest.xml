@@ -19,6 +19,9 @@
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.NoActionBar">
 
+        <!-- So `perfetto` can sample the release build, which is the one worth measuring. -->
+        <profileable android:shell="true" />
+
         <!--
           ~ What a host Activity needs for picture-in-picture (README, host requirement 4): the attribute,
           ~ and the config changes that keep the Activity alive while the window shrinks and grows.

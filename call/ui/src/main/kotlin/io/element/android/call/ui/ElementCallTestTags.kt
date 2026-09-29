@@ -22,4 +22,7 @@ object ElementCallTestTags {
     const val HERO_PREVIOUS = "element_call_hero_previous"
     const val HERO_NEXT = "element_call_hero_next"
     const val HERO_INDICATOR = "element_call_hero_indicator"
+
+    /** The fullscreen HUD's close button, which leaves fullscreen and is not the minimise button (spec 000 R12). */
+    const val EXIT_FULLSCREEN = "element_call_exit_fullscreen"
 }

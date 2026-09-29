@@ -101,6 +101,13 @@ data class ElementCallScreenState(
      */
     val spotlight: CallSpotlight.Choice,
     /**
+     * The [CallTileData.tileId] filling the stage, or null. Purely local (spec 000 R3): it survives
+     * rotation and ends when the tile leaves or the call is minimised (000 R10, R19, R25).
+     */
+    val fullscreenTileId: String?,
+    /** Whether the fullscreen HUD is shown: hidden on entry, toggled by a single tap (000 R8, R9). */
+    val isFullscreenChromeVisible: Boolean,
+    /**
      * What the overflow menu shows: the library version and the core it was built against. Carried in
      * state rather than read from `ElementCallVersion` where they are drawn, so previews and screenshots
      * show a fixed value rather than one that changes with every release.
@@ -110,6 +117,9 @@ data class ElementCallScreenState(
     val eventSink: (ElementCallScreenEvent) -> Unit,
 ) {
     val spotlightTileId: String? get() = spotlight.tileId
+
+    val fullscreenTile: CallTileData?
+        get() = fullscreenTileId?.let { id -> tiles.firstOrNull { it.tileId == id } }
 
     /** The tile in the spotlight. Never ourselves (spec 003 R2). */
     val spotlightTile: CallTileData?

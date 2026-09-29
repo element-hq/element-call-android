@@ -47,6 +47,12 @@ _Nothing yet._
   `ElementCallFloatingTile` take the same `spotlightId` to show it (`pictureInPictureCandidate`).
 - `ElementCallStack.Builder.rtcService(service)` builds the stack over a `MatrixRtcService` of the host's own, or a
   fake, in place of the Rust core.
+- Double-tapping a tile fills the stage with it (spec 000): fitted with no cropping, pinch to zoom up to 4x, a single
+  tap for the HUD. `ElementCallScreenState` gains `fullscreenTileId` and `isFullscreenChromeVisible`;
+  `CallTileAppearance.Fullscreen` and `CallTile`'s `videoTransform` are new; `ElementCallTestTags.EXIT_FULLSCREEN`
+  is the HUD's close button, which leaves fullscreen and never the call.
+- `ElementCallStageDriver`, provided with `ElementCallStageDriverProvider`, drives the stage the way a finger would
+  (scroll, hero switch, fullscreen) for a harness playing layout scenarios; a host never needs one.
 - A member sharing their screen is two tiles, the share a hero. Test tags and keys are unchanged
   (`memberId`, `memberId#SCREEN_SHARE`).
 - `isScreenSharing` now reflects the screen-share publication rather than what was asked for.

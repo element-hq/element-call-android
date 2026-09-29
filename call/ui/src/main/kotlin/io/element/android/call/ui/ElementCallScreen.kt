@@ -27,11 +27,14 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -51,6 +54,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -88,13 +93,18 @@ fun ElementCallScreen(
             // row clear of it (R44).
             val bottomInset = LocalCallStageTestHooks.current?.bottomInset ?: WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
             val controlsClearance = CONTROLS_HEIGHT + bottomInset
-            val stage = @Composable { stageModifier: Modifier ->
-                if (state.tiles.isEmpty()) {
-                    ConnectingPlaceholder(state)
-                } else {
-                    CallStage(state = state, controlsClearance = controlsClearance, modifier = stageModifier)
-                }
-            }
+            // The stage has the same bounds in every arrangement, fullscreen included, and the chrome
+            // floats over it: a stage that moved or resized when a tile went fullscreen would take the
+            // whole grid with it on the first frame of the move (spec 000 R7). Held upright, the top
+            // bar is opaque and the grid is arranged below it; held sideways it floats over the tiles,
+            // because stacked, the two bars take about two fifths of a phone's landscape height,
+            // which is exactly the height the video wanted. One call site, so the scroll offset, the
+            // linger and the rest of what the stage remembers survive rotation and fullscreen (003 R63, R66).
+            val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+            // Kept while the bar is not drawn, so the grid does not move under a fullscreen tile.
+            var bannerHeight by remember { mutableStateOf(0.dp) }
+            val topClearance = if (isLandscape) 0.dp else statusBarTop + TOP_BAR_HEIGHT + bannerHeight
+            val density = LocalDensity.current
             val controls = @Composable { controlsModifier: Modifier ->
                 Box(
                     modifier = controlsModifier
@@ -106,13 +116,38 @@ fun ElementCallScreen(
                 }
             }
 
-            if (isLandscape) {
-                // Held sideways there is not enough height to spend two bars' worth of it on chrome -
-                // stacked, the top bar and the controls take about two fifths of a phone's landscape
-                // height, which is exactly the height the video wanted. So they float over the stage
-                // instead, as the design shows.
-                Box(modifier = Modifier.fillMaxSize()) {
-                    stage(Modifier.fillMaxSize())
+            Box(modifier = Modifier.fillMaxSize()) {
+                if (state.tiles.isEmpty()) {
+                    ConnectingPlaceholder(state)
+                } else {
+                    CallStage(
+                        state = state,
+                        controlsClearance = controlsClearance,
+                        topClearance = topClearance,
+                        fullscreenTop = statusBarTop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+                val fullscreen = state.fullscreenTile
+                if (fullscreen != null) {
+                    // A tile filling the stage, with no chrome but the HUD when asked for (spec 000 R1, R8).
+                    // The status bar keeps the canvas behind it rather than the grid rows under the bar.
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .windowInsetsTopHeight(WindowInsets.statusBars)
+                            .background(ElementCallTheme.colors.bgCanvas),
+                    )
+                    if (state.isFullscreenChromeVisible) {
+                        Box(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+                            CallFullscreenChrome(
+                                tile = fullscreen,
+                                onExitFullscreen = { state.eventSink(ElementCallScreenEvent.ExitFullscreen) },
+                                controls = controls,
+                            )
+                        }
+                    }
+                } else if (isLandscape) {
                     CallTopBar(state, modifier = Modifier.systemBarsPadding())
                     // Stacked so a share that is still running when the call becomes one-to-one does
                     // not draw its banner through the duration.
@@ -120,33 +155,37 @@ fun ElementCallScreen(
                         modifier = Modifier
                             .align(Alignment.TopCenter)
                             .systemBarsPadding()
-                            .padding(top = 56.dp),
+                            .padding(top = TOP_BAR_HEIGHT),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         ScreenShareBanner(state = state)
                         CallDurationLabel(state = state)
                     }
                     controls(Modifier.align(Alignment.BottomCenter))
-                }
-            } else {
-                // The top bar stays above the stage in portrait; only the controls float over it.
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .statusBarsPadding(),
-                ) {
-                    CallTopBar(state)
-                    ScreenShareBanner(state = state, modifier = Modifier.align(Alignment.CenterHorizontally))
-                    Box(modifier = Modifier.weight(1f)) {
-                        stage(Modifier.fillMaxSize())
-                        CallDurationLabel(
+                } else {
+                    // Opaque, so a row scrolled up passes under it; a drag on it is its own, as on the controls (003 B10).
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(ElementCallTheme.colors.bgCanvas)
+                            .scrollable(rememberScrollableState { it }, Orientation.Vertical)
+                            .statusBarsPadding(),
+                    ) {
+                        CallTopBar(state, modifier = Modifier.height(TOP_BAR_HEIGHT))
+                        ScreenShareBanner(
                             state = state,
                             modifier = Modifier
-                                .align(Alignment.TopCenter)
-                                .padding(top = 12.dp),
+                                .align(Alignment.CenterHorizontally)
+                                .onSizeChanged { bannerHeight = with(density) { it.height.toDp() } },
                         )
-                        controls(Modifier.align(Alignment.BottomCenter))
                     }
+                    CallDurationLabel(
+                        state = state,
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = topClearance + 12.dp),
+                    )
+                    controls(Modifier.align(Alignment.BottomCenter))
                 }
             }
         }
@@ -445,6 +484,9 @@ private fun ElementCallConnection.label(): String = when (this) {
 
 /** The controls bar's height: its vertical padding either side of a button. What the stage keeps its last row clear of. */
 private val CONTROLS_HEIGHT = 20.dp + BUTTON_SIZE + 20.dp
+
+/** The top bar's height: an icon button and the bar's padding either side of it. */
+private val TOP_BAR_HEIGHT = 56.dp
 
 /** An icon button's width plus the bar's own padding, kept clear on both sides of the title. */
 private val TOP_BAR_BUTTON_ROOM = 52.dp

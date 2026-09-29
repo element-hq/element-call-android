@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertWithMessage
 import io.element.android.call.api.ElementCallData
+import io.element.android.call.api.rtc.MatrixRtcTileKind
 import io.element.android.call.api.rtc.MatrixRtcTransport
 import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.call.impl.ElementCallStack
@@ -50,7 +51,6 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestCoroutineScheduler
-import org.junit.Ignore
 import org.junit.Test
 import org.robolectric.Shadows.shadowOf
 import java.io.File
@@ -77,7 +77,6 @@ class StageDumpScenarioTest : RobolectricTest() {
     @Test
     fun `004 scroll and rank`() = play("004_scroll_and_rank")
 
-    @Ignore("fullscreen is spec 000, enabled by feature/call_fullscreen")
     @Test
     fun `005 rotation and fullscreen`() = play("005_rotation_and_fullscreen")
 
@@ -182,7 +181,16 @@ class StageDumpScenarioTest : RobolectricTest() {
                 ScenarioAction.Minimize -> controller.setMaximized(false)
                 ScenarioAction.Restore -> controller.setMaximized(true)
                 is ScenarioAction.DetailOnly -> session.apply(content)
-                is ScenarioAction.Fullscreen -> error("fullscreen is spec 000: feature/call_fullscreen")
+                is ScenarioAction.Fullscreen -> runOnUiThread {
+                    val target = action.tile
+                    if (target == null) {
+                        hooks.eventSink(ElementCallScreenEvent.ExitFullscreen)
+                    } else {
+                        val id = target.id
+                        val tileId = if (id.kind == MatrixRtcTileKind.SCREEN_SHARE) "${id.memberId}#SCREEN_SHARE" else id.memberId
+                        hooks.eventSink(ElementCallScreenEvent.ToggleFullscreen(tileId))
+                    }
+                }
                 ScenarioAction.Tick -> Unit
             }
         }

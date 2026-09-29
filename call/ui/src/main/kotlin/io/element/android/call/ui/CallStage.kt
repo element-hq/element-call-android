@@ -11,15 +11,17 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.gestures.rememberScrollableState
+import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.scrollable
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,13 +30,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -44,22 +40,25 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.FloatState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInspectionMode
@@ -81,8 +80,6 @@ import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.ui.theme.ElementCallTheme
-import kotlinx.collections.immutable.ImmutableList
-import kotlinx.collections.immutable.ImmutableMap
 import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -108,6 +105,14 @@ internal fun CallStage(
     state: ElementCallScreenState,
     /** How much of the stage's bottom the control bar floats over, which the last row scrolls clear of (R43, R44). */
     controlsClearance: Dp,
+    /**
+     * How much of the stage's top the top bar floats over. The grid is arranged below it, while a
+     * fullscreen tile takes the stage from [fullscreenTop]. The stage keeps its bounds whether or
+     * not a tile fills it, so nothing already drawn moves when one starts to (000 R7).
+     */
+    topClearance: Dp,
+    /** Where a fullscreen tile starts, keeping the status bar clear (000 R1). */
+    fullscreenTop: Dp,
     modifier: Modifier = Modifier,
     arrangement: CallStageArrangement = CallStageArrangement.RankedGrid,
 ) {
@@ -128,14 +133,18 @@ internal fun CallStage(
         modifier = modifier
             .clipToBounds()
             .semantics { isTraversalGroup = true }
-            .scrollable(scrollable, Orientation.Vertical, reverseDirection = true),
+            // Not while a tile fills the stage: a drag there pans the picture (000 R23).
+            .scrollable(scrollable, Orientation.Vertical, reverseDirection = true, enabled = state.fullscreenTileId == null),
     ) {
+        val density = LocalDensity.current
+        val gridTop = with(density) { topClearance.toPx() }
+        // From here on, coordinates are those of the area under the top bar, which is what the
+        // arrangement divides up; only a fullscreen tile reaches above it.
         val width = constraints.maxWidth.toFloat()
-        val height = constraints.maxHeight.toFloat()
+        val height = constraints.maxHeight.toFloat() - gridTop
         // Nothing is drawn into an area with no room in it: a tile composed at nothing and then
         // grown would animate in from the corner, and would build a GL renderer nobody can see.
         if (width <= 0f || height <= 0f) return@BoxWithConstraints
-        val density = LocalDensity.current
         val metrics = remember(width, height, density, controlsClearance) {
             with(density) {
                 CallStageMetrics(
@@ -151,8 +160,12 @@ internal fun CallStage(
         // The listen-mode speaker is a keyed sibling like any grid tile, so promotion is a slide and
         // never a remount (R37); the hero stack is a pager over tiles that are never in the grid (R17).
         val stickyTileId = (state.spotlight as? CallSpotlight.Choice.Speaker)?.tileId
-        val gridTileIds = state.gridTiles.map { it.tileId }
-        val heroIds = state.heroes
+        // Fullscreen is a placement over the arrangement, not an arrangement: the grid's rects and
+        // its scroll offset are untouched, so leaving returns to the position it had (003 R63, 000 R26).
+        val fullscreenId = state.fullscreenTileId
+        val fullscreenRect = Rect(0f, with(density) { fullscreenTop.toPx() } - gridTop, width, height)
+        val gridTileIds = remember(state.tiles, spotlightTileId) { state.gridTiles.map { it.tileId } }
+        val heroIds = remember(state.tiles) { state.heroes }
         val layout = remember(gridTileIds, spotlightTileId, heroIds, metrics, arrangement) {
             arrangement.compute(CallStageLayout.Input(gridTileIds, spotlightTileId, heroIds, metrics))
         }
@@ -161,24 +174,41 @@ internal fun CallStage(
 
         // Someone leaving can shorten the grid past the offset; ease back to the new end rather than
         // showing an empty area below the last row (R42). A swipe in the meantime takes precedence.
-        LaunchedEffect(layout.contentHeight) {
+        LaunchedEffect(layout.contentHeight, fullscreenId) {
+            // Not while fullscreen: the grid waits where it was left for the way out (R63).
+            if (fullscreenId != null) return@LaunchedEffect
             val excess = scrollOffset.floatValue - layout.maxScroll(height)
             if (excess > 0f) scrollable.animateScrollBy(-excess)
         }
 
-        // Which tiles are on screen, within half a viewport of it, and within one viewport of it -
-        // as sets that only change when a tile crosses an edge, so scrolling by a pixel recomposes
-        // nothing and a tile crossing recomposes the tiles whose state changed.
+        // The composed band, as a set that only changes when a tile crosses its edge, so scrolling by
+        // a pixel recomposes nothing here. Whether a composed tile is on screen is the tile's own
+        // question (see Placed): a tile crossing the viewport's edge recomposes itself and nothing
+        // else, where a stage-wide set would recompose the whole stage at every edge a fling crosses.
         val viewport = { Rect(0f, scrollOffset.floatValue, width, scrollOffset.floatValue + height) }
-        val visibleIds by remember(layout) { derivedStateOf { layout.tilesWithin(viewport(), reach = 0f) } }
-        val nearIds by remember(layout) { derivedStateOf { layout.tilesWithin(viewport(), reach = height * CallTileVisibility.LIVE_HYSTERESIS) } }
-        val bandIds by remember(layout) { derivedStateOf { layout.tilesWithin(viewport(), reach = height * CallTileVisibility.BAND_REACH) } }
+        // While a tile fills the stage nobody is looking at the others: they leave the band, are
+        // paused at once and released after the linger, and come straight back on the way out (000 R17, R18).
+        val bandIds by remember(layout, fullscreenId) {
+            derivedStateOf { if (fullscreenId != null) emptySet() else layout.tilesWithin(viewport(), reach = height * CallTileVisibility.BAND_REACH) }
+        }
 
         // After the stage flips between portrait and landscape, the grid tile that was first visible
-        // before it is still visible (R66): the offset is re-seated on its row rather than reset.
+        // before it is still visible (R66): the offset is re-seated on its row rather than reset. The
+        // tile is found in the arrangement being left, at the offset of that moment, read without
+        // observing it so a scroll does not recompose the stage.
         val firstVisibleId = remember { StringRef() }
-        firstVisibleId.value = visibleIds.minByOrNull { layout.tiles.getValue(it).top } ?: firstVisibleId.value
+        val previous = remember { PreviousLayout() }
         val isLandscape = metrics.isLandscape
+        val previousLayout = previous.layout
+        if (previousLayout != null && previous.isLandscape != isLandscape) {
+            val offset = Snapshot.withoutReadObservation { scrollOffset.floatValue }
+            val seen = Rect(0f, offset, previous.width, offset + previous.height)
+            firstVisibleId.value = previousLayout.tiles.filterValues { it.overlaps(seen) }.minByOrNull { it.value.top }?.key
+        }
+        previous.layout = layout
+        previous.width = width
+        previous.height = height
+        previous.isLandscape = isLandscape
         val seenOrientation = remember { BooleanRef(isLandscape) }
         LaunchedEffect(isLandscape) {
             if (seenOrientation.value == isLandscape) return@LaunchedEffect
@@ -198,14 +228,14 @@ internal fun CallStage(
         val lastShown = remember { StringRef() }
         val currentEventSink by rememberUpdatedState(state.eventSink)
         val tilesById = remember(state.tiles) { state.tiles.associateBy { it.tileId }.toImmutableMap() }
-        LaunchedEffect(bandIds, spotlightTileId) {
+        LaunchedEffect(bandIds, spotlightTileId, fullscreenId) {
             fun constrain(id: String, constraints: MatrixRtcVideoConstraints) {
                 val tile = tilesById[id] ?: return
                 if (!tile.isLocal && tile.hasVideo) {
                     currentEventSink(ElementCallScreenEvent.SetVideoConstraints(tile.memberId, tile.streamKind, constraints))
                 }
             }
-            val back = bandIds - lastBand.value + setOfNotNull(spotlightTileId)
+            val back = bandIds - lastBand.value + setOfNotNull(spotlightTileId, fullscreenId)
             back.forEach { id ->
                 lingerJobs.remove(id)?.cancel()
                 retainedIds.remove(id)
@@ -215,7 +245,7 @@ internal fun CallStage(
             // Only the hero that was shown: one that arrived unshown was never subscribed.
             val unshown = lastShown.value?.takeIf { it != spotlightTileId && it !in bandIds }
             unshown?.let { constrain(it, MatrixRtcVideoConstraints.Paused) }
-            val gone = lastBand.value - bandIds - setOfNotNull(spotlightTileId) + setOfNotNull(unshown)
+            val gone = lastBand.value - bandIds - setOfNotNull(spotlightTileId, fullscreenId) + setOfNotNull(unshown)
             gone.forEach { id ->
                 retainedIds[id] = Unit
                 lingerJobs[id] = lingerScope.launch {
@@ -235,8 +265,8 @@ internal fun CallStage(
         // (R59); and the detail window, derived from it (R52 to R55). Ranks are looked up in the
         // order, never taken from grid positions: the grid has our tile first and the heroes
         // removed, so a grid index is off by one per hero.
-        LaunchedEffect(composedGridIds, bandIds, spotlightTileId, state.tiles) {
-            val composed = state.tiles.filter { it.tileId in composedGridIds || it.tileId == spotlightTileId }
+        LaunchedEffect(composedGridIds, bandIds, spotlightTileId, fullscreenId, state.tiles) {
+            val composed = state.tiles.filter { it.tileId in composedGridIds || it.tileId == spotlightTileId || it.tileId == fullscreenId }
             currentEventSink(ElementCallScreenEvent.SetComposedTiles(composed.map { it.id }.toSet()))
             // The range is the band's, not the linger's: a tile kept only for its stream to settle
             // needs no record, and a range spanning the old band and the new one after a long
@@ -250,7 +280,8 @@ internal fun CallStage(
             // core puts `speaking` on the reference (feature-hq core feedback, 2026-09-26); then
             // the spotlight reads it from the order and this line goes.
             val head = remoteOrder.take(HEAD_RANGE.last + 1).map { it.id }
-            val also = (listOfNotNull(composed.firstOrNull { it.tileId == spotlightTileId }?.id) + head).toSet()
+            val drawnOutOfRank = composed.filter { it.tileId == spotlightTileId || it.tileId == fullscreenId }.map { it.id }
+            val also = (drawnOutOfRank + head).toSet()
             currentEventSink(ElementCallScreenEvent.SetDetailWindow(MatrixRtcDetailWindow(ranks = range, also = also)))
         }
 
@@ -260,12 +291,18 @@ internal fun CallStage(
         layout.tiles.forEach { (tileId, rect) -> lastSlots[tileId] = TileSlot(rect, isSticky = false) }
         val spotlightRect = layout.spotlight
         if (stickyTileId != null && spotlightRect != null) lastSlots[stickyTileId] = TileSlot(spotlightRect, isSticky = true)
+        if (fullscreenId != null && fullscreenId !in heroIds) lastSlots[fullscreenId] = TileSlot(fullscreenRect, isSticky = true, isFullscreen = true)
 
         // Who has just left and has not finished fading out. Their tile plays them out and removes
         // itself when it has; parked beyond the band it does so in a frame.
         val leavers = remember { mutableStateMapOf<String, CallTileData>() }
         val lastTiles = remember { TilesRef() }
+        // Every tile the stage has seen in the call. A tile composed for the first time because it
+        // scrolled into reach is already in the call and appears in place, at full opacity; only a
+        // tile that has just joined fades in (R38, R49: never a blank while scrolling).
+        val knownIds = remember { state.tiles.mapTo(mutableSetOf()) { it.tileId } }
         LaunchedEffect(state.tiles) {
+            state.tiles.mapTo(knownIds) { it.tileId }
             val present = state.tiles.map { it.tileId }.toSet()
             lastTiles.value.forEach { tile -> if (tile.tileId !in present) leavers[tile.tileId] = tile }
             present.forEach { leavers.remove(it) }
@@ -281,9 +318,13 @@ internal fun CallStage(
                 hooks.scrollOffset = { scrollOffset.floatValue }
                 hooks.composedGridIds = composedGridIds
                 hooks.spotlightTileId = spotlightTileId
+                hooks.fullscreenTileId = fullscreenId
                 hooks.heroes = heroIds
                 hooks.eventSink = state.eventSink
                 hooks.scrollTo = { target -> scrollOffset.floatValue = target.coerceIn(0f, layout.maxScroll(height)) }
+                hooks.animateScrollTo = { target ->
+                    lingerScope.launch { scrollable.animateScrollBy(target.coerceIn(0f, layout.maxScroll(height)) - scrollOffset.floatValue) }
+                }
             }
             DisposableEffect(Unit) {
                 onDispose {
@@ -298,26 +339,55 @@ internal fun CallStage(
         @Composable
         fun Placed(tile: CallTileData, isPresent: Boolean) {
             val slot = lastSlots[tile.tileId] ?: return
-            val isLive = if (slot.isSticky) true else tile.tileId in visibleIds
-            val isNear = slot.isSticky || tile.tileId in nearIds
+            // The sticky speaker is live unless something else fills the stage (000 R17); a grid
+            // tile while its rect overlaps the viewport, and near while within half a viewport of it.
+            val isVisible = remember(slot, fullscreenId, width, height) {
+                derivedStateOf {
+                    when {
+                        slot.isSticky -> fullscreenId == null || slot.isFullscreen
+                        fullscreenId != null -> false
+                        else -> slot.rect.overlaps(viewport())
+                    }
+                }
+            }
+            val isNear = remember(slot, fullscreenId, width, height) {
+                derivedStateOf {
+                    when {
+                        slot.isSticky -> true
+                        fullscreenId != null -> false
+                        else -> slot.rect.overlaps(viewport().inflateVertically(height * CallTileVisibility.LIVE_HYSTERESIS))
+                    }
+                }
+            }
             PlacedTile(
                 tile = tile,
                 videoFrames = state.videoFrames[tile.tileId],
-                appearance = if (slot.isSticky) CallTileAppearance.Spotlight else CallTileAppearance.Grid,
+                appearance = when {
+                    slot.isFullscreen -> CallTileAppearance.Fullscreen
+                    slot.isSticky -> CallTileAppearance.Spotlight
+                    else -> CallTileAppearance.Grid
+                },
                 slot = slot,
                 scrollOffset = scrollOffset,
-                isVisible = isLive,
+                isVisible = isVisible,
                 isNear = isNear,
                 isPresent = isPresent,
                 onExit = { leavers.remove(tile.tileId) },
+                isArrival = tile.tileId !in knownIds,
                 stats = state.tileStats(tile, slot.rect),
                 onLongPress = { state.eventSink(ElementCallScreenEvent.ToggleTileStats) },
                 traversalIndex = if (slot.isSticky) 0f else 1f + (gridIndex[tile.tileId] ?: gridTileIds.size),
                 eventSink = state.eventSink,
             )
         }
+        // The whole grid moves as one layer: a scroll changes this translation and nothing else, so no
+        // tile is re-placed or recomposed for it. Sticky slots counter-translate in their own
+        // placement (animatedSlot), which is the only placement a scroll reaches.
+        Box(modifier = Modifier.fillMaxSize().graphicsLayer { translationY = gridTop - scrollOffset.floatValue }) {
         state.tiles.forEach { tile ->
-            val isComposed = tile.tileId == stickyTileId || tile.tileId in composedGridIds && tile.tileId !in hiddenIds
+            val isComposed = tile.tileId == stickyTileId ||
+                tile.tileId == fullscreenId && tile.tileId !in heroIds ||
+                tile.tileId in composedGridIds && tile.tileId !in hiddenIds
             if (!isComposed) return@forEach
             key(tile.tileId) { Placed(tile, isPresent = true) }
         }
@@ -325,10 +395,15 @@ internal fun CallStage(
 
         val choice = state.spotlight
         if (choice is CallSpotlight.Choice.Hero && spotlightRect != null && heroIds.isNotEmpty()) {
+            // Double-tapping the spotlight fullscreens the hero currently shown (003 R62): the pager's
+            // box itself takes the stage, so the page keeps its renderer (000 R7, R20).
+            val isFullscreen = fullscreenId == choice.tileId
             HeroSpotlight(
                 heroIds = heroIds,
                 shownId = choice.tileId,
-                rect = spotlightRect,
+                rect = if (isFullscreen) fullscreenRect else spotlightRect,
+                isFullscreen = isFullscreen,
+                isDimmed = fullscreenId != null && !isFullscreen,
                 scrollOffset = scrollOffset,
                 isLandscape = metrics.isLandscape,
                 tilesById = tilesById,
@@ -341,7 +416,7 @@ internal fun CallStage(
         // the tile, so its tap is its own (000 R16). Only with a picture to turn around.
         val own = state.tiles.firstOrNull { it.isLocal && it.tileId in composedGridIds && state.videoFrames[it.tileId] != null }
         val ownSlot = own?.let { lastSlots[it.tileId] }
-        if (ownSlot != null) {
+        if (ownSlot != null && fullscreenId == null) {
             Box(modifier = Modifier.animatedSlot(ownSlot.rect, isSticky = ownSlot.isSticky, scrollOffset = scrollOffset).zIndex(OVERLAY_Z_INDEX)) {
                 SwitchCameraButton(
                     onClick = { state.eventSink(ElementCallScreenEvent.SwitchCamera) },
@@ -354,7 +429,7 @@ internal fun CallStage(
 
         // Anchored to the spotlight *slot* rather than to whoever is in it, so it stays put while
         // people move through the slot underneath it; not drawn without one (open question Q1).
-        if (spotlightRect != null) {
+        if (spotlightRect != null && fullscreenId == null) {
             Box(modifier = Modifier.animatedSlot(spotlightRect, isSticky = true, scrollOffset = scrollOffset).zIndex(OVERLAY_Z_INDEX)) {
                 MemberCountPill(
                     count = state.memberCount,
@@ -364,10 +439,11 @@ internal fun CallStage(
                 )
             }
         }
+        }
     }
 }
 
-private fun ElementCallScreenState.tileStats(tile: CallTileData, slot: Rect): TileStats? {
+internal fun ElementCallScreenState.tileStats(tile: CallTileData, slot: Rect): TileStats? {
     if (!isTileStatsVisible) return null
     return TileStats(
         receiveStats = receiveStats[MatrixRtcStreamRef(tile.memberId, tile.streamKind)],
@@ -391,15 +467,17 @@ private fun ElementCallScreenState.tileStats(tile: CallTileData, slot: Rect): Ti
  * video.
  */
 @Composable
-private fun ReportVideoConstraints(
+internal fun ReportVideoConstraints(
     tile: CallTileData,
     slot: Rect,
     hasVideo: Boolean,
     isLive: Boolean,
     eventSink: (ElementCallScreenEvent) -> Unit,
+    /** The zoom, quantised to a power of two: simulcast layers are that far apart, and a pinch must not walk dozens of sizes through the FFI (000 R13). */
+    scaleFactor: Int = 1,
 ) {
-    val width = slot.width.roundToInt()
-    val height = slot.height.roundToInt()
+    val width = (slot.width * scaleFactor).roundToInt()
+    val height = (slot.height * scaleFactor).roundToInt()
     val currentEventSink by rememberUpdatedState(eventSink)
     LaunchedEffect(tile.tileId, tile.streamKind, hasVideo, isLive, width, height) {
         if (!hasVideo || tile.isLocal) return@LaunchedEffect
@@ -439,20 +517,21 @@ private fun PlacedTile(
     appearance: CallTileAppearance,
     slot: TileSlot,
     scrollOffset: FloatState,
-    isVisible: Boolean,
-    isNear: Boolean,
+    isVisible: State<Boolean>,
+    isNear: State<Boolean>,
     isPresent: Boolean,
     onExit: () -> Unit,
+    /** Whether this tile has just joined the call, rather than scrolled into reach: only an arrival fades in. */
+    isArrival: Boolean,
     stats: TileStats?,
     onLongPress: () -> Unit,
     traversalIndex: Float,
     eventSink: (ElementCallScreenEvent) -> Unit,
 ) {
-    // Zero on the first composition, so a tile grows into place rather than being there abruptly -
-    // except under inspection, where the animation never runs and starting at zero would mean every
-    // preview and screenshot of this screen showed nothing at all.
+    // Zero on the first composition of a member who has just joined, so they grow into place rather
+    // than being there abruptly. Not under inspection, where the animation never runs.
     val isInspecting = LocalInspectionMode.current
-    val presence = remember { Animatable(if (isInspecting) 1f else 0f) }
+    val presence = remember { Animatable(if (isInspecting || !isArrival) 1f else 0f) }
     val currentOnExit by rememberUpdatedState(onExit)
     LaunchedEffect(isPresent) {
         if (isInspecting) return@LaunchedEffect
@@ -466,9 +545,36 @@ private fun PlacedTile(
             currentOnExit()
         }
     }
-    val isLive = rememberLive(isVisible, isNear)
-    ReportVideoConstraints(tile = tile, slot = slot.rect, hasVideo = videoFrames != null, isLive = isLive, eventSink = eventSink)
+    val isLive = rememberLive(isVisible.value, isNear.value)
+    // In fullscreen only: pinch from fitted up to 4x, drag the zoomed picture within its edges, and
+    // both reset when fullscreen ends (000 R14, R22 to R24). Under fitted the scale clamps to fitted
+    // and never leaves fullscreen.
+    var zoom by remember(slot.isFullscreen) { mutableStateOf(VideoTransform.None) }
+    val transformable = rememberTransformableState { _, zoomChange, pan, _ ->
+        val scale = (zoom.scale * zoomChange).coerceIn(1f, MAX_ZOOM)
+        val maxX = (slot.rect.width * scale - slot.rect.width) / 2
+        val maxY = (slot.rect.height * scale - slot.rect.height) / 2
+        zoom = VideoTransform(
+            scale = scale,
+            offset = Offset((zoom.offset.x + pan.x).coerceIn(-maxX, maxX), (zoom.offset.y + pan.y).coerceIn(-maxY, maxY)),
+        )
+    }
+    ReportVideoConstraints(
+        tile = tile,
+        slot = slot.rect,
+        hasVideo = videoFrames != null,
+        isLive = isLive,
+        eventSink = eventSink,
+        scaleFactor = if (slot.isFullscreen) zoom.scale.quantisedToPowerOfTwo() else 1,
+    )
     ReportLiveToHooks(tile.tileId, isLive)
+    // Above every other tile for the whole of the move, both ways: raised the moment fullscreen is
+    // entered, and lowered only once the way back has landed, never at its start (000 R7).
+    var isRaised by remember { mutableStateOf(slot.isFullscreen) }
+    if (slot.isFullscreen) isRaised = true
+    // The change from cropped to fitted is travelled across the move, never applied at either end (000 R7).
+    val fit by animateFloatAsState(targetValue = appearance.fitFor(tile), animationSpec = FIT_SPEC, label = "tileFit")
+    val fullscreenLabel = stringResource(if (slot.isFullscreen) R.string.element_call_a11y_exit_fullscreen else R.string.element_call_a11y_enter_fullscreen)
 
     // A member who has left is gone from the frame map in the same breath, and swapping their video
     // for an avatar for the moment they spend fading out reads as a glitch. Their last stream is
@@ -483,14 +589,27 @@ private fun PlacedTile(
         videoFrames = frames,
         appearance = appearance,
         stats = stats,
+        fit = fit,
+        // The HUD names the fullscreen tile (000 R11); the tile's own pill would double it.
+        showName = !slot.isFullscreen,
+        videoTransform = if (slot.isFullscreen) zoom else VideoTransform.None,
         modifier = Modifier
             .testTag(ElementCallTestTags.tile(tile.tileId))
-            .semantics { this.traversalIndex = traversalIndex }
-            .animatedSlot(slot.rect, isSticky = slot.isSticky, scrollOffset = scrollOffset)
+            .semantics {
+                this.traversalIndex = traversalIndex
+                // Double tap is how TalkBack activates anything, so the gesture cannot reach it (000 R21).
+                customActions = listOf(CustomAccessibilityAction(fullscreenLabel) {
+                    eventSink(ElementCallScreenEvent.ToggleFullscreen(tile.tileId))
+                    true
+                })
+            }
+            .animatedSlot(slot.rect, isSticky = slot.isSticky, scrollOffset = scrollOffset, onArrive = { isRaised = slot.isFullscreen })
             // The spotlight draws over the grid passing underneath it (R27); we draw over the rest
-            // for the moment a move overlaps.
+            // for the moment a move overlaps; a tile filling the stage is above everything for the
+            // whole of its move, including the tiles on their way out (000 R7).
             .zIndex(
                 when {
+                    isRaised -> FULLSCREEN_Z_INDEX
                     slot.isSticky -> SPOTLIGHT_Z_INDEX
                     tile.isLocal -> LOCAL_Z_INDEX
                     else -> 0f
@@ -506,10 +625,14 @@ private fun PlacedTile(
             // A vertical drag that starts on the spotlight does not scroll the grid (R64): a state
             // that reports every delta consumed leaves nothing for the stage's own scrollable.
             .then(if (slot.isSticky) Modifier.scrollable(rememberScrollableState { it }, Orientation.Vertical) else Modifier)
-            // Long press for the debug readout: the numbers are about *this* stream, so the gesture
-            // that reveals them is on the tile. A drag past the touch slop cancels it and scrolls.
+            .then(if (slot.isFullscreen) Modifier.transformable(transformable) else Modifier)
+            // One pointer node per tile: a double tap enters and leaves fullscreen (000 R1, R2, R4), a
+            // single tap toggles the HUD there (000 R9), a long press the debug readout. A drag past
+            // the touch slop cancels a tap (003 R65); a down during a fling stops it without consuming
+            // it, so a double tap right after a scroll is two clean taps.
             .combinedClickable(
-                onClick = {},
+                onClick = { if (slot.isFullscreen) eventSink(ElementCallScreenEvent.ToggleFullscreenChrome) },
+                onDoubleClick = { eventSink(ElementCallScreenEvent.ToggleFullscreen(tile.tileId)) },
                 onLongClick = onLongPress,
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() },
@@ -517,126 +640,10 @@ private fun PlacedTile(
     )
 }
 
-/**
- * The spotlight over the hero stack: a pager in the model's order showing one hero at a time,
- * exactly the shown one composed and receiving video (R19, R20, R24). The pager is driven from the
- * shown hero's identity, so a stack reordering under it scrolls, without animation, to where that
- * hero now is: identity is the truth and the page index follows (R21). A settled swipe names the
- * hero it landed on (R22); the pager does not wrap (R23).
- *
- * Chrome by orientation (contract B2): a "1 of n" pill and dots in portrait, arrows in landscape.
- * Screen readers step the stack through custom actions in both, and the arrows are focusable too
- * (R25). A vertical drag here never reaches the grid's scrollable (R64).
- */
-@Composable
-private fun HeroSpotlight(
-    heroIds: ImmutableList<String>,
-    shownId: String,
-    rect: Rect,
-    scrollOffset: FloatState,
-    isLandscape: Boolean,
-    tilesById: ImmutableMap<String, CallTileData>,
-    state: ElementCallScreenState,
-) {
-    val shownIndex = heroIds.indexOf(shownId).coerceAtLeast(0)
-    val currentHeroIds by rememberUpdatedState(heroIds)
-    val pagerState = rememberPagerState(initialPage = shownIndex) { currentHeroIds.size }
-    LaunchedEffect(shownIndex, heroIds) {
-        if (pagerState.currentPage != shownIndex && !pagerState.isScrollInProgress) pagerState.scrollToPage(shownIndex)
-    }
-    val currentEventSink by rememberUpdatedState(state.eventSink)
-    LaunchedEffect(pagerState) {
-        snapshotFlow { pagerState.settledPage }.collect { page ->
-            currentHeroIds.getOrNull(page)?.let { currentEventSink(ElementCallScreenEvent.ShowHero(it)) }
-        }
-    }
-    val show = { index: Int -> heroIds.getOrNull(index)?.let { state.eventSink(ElementCallScreenEvent.ShowHero(it)) } != null }
-    val nextLabel = stringResource(R.string.element_call_a11y_next_hero)
-    val previousLabel = stringResource(R.string.element_call_a11y_previous_hero)
-    Box(
-        modifier = Modifier
-            .animatedSlot(rect, isSticky = true, scrollOffset = scrollOffset)
-            .zIndex(SPOTLIGHT_Z_INDEX)
-            .scrollable(rememberScrollableState { it }, Orientation.Vertical)
-            .semantics {
-                traversalIndex = 0f
-                customActions = listOf(
-                    CustomAccessibilityAction(nextLabel) { show(shownIndex + 1) },
-                    CustomAccessibilityAction(previousLabel) { show(shownIndex - 1) },
-                )
-            },
-    ) {
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier.fillMaxSize(),
-            key = { page -> currentHeroIds.getOrNull(page) ?: page },
-            beyondViewportPageCount = 0,
-        ) { page ->
-            val tile = currentHeroIds.getOrNull(page)?.let { tilesById[it] } ?: return@HorizontalPager
-            // The pager may keep a neighbouring page composed for a moment; only the shown hero receives video (R24).
-            val isShown = tile.tileId == shownId
-            ReportVideoConstraints(tile = tile, slot = rect, hasVideo = state.videoFrames[tile.tileId] != null, isLive = isShown, eventSink = state.eventSink)
-            ReportLiveToHooks(tile.tileId, isLive = isShown)
-            CallTile(
-                tile = tile,
-                videoFrames = state.videoFrames[tile.tileId],
-                appearance = CallTileAppearance.Spotlight,
-                stats = state.tileStats(tile, rect),
-                showName = !isLandscape,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .testTag(ElementCallTestTags.tile(tile.tileId))
-                    .combinedClickable(
-                        onClick = {},
-                        onLongClick = { state.eventSink(ElementCallScreenEvent.ToggleTileStats) },
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() },
-                    ),
-            )
-        }
-        if (heroIds.size > 1) {
-            // Bottom-left in landscape, where the frames put it and where no name pill is; top-right
-            // in portrait, where the share's name pill has the bottom-left.
-            HeroPositionPill(
-                position = shownIndex + 1,
-                count = heroIds.size,
-                modifier = Modifier
-                    .align(if (isLandscape) Alignment.BottomStart else Alignment.TopEnd)
-                    .padding(14.dp)
-                    .testTag(ElementCallTestTags.HERO_INDICATOR),
-            )
-            if (isLandscape) {
-                HeroArrow(
-                    icon = Icons.AutoMirrored.Rounded.KeyboardArrowLeft,
-                    contentDescription = previousLabel,
-                    enabled = shownIndex > 0,
-                    onClick = { show(shownIndex - 1) },
-                    modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .padding(8.dp)
-                        .testTag(ElementCallTestTags.HERO_PREVIOUS),
-                )
-                HeroArrow(
-                    icon = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                    contentDescription = nextLabel,
-                    enabled = shownIndex < heroIds.size - 1,
-                    onClick = { show(shownIndex + 1) },
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .padding(8.dp)
-                        .testTag(ElementCallTestTags.HERO_NEXT),
-                )
-            } else {
-                HeroDots(
-                    count = heroIds.size,
-                    shownIndex = shownIndex,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 10.dp),
-                )
-            }
-        }
-    }
+internal fun Float.quantisedToPowerOfTwo(): Int = when {
+    this >= QUAD_ZOOM -> 4
+    this >= DOUBLE_ZOOM -> 2
+    else -> 1
 }
 
 /**
@@ -659,57 +666,6 @@ private fun SwitchCameraButton(onClick: () -> Unit, modifier: Modifier = Modifie
             contentDescription = stringResource(R.string.element_call_a11y_switch_camera),
             modifier = Modifier.size(20.dp),
         )
-    }
-}
-
-@Composable
-private fun HeroPositionPill(position: Int, count: Int, modifier: Modifier = Modifier) {
-    Text(
-        text = stringResource(R.string.element_call_hero_position, position, count),
-        style = ElementCallTheme.typography.bodySmMedium,
-        color = ElementCallTheme.colors.onOverlay,
-        modifier = modifier
-            .clip(RoundedCornerShape(percent = 50))
-            .background(ElementCallTheme.colors.overlayScrim)
-            .padding(horizontal = 10.dp, vertical = 5.dp),
-    )
-}
-
-@Composable
-private fun HeroDots(count: Int, shownIndex: Int, modifier: Modifier = Modifier) {
-    Row(modifier = modifier, horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        repeat(count) { index ->
-            Box(
-                modifier = Modifier
-                    .size(if (index == shownIndex) 8.dp else 6.dp)
-                    .clip(CircleShape)
-                    .background(ElementCallTheme.colors.onOverlay.copy(alpha = if (index == shownIndex) 1f else 0.5f))
-                    .border(1.dp, ElementCallTheme.colors.overlayScrim, CircleShape),
-            )
-        }
-    }
-}
-
-@Composable
-private fun HeroArrow(
-    icon: ImageVector,
-    contentDescription: String,
-    enabled: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    IconButton(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = modifier,
-        colors = IconButtonDefaults.iconButtonColors(
-            containerColor = ElementCallTheme.colors.overlayScrim,
-            contentColor = ElementCallTheme.colors.onOverlay,
-            disabledContainerColor = ElementCallTheme.colors.overlayScrim.copy(alpha = 0.3f),
-            disabledContentColor = ElementCallTheme.colors.onOverlay.copy(alpha = 0.4f),
-        ),
-    ) {
-        Icon(imageVector = icon, contentDescription = contentDescription)
     }
 }
 
@@ -754,13 +710,19 @@ private fun MemberCountPill(count: Int, modifier: Modifier = Modifier) {
  * the offset on the first frame.
  */
 @Composable
-private fun Modifier.animatedSlot(
+internal fun Modifier.animatedSlot(
     slot: Rect,
     isSticky: Boolean,
     scrollOffset: FloatState,
+    /** Told when the move to [slot] has finished; not told when a newer slot cancelled it. */
+    onArrive: (() -> Unit)? = null,
 ): Modifier {
     val bounds = remember { Animatable(slot, Rect.VectorConverter) }
-    LaunchedEffect(slot) { bounds.animateTo(slot, SLOT_SPEC) }
+    val currentOnArrived by rememberUpdatedState(onArrive)
+    LaunchedEffect(slot) {
+        bounds.animateTo(slot, SLOT_SPEC)
+        currentOnArrived?.invoke()
+    }
     val stickyFactor = remember { Animatable(if (isSticky) 1f else 0f) }
     LaunchedEffect(isSticky) { stickyFactor.animateTo(if (isSticky) 1f else 0f, STICKY_SPEC) }
     return layout { measurable, _ ->
@@ -772,19 +734,29 @@ private fun Modifier.animatedSlot(
             )
         )
         layout(placeable.width, placeable.height) {
-            val shift = scrollOffset.floatValue * (1f - stickyFactor.value)
-            placeable.place(current.left.roundToInt(), (current.top - shift).roundToInt())
+            // The grid's layer is translated by the offset; a sticky slot undoes it. A grid tile at
+            // rest does not read the offset at all, so a scroll does not re-place it.
+            val factor = stickyFactor.value
+            val shift = if (factor == 0f) 0f else scrollOffset.floatValue * factor
+            placeable.place(current.left.roundToInt(), (current.top + shift).roundToInt())
         }
     }
 }
 
 /** A tile's rectangle, and whether it is sticky (viewport coordinates) or scrolls (content coordinates). */
-private data class TileSlot(val rect: Rect, val isSticky: Boolean)
+private data class TileSlot(val rect: Rect, val isSticky: Boolean, val isFullscreen: Boolean = false)
 
 /** Holders that change without recomposing anything. */
 private class LayoutRef {
     var value: CallStageLayout? = null
     var viewportHeight: Float = 0f
+}
+
+private class PreviousLayout {
+    var layout: CallStageLayout? = null
+    var width: Float = 0f
+    var height: Float = 0f
+    var isLandscape: Boolean = false
 }
 
 private class StringRef {
@@ -825,10 +797,16 @@ internal val HEAD_RANGE = 0 until 8
 
 private const val ENTER_SCALE = 0.85f
 
-/** Our tile sits over the others, the spotlight over everything passing under it, overlays over every tile. */
+/** Our tile sits over the others, the spotlight over everything passing under it, overlays over every tile, a fullscreen tile over all. */
 private const val LOCAL_Z_INDEX = 1f
-private const val SPOTLIGHT_Z_INDEX = 2f
+internal const val SPOTLIGHT_Z_INDEX = 2f
 private const val OVERLAY_Z_INDEX = 3f
+internal const val FULLSCREEN_Z_INDEX = 4f
+
+/** The zoom runs from fitted up to 4x (000 R22); constraints step at the simulcast layers' powers of two (000 R13). */
+internal const val MAX_ZOOM = 4f
+private const val DOUBLE_ZOOM = 2f
+private const val QUAD_ZOOM = 4f
 
 /**
  * Deliberately not bouncy. A tile carrying someone's face overshooting its position is the kind of
@@ -840,10 +818,23 @@ private val SLOT_SPEC = spring(
     visibilityThreshold = Rect.VisibilityThreshold,
 )
 
-/** [SLOT_SPEC]'s twin for a scalar, so the two motions it is summed with stay one motion. */
-private val STICKY_SPEC = spring<Float>(
+/** The fill-to-fit continuum moves with the slot, so the aspect is right at every point of the move (000 R7). */
+internal val FIT_SPEC = spring<Float>(
     dampingRatio = Spring.DampingRatioNoBouncy,
     stiffness = Spring.StiffnessMediumLow,
+)
+
+/**
+ * [SLOT_SPEC]'s twin for a scalar, so the two motions it is summed with stay one motion.
+ *
+ * The factor multiplies the scroll offset, so where a spring stops and snaps is a distance on
+ * screen: the default 0.01 is a 30 px jump at the end of the move for a grid scrolled 3000 px.
+ * This threshold keeps the snap under half a pixel for offsets up to 50 000 px.
+ */
+private val STICKY_SPEC = spring(
+    dampingRatio = Spring.DampingRatioNoBouncy,
+    stiffness = Spring.StiffnessMediumLow,
+    visibilityThreshold = 1f / 100_000,
 )
 
 /** Short: this is an acknowledgement that someone arrived, not an event in its own right. */

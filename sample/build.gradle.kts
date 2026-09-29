@@ -20,6 +20,15 @@ android {
         versionCode = 1
         versionName = project.property("VERSION_NAME") as String
     }
+
+    buildTypes {
+        // For measuring: a debuggable app runs interpreted and says nothing about how smooth a call
+        // is. Release is signed with the debug key so it installs like debug, and profileable (see the
+        // manifest) so a Perfetto trace can sample it.
+        release {
+            signingConfig = signingConfigs.getByName("debug")
+        }
+    }
 }
 
 dependencies {

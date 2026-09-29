@@ -95,6 +95,18 @@ enum class SampleFixture(val key: String, val title: String, val description: St
             participants = listOf(aLocalParticipant(), aSharingParticipant(A_REMOTE_MEMBER_ID, userId = UserId("@bob:example.org")), aStaleParticipant()),
         )
     },
+    TWO_HUNDRED(
+        key = "two_hundred",
+        title = "Two hundred people",
+        description = "A grid of two hundred, one in ten with a camera on. What is drawn depends on the screen, not the room.",
+    ) {
+        override fun snapshot() = aConnected(
+            participants = listOf(aLocalParticipant()) + (1..TWO_HUNDRED_SIZE).map { index ->
+                val member = aCrowdParticipant(index)
+                if (index % 10 == 0) member.copy(streams = member.streams + MatrixRtcStreamState(MatrixRtcStreamKind.CAMERA, isMuted = false)) else member
+            },
+        ).copy(memberCount = TWO_HUNDRED_SIZE + 1)
+    },
     TWO_SHARES(
         key = "two_shares",
         title = "Two people sharing their screens",
@@ -176,6 +188,7 @@ enum class SampleFixture(val key: String, val title: String, val description: St
         fun fromKey(key: String): SampleFixture? = entries.firstOrNull { it.key == key }
 
         private const val CROWD_SIZE = 8
+        private const val TWO_HUNDRED_SIZE = 200
 
         private val ROOM_MEMBERS = persistentMapOf(
             UserId("@alice:example.org") to ElementCallRoomMember(UserId("@alice:example.org"), displayName = "Alice", avatarUrl = null),

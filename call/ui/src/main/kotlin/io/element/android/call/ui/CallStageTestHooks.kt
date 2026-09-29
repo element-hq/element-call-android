@@ -33,9 +33,13 @@ internal class CallStageTestHooks {
     /** The grid tiles composed: within the band, or beyond it inside the linger. */
     var composedGridIds: Set<String> = emptySet()
     var spotlightTileId: String? = null
+    var fullscreenTileId: String? = null
     var heroes: List<String> = emptyList()
     var eventSink: (ElementCallScreenEvent) -> Unit = {}
     var scrollTo: (Float) -> Unit = {}
+
+    /** As a fling would, rather than jumping: what a person watching a scenario on a device expects. */
+    var animateScrollTo: (Float) -> Unit = {}
 
     /** Stands in for the system bar inset the control bar is padded by, which a JVM has none of. */
     var bottomInset: Dp? = null

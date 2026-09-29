@@ -8,17 +8,18 @@
 package io.element.android.call.sample
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
@@ -34,10 +35,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.element.android.call.test.scenario.MatrixRtcScenario
 import io.element.android.call.ui.ElementCallOverlay
+import io.element.android.call.ui.ElementCallStageDriver
+import io.element.android.call.ui.ElementCallStageDriverProvider
 import kotlinx.collections.immutable.toImmutableList
+import kotlinx.coroutines.flow.dropWhile
+import kotlinx.coroutines.flow.first
 
 /**
  * The host, reduced to what a host does: wrap its content in [ElementCallOverlay] and decide the style.
@@ -51,90 +57,104 @@ fun SampleApp(
     controller: SampleElementCallController,
     modifier: Modifier = Modifier,
     initialScenario: MatrixRtcScenario? = null,
+    /** A scenario's `rotate` frame, which only the Activity can perform. */
+    onRotate: (isLandscape: Boolean) -> Unit = {},
 ) {
     var isStyleOverridden by rememberSaveable { mutableStateOf(false) }
     val fixtures = remember { SampleFixture.entries.toImmutableList() }
-    var player by remember { mutableStateOf(initialScenario?.let { SampleScenarioPlayer(controller, it) }) }
+    val driver = remember { ElementCallStageDriver() }
+    var player by remember { mutableStateOf(initialScenario?.let { SampleScenarioPlayer(controller, it, driver, onRotate) }) }
+    // Hanging up ends the scenario with the call: once the call it started is gone, so is its bar.
+    LaunchedEffect(player) {
+        if (player == null) return@LaunchedEffect
+        controller.state.dropWhile { it == null }.first { it == null }
+        player = null
+    }
     MaterialTheme(colorScheme = darkColorScheme()) {
         Box(modifier = modifier) {
-            ElementCallOverlay(
-                controller = controller,
-                // Null is the library's defaults; the override is the proof that the port reaches every colour.
-                style = if (isStyleOverridden) rememberLoudElementCallStyle() else null,
-            ) { contentModifier ->
-                SampleHomeScreen(
-                    fixtures = fixtures,
-                    scenarios = SampleActivity.SCENARIOS.toImmutableList(),
-                    isStyleOverridden = isStyleOverridden,
-                    onToggleStyle = { isStyleOverridden = !isStyleOverridden },
-                    onOpen = {
-                        player = null
-                        controller.start(it.snapshot())
-                    },
-                    onOpenScenario = { name -> player = SampleScenarioPlayer(controller, MatrixRtcScenario.load(name)) },
-                    modifier = contentModifier,
-                )
+            ElementCallStageDriverProvider(driver) {
+                ElementCallOverlay(
+                    controller = controller,
+                    // Null is the library's defaults; the override is the proof that the port reaches every colour.
+                    style = if (isStyleOverridden) rememberLoudElementCallStyle() else null,
+                ) { contentModifier ->
+                    SampleHomeScreen(
+                        fixtures = fixtures,
+                        scenarios = SampleActivity.SCENARIOS.toImmutableList(),
+                        isStyleOverridden = isStyleOverridden,
+                        onToggleStyle = { isStyleOverridden = !isStyleOverridden },
+                        onOpen = {
+                            player = null
+                            controller.start(it.snapshot())
+                        },
+                        onOpenScenario = { name -> player = SampleScenarioPlayer(controller, MatrixRtcScenario.load(name), driver, onRotate) },
+                        modifier = contentModifier,
+                    )
+                }
             }
             player?.let { current ->
-                ScenarioScrubber(
+                ScenarioBar(
                     player = current,
                     modifier = Modifier
                         .align(Alignment.TopCenter)
                         .statusBarsPadding()
-                        .padding(top = 56.dp, start = 24.dp, end = 24.dp),
+                        .padding(top = 60.dp, start = 12.dp, end = 12.dp),
                 )
             }
         }
     }
 }
 
-/** Play, pause and scrub a scenario; the cue is the action the person has to perform themselves. */
+/**
+ * One line over the top of the stage, as the iOS sample has it: play or pause, step to the next
+ * frame, then the step, the time, and the frame last applied as the file writes it. Small and see-
+ * through, so the tiles under it stay readable.
+ */
 @Composable
-private fun ScenarioScrubber(player: SampleScenarioPlayer, modifier: Modifier = Modifier) {
+private fun ScenarioBar(player: SampleScenarioPlayer, modifier: Modifier = Modifier) {
     LaunchedEffect(player) { player.start() }
     LaunchedEffect(player, player.isPlaying) { if (player.isPlaying) player.play() }
-    Column(
+    Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color.Black.copy(alpha = 0.7f))
-            .padding(horizontal = 12.dp, vertical = 4.dp),
+            .height(BAR_HEIGHT)
+            .clip(RoundedCornerShape(percent = 50))
+            .background(Color.Black.copy(alpha = 0.55f))
+            .padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = { player.isPlaying = !player.isPlaying }) {
-                Icon(
-                    imageVector = if (player.isPlaying) PauseIcon else PlayIcon,
-                    contentDescription = if (player.isPlaying) "Pause" else "Play",
-                    tint = Color.White,
-                )
-            }
-            Slider(
-                value = player.positionMs.toFloat(),
-                onValueChange = {
-                    player.isPlaying = false
-                    player.seekTo(it.toLong())
-                },
-                valueRange = 0f..player.durationMs.toFloat().coerceAtLeast(1f),
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                text = "${player.positionMs / MS_PER_S}.${player.positionMs % MS_PER_S / MS_PER_TENTH}s / ${player.durationMs / MS_PER_S}s",
-                style = MaterialTheme.typography.labelMedium,
-                color = Color.White,
-                modifier = Modifier.padding(start = 8.dp),
+        IconButton(onClick = { player.isPlaying = !player.isPlaying }, modifier = Modifier.size(BAR_HEIGHT)) {
+            Icon(
+                imageVector = if (player.isPlaying) PauseIcon else PlayIcon,
+                contentDescription = if (player.isPlaying) "Pause" else "Play",
+                tint = Color.White,
+                modifier = Modifier.size(20.dp),
             )
         }
+        IconButton(onClick = player::stepForward, enabled = player.step < player.stepCount, modifier = Modifier.size(BAR_HEIGHT)) {
+            Icon(
+                imageVector = StepIcon,
+                contentDescription = "Next frame",
+                tint = if (player.step < player.stepCount) Color.White else Color.White.copy(alpha = 0.4f),
+                modifier = Modifier.size(20.dp),
+            )
+        }
+        Text(text = "${player.step}/${player.stepCount}", style = MaterialTheme.typography.labelLarge, color = Color.White)
+        Text(text = "${player.currentTimeMs / MS_PER_S}s", style = MaterialTheme.typography.labelLarge, color = Color.White)
         Text(
-            text = player.cue?.let { "→ $it" } ?: player.scenario.name,
-            style = MaterialTheme.typography.labelSmall,
+            text = player.current ?: player.scenario.name,
+            style = MaterialTheme.typography.labelLarge,
             color = Color.White,
-            modifier = Modifier.padding(start = 12.dp, bottom = 4.dp),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f).padding(end = 8.dp),
         )
     }
 }
 
+private val BAR_HEIGHT = 36.dp
 private const val MS_PER_S = 1_000L
-private const val MS_PER_TENTH = 100L
 
 private val PlayIcon: ImageVector by lazy {
     ImageVector.Builder(name = "play", defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f).apply {
@@ -142,6 +162,23 @@ private val PlayIcon: ImageVector by lazy {
             moveTo(8f, 5f)
             lineTo(19f, 12f)
             lineTo(8f, 19f)
+            close()
+        }
+    }.build()
+}
+
+/** A bar and a play triangle: forward by one frame. */
+private val StepIcon: ImageVector by lazy {
+    ImageVector.Builder(name = "step", defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f).apply {
+        path(fill = androidx.compose.ui.graphics.SolidColor(Color.White)) {
+            moveTo(5f, 5f)
+            lineTo(9f, 5f)
+            lineTo(9f, 19f)
+            lineTo(5f, 19f)
+            close()
+            moveTo(11f, 5f)
+            lineTo(21f, 12f)
+            lineTo(11f, 19f)
             close()
         }
     }.build()

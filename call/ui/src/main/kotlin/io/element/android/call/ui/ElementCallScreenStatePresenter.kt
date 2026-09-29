@@ -13,6 +13,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallController
@@ -63,6 +64,17 @@ fun rememberElementCallScreenState(
     // runs with no UI; what it needs to remember lives above the screen (spec 003 R7, R20, R67).
     val spotlight = CallSpotlight.choose(tiles, spotlightMemory.shownHeroId, spotlightMemory.lastSpeakerId, spotlightMemory.lastHeroes)
     val heroes = tiles.filter { it.isHero && !it.isLocal }.map { it.tileId }
+
+    // Fullscreen is the screen's own state (spec 000 R3): saved across rotation (R10), gone with the
+    // screen when the call is minimised (R25), and ended when the tile leaves (R19).
+    var fullscreenTileId by rememberSaveable { mutableStateOf<String?>(null) }
+    var isFullscreenChromeVisible by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(tiles) {
+        if (fullscreenTileId != null && tiles.none { it.tileId == fullscreenTileId }) {
+            fullscreenTileId = null
+            isFullscreenChromeVisible = false
+        }
+    }
     LaunchedEffect(spotlight, heroes) {
         when (spotlight) {
             is CallSpotlight.Choice.Hero -> {
@@ -110,6 +122,16 @@ fun rememberElementCallScreenState(
             is ElementCallScreenEvent.ShowHero -> {
                 if (event.tileId in heroes) spotlightMemory.shownHeroId = event.tileId
             }
+            is ElementCallScreenEvent.ToggleFullscreen -> {
+                fullscreenTileId = if (fullscreenTileId == event.tileId) null else event.tileId
+                // Hidden on entry (000 R8), and nothing to show on the way out.
+                isFullscreenChromeVisible = false
+            }
+            ElementCallScreenEvent.ToggleFullscreenChrome -> isFullscreenChromeVisible = !isFullscreenChromeVisible
+            ElementCallScreenEvent.ExitFullscreen -> {
+                fullscreenTileId = null
+                isFullscreenChromeVisible = false
+            }
             ElementCallScreenEvent.ToggleScreenShare -> {
                 if (current?.isScreenSharing == true) {
                     controller.setScreenShareEnabled(token = null)
@@ -127,7 +149,14 @@ fun rememberElementCallScreenState(
         }
     }
 
-    return current.toState(videoFrames = videoFrames, tiles = tiles, spotlight = spotlight, eventSink = ::handleEvent)
+    return current.toState(
+        videoFrames = videoFrames,
+        tiles = tiles,
+        spotlight = spotlight,
+        fullscreenTileId = fullscreenTileId,
+        isFullscreenChromeVisible = isFullscreenChromeVisible,
+        eventSink = ::handleEvent,
+    )
 }
 
 /**
@@ -157,6 +186,8 @@ private fun ElementCallSnapshot?.toState(
     videoFrames: ImmutableMap<String, Flow<MatrixRtcVideoFrame>>,
     tiles: ImmutableList<CallTileData>,
     spotlight: CallSpotlight.Choice,
+    fullscreenTileId: String?,
+    isFullscreenChromeVisible: Boolean,
     eventSink: (ElementCallScreenEvent) -> Unit,
 ) = ElementCallScreenState(
     connection = this?.connection ?: ElementCallConnection.RequestingPermission,
@@ -181,6 +212,8 @@ private fun ElementCallSnapshot?.toState(
     connectedAtElapsedMs = this?.connectedAtElapsedMs,
     tiles = tiles,
     spotlight = spotlight,
+    fullscreenTileId = fullscreenTileId,
+    isFullscreenChromeVisible = isFullscreenChromeVisible,
     libraryVersion = ElementCallVersion.library,
     coreVersion = ElementCallVersion.core,
     eventSink = eventSink,
