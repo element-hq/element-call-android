@@ -15,7 +15,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.lifecycleScope
 import io.element.android.call.impl.ElementCallPictureInPicture
 import io.element.android.call.test.scenario.MatrixRtcScenario
+import kotlinx.collections.immutable.toImmutableList
 import timber.log.Timber
+import java.util.zip.ZipFile
 
 /**
  * The one Activity in this repository, and everything a host Activity has to do: bind
@@ -34,34 +36,46 @@ class SampleActivity : ComponentActivity() {
         controller = SampleElementCallController(scope = lifecycleScope)
         ElementCallPictureInPicture.attach(this, controller)
 
+        val scenarios = listScenarios()
         val requested = intent.getStringExtra(EXTRA_FIXTURE)
-        if (requested != null) {
-            val fixture = SampleFixture.fromKey(requested)
-            if (fixture == null) {
-                Timber.w("Sample: unknown fixture '$requested', known: ${SampleFixture.entries.map { it.key }}")
-            } else {
-                controller.start(fixture.snapshot())
-            }
+        val fixture = requested?.let(SampleFixture::fromKey)
+        fixture?.let { controller.start(it.snapshot()) }
+        val requestedScenario = intent.getStringExtra(EXTRA_SCENARIO)
+        val scenario = requestedScenario?.takeIf { it in scenarios }?.let(MatrixRtcScenario::load)
+        // On the home screen rather than only in the log: a test that asked for a fixture that is not
+        // there otherwise fails on a missing tile, which is true and about nothing.
+        val launchError = when {
+            requested != null && fixture == null -> "Unknown fixture '$requested'. Known: ${SampleFixture.entries.joinToString { it.key }}"
+            requestedScenario != null && scenario == null -> "Unknown scenario '$requestedScenario'. Known: ${scenarios.joinToString()}"
+            else -> null
         }
-        val scenario = intent.getStringExtra(EXTRA_SCENARIO)?.let { name ->
-            if (name in SCENARIOS) {
-                MatrixRtcScenario.load(name)
-            } else {
-                Timber.w("Sample: unknown scenario '$name', known: $SCENARIOS")
-                null
-            }
-        }
+        launchError?.let { Timber.w("Sample: $it") }
 
         setContent {
             SampleApp(
                 controller = controller,
+                scenarios = scenarios.toImmutableList(),
                 initialScenario = scenario,
+                launchError = launchError,
                 // The manifest handles orientation changes itself, so the call and the player survive the turn.
                 onRotate = { isLandscape ->
                     requestedOrientation = if (isLandscape) ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
                 },
             )
         }
+    }
+
+    /**
+     * The vendored corpus (`plans/003.call_layout/scenarios/` in feature-hq), listed from the APK's Java
+     * resources as the iOS app lists its bundle, so a file added to the corpus shows up without a list to update.
+     */
+    private fun listScenarios(): List<String> = ZipFile(applicationInfo.sourceDir).use { apk ->
+        apk.entries().asSequence()
+            .map { it.name }
+            .filter { it.startsWith("scenarios/") && it.endsWith(".txt") }
+            .map { it.removePrefix("scenarios/").removeSuffix(".txt") }
+            .sorted()
+            .toList()
     }
 
     override fun onUserLeaveHint() {
@@ -75,15 +89,5 @@ class SampleActivity : ComponentActivity() {
 
         /** A scenario's name under `scenarios/`, as a string extra: `--es scenario 004_scroll_and_rank`. */
         const val EXTRA_SCENARIO = "scenario"
-
-        /** The vendored corpus, `plans/003.call_layout/scenarios/` in feature-hq. */
-        val SCENARIOS = listOf(
-            "001_small_calls",
-            "002_listen_mode",
-            "003_two_shares",
-            "004_scroll_and_rank",
-            "005_rotation_and_fullscreen",
-            "006_two_hundred",
-        )
     }
 }

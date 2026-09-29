@@ -36,7 +36,7 @@ class FloatingTileGestureTest {
 
     @Test
     fun draggingTheTileAcrossTheScreenSnapsItToTheOtherEdge() {
-        launchSample(SampleFixture.FLOATING_TILE).use {
+        launchSample(SampleFixture.MINIMIZED_VIDEO).use {
             val tile = composeRule.onNodeWithTag(ElementCallTestTags.FLOATING_TILE)
             val before = tile.getBoundsInRoot()
 
@@ -56,7 +56,7 @@ class FloatingTileGestureTest {
 
     @Test
     fun tappingTheTileBringsTheCallBackFullScreen() {
-        launchSample(SampleFixture.FLOATING_TILE).use {
+        launchSample(SampleFixture.MINIMIZED_VIDEO).use {
             composeRule.onNodeWithTag(ElementCallTestTags.FLOATING_TILE).performClick()
             composeRule.waitForIdle()
 
