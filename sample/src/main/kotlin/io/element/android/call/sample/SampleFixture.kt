@@ -195,8 +195,8 @@ enum class SampleFixture(val key: String, val category: Category, val title: Str
 
     /** The picker's sections. Scenarios come after them. */
     enum class Category(val title: String) {
-        CONNECTING("Connecting"),
         CONNECTED("Connected"),
+        CONNECTING("Connecting"),
     }
 
     companion object {
