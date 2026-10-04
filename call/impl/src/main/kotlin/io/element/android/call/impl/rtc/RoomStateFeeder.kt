@@ -8,7 +8,7 @@
 package io.element.android.call.impl.rtc
 
 import io.element.android.call.api.matrix.ElementCallMatrixRoom
-import io.element.android.call.api.matrix.ElementCallRoomStateEvent
+import io.element.android.call.api.matrix.ElementCallRoomEvent
 import io.element.android.call.api.rtc.MatrixRtcEventTypes
 import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 import io.element.android.call.api.rtc.id.RoomId
@@ -266,26 +266,13 @@ internal class RoomStateFeeder(
     /**
      * Four fields across, with the content handed over untouched for the library to parse - the same
      * bargain [StickyEventMapper.mapRaw] strikes, and for the same reason.
-     *
-     * A missing timestamp becomes 0, which the core reads as "long expired". That is strictly better
-     * than dropping the event: a content carrying its own `created_ts` is unaffected and stays a
-     * usable membership, and one that is not lands where dropping would have put it anyway. Reaching
-     * for the wall clock instead would be worse than both - it would resurrect a genuinely expired
-     * membership as a phantom member. The warning matters more than the value: the SDK only omits a
-     * timestamp for the stripped state of a room we are merely invited to, which we cannot be in
-     * while joined to a call in it, so seeing one falsifies an assumption this whole feed rests on.
      */
-    private fun ElementCallRoomStateEvent.toLegacyStateMemberEvent(): FfiLegacyStateMemberEvent {
-        if (timestampMs == null) {
-            Timber.w("MatrixRTC: state membership $stateKey in $roomId has no timestamp, treating it as long expired")
-        }
-        return FfiLegacyStateMemberEvent(
-            sender = sender.value,
-            stateKey = stateKey,
-            originServerTs = timestampMs?.toULong() ?: 0uL,
-            contentJson = contentJson,
-        )
-    }
+    private fun ElementCallRoomEvent.toLegacyStateMemberEvent(): FfiLegacyStateMemberEvent = FfiLegacyStateMemberEvent(
+        sender = sender.value,
+        stateKey = stateKey.orEmpty(),
+        originServerTs = timestampMs.toULong(),
+        contentJson = contentJson,
+    )
 
     /**
      * The core needs this to accept membership events at all: a sender it cannot place in the room

@@ -106,7 +106,7 @@ internal class SessionStateFeeder(
                         contentJson = message.content,
                         wasEncrypted = true,
                         senderDeviceId = senderDeviceId?.value,
-                        senderIsCrossSigned = encryptionInfo.isSenderCrossSigned,
+                        senderIsCrossSigned = encryptionInfo.isSenderCrossSigned == true,
                     )
                 }
             }

@@ -8,8 +8,7 @@
 package io.element.android.call.impl.rtc
 
 import com.google.common.truth.Truth.assertThat
-import io.element.android.call.api.matrix.ElementCallRoomStateEvent
-import io.element.android.call.api.matrix.ElementCallStickyEvent
+import io.element.android.call.api.matrix.ElementCallRoomEvent
 import io.element.android.call.api.rtc.MatrixRtcEventTypes
 import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 import io.element.android.call.api.rtc.id.EventId
@@ -153,7 +152,7 @@ class RoomStateFeederTest {
     @Test
     fun `an empty state snapshot is not fed, unlike an empty sticky one`() = runTest {
         val manager = RecordingSessionManager()
-        val stateEvents = MutableStateFlow(emptyList<ElementCallRoomStateEvent>())
+        val stateEvents = MutableStateFlow(emptyList<ElementCallRoomEvent>())
 
         startFeeder(manager, stateEvents = stateEvents, membershipFormat = MatrixRtcMembershipFormat.ROOM_STATE)
 
@@ -217,22 +216,6 @@ class RoomStateFeederTest {
         startFeeder(manager, stateEvents = stateEvents, membershipFormat = MatrixRtcMembershipFormat.ROOM_STATE)
 
         assertThat(manager.memberships.single().third.map { it.stateKey }).containsExactly(A_STATE_KEY)
-    }
-
-    /**
-     * A timestamp is only ever absent for the stripped state of a room we are merely invited to, which
-     * we cannot be in while joined to a call there. Dropping the event would throw away a membership
-     * whose content may well carry its own `created_ts`; 0 lets the library decide, and reads as long
-     * expired if it has nothing better.
-     */
-    @Test
-    fun `a state membership with no timestamp is fed as long expired rather than dropped`() = runTest {
-        val manager = RecordingSessionManager()
-        val stateEvents = MutableStateFlow(listOf(aMemberStateEvent(timestampMs = null)))
-
-        startFeeder(manager, stateEvents = stateEvents, membershipFormat = MatrixRtcMembershipFormat.ROOM_STATE)
-
-        assertThat(manager.memberships.single().third.single().originServerTs).isEqualTo(0uL)
     }
 
     /**
@@ -330,8 +313,8 @@ class RoomStateFeederTest {
      */
     private fun TestScope.startFeeder(
         manager: RtcSessionManagerHandleInterface,
-        stickyEvents: MutableStateFlow<List<ElementCallStickyEvent>> = MutableStateFlow(emptyList()),
-        stateEvents: MutableStateFlow<List<ElementCallRoomStateEvent>> = MutableStateFlow(emptyList()),
+        stickyEvents: MutableStateFlow<List<ElementCallRoomEvent>> = MutableStateFlow(emptyList()),
+        stateEvents: MutableStateFlow<List<ElementCallRoomEvent>> = MutableStateFlow(emptyList()),
         membershipFormat: MatrixRtcMembershipFormat = MatrixRtcMembershipFormat.CURRENT,
         joinedMemberIds: Flow<List<UserId>> = flowOf(listOf(A_USER_ID)),
         slotId: String? = A_SLOT_ID,
@@ -361,26 +344,27 @@ class RoomStateFeederTest {
     private fun aMemberStateEvent(
         stateKey: String = A_STATE_KEY,
         contentJson: String = """{"memberships":[{"membershipID":"$stateKey","expires":3600000}]}""",
-        timestampMs: Long? = 1_700_000_000_000L,
-    ) = ElementCallRoomStateEvent(
+        timestampMs: Long = 1_700_000_000_000L,
+    ) = ElementCallRoomEvent(
+        eventId = EventId("\$aStateEventId"),
+        sender = A_USER_ID,
         eventType = MatrixRtcEventTypes.MEMBER_ELEMENT_CALL_STATE_UNSTABLE,
         stateKey = stateKey,
-        sender = A_USER_ID,
-        contentJson = contentJson,
-        eventId = EventId("\$aStateEventId"),
         timestampMs = timestampMs,
+        contentJson = contentJson,
+        encryptionInfo = null,
     )
 
     private fun aMemberStickyEvent(
         memberId: String = A_MEMBER_ID,
-        contentJson: String = """{"slot_id":"m.call","member":{"id":"$memberId","membership":"join"}}""",
-    ) = ElementCallStickyEvent(
+        contentJson: String = """{"slot_id":"m.call","msc4354_sticky_key":"$memberId","member":{"id":"$memberId","membership":"join"}}""",
+    ) = ElementCallRoomEvent(
+        eventId = EventId("\$anEventId"),
         sender = A_USER_ID,
         eventType = MatrixRtcEventTypes.MEMBER_UNSTABLE,
-        stickyKey = memberId,
-        eventId = EventId("\$anEventId"),
-        expiresAtMs = 0L,
-        eventJson = """{"content":$contentJson}""",
+        stateKey = null,
+        timestampMs = 0L,
+        contentJson = contentJson,
         // Cleartext, so the core is told so: the mapper only vouches for departures.
         encryptionInfo = null,
     )
