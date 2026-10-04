@@ -26,6 +26,7 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
   (replacing `ElementCallStickyEvent` and `ElementCallRoomStateEvent`) and must emit the current set first, an empty
   one included. New: `timelineEvents(types)`, `redactions()` and `relations(...)`.
   `ElementCallEventEncryptionInfo.isSenderCrossSigned` is nullable: null when the client cannot say.
+- `ElementCallStack.start()` is gone: the core subscribes on its own once a room opens. Drop the call.
 
 ## 0.1.0-rc.6 - 2026-09-29
 
