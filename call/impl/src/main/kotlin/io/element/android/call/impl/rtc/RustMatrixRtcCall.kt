@@ -10,11 +10,10 @@ package io.element.android.call.impl.rtc
 import android.content.Context
 import io.element.android.call.api.ElementCallDispatchers
 import io.element.android.call.api.matrix.ElementCallMatrixTransport
+import io.element.android.call.api.rtc.MatrixRtcCall
 import io.element.android.call.api.rtc.MatrixRtcLeaveReason
 import io.element.android.call.api.rtc.MatrixRtcMediaSession
 import io.element.android.call.api.rtc.MatrixRtcMembership
-import io.element.android.call.api.rtc.MatrixRtcSession
-import io.element.android.call.api.rtc.MatrixRtcTransport
 import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.call.impl.util.childScope
 import io.element.android.call.impl.util.runCatchingExceptions
@@ -35,35 +34,33 @@ import org.matrix.rtc.connectMediaSession
 import timber.log.Timber
 import java.util.concurrent.atomic.AtomicBoolean
 
-internal class RustMatrixRtcSession(
+internal class RustMatrixRtcCall(
     override val roomId: RoomId,
     override val slotId: String,
-    private val localMemberId: String,
+    override val memberId: String,
+    /** The transport the call was joined on, which is where its media connects. */
+    private val liveKit: RtcTransport.LiveKit,
     private val manager: RtcSessionManagerHandle,
     private val transport: ElementCallMatrixTransport,
-    private val sessionScope: CoroutineScope,
+    private val callScope: CoroutineScope,
     private val dispatchers: ElementCallDispatchers,
     private val ffiDispatcher: CoroutineDispatcher,
-    /** Passed straight to the call, which needs one to open the camera. */
+    /** Passed straight to the media session, which needs one to open the camera. */
     private val context: Context,
     /**
      * Written by [RoomStateFeeder] after each membership feed, which is the only moment the count can
      * change for a reason we can see. Shared rather than owned here so that nothing has to poll: the
-     * session has no signal of its own to read the count on.
+     * call has no signal of its own to read the count on.
      */
     override val memberCount: StateFlow<Int>,
-    /**
-     * Called once the session is over, after the leave when there is one. What the service hooks here is
-     * the room bridge's teardown: it has to outlive `manager.leave`, because the core cancels the delayed
-     * event from inside it and that cancel goes through the bridge.
-     */
-    private val onSessionEnded: () -> Unit,
-) : MatrixRtcSession {
+) : MatrixRtcCall {
     private val _members = MutableStateFlow(emptyList<MatrixRtcMembership>())
     override val members: StateFlow<List<MatrixRtcMembership>> = _members
 
-    private var call: RustMatrixRtcMediaSession? = null
-    private val hasLeft = AtomicBoolean(false)
+    private var mediaSession: RustMatrixRtcMediaSession? = null
+
+    /** Set by the leave or the close, whichever comes first: after either there is nothing left to leave. */
+    private val hasEnded = AtomicBoolean(false)
 
     /**
      * Guarded together because closing races creating: `leave()` can arrive before
@@ -109,7 +106,7 @@ internal class RustMatrixRtcSession(
      * on, and the call would simply hang.
      */
     private fun readMemberships(subscription: MembershipSnapshotSubscription) {
-        sessionScope.launch(dispatchers.io) {
+        callScope.launch(dispatchers.io) {
             var hasReportedSnapshot = false
             while (isActive) {
                 val snapshot = runCatchingExceptions { subscription.nextSnapshot() }
@@ -134,10 +131,10 @@ internal class RustMatrixRtcSession(
         }
     }
 
-    override suspend fun connectMedia(transport: MatrixRtcTransport.LiveKit): Result<MatrixRtcMediaSession> = runCatchingExceptions {
-        call?.let { return@runCatchingExceptions it }
+    override suspend fun connectMedia(): Result<MatrixRtcMediaSession> = runCatchingExceptions {
+        mediaSession?.let { return@runCatchingExceptions it }
 
-        val mediaSession = withContext(ffiDispatcher) {
+        val ffiMediaSession = withContext(ffiDispatcher) {
             connectMediaSession(
                 manager,
                 // No member id to pass: the core knows which membership this session joined as,
@@ -145,27 +142,27 @@ internal class RustMatrixRtcSession(
                 MediaSessionConfig(
                     roomId = roomId.value,
                     slotId = slotId,
-                    userId = this@RustMatrixRtcSession.transport.userId.value,
-                    deviceId = this@RustMatrixRtcSession.transport.deviceId.value,
-                    livekitServiceUrl = transport.serviceUrl,
+                    userId = transport.userId.value,
+                    deviceId = transport.deviceId.value,
+                    livekitServiceUrl = liveKit.serviceUrl,
                 ),
-                RustOpenIdTokenProvider(this@RustMatrixRtcSession.transport),
+                RustOpenIdTokenProvider(transport),
             )
         }
 
-        // A child of the session scope, so leaving the session tears the media down with it.
-        val callScope = sessionScope.childScope(dispatchers.io, "MatrixRtcMediaSession-$roomId-$slotId")
+        // A child of the call scope, so leaving the call tears the media down with it.
+        val mediaScope = callScope.childScope(dispatchers.io, "MatrixRtcMediaSession-$roomId-$slotId")
         RustMatrixRtcMediaSession(
             // The id the core minted at join time, which is also what the media roster reports us
             // under - so nothing here has to reconcile two spellings of ourselves.
-            localMemberId = localMemberId,
-            mediaSession = mediaSession,
-            callScope = callScope,
+            localMemberId = memberId,
+            mediaSession = ffiMediaSession,
+            callScope = mediaScope,
             ffiDispatcher = ffiDispatcher,
             context = context,
             dispatchers = dispatchers,
         ).also {
-            call = it
+            mediaSession = it
             it.start()
             Timber.d("MatrixRTC: media connected for $roomId/$slotId")
         }
@@ -174,19 +171,19 @@ internal class RustMatrixRtcSession(
     }
 
     override suspend fun leave(reason: MatrixRtcLeaveReason?): Result<Unit> {
-        if (!hasLeft.compareAndSet(false, true)) {
-            // Hanging up and tearing the activity down both leave - deliberately, so that a swipe
-            // from recents still departs - and the core rejects the second attempt as `not joined`.
+        if (!hasEnded.compareAndSet(false, true)) {
+            // Hanging up and shutting the room down both leave, and the core rejects the second
+            // attempt as `not joined`.
             Timber.d("MatrixRTC: already left $roomId/$slotId")
             return Result.success(Unit)
         }
-        call?.disconnect()
-        call = null
+        mediaSession?.disconnect()
+        mediaSession = null
         // Before the leave rather than after: a sticky snapshot arriving while we are leaving makes
         // the core create a fresh session for the slot, seeded with none of the room state we fed
         // the old one.
         closeMembershipSubscription()
-        sessionScope.cancel()
+        callScope.cancel()
         return withContext(ffiDispatcher) {
             runCatchingExceptions {
                 manager.leave(
@@ -199,23 +196,20 @@ internal class RustMatrixRtcSession(
             }.onFailure {
                 Timber.w(it, "MatrixRTC: failed to leave $roomId/$slotId")
             }
-        }.also {
-            // After the leave, success or not: the leave itself is the last thing to go through the bridge.
-            onSessionEnded()
         }
     }
 
     override fun close() {
         // Stops the feed loops, the membership subscription and any media. Does not leave the
-        // session: callers that want a clean departure must call leave() first.
-        call?.close()
-        call = null
+        // call: callers that want a clean departure must call leave() first.
+        hasEnded.set(true)
+        mediaSession?.close()
+        mediaSession = null
         closeMembershipSubscription()
-        sessionScope.cancel()
-        onSessionEnded()
+        callScope.cancel()
     }
 
-    /** @return false if the session has already been closed, in which case the subscription is spent. */
+    /** @return false if the call has already been closed, in which case the subscription is spent. */
     private fun keepSubscription(subscription: MembershipSnapshotSubscription): Boolean = synchronized(subscriptionLock) {
         if (isSubscriptionClosed) {
             subscription.close()

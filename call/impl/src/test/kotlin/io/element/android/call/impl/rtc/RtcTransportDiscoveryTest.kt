@@ -8,7 +8,6 @@
 package io.element.android.call.impl.rtc
 
 import com.google.common.truth.Truth.assertThat
-import io.element.android.call.api.rtc.MatrixRtcTransport
 import io.element.android.call.test.FakeElementCallMatrixTransport
 import org.junit.Test
 
@@ -25,7 +24,7 @@ class RtcTransportDiscoveryTest {
             RtcTransportDiscovery.TRANSPORTS_KEY,
         )
 
-        assertThat(transports).containsExactly(MatrixRtcTransport.LiveKit(A_SERVICE_URL))
+        assertThat(transports).containsExactly(RtcTransport.LiveKit(A_SERVICE_URL))
     }
 
     @Test
@@ -40,7 +39,7 @@ class RtcTransportDiscoveryTest {
             RtcTransportDiscovery.RTC_FOCI_KEY,
         )
 
-        assertThat(transports).containsExactly(MatrixRtcTransport.LiveKit(A_SERVICE_URL))
+        assertThat(transports).containsExactly(RtcTransport.LiveKit(A_SERVICE_URL))
     }
 
     @Test
@@ -50,7 +49,7 @@ class RtcTransportDiscoveryTest {
             RtcTransportDiscovery.RTC_FOCI_KEY_ALIAS,
         )
 
-        assertThat(transports).containsExactly(MatrixRtcTransport.LiveKit(A_SERVICE_URL))
+        assertThat(transports).containsExactly(RtcTransport.LiveKit(A_SERVICE_URL))
     }
 
     @Test
@@ -68,8 +67,8 @@ class RtcTransportDiscoveryTest {
         )
 
         assertThat(transports).containsExactly(
-            MatrixRtcTransport.LiveKit("https://first.example.org/jwt"),
-            MatrixRtcTransport.LiveKit("https://second.example.org/jwt"),
+            RtcTransport.LiveKit("https://first.example.org/jwt"),
+            RtcTransport.LiveKit("https://second.example.org/jwt"),
         ).inOrder()
     }
 
@@ -80,7 +79,7 @@ class RtcTransportDiscoveryTest {
             RtcTransportDiscovery.TRANSPORTS_KEY,
         )
 
-        assertThat(transports).containsExactly(MatrixRtcTransport.Unsupported("somethingelse"))
+        assertThat(transports).containsExactly(RtcTransport.Unsupported("somethingelse"))
     }
 
     @Test

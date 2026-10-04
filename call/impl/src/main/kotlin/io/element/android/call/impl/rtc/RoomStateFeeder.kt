@@ -9,8 +9,8 @@ package io.element.android.call.impl.rtc
 
 import io.element.android.call.api.matrix.ElementCallMatrixRoom
 import io.element.android.call.api.matrix.ElementCallRoomStateEvent
-import io.element.android.call.api.rtc.MatrixRtcElementCallCompat
 import io.element.android.call.api.rtc.MatrixRtcEventTypes
+import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.call.api.rtc.id.UserId
 import io.element.android.call.impl.util.runCatchingExceptions
@@ -47,12 +47,12 @@ internal class RoomStateFeeder(
     private val room: ElementCallMatrixRoom,
     private val ownUserId: UserId,
     private val scope: CoroutineScope,
-    private val elementCallCompat: MatrixRtcElementCallCompat,
+    private val membershipFormat: MatrixRtcMembershipFormat,
     /** The slot we joined, for [updateMemberCount] only. Defaulted for tests; joining always passes it. */
     private val slotId: String? = null,
     /**
      * Where [updateMemberCount] publishes what the core answered, for
-     * [io.element.android.call.api.rtc.MatrixRtcSession.memberCount] to expose.
+     * [io.element.android.call.api.rtc.MatrixRtcCall.memberCount] to expose.
      *
      * Here rather than in the session because this is the only place that knows *when* the membership
      * changed: every change we can act on arrives as a feed, and the count is already read once after
@@ -98,16 +98,16 @@ internal class RoomStateFeeder(
      * ordering [start] describes.
      */
     fun startMemberships() {
-        when (elementCallCompat) {
-            MatrixRtcElementCallCompat.OFF -> feedSpecStickyEvents()
-            MatrixRtcElementCallCompat.STICKY_EVENTS -> feedRawMemberships()
-            MatrixRtcElementCallCompat.STATE_EVENTS -> feedStateMemberships()
+        when (membershipFormat) {
+            MatrixRtcMembershipFormat.CURRENT -> feedSpecStickyEvents()
+            MatrixRtcMembershipFormat.STICKY2025 -> feedRawMemberships()
+            MatrixRtcMembershipFormat.ROOM_STATE -> feedStateMemberships()
         }
-        if (elementCallCompat != MatrixRtcElementCallCompat.STATE_EVENTS) {
+        if (membershipFormat != MatrixRtcMembershipFormat.ROOM_STATE) {
             // The two sticky modes are wired up but starved: no bridge feeds sticky events until the SDK
             // exposes MSC4354, so a call joined in either mode sees nobody. Said once here, next to the
             // choice, rather than left to be inferred from a roster that stays empty.
-            Timber.w("MatrixRTC: $elementCallCompat needs MSC4354 sticky events, which the bridge for $roomId cannot feed; no membership will be fed")
+            Timber.w("MatrixRTC: $membershipFormat needs MSC4354 sticky events, which the bridge for $roomId cannot feed; no membership will be fed")
         }
     }
 
@@ -164,7 +164,7 @@ internal class RoomStateFeeder(
                 val summary = mapped.joinToString { (event, slotId) ->
                     "${event.sender}/${event.senderDeviceId ?: "?"} slot=$slotId ${event.eventType} encrypted=${event.wasEncrypted}"
                 }
-                Timber.i("MatrixRTC: feeding ${mapped.size} raw membership(s) for $roomId ($elementCallCompat): [$summary]")
+                Timber.i("MatrixRTC: feeding ${mapped.size} raw membership(s) for $roomId ($membershipFormat): [$summary]")
                 feed("raw memberships") { manager.setCurrentMembership(roomId.value, mapped.map { it.first }, emptyList()) }
                 updateMemberCount("after feeding ${mapped.size} membership(s)")
             }
@@ -317,7 +317,7 @@ internal class RoomStateFeeder(
      * the senders among.
      *
      * The sticky modes mostly get away with it, because something usually changes again soon and the
-     * next snapshot lands after the members. [MatrixRtcElementCallCompat.STATE_EVENTS] does not: a
+     * next snapshot lands after the members. [MatrixRtcMembershipFormat.ROOM_STATE] does not: a
      * running Element Call rewrites its state membership only every few minutes, so a first snapshot
      * lost this way is an empty roster and no key distribution for that long, with nothing in the log
      * to say why.

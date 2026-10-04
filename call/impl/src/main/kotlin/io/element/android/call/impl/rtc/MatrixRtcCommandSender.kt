@@ -61,7 +61,7 @@ internal class MatrixRtcCommandSender(
 
     /**
      * @return the event id the homeserver assigned. Unread for an `m.rtc.slot`, but in
-     * [io.element.android.call.api.rtc.MatrixRtcElementCallCompat.STATE_EVENTS] the membership itself
+     * [io.element.android.call.api.rtc.MatrixRtcMembershipFormat.ROOM_STATE] the membership itself
      * comes through here, and there it is what an MSC4075 notification relates to.
      */
     override suspend fun sendStateEvent(roomId: String, eventType: String, stateKey: String, contentJson: String): String {
@@ -86,7 +86,7 @@ internal class MatrixRtcCommandSender(
 
     /**
      * The dead man's switch for a membership carried as *room state*, which is what
-     * [io.element.android.call.api.rtc.MatrixRtcElementCallCompat.STATE_EVENTS] publishes.
+     * [io.element.android.call.api.rtc.MatrixRtcMembershipFormat.ROOM_STATE] publishes.
      *
      * Only ever called in that mode: the message-like [sendDelayedEvent] has no state key to send a
      * membership under, so the two are not interchangeable. Worth knowing that this is the better half
@@ -123,7 +123,7 @@ internal class MatrixRtcCommandSender(
 
     /**
      * Message-like room events. The core sends its MSC4075 notification this way when the membership is room
-     * state - [io.element.android.call.api.rtc.MatrixRtcElementCallCompat.STATE_EVENTS], the mode this library
+     * state - [io.element.android.call.api.rtc.MatrixRtcMembershipFormat.ROOM_STATE], the mode this library
      * pins - so this is what makes a call ring. It also carries reactions and raised hands, which nothing in
      * the UI triggers yet (plan 002).
      *

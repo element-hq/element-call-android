@@ -18,11 +18,11 @@ import io.element.android.call.api.rtc.MatrixRtcAudioLevel
 import io.element.android.call.api.rtc.MatrixRtcCallEvent
 import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
-import io.element.android.call.api.rtc.MatrixRtcElementCallCompat
 import io.element.android.call.api.rtc.MatrixRtcEndReason
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionDiagnostic
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcLocalState
+import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 import io.element.android.call.api.rtc.MatrixRtcNotificationType
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
@@ -30,11 +30,10 @@ import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcTileKind
-import io.element.android.call.api.rtc.MatrixRtcTransport
 import io.element.android.call.test.A_ROOM_ID
 import io.element.android.call.test.FakeElementCallLifecycleListener
 import io.element.android.call.test.FakeElementCallRoomContextProvider
-import io.element.android.call.test.FakeMatrixRtcService
+import io.element.android.call.test.FakeMatrixRtcClient
 import io.element.android.call.test.aRoster
 import io.element.android.call.test.aTile
 import io.element.android.call.test.aWindowedRoster
@@ -55,7 +54,6 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
 
-private val A_TRANSPORT = MatrixRtcTransport.LiveKit("https://sfu.example.org/jwt")
 private const val A_LOCAL_MEMBER_ID = "6ffd927ac275815176463d6fee57ed62"
 private const val A_REMOTE_MEMBER_ID = "2921a8e353fbc938be76f5b2f4946178"
 private const val ANOTHER_REMOTE_MEMBER_ID = "3d7f0c7c6f2a4d0b9e8a1c5b7d6e4f21"
@@ -96,21 +94,21 @@ class DefaultElementCallControllerTest {
 
     @Test
     fun `a second start while a call is running is ignored`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
 
         controller.startCall(ElementCallData(roomId = A_ROOM_ID, isAudioCall = false))
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
 
         assertThat(controller.state.value?.callData?.isAudioCall).isTrue()
-        assertThat(rtcService.joinCallCount).isEqualTo(1)
+        assertThat(rtcClient.roomCount).isEqualTo(1)
     }
 
     @Test
     fun `denying the microphone fails the call rather than joining silently`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
 
         controller.state.filterNotNull().test {
             awaitItem()
@@ -118,15 +116,15 @@ class DefaultElementCallControllerTest {
 
             val states = consumeItemsUntilPredicate { it.connection is ElementCallConnection.Failed }
             assertThat(states.last().connection).isInstanceOf(ElementCallConnection.Failed::class.java)
-            assertThat(rtcService.joinCallCount).isEqualTo(0)
+            assertThat(rtcClient.roomCount).isEqualTo(0)
             cancelAndIgnoreRemainingEvents()
         }
     }
 
     @Test
     fun `granting the microphone joins and connects media`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
 
         controller.state.filterNotNull().test {
             awaitItem()
@@ -134,9 +132,9 @@ class DefaultElementCallControllerTest {
 
             val states = consumeItemsUntilPredicate { it.connection == ElementCallConnection.Connected }
             assertThat(states.last().isMicrophonePermissionGranted).isTrue()
-            assertThat(rtcService.joinCallCount).isEqualTo(1)
-            assertThat(rtcService.lastSession?.connectMediaCount).isEqualTo(1)
-            assertThat(rtcService.lastSession?.lastCall?.publishMicrophoneCount).isEqualTo(1)
+            assertThat(rtcClient.roomCount).isEqualTo(1)
+            assertThat(rtcClient.lastCall?.connectMediaCount).isEqualTo(1)
+            assertThat(rtcClient.lastCall?.lastMediaSession?.publishMicrophoneCount).isEqualTo(1)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -148,7 +146,7 @@ class DefaultElementCallControllerTest {
      */
     @Test
     fun `an audio call joins, publishes the microphone and survives with no screen collecting its state`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
+        val rtcClient = FakeMatrixRtcClient()
         val audioDevices = FakeCallAudioDeviceController()
         val platform = FakeElementCallPlatform()
         var startedServiceBeforeCapture: Boolean? = null
@@ -158,7 +156,7 @@ class DefaultElementCallControllerTest {
             releaseAudioFocusResult = {},
         )
         val controller = createController(
-            rtcService = rtcService,
+            rtcClient = rtcClient,
             audioDeviceController = audioDevices,
             platform = platform,
             audioFocus = audioFocus,
@@ -169,11 +167,11 @@ class DefaultElementCallControllerTest {
 
         assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.Connected)
         assertThat(startedServiceBeforeCapture).isTrue()
-        assertThat(rtcService.lastSession?.lastCall?.publishMicrophoneCount).isEqualTo(1)
+        assertThat(rtcClient.lastCall?.lastMediaSession?.publishMicrophoneCount).isEqualTo(1)
         assertThat(audioDevices.startCount).isEqualTo(1)
         assertThat(audioDevices.stopCount).isEqualTo(0)
         assertThat(platform.stopForegroundServiceCount).isEqualTo(0)
-        assertThat(rtcService.lastSession?.leaveCount).isEqualTo(0)
+        assertThat(rtcClient.lastCall?.leaveCount).isEqualTo(0)
     }
 
     /**
@@ -184,8 +182,8 @@ class DefaultElementCallControllerTest {
      */
     @Test
     fun `a call reports the core's member count`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
 
         controller.state.filterNotNull().test {
             awaitItem()
@@ -197,7 +195,7 @@ class DefaultElementCallControllerTest {
             // arrives on a subscription the core has to wake - and it does not wake it for the
             // Element Call compat path, so members can sit empty for an entire working call.
             // Pushed rather than read at zero, which is the initial value and would pass unsubscribed.
-            rtcService.lastSession?.memberCount?.value = 1
+            rtcClient.lastCall?.memberCount?.value = 1
 
             val states = consumeItemsUntilPredicate { it.memberCount == 1 }
             assertThat(states.last().memberCount).isEqualTo(1)
@@ -211,29 +209,29 @@ class DefaultElementCallControllerTest {
      * Restore per-mode tests when the pin goes (see `docs/FEEDBACK.md`, "Widget-driver stopgap").
      */
     @Test
-    fun `a call joins in the state-event Element Call compatibility whatever the option says`() = runTest {
-        MatrixRtcElementCallCompat.entries.forEach { preferred ->
-            val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-            val controller = createController(rtcService = rtcService, elementCallCompat = preferred)
+    fun `a call opens its room in the room-state membership format whatever the option says`() = runTest {
+        MatrixRtcMembershipFormat.entries.forEach { preferred ->
+            val rtcClient = FakeMatrixRtcClient()
+            val controller = createController(rtcClient = rtcClient, membershipFormat = preferred)
 
             controller.state.filterNotNull().test {
                 awaitItem()
                 controller.setMicrophonePermissionGranted(true)
 
                 consumeItemsUntilPredicate { it.connection == ElementCallConnection.Connected }
-                // Passed to the join rather than merely stored: the mode also fixes the member id, the SFU
-                // identity and the token endpoint, so a session joined with the wrong one connects and
+                // Passed to the room rather than merely stored: the format also fixes the member id, the SFU
+                // identity and the token endpoint, so a call joined with the wrong one connects and
                 // stays silent rather than failing.
-                assertThat(rtcService.lastElementCallCompat).isEqualTo(MatrixRtcElementCallCompat.STATE_EVENTS)
+                assertThat(rtcClient.lastMembershipFormat).isEqualTo(MatrixRtcMembershipFormat.ROOM_STATE)
                 cancelAndIgnoreRemainingEvents()
             }
         }
     }
 
     @Test
-    fun `a homeserver with no livekit transport fails the call before joining`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = emptyList())
-        val controller = createController(rtcService = rtcService)
+    fun `a failed join fails the call, and dismissing it shuts the room down`() = runTest {
+        val rtcClient = FakeMatrixRtcClient(joinResult = { Result.failure(IllegalStateException("Homeserver offers no LiveKit transport")) })
+        val controller = createController(rtcClient = rtcClient)
 
         controller.state.filterNotNull().test {
             awaitItem()
@@ -242,24 +240,29 @@ class DefaultElementCallControllerTest {
             val states = consumeItemsUntilPredicate { it.connection is ElementCallConnection.Failed }
             val failure = states.last().connection as ElementCallConnection.Failed
             assertThat(failure.message).contains("LiveKit")
-            assertThat(rtcService.joinCallCount).isEqualTo(0)
+            assertThat(rtcClient.lastRoom?.shutdownCount).isEqualTo(0)
             cancelAndIgnoreRemainingEvents()
         }
+        controller.hangUp()
+        runCurrent()
+
+        assertThat(rtcClient.lastRoom?.shutdownCount).isEqualTo(1)
     }
 
     @Test
     fun `hanging up disconnects the media, leaves the session and clears the call`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
+        val rtcClient = FakeMatrixRtcClient()
         val lifecycleListener = FakeElementCallLifecycleListener()
-        val controller = createController(rtcService = rtcService, lifecycleListener = lifecycleListener)
+        val controller = createController(rtcClient = rtcClient, lifecycleListener = lifecycleListener)
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
 
         controller.hangUp()
         runCurrent()
 
-        assertThat(rtcService.lastSession?.lastCall?.disconnectCount).isEqualTo(1)
-        assertThat(rtcService.lastSession?.leaveCount).isEqualTo(1)
+        assertThat(rtcClient.lastCall?.lastMediaSession?.disconnectCount).isEqualTo(1)
+        assertThat(rtcClient.lastCall?.leaveCount).isEqualTo(1)
+        assertThat(rtcClient.lastRoom?.shutdownCount).isEqualTo(1)
         // Null rather than Ended: the screen closes on the call going away, and the bar with it.
         assertThat(controller.state.value).isNull()
         assertThat(lifecycleListener.endedCalls.map { it?.roomId }).containsExactly(A_ROOM_ID)
@@ -267,23 +270,23 @@ class DefaultElementCallControllerTest {
 
     @Test
     fun `a call ended by the far end is torn down without leaving`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
 
-        rtcService.lastSession?.lastCall!!.emit(MatrixRtcCallEvent.Ended(MatrixRtcEndReason.ConnectionClosed("SFU went away")))
+        rtcClient.lastCall?.lastMediaSession!!.emit(MatrixRtcCallEvent.Ended(MatrixRtcEndReason.ConnectionClosed("SFU went away")))
         runCurrent()
 
         assertThat(controller.state.value).isNull()
-        assertThat(rtcService.lastSession?.lastCall?.disconnectCount).isEqualTo(1)
-        assertThat(rtcService.lastSession?.leaveCount).isEqualTo(0)
+        assertThat(rtcClient.lastCall?.lastMediaSession?.disconnectCount).isEqualTo(1)
+        assertThat(rtcClient.lastCall?.leaveCount).isEqualTo(0)
     }
 
     @Test
     fun `muting is forwarded to the call and read back from it`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
 
         controller.state.filterNotNull().test {
             awaitItem()
@@ -300,15 +303,15 @@ class DefaultElementCallControllerTest {
 
     @Test
     fun `audio levels reach the state`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
 
         controller.state.filterNotNull().test {
             awaitItem()
             controller.setMicrophonePermissionGranted(true)
             consumeItemsUntilPredicate { it.connection == ElementCallConnection.Connected }
 
-            val call = rtcService.lastSession?.lastCall!!
+            val call = rtcClient.lastCall?.lastMediaSession!!
             call.audioLevels.value = mapOf("aRemoteMemberId" to MatrixRtcAudioLevel(level = 0.5f, frameCount = 42))
 
             val state = consumeItemsUntilPredicate { it.audioLevels.isNotEmpty() }.last()
@@ -324,14 +327,14 @@ class DefaultElementCallControllerTest {
      */
     @Test
     fun `audio levels are sampled rather than forwarded one by one`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
 
         controller.state.filterNotNull().test {
             awaitItem()
             controller.setMicrophonePermissionGranted(true)
             consumeItemsUntilPredicate { it.connection == ElementCallConnection.Connected }
-            val call = rtcService.lastSession?.lastCall!!
+            val call = rtcClient.lastCall?.lastMediaSession!!
 
             // Two readings with no time passing between them: a window's worth of a meter.
             call.audioLevels.value = mapOf("aRemoteMemberId" to MatrixRtcAudioLevel(level = 0.1f, frameCount = 1))
@@ -349,15 +352,15 @@ class DefaultElementCallControllerTest {
 
     @Test
     fun `receive stats and a frame encryption failure reach the state`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
 
         controller.state.filterNotNull().test {
             awaitItem()
             controller.setMicrophonePermissionGranted(true)
             consumeItemsUntilPredicate { it.connection == ElementCallConnection.Connected }
 
-            val call = rtcService.lastSession?.lastCall!!
+            val call = rtcClient.lastCall?.lastMediaSession!!
             call.receiveStats.value = mapOf(MatrixRtcStreamRef("aRemoteMemberId", MatrixRtcStreamKind.MICROPHONE) to A_RECEIVE_STATS)
             call.emit(
                 MatrixRtcCallEvent.FrameEncryption(
@@ -376,11 +379,11 @@ class DefaultElementCallControllerTest {
 
     @Test
     fun `a degraded media connection is reported and clears again`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
-        val call = rtcService.lastSession?.lastCall!!
+        val call = rtcClient.lastCall?.lastMediaSession!!
 
         call.emit(MatrixRtcCallEvent.MediaConnectionDegraded(degraded = true))
         runCurrent()
@@ -393,8 +396,8 @@ class DefaultElementCallControllerTest {
 
     @Test
     fun `the test tone is forwarded to the call`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
 
         controller.state.filterNotNull().test {
             awaitItem()
@@ -411,9 +414,9 @@ class DefaultElementCallControllerTest {
 
     @Test
     fun `connecting takes the audio route and offers every device`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
+        val rtcClient = FakeMatrixRtcClient()
         val audioDevices = FakeCallAudioDeviceController(initialDevices = listOf(anEarpiece(), aSpeaker()))
-        val controller = createController(rtcService = rtcService, audioDeviceController = audioDevices)
+        val controller = createController(rtcClient = rtcClient, audioDeviceController = audioDevices)
 
         controller.state.filterNotNull().test {
             awaitItem()
@@ -442,9 +445,9 @@ class DefaultElementCallControllerTest {
      */
     @Test
     fun `a video call starts on the loudspeaker`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
+        val rtcClient = FakeMatrixRtcClient()
         val audioDevices = FakeCallAudioDeviceController(initialDevices = listOf(anEarpiece(), aSpeaker()))
-        val controller = createController(rtcService = rtcService, audioDeviceController = audioDevices, isAudioCall = false)
+        val controller = createController(rtcClient = rtcClient, audioDeviceController = audioDevices, isAudioCall = false)
 
         controller.state.filterNotNull().test {
             awaitItem()
@@ -459,9 +462,9 @@ class DefaultElementCallControllerTest {
 
     @Test
     fun `a video call still prefers a headset over the loudspeaker`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
+        val rtcClient = FakeMatrixRtcClient()
         val audioDevices = FakeCallAudioDeviceController(initialDevices = listOf(aBluetoothHeadset(), anEarpiece(), aSpeaker()))
-        val controller = createController(rtcService = rtcService, audioDeviceController = audioDevices, isAudioCall = false)
+        val controller = createController(rtcClient = rtcClient, audioDeviceController = audioDevices, isAudioCall = false)
 
         controller.state.filterNotNull().test {
             awaitItem()
@@ -481,9 +484,9 @@ class DefaultElementCallControllerTest {
      */
     @Test
     fun `a device connected mid-call appears in the list`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
+        val rtcClient = FakeMatrixRtcClient()
         val audioDevices = FakeCallAudioDeviceController(initialDevices = listOf(anEarpiece(), aSpeaker()))
-        val controller = createController(rtcService = rtcService, audioDeviceController = audioDevices)
+        val controller = createController(rtcClient = rtcClient, audioDeviceController = audioDevices)
 
         controller.state.filterNotNull().test {
             awaitItem()
@@ -508,12 +511,12 @@ class DefaultElementCallControllerTest {
      */
     @Test
     fun `hanging up hands the audio route and the foreground service back`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
+        val rtcClient = FakeMatrixRtcClient()
         val audioDevices = FakeCallAudioDeviceController()
         val platform = FakeElementCallPlatform()
         var releaseCount = 0
         val controller = createController(
-            rtcService = rtcService,
+            rtcClient = rtcClient,
             audioDeviceController = audioDevices,
             platform = platform,
             audioFocus = FakeAudioFocus(requestAudioFocusResult = {}, releaseAudioFocusResult = { releaseCount++ }),
@@ -539,10 +542,10 @@ class DefaultElementCallControllerTest {
      */
     @Test
     fun `minimizing keeps the call running and can be undone`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
+        val rtcClient = FakeMatrixRtcClient()
         val audioDevices = FakeCallAudioDeviceController()
         val platform = FakeElementCallPlatform()
-        val controller = createController(rtcService = rtcService, audioDeviceController = audioDevices, platform = platform)
+        val controller = createController(rtcClient = rtcClient, audioDeviceController = audioDevices, platform = platform)
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
         assertThat(controller.state.value?.isMaximized).isTrue()
@@ -555,7 +558,7 @@ class DefaultElementCallControllerTest {
         assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.Connected)
         assertThat(audioDevices.stopCount).isEqualTo(0)
         assertThat(platform.stopForegroundServiceCount).isEqualTo(0)
-        assertThat(rtcService.lastSession?.leaveCount).isEqualTo(0)
+        assertThat(rtcClient.lastCall?.leaveCount).isEqualTo(0)
 
         // What tapping the minimized bar does.
         controller.setMaximized(true)
@@ -571,8 +574,8 @@ class DefaultElementCallControllerTest {
      */
     @Test
     fun `a video call turns the camera on once connected`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService, isAudioCall = false)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient, isAudioCall = false)
 
         // The host asks for the camera up front on a video call, so it is granted before media
         // connects. This is the ordering where the controller has to act on it itself.
@@ -581,7 +584,7 @@ class DefaultElementCallControllerTest {
         runCurrent()
 
         assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.Connected)
-        assertThat(rtcService.lastSession?.lastCall?.cameraEnabledCalls).contains(true)
+        assertThat(rtcClient.lastCall?.lastMediaSession?.cameraEnabledCalls).contains(true)
     }
 
     /**
@@ -612,8 +615,8 @@ class DefaultElementCallControllerTest {
      */
     @Test
     fun `muting while the call connects publishes the microphone already muted`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
 
         // Nothing to mute yet: the permission has not been answered, so there is no session, let
         // alone a call. The tap has nowhere to go but the snapshot.
@@ -625,7 +628,7 @@ class DefaultElementCallControllerTest {
         runCurrent()
 
         assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.Connected)
-        assertThat(rtcService.lastSession?.lastCall?.publishMicrophoneCalls).containsExactly(true)
+        assertThat(rtcClient.lastCall?.lastMediaSession?.publishMicrophoneCalls).containsExactly(true)
         // And it is still muted once connected: the observers start after the publication, so what
         // they report back is the state it was published in rather than a default that undoes it.
         assertThat(controller.state.value?.isMicrophoneMuted).isTrue()
@@ -633,20 +636,20 @@ class DefaultElementCallControllerTest {
 
     @Test
     fun `a microphone nobody touched is published unmuted`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
 
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
 
-        assertThat(rtcService.lastSession?.lastCall?.publishMicrophoneCalls).containsExactly(false)
+        assertThat(rtcClient.lastCall?.lastMediaSession?.publishMicrophoneCalls).containsExactly(false)
         assertThat(controller.state.value?.isMicrophoneMuted).isFalse()
     }
 
     @Test
     fun `a mute taken back while the call connects publishes the microphone unmuted`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
 
         controller.setMicrophoneMuted(true)
         controller.setMicrophoneMuted(false)
@@ -655,14 +658,14 @@ class DefaultElementCallControllerTest {
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
 
-        assertThat(rtcService.lastSession?.lastCall?.publishMicrophoneCalls).containsExactly(false)
+        assertThat(rtcClient.lastCall?.lastMediaSession?.publishMicrophoneCalls).containsExactly(false)
         assertThat(controller.state.value?.isMicrophoneMuted).isFalse()
     }
 
     @Test
     fun `turning the camera on while the call connects starts it once connected`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService, isAudioCall = true)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient, isAudioCall = true)
 
         // The permission answered first, which is what makes the button live: without it the tap
         // asks for the permission instead, and that answer is not an ask for the camera.
@@ -674,7 +677,7 @@ class DefaultElementCallControllerTest {
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
 
-        assertThat(rtcService.lastSession?.lastCall?.cameraEnabledCalls).containsExactly(true)
+        assertThat(rtcClient.lastCall?.lastMediaSession?.cameraEnabledCalls).containsExactly(true)
         assertThat(controller.state.value?.isCameraEnabled).isTrue()
     }
 
@@ -684,8 +687,8 @@ class DefaultElementCallControllerTest {
      */
     @Test
     fun `turning the camera off while a video call connects leaves it off`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService, isAudioCall = false)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient, isAudioCall = false)
 
         controller.setCameraPermissionGranted(true)
         controller.setCameraEnabled(false)
@@ -695,14 +698,14 @@ class DefaultElementCallControllerTest {
         runCurrent()
 
         assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.Connected)
-        assertThat(rtcService.lastSession?.lastCall?.cameraEnabledCalls).isEmpty()
+        assertThat(rtcClient.lastCall?.lastMediaSession?.cameraEnabledCalls).isEmpty()
         assertThat(controller.state.value?.isCameraEnabled).isFalse()
     }
 
     @Test
     fun `an audio call leaves the camera off`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService, isAudioCall = true)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient, isAudioCall = true)
 
         controller.setCameraPermissionGranted(true)
         controller.setMicrophonePermissionGranted(true)
@@ -711,7 +714,7 @@ class DefaultElementCallControllerTest {
         // Granting the camera is not the same as wanting it on: an audio call that answered the
         // permission dialog must still start with the camera off.
         assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.Connected)
-        assertThat(rtcService.lastSession?.lastCall?.isCameraEnabled?.value).isFalse()
+        assertThat(rtcClient.lastCall?.lastMediaSession?.isCameraEnabled?.value).isFalse()
     }
 
     /**
@@ -724,9 +727,9 @@ class DefaultElementCallControllerTest {
      */
     @Test
     fun `connecting reports the join, and ending reports the end`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
+        val rtcClient = FakeMatrixRtcClient()
         val lifecycleListener = FakeElementCallLifecycleListener()
-        val controller = createController(rtcService = rtcService, lifecycleListener = lifecycleListener)
+        val controller = createController(rtcClient = rtcClient, lifecycleListener = lifecycleListener)
 
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
@@ -751,11 +754,11 @@ class DefaultElementCallControllerTest {
      */
     @Test
     fun `two collectors on one member open a single video stream`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
-        val call = rtcService.lastSession?.lastCall!!
+        val call = rtcClient.lastCall?.lastMediaSession!!
 
         val first = backgroundScope.launch { controller.videoFrames(A_REMOTE_MEMBER_ID).collect { } }
         val second = backgroundScope.launch { controller.videoFrames(A_REMOTE_MEMBER_ID).collect { } }
@@ -784,11 +787,11 @@ class DefaultElementCallControllerTest {
      */
     @Test
     fun `a member moving between tiles keeps one stream open throughout`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
-        val call = rtcService.lastSession?.lastCall!!
+        val call = rtcClient.lastCall?.lastMediaSession!!
 
         val spotlightTile = backgroundScope.launch { controller.videoFrames(A_REMOTE_MEMBER_ID).collect { } }
         runCurrent()
@@ -826,14 +829,14 @@ class DefaultElementCallControllerTest {
      */
     @Test
     fun `the composed tiles reach the call, including one that connects later`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
         val composed = setOf(MatrixRtcTileId(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.PERSON))
         controller.setComposedTiles(composed)
 
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
-        val call = rtcService.lastSession?.lastCall!!
+        val call = rtcClient.lastCall?.lastMediaSession!!
         assertThat(call.composedTiles).containsExactly(composed)
 
         val more = composed + MatrixRtcTileId(ANOTHER_REMOTE_MEMBER_ID, MatrixRtcTileKind.SCREEN_SHARE)
@@ -848,11 +851,11 @@ class DefaultElementCallControllerTest {
      */
     @Test
     fun `the roster reaches the snapshot whole, references included`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
-        val call = rtcService.lastSession?.lastCall!!
+        val call = rtcClient.lastCall?.lastMediaSession!!
 
         call.tiles.value = aWindowedRoster(
             aTile(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.SCREEN_SHARE),
@@ -877,11 +880,11 @@ class DefaultElementCallControllerTest {
     /** Never ourselves: the core never ranks our own tile, so alone the order is empty. */
     @Test
     fun `the order never holds us, and is empty when we are alone`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
-        val call = rtcService.lastSession?.lastCall!!
+        val call = rtcClient.lastCall?.lastMediaSession!!
 
         call.localState.value = MatrixRtcLocalState(tile = aTile(A_LOCAL_MEMBER_ID, hasVideo = true), isScreenSharing = false)
         runCurrent()
@@ -895,14 +898,14 @@ class DefaultElementCallControllerTest {
      */
     @Test
     fun `the detail window reaches the call, including one that connects later, and not the next call`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
         val window = MatrixRtcDetailWindow(ranks = 0 until 6, also = setOf(MatrixRtcTileId(A_REMOTE_MEMBER_ID, MatrixRtcTileKind.SCREEN_SHARE)))
         controller.setDetailWindow(window)
 
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
-        val call = rtcService.lastSession?.lastCall!!
+        val call = rtcClient.lastCall?.lastMediaSession!!
         assertThat(call.detailWindows).containsExactly(window)
 
         val scrolled = MatrixRtcDetailWindow(ranks = 4 until 12)
@@ -914,7 +917,7 @@ class DefaultElementCallControllerTest {
         controller.startCall(ElementCallData(roomId = A_ROOM_ID, isAudioCall = true))
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
-        val nextCall = rtcService.lastSession?.lastCall!!
+        val nextCall = rtcClient.lastCall?.lastMediaSession!!
         assertThat(nextCall).isNotSameInstanceAs(call)
         assertThat(nextCall.detailWindows).isEmpty()
         // The composed set is replayed whatever it holds; what matters is that the last call's is not.
@@ -927,8 +930,8 @@ class DefaultElementCallControllerTest {
      */
     @Test
     fun `granting the camera permission turns the camera on`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
 
@@ -937,13 +940,13 @@ class DefaultElementCallControllerTest {
 
         assertThat(controller.state.value?.isCameraPermissionGranted).isTrue()
         assertThat(controller.state.value?.isCameraEnabled).isTrue()
-        assertThat(rtcService.lastSession?.lastCall?.cameraEnabledCalls).containsExactly(true)
+        assertThat(rtcClient.lastCall?.lastMediaSession?.cameraEnabledCalls).containsExactly(true)
     }
 
     @Test
     fun `turning the camera off once it is on stops it`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
         controller.setCameraPermissionGranted(true)
@@ -953,7 +956,7 @@ class DefaultElementCallControllerTest {
         runCurrent()
 
         assertThat(controller.state.value?.isCameraEnabled).isFalse()
-        assertThat(rtcService.lastSession?.lastCall?.cameraEnabledCalls).containsExactly(true, false).inOrder()
+        assertThat(rtcClient.lastCall?.lastMediaSession?.cameraEnabledCalls).containsExactly(true, false).inOrder()
     }
 
     /**
@@ -962,8 +965,8 @@ class DefaultElementCallControllerTest {
      */
     @Test
     fun `switching the camera follows what the call reports rather than the request`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
         // Front facing before the camera has ever been opened, which is the side it starts on.
@@ -973,7 +976,7 @@ class DefaultElementCallControllerTest {
         runCurrent()
 
         assertThat(controller.state.value?.isFrontCamera).isFalse()
-        assertThat(rtcService.lastSession?.lastCall?.switchCameraCount).isEqualTo(1)
+        assertThat(rtcClient.lastCall?.lastMediaSession?.switchCameraCount).isEqualTo(1)
     }
 
     /**
@@ -989,17 +992,17 @@ class DefaultElementCallControllerTest {
      */
     @Test
     fun `the proximity sensor is only allowed to blank a maximized audio call in the foreground`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
+        val rtcClient = FakeMatrixRtcClient()
         val audioDeviceController = FakeCallAudioDeviceController()
         val lifecycleListener = FakeElementCallLifecycleListener()
         val controller = createController(
-            rtcService = rtcService,
+            rtcClient = rtcClient,
             audioDeviceController = audioDeviceController,
             lifecycleListener = lifecycleListener,
         )
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
-        val call = rtcService.lastSession?.lastCall!!
+        val call = rtcClient.lastCall?.lastMediaSession!!
         call.tiles.value = aRoster(aTile(A_REMOTE_MEMBER_ID, hasVideo = false))
         runCurrent()
 
@@ -1039,11 +1042,11 @@ class DefaultElementCallControllerTest {
      */
     @Test
     fun `only a call with video floats as a tile when minimized`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
-        val call = rtcService.lastSession?.lastCall!!
+        val call = rtcClient.lastCall?.lastMediaSession!!
 
         // Audio only: the bar.
         call.tiles.value = aRoster(aTile(A_REMOTE_MEMBER_ID, hasVideo = false))
@@ -1076,8 +1079,8 @@ class DefaultElementCallControllerTest {
      */
     @Test
     fun `only a maximized call asks to enter picture-in-picture`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
 
         // A call was started by createController, and it starts maximized.
         assertThat(controller.shouldEnterPictureInPicture.value).isTrue()
@@ -1104,8 +1107,8 @@ class DefaultElementCallControllerTest {
      */
     @Test
     fun `coming back from picture-in-picture restores the full screen call`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
         controller.setInPictureInPicture(true)
         controller.setMaximized(false)
         runCurrent()
@@ -1127,7 +1130,7 @@ class DefaultElementCallControllerTest {
      */
     @Test
     fun `sharing the screen upgrades the foreground service before claiming the projection`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
+        val rtcClient = FakeMatrixRtcClient()
         // What the call had been asked to do at the moment the service was upgraded. The ordering is
         // only visible from inside that moment: two counters read afterwards would both be non-zero
         // whichever way round it happened.
@@ -1135,14 +1138,14 @@ class DefaultElementCallControllerTest {
         val platform = FakeElementCallPlatform(
             onStartForegroundService = { isProjecting ->
                 if (isProjecting) {
-                    shareCallsWhenProjectingClaimed = rtcService.lastSession?.lastCall?.screenShareCalls?.size
+                    shareCallsWhenProjectingClaimed = rtcClient.lastCall?.lastMediaSession?.screenShareCalls?.size
                 }
             },
         )
-        val controller = createController(rtcService = rtcService, platform = platform, isScreenSharingEnabled = true)
+        val controller = createController(rtcClient = rtcClient, platform = platform, isScreenSharingEnabled = true)
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
-        val call = rtcService.lastSession?.lastCall!!
+        val call = rtcClient.lastCall?.lastMediaSession!!
         assertThat(controller.state.value?.isScreenShareAvailable).isTrue()
         // Everything the connection itself started, so what is left is what sharing did.
         platform.startForegroundServiceProjecting.clear()
@@ -1167,12 +1170,12 @@ class DefaultElementCallControllerTest {
      */
     @Test
     fun `sharing the screen is refused unless the host enabled it`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
+        val rtcClient = FakeMatrixRtcClient()
         val platform = FakeElementCallPlatform()
-        val controller = createController(rtcService = rtcService, platform = platform)
+        val controller = createController(rtcClient = rtcClient, platform = platform)
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
-        val call = rtcService.lastSession?.lastCall!!
+        val call = rtcClient.lastCall?.lastMediaSession!!
         assertThat(controller.state.value?.isScreenShareAvailable).isFalse()
         platform.startForegroundServiceProjecting.clear()
 
@@ -1187,12 +1190,12 @@ class DefaultElementCallControllerTest {
     /** And the type is given back afterwards, so the screen-recording indicator does not linger. */
     @Test
     fun `stopping the share drops the media projection service type`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
+        val rtcClient = FakeMatrixRtcClient()
         val platform = FakeElementCallPlatform()
-        val controller = createController(rtcService = rtcService, platform = platform, isScreenSharingEnabled = true)
+        val controller = createController(rtcClient = rtcClient, platform = platform, isScreenSharingEnabled = true)
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
-        val call = rtcService.lastSession?.lastCall!!
+        val call = rtcClient.lastCall?.lastMediaSession!!
         controller.setScreenShareEnabled(MatrixRtcScreenCaptureToken(Intent()))
         runCurrent()
         platform.startForegroundServiceProjecting.clear()
@@ -1211,11 +1214,11 @@ class DefaultElementCallControllerTest {
      */
     @Test
     fun `a share ended from outside the app turns the state off`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService, isScreenSharingEnabled = true)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient, isScreenSharingEnabled = true)
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
-        val call = rtcService.lastSession?.lastCall!!
+        val call = rtcClient.lastCall?.lastMediaSession!!
         call.setScreenShareEnabled(enabled = true, token = MatrixRtcScreenCaptureToken(Intent()))
         runCurrent()
         assertThat(controller.state.value?.isScreenSharing).isTrue()
@@ -1233,15 +1236,15 @@ class DefaultElementCallControllerTest {
      */
     @Test
     fun `a call in a DM asks the far end to ring`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService, roomIsDm = true, isAudioCall = false)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient, roomIsDm = true, isAudioCall = false)
 
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
 
-        assertThat(rtcService.lastNotify?.type).isEqualTo(MatrixRtcNotificationType.RING)
+        assertThat(rtcClient.lastRoom?.lastNotify?.type).isEqualTo(MatrixRtcNotificationType.RING)
         // The intent rides along, so the callee is told what they are being invited to.
-        assertThat(rtcService.lastNotify?.intent).isEqualTo(MatrixRtcCallIntent.VIDEO)
+        assertThat(rtcClient.lastRoom?.lastNotify?.intent).isEqualTo(MatrixRtcCallIntent.VIDEO)
     }
 
     /**
@@ -1250,14 +1253,14 @@ class DefaultElementCallControllerTest {
      */
     @Test
     fun `a call in a room notifies without ringing`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService, roomIsDm = false, isAudioCall = true)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient, roomIsDm = false, isAudioCall = true)
 
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
 
-        assertThat(rtcService.lastNotify?.type).isEqualTo(MatrixRtcNotificationType.NOTIFY)
-        assertThat(rtcService.lastNotify?.intent).isEqualTo(MatrixRtcCallIntent.AUDIO)
+        assertThat(rtcClient.lastRoom?.lastNotify?.type).isEqualTo(MatrixRtcNotificationType.NOTIFY)
+        assertThat(rtcClient.lastRoom?.lastNotify?.intent).isEqualTo(MatrixRtcCallIntent.AUDIO)
     }
 
     /**
@@ -1267,14 +1270,14 @@ class DefaultElementCallControllerTest {
      */
     @Test
     fun `a room that cannot be read in time notifies rather than rings, and the call still joins`() = runTest {
-        val rtcService = FakeMatrixRtcService(transports = listOf(A_TRANSPORT))
-        val controller = createController(rtcService = rtcService, roomIsDm = null, isAudioCall = false)
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient, roomIsDm = null, isAudioCall = false)
 
         controller.setMicrophonePermissionGranted(true)
         advanceTimeBy(DefaultElementCallController.ROOM_CONTEXT_TIMEOUT_MS + 1)
         runCurrent()
 
-        assertThat(rtcService.lastNotify?.type).isEqualTo(MatrixRtcNotificationType.NOTIFY)
+        assertThat(rtcClient.lastRoom?.lastNotify?.type).isEqualTo(MatrixRtcNotificationType.NOTIFY)
         assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.Connected)
         assertThat(controller.state.value?.roomName).isNull()
     }
@@ -1307,9 +1310,9 @@ class DefaultElementCallControllerTest {
      * is what the notification timeout is for.
      */
     private fun TestScope.createController(
-        rtcService: FakeMatrixRtcService = FakeMatrixRtcService(),
+        rtcClient: FakeMatrixRtcClient = FakeMatrixRtcClient(),
         audioDeviceController: FakeCallAudioDeviceController = FakeCallAudioDeviceController(),
-        elementCallCompat: MatrixRtcElementCallCompat = MatrixRtcElementCallCompat.OFF,
+        membershipFormat: MatrixRtcMembershipFormat = MatrixRtcMembershipFormat.CURRENT,
         platform: FakeElementCallPlatform = FakeElementCallPlatform(),
         audioFocus: FakeAudioFocus = FakeAudioFocus(requestAudioFocusResult = {}, releaseAudioFocusResult = {}),
         lifecycleListener: FakeElementCallLifecycleListener = FakeElementCallLifecycleListener(),
@@ -1323,12 +1326,12 @@ class DefaultElementCallControllerTest {
         val controller = DefaultElementCallController(
             scope = backgroundScope,
             platform = platform,
-            rtcService = rtcService,
+            rtcClient = rtcClient,
             audioDeviceController = audioDeviceController,
             audioFocus = audioFocus,
             lifecycleListener = lifecycleListener,
             roomContextProvider = roomContextProvider,
-            options = ElementCallOptions(elementCallCompat = elementCallCompat, isScreenSharingEnabled = isScreenSharingEnabled),
+            options = ElementCallOptions(membershipFormat = membershipFormat, isScreenSharingEnabled = isScreenSharingEnabled),
         )
         controller.startCall(ElementCallData(roomId = A_ROOM_ID, isAudioCall = isAudioCall))
         runCurrent()

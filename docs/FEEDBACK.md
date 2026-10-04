@@ -1091,8 +1091,8 @@ stopgap is:
    in Element X commit `8a2e944437`, the last one before the bridge landed, in `JoinedRustRoom.kt` and
    `RustMatrixClient.kt`).
 2. Delete `call/matrix/…/temporary/widget/` (driver, bridge, capability grant, relay, registry), drop
-   `onSessionEnded` from `RustMatrixRtcSession`, and lift the compat pin in `DefaultElementCallController` so
-   `ElementCallOptions.elementCallCompat` is obeyed. The `RustWidgetDriver` recv-loop hardening the spike made in
+   the bridge close from `RustMatrixRtcClient.room`'s `onShutdown`, and lift the format pin in
+   `DefaultElementCallController` so `ElementCallOptions.membershipFormat` is obeyed. The `RustWidgetDriver` recv-loop hardening the spike made in
    Element X is a genuine bug fix for the WebView call too and can go to Element X on its own.
 
 **Missing from the released FFI** (each retires part of the bridge; all of them retire it):
@@ -1104,7 +1104,7 @@ stopgap is:
 - `Client.subscribeToToDeviceMessages(eventTypes)` delivering the **encryption info**: attested sender, sender device
   id and cross-signing status. The widget path delivers `{type, content, sender, encrypted}` only.
 - `Room.sendStickyRaw` (MSC4354) for the sticky-event compat modes; until then calls are pinned to the state-event
-  mode (`DefaultElementCallController`; `ElementCallOptions.elementCallCompat` is read but not obeyed).
+  mode (`DefaultElementCallController`; `ElementCallOptions.membershipFormat` is read but not obeyed).
 - `Room.sendRaw` returning the event id (matrix-rust-sdk item 9). It exists and sends, but resolves to unit, and the
   core keeps the id of a raised hand's `m.reaction` to redact it later - so the message-like room event (the MSC4075
   notification of the state-event mode too, a plain room event since core v0.3.0-rc.1) goes through the widget

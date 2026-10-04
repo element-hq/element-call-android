@@ -7,22 +7,22 @@
 
 package io.element.android.call.api
 
-import io.element.android.call.api.rtc.MatrixRtcElementCallCompat
 import io.element.android.call.api.rtc.MatrixRtcLoggingConfiguration
+import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 
 /**
  * The knobs a host may turn. Everything has a default; the sample app passes none.
  */
 data class ElementCallOptions(
     /**
-     * Which generation of Element Call a call should be reachable by. See [MatrixRtcElementCallCompat].
+     * Which generation of Element Call a call should be reachable by. See [MatrixRtcMembershipFormat].
      *
-     * Temporary: pinned to [MatrixRtcElementCallCompat.STATE_EVENTS] while the library builds against the
+     * Temporary: pinned to [MatrixRtcMembershipFormat.ROOM_STATE] while the library builds against the
      * released Rust SDK, whatever is asked for. The two sticky modes need MSC4354, which the widget-driver
      * stopgap cannot carry (`docs/FEEDBACK.md`, "Widget-driver stopgap"). A different value is logged so the
      * pin is visible; lifting it is a one-line change in the controller.
      */
-    val elementCallCompat: MatrixRtcElementCallCompat = MatrixRtcElementCallCompat.STATE_EVENTS,
+    val membershipFormat: MatrixRtcMembershipFormat = MatrixRtcMembershipFormat.ROOM_STATE,
     /**
      * How the RTC core logs, or null to leave the core silent. Applied when the native library is first
      * loaded; only the first configuration in a process takes effect.

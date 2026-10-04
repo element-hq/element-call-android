@@ -17,6 +17,11 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
   restores the host's appearance and status bar when it goes. A host that sets either itself while the call screen
   is up will fight it.
 - `ElementCallScreenState` gains `isStageChromeVisible`; `ElementCallScreenEvent.ToggleFullscreenChrome` is gone.
+- The RTC API follows the core's room-first names: `MatrixRtcClient.room()` opens a `MatrixRtcRoom`, whose `joinCall()`
+  returns a `MatrixRtcCall` (was `MatrixRtcSession`), whose `connectMedia()` returns a `MatrixRtcMediaSession` (was
+  `MatrixRtcCall`). `ElementCallStack.Builder.rtcService` is `rtcClient`. `MatrixRtcTransport` is gone: the join picks it.
+- `ElementCallOptions.elementCallCompat` is `membershipFormat`, a `MatrixRtcMembershipFormat` (`CURRENT`, `STICKY2025`,
+  `ROOM_STATE`; were `OFF`, `STICKY_EVENTS`, `STATE_EVENTS`).
 
 ## 0.1.0-rc.6 - 2026-09-29
 

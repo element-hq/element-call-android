@@ -18,11 +18,11 @@ import io.element.android.call.api.NoOpElementCallRoomContextProvider
 import io.element.android.call.api.audio.AudioFocus
 import io.element.android.call.api.audio.CallAudioDeviceController
 import io.element.android.call.api.matrix.ElementCallMatrixTransport
-import io.element.android.call.api.rtc.MatrixRtcService
+import io.element.android.call.api.rtc.MatrixRtcClient
 import io.element.android.call.impl.audio.DefaultAudioFocus
 import io.element.android.call.impl.audio.DefaultCallAudioDeviceController
 import io.element.android.call.impl.rtc.MatrixRtcFfi
-import io.element.android.call.impl.rtc.RustMatrixRtcService
+import io.element.android.call.impl.rtc.RustMatrixRtcClient
 import kotlinx.coroutines.CoroutineScope
 
 /**
@@ -45,7 +45,7 @@ import kotlinx.coroutines.CoroutineScope
 class ElementCallStack private constructor(
     val controller: ElementCallController,
     val options: ElementCallOptions,
-    private val rtcService: MatrixRtcService,
+    private val startCore: suspend () -> Unit,
 ) {
     /**
      * Bring the RTC core up. Call it as soon as the session exists, not when a call starts: a key
@@ -53,7 +53,7 @@ class ElementCallStack private constructor(
      * for the rest of the call. Idempotent.
      */
     suspend fun start() {
-        rtcService.start()
+        startCore()
     }
 
     /** Forget the stack. The session scope it was built with tears the rest down. */
@@ -72,7 +72,7 @@ class ElementCallStack private constructor(
         private var audioFocus: AudioFocus? = null
         private var options: ElementCallOptions = ElementCallOptions()
         private var dispatchers: ElementCallDispatchers = ElementCallDispatchers.Default
-        private var rtcService: MatrixRtcService? = null
+        private var rtcClient: MatrixRtcClient? = null
 
         /** Room names, direct flags and member profiles. Defaults to none: tiles show user ids. */
         fun roomContext(provider: ElementCallRoomContextProvider) = apply { roomContextProvider = provider }
@@ -91,10 +91,10 @@ class ElementCallStack private constructor(
         fun dispatchers(dispatchers: ElementCallDispatchers) = apply { this.dispatchers = dispatchers }
 
         /**
-         * The RTC core, in place of the Rust one over [transport]: for a harness that plays a
+         * The RTC client, in place of the Rust one over [transport]: for a harness that plays a
          * scripted call through the real controller and the real screen. The default is the Rust core.
          */
-        fun rtcService(service: MatrixRtcService) = apply { rtcService = service }
+        fun rtcClient(client: MatrixRtcClient) = apply { rtcClient = client }
 
         /**
          * @param scope lives as long as the Matrix session. The core, its feeds and the running call
@@ -103,23 +103,28 @@ class ElementCallStack private constructor(
         fun build(scope: CoroutineScope): ElementCallStack {
             // Recorded before the library loads; applied on the first native call.
             options.logging?.let { MatrixRtcFfi.setLoggingConfiguration(it) }
-            val rtcService = rtcService ?: RustMatrixRtcService(
-                transport = transport,
-                dispatchers = dispatchers,
-                context = context,
-                sessionCoroutineScope = scope,
-            )
+            val rustClient = if (rtcClient == null) {
+                RustMatrixRtcClient(
+                    transport = transport,
+                    dispatchers = dispatchers,
+                    context = context,
+                    sessionCoroutineScope = scope,
+                )
+            } else {
+                null
+            }
+            val rtcClient = rtcClient ?: checkNotNull(rustClient)
             val controller = DefaultElementCallController(
                 scope = scope,
                 platform = DefaultElementCallPlatform(context),
-                rtcService = rtcService,
+                rtcClient = rtcClient,
                 audioDeviceController = audioDeviceController ?: DefaultCallAudioDeviceController(context),
                 audioFocus = audioFocus ?: DefaultAudioFocus(context),
                 lifecycleListener = lifecycleListener,
                 roomContextProvider = roomContextProvider,
                 options = options,
             )
-            return ElementCallStack(controller, options, rtcService).also { ElementCallStackRegistry.register(it) }
+            return ElementCallStack(controller, options, startCore = { rustClient?.start() }).also { ElementCallStackRegistry.register(it) }
         }
     }
 }
