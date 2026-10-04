@@ -9,9 +9,9 @@ package io.element.android.call.matrix
 
 import io.element.android.call.api.ElementCallDispatchers
 import io.element.android.call.api.matrix.ElementCallDelayedEventAction
+import io.element.android.call.api.matrix.ElementCallMatrixException
 import io.element.android.call.api.matrix.ElementCallMatrixRoom
-import io.element.android.call.api.matrix.ElementCallRoomStateEvent
-import io.element.android.call.api.matrix.ElementCallStickyEvent
+import io.element.android.call.api.matrix.ElementCallRoomEvent
 import io.element.android.call.api.rtc.id.EventId
 import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.call.api.rtc.id.UserId
@@ -108,9 +108,22 @@ internal class SdkElementCallMatrixRoom(
         return bridge.sendStickyEvent(eventType, contentJson, durationMs)
     }
 
-    override fun stickyEvents(): Flow<List<ElementCallStickyEvent>> = bridge.stickyEvents()
+    override fun stickyEvents(): Flow<List<ElementCallRoomEvent>> = bridge.stickyEvents()
 
-    override fun stateEvents(eventType: String): Flow<List<ElementCallRoomStateEvent>> = bridge.stateEvents(eventType)
+    override fun stateEvents(eventType: String): Flow<List<ElementCallRoomEvent>> = bridge.stateEvents(eventType)
+
+    override fun timelineEvents(eventTypes: List<String>): Flow<List<ElementCallRoomEvent>> = bridge.timelineEvents(eventTypes)
+
+    override fun redactions(): Flow<EventId> = bridge.redactions()
+
+    /**
+     * Reactions sent before we joined cannot be fetched yet; live ones arrive through [timelineEvents]. The
+     * bindings' `loadOrFetchEventWithRelations` returns typed content with no raw JSON or encryption, and the
+     * widget API has no `read_relations` (`docs/FEEDBACK.md`, "Widget-driver stopgap").
+     */
+    override suspend fun relations(eventId: EventId, relType: String, eventType: String): Result<List<ElementCallRoomEvent>> {
+        return Result.failure(ElementCallMatrixException.NotSupported("relations of $eventId"))
+    }
 
     override suspend fun close() {
         bridge.stop()

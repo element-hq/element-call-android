@@ -9,7 +9,7 @@ package io.element.android.call.impl.rtc
 
 import com.google.common.truth.Truth.assertThat
 import io.element.android.call.api.matrix.ElementCallEventEncryptionInfo
-import io.element.android.call.api.matrix.ElementCallStickyEvent
+import io.element.android.call.api.matrix.ElementCallRoomEvent
 import io.element.android.call.api.rtc.id.DeviceId
 import io.element.android.call.api.rtc.id.EventId
 import io.element.android.call.api.rtc.id.RoomId
@@ -177,7 +177,7 @@ class StickyEventMapperTest {
 
     @Test
     fun `unparseable json is dropped rather than thrown`() {
-        val result = StickyEventMapper.map(A_ROOM_ID, aStickyEvent().copy(eventJson = "not json"))
+        val result = StickyEventMapper.map(A_ROOM_ID, aStickyEvent(content = "not json"))
 
         assertThat(result).isNull()
     }
@@ -209,7 +209,6 @@ private fun aStickyEvent(
     content: String = """
         {
           "slot_id": "aSlot",
-          "msc4354_sticky_key": "aStickyKey",
           "member": { "id": "aMemberId", "membership": "join" },
           "application": { "application_type": "m.call" },
           "transports": {
@@ -218,12 +217,13 @@ private fun aStickyEvent(
           }
         }
     """.trimIndent(),
-) = ElementCallStickyEvent(
+) = ElementCallRoomEvent(
+    eventId = AN_EVENT_ID,
     sender = A_USER_ID,
     eventType = "m.rtc.member",
-    stickyKey = stickyKey,
-    eventId = AN_EVENT_ID,
-    expiresAtMs = 0L,
-    eventJson = """{ "type": "m.rtc.member", "sender": "${A_USER_ID.value}", "content": $content }""",
+    stateKey = null,
+    timestampMs = 0L,
+    // The sticky key lives in the content (MSC4354).
+    contentJson = if (stickyKey == null) content else content.replaceFirst("{", """{ "msc4354_sticky_key": "$stickyKey", """),
     encryptionInfo = encryptionInfo,
 )

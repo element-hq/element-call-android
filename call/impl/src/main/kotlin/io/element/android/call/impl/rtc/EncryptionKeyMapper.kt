@@ -65,7 +65,7 @@ internal object EncryptionKeyMapper {
             // The attested sender, not the one claimed in the event.
             senderUserId = encryptionInfo.senderId.value,
             senderDeviceId = senderDeviceId.value,
-            senderIsCrossSigned = encryptionInfo.isSenderCrossSigned,
+            senderIsCrossSigned = encryptionInfo.isSenderCrossSigned == true,
         )
     }
 

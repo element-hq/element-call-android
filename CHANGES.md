@@ -17,6 +17,10 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
   `MatrixRtcCall`). `ElementCallStack.Builder.rtcService` is `rtcClient`. `MatrixRtcTransport` is gone: the join picks it.
 - `ElementCallOptions.elementCallCompat` is `membershipFormat`, a `MatrixRtcMembershipFormat` (`CURRENT`, `STICKY2025`,
   `ROOM_STATE`; were `OFF`, `STICKY_EVENTS`, `STATE_EVENTS`).
+- `ElementCallMatrixRoom`, for a host implementing it: `stickyEvents()` and `stateEvents()` carry `ElementCallRoomEvent`
+  (replacing `ElementCallStickyEvent` and `ElementCallRoomStateEvent`) and must emit the current set first, an empty
+  one included. New: `timelineEvents(types)`, `redactions()` and `relations(...)`.
+  `ElementCallEventEncryptionInfo.isSenderCrossSigned` is nullable: null when the client cannot say.
 
 ## 0.1.0-rc.6 - 2026-09-29
 

@@ -7,7 +7,7 @@
 
 package io.element.android.call.impl.rtc
 
-import io.element.android.call.api.matrix.ElementCallStickyEvent
+import io.element.android.call.api.matrix.ElementCallRoomEvent
 import io.element.android.call.api.rtc.id.RoomId
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -19,7 +19,7 @@ import org.matrix.rtc.RawMemberEvent as FfiRawMemberEvent
 import org.matrix.rtc.StickyEvent as FfiStickyEvent
 
 /**
- * Turns the SDK's [ElementCallStickyEvent] into the flat record the RTC core expects.
+ * Turns a sticky [ElementCallRoomEvent] into the flat record the RTC core expects.
  *
  * The SDK hands us the whole `m.rtc.member` event as JSON plus its decryption metadata; the FFI
  * wants the MSC4143 content fields pulled apart. Everything except `slot_id` is optional per the
@@ -38,7 +38,7 @@ internal object StickyEventMapper {
      * @return the mapped event, or null if it is unusable: unparseable JSON, no `slot_id`, or no
      * sticky key.
      */
-    fun map(roomId: RoomId, event: ElementCallStickyEvent): FfiStickyEvent? {
+    fun map(roomId: RoomId, event: ElementCallRoomEvent): FfiStickyEvent? {
         val content = parseContent(event) ?: return null
 
         val slotId = content.string("slot_id")
@@ -46,8 +46,7 @@ internal object StickyEventMapper {
             Timber.w("Dropping sticky event ${event.eventId}: no slot_id in content")
             return null
         }
-        // The SDK already surfaces the sticky key, so we do not re-read content.msc4354_sticky_key.
-        val stickyKey = event.stickyKey
+        val stickyKey = content.string("msc4354_sticky_key")
         if (stickyKey == null) {
             Timber.w("Dropping sticky event ${event.eventId}: no sticky key")
             return null
@@ -107,7 +106,7 @@ internal object StickyEventMapper {
      *
      * @return the mapped event, or null if the content cannot be read at all.
      */
-    fun mapRaw(event: ElementCallStickyEvent): FfiRawMemberEvent? {
+    fun mapRaw(event: ElementCallRoomEvent): FfiRawMemberEvent? {
         val content = parseContent(event) ?: return null
 
         // Same narrow workaround as [map], for the same Rust SDK bug: the dead man's switch leave is
@@ -146,13 +145,13 @@ internal object StickyEventMapper {
      * slot. That reads exactly like a membership we never received, which is why the value is worth
      * a log line even though nothing reads it.
      */
-    fun slotIdOf(event: ElementCallStickyEvent): String? = parseContent(event)?.string("slot_id")
+    fun slotIdOf(event: ElementCallRoomEvent): String? = parseContent(event)?.string("slot_id")
 
-    private fun parseContent(event: ElementCallStickyEvent): JsonObject? {
+    private fun parseContent(event: ElementCallRoomEvent): JsonObject? {
         return try {
-            json.parseToJsonElement(event.eventJson).let { it as? JsonObject }?.obj("content")
+            json.parseToJsonElement(event.contentJson) as? JsonObject
         } catch (throwable: Throwable) {
-            // Never log eventJson itself, it is user-adjacent content.
+            // Never log the content itself, it is user-adjacent.
             Timber.w(throwable, "Dropping sticky event ${event.eventId}: cannot parse content")
             null
         }

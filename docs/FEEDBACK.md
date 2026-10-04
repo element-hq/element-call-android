@@ -1109,6 +1109,17 @@ stopgap is:
   core keeps the id of a raised hand's `m.reaction` to redact it later - so the message-like room event (the MSC4075
   notification of the state-event mode too, a plain room event since core v0.3.0-rc.1) goes through the widget
   machine's `send_event`, which answers with the id, until `sendRaw` does. `Room.redact` already lowers the hand.
+- Querying the reactions already in the room, with raw content and encryption info. Live reactions arrive as
+  timeline events; the ones sent before we joined cannot be fetched: `Room.loadOrFetchEventWithRelations` returns
+  typed content with neither, and the widget API has no `read_relations`. `ElementCallMatrixRoom.relations` answers
+  `NotSupported`, so a hand raised before we joined is not seen until it changes.
+- Timeline events with their encryption info. The widget driver forwards decrypted reactions without saying whether
+  they were encrypted, so the bridge reports them without any; the core binds a reaction to its member by sender.
+  Membership is unaffected. `Room.subscribeToMessageLikeEvents`, with raw content and encryption info, is
+  [matrix-rust-sdk#7163](https://github.com/matrix-org/matrix-rust-sdk/pull/7163); read reactions and redactions
+  there once released.
+- `Room.stickyEvents` / `subscribeToStickyEvents` with encryption info: on SDK main since `516229640`, not in
+  26.09.26. Once released, `stickyEvents()` reads them from the SDK, not the bridge.
 
 **Trust relaxation while the stopgap is in place.** The core drops a media key whose sender is not cross-signed
 and the mapper drops one without a sender device. Through the widget driver neither is knowable, so the bridge
