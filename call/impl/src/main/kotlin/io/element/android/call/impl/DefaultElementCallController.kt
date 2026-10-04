@@ -17,12 +17,12 @@ import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.audio.AudioFocus
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.audio.CallAudioDeviceController
-import io.element.android.call.api.rtc.MatrixRtcCall
 import io.element.android.call.api.rtc.MatrixRtcCallEvent
 import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcElementCallCompat
 import io.element.android.call.api.rtc.MatrixRtcLeaveReason
+import io.element.android.call.api.rtc.MatrixRtcMediaSession
 import io.element.android.call.api.rtc.MatrixRtcNotificationType
 import io.element.android.call.api.rtc.MatrixRtcNotify
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
@@ -183,7 +183,7 @@ internal class DefaultElementCallController(
     private var videoSharingScope: CoroutineScope? = null
 
     private var session: MatrixRtcSession? = null
-    private var call: MatrixRtcCall? = null
+    private var call: MatrixRtcMediaSession? = null
     private var composedTiles: Set<MatrixRtcTileId> = emptySet()
     private var detailWindow: MatrixRtcDetailWindow? = null
 
@@ -368,7 +368,7 @@ internal class DefaultElementCallController(
     }
 
     /**
-     * Shared rather than handed straight through, because [MatrixRtcCall.videoFrames] is **cold and
+     * Shared rather than handed straight through, because [MatrixRtcMediaSession.videoFrames] is **cold and
      * one stream per collector** - its own KDoc says "collect it once per member; two collectors
      * means two streams". Two tiles on one member opened two `videoStream` handles on the same track,
      * and the second one closing under the first crashed the core inside `VideoSinkWrapper::on_frame`.
@@ -576,7 +576,7 @@ internal class DefaultElementCallController(
      * screen while nothing was yet listening to the events that call raises.
      */
     @OptIn(FlowPreview::class)
-    private fun CoroutineScope.startObservers(session: MatrixRtcSession, call: MatrixRtcCall) {
+    private fun CoroutineScope.startObservers(session: MatrixRtcSession, call: MatrixRtcMediaSession) {
         fun observe(block: suspend () -> Unit) = launch(start = CoroutineStart.UNDISPATCHED) { block() }
 
         // The core's count query rather than members.size: the projection behind members can sit at
@@ -652,7 +652,7 @@ internal class DefaultElementCallController(
      */
     private suspend fun endCall(leave: Boolean) {
         val leavingSession: MatrixRtcSession?
-        val leavingCall: MatrixRtcCall?
+        val leavingCall: MatrixRtcMediaSession?
         val endedCallData: ElementCallData?
         mutex.withLock {
             if (_state.value == null && callJob == null) return

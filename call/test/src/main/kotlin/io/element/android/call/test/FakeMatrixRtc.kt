@@ -8,12 +8,12 @@
 package io.element.android.call.test
 
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
-import io.element.android.call.api.rtc.MatrixRtcCall
 import io.element.android.call.api.rtc.MatrixRtcCallEvent
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcElementCallCompat
 import io.element.android.call.api.rtc.MatrixRtcLeaveReason
 import io.element.android.call.api.rtc.MatrixRtcLocalState
+import io.element.android.call.api.rtc.MatrixRtcMediaSession
 import io.element.android.call.api.rtc.MatrixRtcMembership
 import io.element.android.call.api.rtc.MatrixRtcNotify
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
@@ -84,12 +84,12 @@ class FakeMatrixRtcSession(
         private set
     var leaveCount = 0
         private set
-    var lastCall: FakeMatrixRtcCall? = null
+    var lastCall: FakeMatrixRtcMediaSession? = null
         private set
 
-    override suspend fun connectMedia(transport: MatrixRtcTransport.LiveKit): Result<MatrixRtcCall> {
+    override suspend fun connectMedia(transport: MatrixRtcTransport.LiveKit): Result<MatrixRtcMediaSession> {
         connectMediaCount++
-        return Result.success(FakeMatrixRtcCall().also { lastCall = it })
+        return Result.success(FakeMatrixRtcMediaSession().also { lastCall = it })
     }
 
     override suspend fun leave(reason: MatrixRtcLeaveReason?): Result<Unit> {
@@ -100,7 +100,7 @@ class FakeMatrixRtcSession(
     override fun close() = Unit
 }
 
-class FakeMatrixRtcCall : MatrixRtcCall {
+class FakeMatrixRtcMediaSession : MatrixRtcMediaSession {
     override val localMemberId: String = "aLocalMemberId"
 
     private val _events = MutableSharedFlow<MatrixRtcCallEvent>(extraBufferCapacity = 8)

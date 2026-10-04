@@ -23,7 +23,7 @@ import kotlinx.coroutines.flow.StateFlow
  * are handed out on [videoFrames] for a renderer to consume and a caller that ignores them simply
  * sees nothing - and, for remote members, decodes nothing either.
  */
-interface MatrixRtcCall : AutoCloseable {
+interface MatrixRtcMediaSession : AutoCloseable {
     /**
      * Our own MSC4143 member id for this join.
      *

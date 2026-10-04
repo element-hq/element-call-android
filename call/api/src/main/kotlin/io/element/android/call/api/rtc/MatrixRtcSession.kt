@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
  * A MatrixRTC session we have joined: one `(roomId, slotId)` pair.
  *
  * Membership. Media is attached separately with [connectMedia], and what participants are actually
- * publishing belongs to the [MatrixRtcCall] that returns - but [members] is available from the
+ * publishing belongs to the [MatrixRtcMediaSession] that returns - but [members] is available from the
  * moment we join, before there is any media at all.
  */
 interface MatrixRtcSession : AutoCloseable {
@@ -55,7 +55,7 @@ interface MatrixRtcSession : AutoCloseable {
      *
      * @param transport where to connect. Must be one the session was joined with.
      */
-    suspend fun connectMedia(transport: MatrixRtcTransport.LiveKit): Result<MatrixRtcCall>
+    suspend fun connectMedia(transport: MatrixRtcTransport.LiveKit): Result<MatrixRtcMediaSession>
 
     /**
      * Leave the session, publishing a leave membership event.
