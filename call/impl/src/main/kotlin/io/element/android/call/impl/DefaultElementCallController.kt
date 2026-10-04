@@ -566,8 +566,6 @@ internal class DefaultElementCallController(
     private fun CoroutineScope.startObservers(rtcCall: MatrixRtcCall, call: MatrixRtcMediaSession) {
         fun observe(block: suspend () -> Unit) = launch(start = CoroutineStart.UNDISPATCHED) { block() }
 
-        // The core's count query rather than members.size: the projection behind members can sit at
-        // zero for a whole call. See MatrixRtcCall.memberCount.
         observe { rtcCall.memberCount.collect { value -> updateState { it.copy(memberCount = value) } } }
         observe { call.tiles.collect { value -> updateState { it.copy(roster = value) } } }
         observe {

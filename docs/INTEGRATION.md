@@ -19,10 +19,10 @@ not a call SDK. It will not touch your homeserver, open a capture device, or dra
 
 1. [What you are linking against](#1-what-you-are-linking-against)
 2. [Loading the native library](#2-loading-the-native-library)
-3. [The outbound bridge: the command sender](#3-the-outbound-bridge-the-command-sender)
-4. [The inbound bridge: feeding the core](#4-the-inbound-bridge-feeding-the-core)
-5. [Starting the core, and when](#5-starting-the-core-and-when)
-6. [Placing and joining a call](#6-placing-and-joining-a-call)
+3. [The backend: what the core asks of your client](#3-the-backend-what-the-core-asks-of-your-client)
+4. [Delivering a room's subjects](#4-delivering-a-rooms-subjects)
+5. [Opening a room](#5-opening-a-room)
+6. [Joining a call](#6-joining-a-call)
 7. [Connecting media](#7-connecting-media)
 8. [Publishing audio](#8-publishing-audio)
 9. [Publishing video: camera](#9-publishing-video-camera)
@@ -120,284 +120,169 @@ that never connects says nothing at warn.
 
 ---
 
-## 3. The outbound bridge: the command sender
+## 3. The backend: what the core asks of your client
 
-This is the first thing to implement and the one the library cannot do without. The core decides *what* to put on
-the Matrix wire; your `CommandSenderCallback` is *how*. Register it on the manager at construction:
+The core decides *what* to put on the Matrix wire and *what* it needs to read; your `MatrixBackend` is *how*. You
+implement it once, over your own client, and hand it to the core:
 
 ```kotlin
-RtcSessionManagerHandle().apply {
-    setCommandSender(MatrixRtcCommandSender(client, dispatchers.io, roomProvider = { client.getJoinedRoom(it) }))
-}
+val rtcClient = RtcClient(DefaultMatrixBackend(transport, discovery, roomProvider = { openRooms[it] }, sessionScope, io))
 ```
 
-Seven callbacks, each mapping onto one SDK send. All of them suspend, so map them straight onto your suspending
-client calls with no blocking bridge in between (an earlier version needed a `runBlocking` bridge; v0.2.0 removed
-the need). Reference implementation: `call/impl/…/rtc/MatrixRtcCommandSender.kt`.
+Reference implementation: `call/impl/…/rtc/DefaultMatrixBackend.kt`. The core depends on no Matrix SDK, so a host
+keeps exactly one copy of its own.
 
-| Callback | Maps to | Returns |
+| Method | Maps to | Returns |
 | :--- | :--- | :--- |
-| `sendStickyEvent` | `room.sendStickyEvent(type, json, durationMs)` (MSC4354) | the event id — see below |
+| `sendStickyEvent` | `room.sendStickyEvent(type, json, durationMs)` (MSC4354) | the event id |
+| `sendDelayedEvent` | `room.sendDelayedEvent(type, stateKey?, json, delayMs)` (MSC4140); a state key makes it a state event | the **delay id** |
+| `restartDelayedEvent` / `cancelDelayedEvent` | `room.updateDelayedEvent(delayId, RESTART / CANCEL)` | — |
 | `sendStateEvent` | `room.sendRawStateEvent(type, stateKey, json)` | the event id |
-| `sendDelayedEvent` | `room.sendDelayedEvent(delayMs, type, json)` (MSC4140) | the **delay id** |
-| `sendDelayedStateEvent` | `room.sendDelayedStateEvent(delayMs, type, stateKey, json)` | the delay id |
-| `cancelDelayedEvent` | `room.updateDelayedEvent(delayId, CANCEL)` | — |
-| `restartDelayedEvent` | `room.updateDelayedEvent(delayId, RESTART)` | — |
+| `sendRoomEvent` | a message-like send, encrypted in an encrypted room | the event id |
+| `redactEvent` | `room.redact(eventId, reason)` | — |
 | `sendToDeviceMessage` | `client.sendToDeviceMessage(type, messages, encrypt = true)` | one delivery verdict per recipient |
+| `subscribeRoom` / `subscribeToDevice` | your client's listeners, delivering into the sink (§4) | a `BackendSubscription` |
+| `relations` | `GET /relations/{eventId}/{relType}/{eventType}`, decrypted | the related events |
+| `openidToken` | `client.getOpenIdToken()` | the token |
+| `rtcTransports` | MSC4143 transport discovery, as the raw `rtc_transports` JSON array | `[]` when there is none |
 
-**On the released SDK, only `sendStateEvent` reaches the SDK directly.** The Kotlin bindings do not yet expose
-delayed events, sticky events or to-device sends, so the other six callbacks go through the Matrix port
-(`ElementCallMatrixRoom` in `call/api`), whose turnkey implementation in `call/matrix` drives the SDK's widget machine
-in-process -
-`FEEDBACK.md`, "Widget-driver stopgap", has the wire details and what retires it. The rows above describe the
-operations; the bridge is where they land until the SDK grows the calls named in each row.
+**On the released SDK, most rows go through the widget-driver stopgap.** The Kotlin bindings do not yet expose
+delayed events, sticky events, raw room events or to-device sends, so `call/matrix` drives the SDK's widget machine
+in-process behind the `ElementCallMatrixRoom` port; `FEEDBACK.md`, "Widget-driver stopgap", has what retires it.
 
 Things that are not obvious and cost real time:
 
-**Pass the content through verbatim.** The core emits the unstable membership type itself and formats the JSON. Do
-not normalise either. Watch out for SDK send paths that disagree: in matrix-rust-sdk, `sendStickyRaw` passes the
-type through unchanged while `sendDelayedEvent` normalises it via ruma's typed enum.
+**Pass everything through verbatim.** The core emits the event types (unstable spellings included) and formats the
+JSON, and it parses what comes back. Do not normalise types, content or transports. Watch out for SDK send paths
+that disagree: in matrix-rust-sdk, `sendStickyRaw` passes the type through unchanged while `sendDelayedEvent`
+normalises it via ruma's typed enum.
 
-**The lifetime is the core's to choose.** `sendStickyEvent` is handed a duration; use it. It is the side that knows
-when it will next refresh the membership, and a duration you pick could expire first and drop you out of a session
-you are still in. If your SDK takes a narrower integer type, **clamp rather than truncate** — a bare `toUInt()`
-turns an over-large duration into a tiny one, which is a membership that expires almost immediately and the hardest
-version of this bug to recognise.
+**The lifetime is the core's to choose.** `sendStickyEvent` is handed a duration; use it. If your SDK takes a
+narrower integer type, **clamp rather than truncate**.
 
-**Delayed events are a dead man's switch, and failing them is not fatal.** If the send throws, the core carries on
-and shortens the membership lifetime instead. But classify the failure: `CommandSenderException.NotSupported`
-retires the switch for the session, while `SendException` degrades the same way and re-probes periodically. So a
-*permanent* refusal must be reported as `NotSupported` and a *transient* one must not be:
+**Report failures, do not classify them.** Throw `FfiBackendException.Failed(errcode, status, reason)` with the
+Matrix `errcode` and HTTP status when your client has them. The core decides what a failure means — a delayed-event
+refusal (`M_UNRECOGNIZED`, or matrix.org's `M_FORBIDDEN`) retires the dead man's switch for the session, anything
+else is retried. Keep `CancellationException` a cancellation.
 
-```kotlin
-ErrorKind.Unrecognized -> true                                              // 404 M_UNRECOGNIZED
-ErrorKind.Forbidden -> message?.contains("delayed event", true) == true     // matrix.org disallows them
-else -> false                                                              // retryable
-```
-
-`Forbidden` also covers a genuine power-level rejection of a delayed *state* event, which is your fault rather than
-the homeserver's and would clear the moment your power level changed — only the message separates the two.
-
-**Get `cancel` and `restart` the right way round.** Swapping them retires the membership the switch protects,
-dropping you out of a live call minutes later with nothing in the log connecting cause to effect. Pin each to its
-action with a test.
+**Get `cancel` and `restart` the right way round.** Swapping them retires the membership the switch protects. Pin
+each to its action with a test.
 
 **`sendToDeviceMessage` must be encrypted, and must report per recipient.** RTC media keys never go out in the
-clear. Send once for the whole batch — the SDK takes the same recipient map the core hands you — and return one
-verdict per recipient. A recipient reported as delivered is never re-sent to and one reported as failed is retried
-on the next rollout, so **reporting a failure as a success is how a member ends up permanently keyless**.
-
-**Failures must become `CommandSenderException`, not exceptions crossing the FFI.** Wrap every callback body. One
-exception: keep `CancellationException` a cancellation — dressing it as a send failure tells the core the command
-was attempted and failed, when in fact the session it belongs to is gone.
-
-**Known gap:** matrix-rust-sdk's `sendStickyRaw` returns nothing, so there is no event id to report and this
-integration answers with an empty string. The core relates MSC4075 notifications to the membership event, so this
-matters. See `FEEDBACK.md`, matrix-rust-sdk item 9.
+clear. A recipient reported as delivered is never re-sent to; **reporting a failure as a success is how a member
+ends up permanently keyless**.
 
 ---
 
-## 4. The inbound bridge: feeding the core
+## 4. Delivering a room's subjects
 
-The core has no network of its own. Everything it knows about a room, you tell it. Split the feeds by lifetime,
-because the two halves have genuinely different rules.
+The core has no network of its own. `subscribeRoom(roomId, subjects, sink)` asks for one room's subjects; it is
+**synchronous**: start your listeners and return. Deliver from your own coroutines until `cancel()`, which must be
+idempotent. Each subject on its own, so one that never emits cannot hold up the others, and a failing one must end
+only itself — an exception escaping into your session scope kills the session.
 
-### Session-scoped: media keys (`SessionStateFeeder.kt`)
+| Subject | Sink call | Notes |
+| :--- | :--- | :--- |
+| sticky events | `onStickyEvents(events)` | the complete live set |
+| each `stateEventTypes` entry | `onStateEvents(type, events)` | under its own type: ruma's alias collapse (`m.call.member` / `org.matrix.msc3401.call.member`) means filtering a shared bucket by type |
+| joined members | `onJoinedMembers(userIds)` | **must include your own user** |
+| encryption | `onEncryption(encrypted)` | only once known; never guess `false` |
+| `timelineEventTypes` | `onTimelineEvents(events)` | each batch as it arrives: reactions, raised hands |
+| redactions | `onRedaction(eventId)` | a lowered hand |
 
-*On the released SDK the source is the bridge's `ToDeviceRelay`, fed by whichever room bridge is live, rather
-than a client-wide subscription; the rules below are unchanged, and so is the feeder - see `FEEDBACK.md`,
-"Widget-driver stopgap", for what that costs.*
+**`RtcClient.room()` resolves only once every set-shaped subject has delivered once.** So:
 
-Media keys arrive over to-device, and **to-device delivery cannot be caught up on** — the SDK hands each message to
-whoever is subscribed at that moment and then forgets it. Subscribe for the whole Matrix session, not per call, or
-you silently discard every key sent between calls, including the rotation another member performs the instant they
-see you join. The symptom is a member stuck at `MISSING_KEY` for an entire call with nothing in the log to say why.
+- **Deliver the current set first, then the whole set on every change.**
+- **An empty set means none, and it must still be delivered.** Holding back an empty set ("it might mean not
+  synced") is the one mistake that hangs: `room()` never returns. If your source cannot tell "none" from "not
+  loaded", fix that at the source: the widget stopgap waits for the machine's first `update_state`, which carries
+  every granted type, an empty one included.
+- **A joined-member set without your own user is ignored**, and the room never seeds.
 
-Subscribe to **both** key types unconditionally:
+The core logs which delivery it is still waiting on; `RustMatrixRtcClient` also turns a seeding that never finishes
+into a failed join after 30 s rather than an endless "Joining".
 
-- `org.matrix.msc4143.rtc.encryption_key` → parse and call `manager.receiveEncryptionKey(key)`
-- `io.element.call.encryption_keys` (Element Call's dialect: a `keys` array) → hand the content over raw with
-  `manager.receiveLegacyEncryptionKey(...)`; the library parses that shape itself
+Events cross as `FfiEventIn`: id, sender, type, state key, `origin_server_ts`, the whole decrypted `content` as JSON,
+and `FfiEventEncryption`. Report only what your client said: a cross-signing status it cannot give stays `null`.
 
-A to-device message carries exactly one type, so a peer speaking the legacy dialect sends under that name *instead
-of* the spec one. Feeding a key for a call you are not in costs nothing — with no membership to bind it to, the core
-has nowhere to put it.
-
-**Only trust encrypted messages.** The top-level sender of a cleartext to-device message is unauthenticated, so
-accepting one lets anyone inject a media key. Pass the *attested* sender and device from the encryption info, never
-the one claimed in the content. Log what you claimed for `crossSigned`: the core throws a key away on that field
-without telling you, and the member simply stays at `MISSING_KEY`.
-
-### Room-scoped: members, encryption, memberships (`RoomStateFeeder.kt`)
-
-*Members and encryption come from the SDK; memberships come from `MatrixRtcRoomBridge.stateEvents` (and
-`stickyEvents`, which no bridge feeds until the SDK exposes MSC4354 - hence the `STATE_EVENTS` pin).*
-
-These are all snapshot-shaped — a new subscriber is handed the current truth rather than only what changes next — so
-they can safely start at join time.
-
-**Ordering is not cosmetic, and both orderings below have bitten this integration.**
-
-```
-1. onRoomMembersReceived(roomId, joinedUserIds)   ─┐ before the join
-2. onRoomEncryptionReceived(roomId, isEncrypted)  ─┘
-3. manager.join(...)
-4. subscribeMembershipSnapshots(roomId, slotId)    ← subscribe
-5. setCurrentStickyState / setCurrentMembership    ← only now feed memberships
-```
-
-- **Room members before anything else.** A sender the core cannot place in the room is excluded as
-  `SenderNotInRoom`. Hold the membership feed on a `CompletableDeferred` completed by the first member feed;
-  otherwise the first snapshot races the members and every entry in it is rejected.
-- **Memberships after the join**, because the compatibility mode is fixed by the join and decides how a membership
-  is *parsed*. Fed beforehand, the first snapshot is read as MSC4143 whatever mode you are in.
-- **Subscribe before feeding.** `nextSnapshot()` reports only what changes *after* the subscription exists. Joining
-  a call that is already running feeds the whole roster at once and then goes quiet — losing that first batch loses
-  it for the rest of the call. This is what "0 in call" next to a working two-way call looked like.
-
-Filtering rules that are each a bug you would otherwise ship:
-
-- **Never feed an empty room-member list.** A room you are joined to always contains you, so empty means "not
-  loaded yet". Feeding it says the room is deserted, which excludes every membership and rotates the media key
-  twice.
-- **Do feed an empty sticky snapshot.** `setCurrentStickyState` *replaces*: a shrunken set is how an expired
-  membership departs.
-- **Never feed an empty legacy *state* snapshot.** Room state is replaced, never removed, so a departure is a
-  present event with `{}` content — an empty list therefore cannot mean "everyone left", it means the bucket has not
-  synced. Feeding it states the call is deserted, ourselves included: the roster drops to zero, the core stops
-  refreshing a session it believes we are not in, and ~20 s later the delayed state event fires and empties our
-  membership while the call is still up.
-- **Do not filter `{}` content out of state memberships** — that event *is* the departure.
-- **Sort before `distinctUntilChanged`.** The SDK re-reads whole room state far more often than a membership
-  actually changes and promises no stable order; unsorted, every redundant read becomes a full membership
-  replacement.
-- **Accept both spellings** of every type (`m.rtc.member` / `org.matrix.msc4143.rtc.member`, `m.call.member` /
-  `org.matrix.msc3401.call.member`) when matching, but subscribe to only *one* — ruma treats the stable name as an
-  alias, so subscribing to both feeds the same members twice with each call wiping the other's list.
-
-**Never let a feed failure reach your scope.** uniffi surfaces anything that goes wrong inside the core as an
-exception, and uncaught from a background flow it kills the process — taking the log with it, right where the
-interesting part is. Feeding is best-effort by nature: the next snapshot supersedes what this one failed to deliver.
+**To-device**: `subscribeToDevice(types, sink)` the same way. **Only the encryption info is authenticated** — pass
+the attested sender and device from it, never what the content claims.
 
 ---
 
-## 5. Starting the core, and when
+## 5. Opening a room
 
-**Create the core when the Matrix session exists, not when a call starts.** Two reasons:
-
-1. The core is meant to be the thing that *notices* a call happening and tells you — which it cannot do if it only
-   comes into existence once the user has already started one.
-2. The narrower reason, which bites today: media keys arrive over to-device and cannot be caught up on (§4).
-
-One core per Matrix session, built once and never rebuilt — it accumulates memberships and keys across calls, so
-replacing it silently discards all of it. Guard construction with a mutex rather than a lazy: the to-device
-subscription must be established exactly once, and two callers racing would either feed every key twice or leave one
-holding a manager that calls are not joined on.
+One `RtcClient` per Matrix session. Creating it does no I/O and the core holds nothing about a room until you open
+one, so there is nothing to start at login: the core subscribes to to-device itself, and no key is sent to you
+before your membership is visible.
 
 ```kotlin
-// In the host, once per session, behind its feature flag. Element X does this from its logged-in flow;
-// ElementCallStack.start() is what brings the core up, with the session rather than with the first call.
-featureFlagService.isFeatureEnabledFlow(FeatureFlags.NativeCall)
-    .filter { it }.take(1)
-    .onEach { elementCallStack.start() }
-    .launchIn(sessionScope)
+val rtcRoom = rtcClient.room(roomId, FfiRoomOptions(format = FfiMembershipFormat.ROOM_STATE))
 ```
 
-Make `start()` idempotent and call it from `join` too, so a caller that forgets still gets a working call — just one
-that may have missed keys.
+Make the room your client side needs (here, the widget bridge) routable **before** calling `room()`, because the
+core subscribes from inside it. `shutdown()` leaves every call of the room and ends its subscriptions; close your
+own room only after it, because that leave goes through it. (`shutdown`, not `close`: uniffi's `close()` frees the
+object.)
+
+### Membership format
+
+A **three-way choice made once per room**, not a set of flags — it fixes what the core subscribes to, the wire
+format, the member id, the SFU participant identity and the token endpoint together:
+
+- `CURRENT` — MSC4143 + MSC4354 as they stand.
+- `STICKY2025` — Element Call as of 2025: sticky events with legacy fields riding alongside.
+- `ROOM_STATE` — the pre-MSC4354 generation: `org.matrix.msc3401.call.member` room state, delayed *state* events as
+  the dead man's switch. Visible to that generation and to nobody else.
+
+`CURRENT` and `STICKY2025` joins fail in a room with no open `m.rtc.slot`, and this library never opens one, so it
+pins `ROOM_STATE` (`DefaultElementCallController`).
 
 ---
 
-## 6. Placing and joining a call
-
-### Transport discovery is yours
-
-Deliberately not part of the core. Query the homeserver and pass the result in:
-
-1. `GET /_matrix/client/unstable/org.matrix.msc4143/rtc/transports` → `rtc_transports`
-2. on 404, fall back to `/.well-known/matrix/client` → `org.matrix.msc4143.rtc_foci` (alias `m.rtc_foci`)
-
-The fallback is not hypothetical — matrix.org answers 404 (and answered 401 on the endpoint throughout our
-testing). matrix-rust-sdk already does exactly this with caching in `Client::rtc_transports()`; replace your copy
-with a call through when it reaches the FFI. See `RtcTransportDiscovery.kt`.
-
-### Slot ids
-
-MSC4143 requires a slot id to start with `{applicationType}#`. **Nothing enforces this on the way in**: the core
-validates it in `openSlot`, which has no Android data source, and `join` takes whatever it is given. A malformed
-slot id produces a call that looks entirely healthy from your side — membership published, media connected, audio
-flowing — while a conformant peer refuses the membership on sight. Ours is `m.call#ROOM`, which is the slot Element
-Call opens for a room-wide call; a *different* slot id leaves you technically valid and still alone. Log a warning
-if the prefix is wrong.
-
-### The join
+## 6. Joining a call
 
 ```kotlin
-val memberId: String = manager.join(
+val rtcCall = rtcRoom.joinCall(
     FfiJoinSessionParams(
-        userId, deviceId, roomId, slotId,
-        application = "m.call",
-        transport = FfiTransportConfig(type = "livekit", livekitServiceUrl = url),
-        canSubscribe = listOf("livekit"),
+        applicationSlotId = null,                 // the room-wide call, m.call#room
+        transport = FfiJoinTransport.Advertised,  // the core picks from rtcTransports()
         keepAliveTimeoutMs = 20_000uL,
-        stickyDurationMs = null,      // defer to the core — it owns the membership lifetime
-        encryptionConfig = null,      // follow whatever the slot prescribes
-        elementCallCompat = ...,
-        notify = ...,                 // null joins quietly
+        stickyDurationMs = null,                  // defer to the core
+        encryptionConfig = null,                  // follow the slot
+        notify = ...,                             // null joins quietly
     )
 )
 ```
 
-**The core mints the member id and hands it back.** It is what every sticky event, media roster entry and
-frame-encryption report is keyed by, and what the media session reports you under. Deriving one locally is exactly
-what MSC4143 forbids — keep the core's.
+**No transport to discover or pass.** `Advertised` makes the core pick the first LiveKit transport from your
+`rtcTransports()`, and fail the join when there is none. Answer that method with the MSC4143 endpoint and the
+`.well-known` fallback (`rtc_foci`): matrix.org answers 404 on the endpoint. See `RtcTransportDiscovery.kt`.
 
-A member id is fresh for every join. A device that rejoined without leaving appears under a new id; matching on
-user id and device id is the only way to recognise it as the same device.
+**No slot id to compose.** The join takes the MSC4143 application slot id; `null` is `m.call#room`, the slot
+Element Call opens for a room-wide call.
+
+**The core mints the member id** (`rtcCall.memberId()`). It is what every membership, media roster entry and
+frame-encryption report is keyed by. A device that rejoined without leaving appears under a new id.
+
+**No keep-alive of your own.** The call refreshes its membership and rotates keys on the core's own runtime until it
+leaves or is dropped. A dropped call sends no leave: its membership expires through the delayed leave.
+
+A join refused because the room has no open slot fails with `MatrixRtcFfiException.SlotClosed`.
 
 ### Ringing the other side (MSC4075)
 
 Pass a `notify` config **only when the user is starting a call** — joining one someone else started happens
-quietly. The core suppresses the notification anyway once anybody else is in the session, so passing one for a call
-that turns out to be running rings nobody; but *wanting* to summon people is your app's statement to make.
+quietly. The core suppresses the notification anyway once anybody else is in the call.
 
-Our rule: a DM rings (`RING`), any other room gets a silent `NOTIFICATION` — ringing a room summons everyone in it,
-and a group call is an invitation rather than a summons. Default to the silent one if the room cannot be read: an
-unwanted ring wakes people up, a missing one only makes the call quieter than it should have been. Carry the MSC4196
-`m.call.intent` (`audio` / `video`) so the callee knows what they are answering.
-
-### Element Call compatibility
-
-If you need to interoperate with pre-2026 Element Call, this is a **three-way choice made once per join**, not a set
-of flags — it fixes the wire format, the member id, the SFU participant identity and the token endpoint together:
-
-- `OFF` — MSC4143 as it stands. Reading sticky-event Element Call peers still works; what is off is *publishing*
-  anything they can read.
-- `STICKY_EVENTS` — membership as an MSC4354 sticky event with legacy fields riding alongside; stays callable by an
-  `OFF` peer.
-- `STATE_EVENTS` — the pre-MSC4354 generation: `org.matrix.msc3401.call.member` room state, delayed *state* events
-  as the dead man's switch. Visible to that generation and to nobody else, an MSC4143 peer included.
-
-Read the mode once at join time. It cannot change mid-session, so expose it as a setting that applies to the next
-call. And read it *before* building the room-state feeder — it decides how memberships are parsed, and feeding one
-dialect while joining in another is not an error but a silence.
+Our rule: a DM rings (`RING`), any other room gets a silent `NOTIFICATION`. Default to the silent one if the room
+cannot be read. Carry the MSC4196 `m.call.intent` (`audio` / `video`).
 
 ### Membership readback
 
-Two sources, and they can legitimately disagree:
-
-- `subscribeMembershipSnapshots(roomId, slotId)` → `nextSnapshot()` carries **identities**, and is the only source
-  for *who* is in the call. It **blocks the calling thread**, so run it on a general IO dispatcher — parking your
-  single FFI thread for the length of a call leaves nothing to start `leave()` or the media connection on, and the
-  call simply hangs.
-- `manager.memberCount(roomId, slotId)` is a **query**, right whenever it is read. Read it after each membership
-  feed. Prefer it wherever a count is all you need: the subscription is not woken in every compat mode, so the
-  snapshot can sit empty for an entire call whose count is tracked correctly (`FEEDBACK.md` item 7).
-
-Closing the subscription handle is what unblocks a reader parked in `nextSnapshot()`; cancelling the scope cannot,
-because that thread is inside a blocking FFI call with no cancellation point. Guard creation and closing with the
-same lock — `leave()` can arrive before `subscribeMembershipSnapshots` returns, and a subscription handed over after
-that point must be closed on arrival.
+`rtcCall.subscribeMembershipSnapshots()` → `next()` **suspends** until the roster changes; the first call returns
+the current roster, and `null` means the room was shut down — only then stop reading. Cancelling the reading
+coroutine cancels the pending `next()`. The roster's size is the member count.
 
 ---
 
@@ -406,22 +291,10 @@ that point must be closed on arrival.
 Membership and media are separate steps. You are in the call as soon as you have joined; media is attached after:
 
 ```kotlin
-val mediaSession = connectMediaSession(
-    manager,
-    MediaSessionConfig(roomId, slotId, userId, deviceId, livekitServiceUrl),
-    openIdTokenProvider,   // yours
-)
+val mediaSession = connectMediaSession(rtcCall, MediaSessionConfig(stability = null))
 ```
 
-The token provider is a three-line adapter proving your Matrix identity to the transport's authorisation service,
-which exchanges it for SFU credentials:
-
-```kotlin
-override suspend fun getOpenIdToken(): FfiOpenIdToken {
-    val token = client.getOpenIdToken().getOrThrow()
-    return FfiOpenIdToken(token.accessToken, token.tokenType, token.matrixServerName, token.expiresInSeconds.toULong())
-}
-```
+The focus comes from the join, and the account and the SFU's OpenID token from your backend (`openidToken`).
 
 Then, in this order:
 
@@ -897,17 +770,14 @@ How to drive it:
 Leaving the transport and leaving the session are separate, and the order matters:
 
 ```
-1. disconnect media                       (mediaSession.disconnect())
-2. close the membership subscription      ← before the leave, see below
-3. cancel your session scope              (stops every feed loop)
-4. manager.leave(roomId, slotId, params)  (publishes the leave membership)
+1. disconnect media      (mediaSession.disconnect())
+2. rtcCall.leave(params) (publishes the leave membership)
+3. rtcRoom.shutdown()    (leaves anything still joined, ends the room's subscriptions)
+4. close your own room   (after the shutdown: its leave goes through it)
 ```
 
-**Close the subscription before leaving.** A sticky snapshot arriving while you are leaving makes the core create a
-fresh session for the slot, seeded with none of the room state you fed the old one.
-
-**Make `leave` idempotent.** Hanging up and tearing the Activity down both leave — deliberately, so a swipe from
-recents still departs — and the core rejects the second attempt as `not joined`.
+**Make `leave` idempotent.** Hanging up and shutting the room down both leave, and the second attempt fails as
+`CallOver`.
 
 On the media side, release everything explicitly rather than leaving it to the GC: stop capture (camera light),
 stop the projection (recording indicator), stop every playback track, then cancel the scope. And release in the
@@ -923,8 +793,9 @@ that case there is nothing to leave; the session is already over.
 
 | Thread | What runs on it |
 | :--- | :--- |
-| single-threaded FFI dispatcher | every FFI call *start*: join, leave, publish, mute, constraints, stats, `participants()` |
-| general IO | anything that **blocks**: `nextSnapshot()` |
+| single-threaded FFI dispatcher | every FFI call *start*: room, join, leave, publish, mute, constraints, stats, `participants()` |
+| general IO | your backend's sends and subscriptions |
+| the core's own runtime | its feeds and upkeep: keep-alive, key rotation — nothing for you to schedule |
 | one thread per audio loop, at `THREAD_PRIORITY_URGENT_AUDIO` | `stream.next()` and the `AudioTrack` write; the `AudioRecord` read and `track.captureAudio` |
 | capture threads (camera, GL) | `track.captureVideo` — straight from the capture callback, not via the FFI dispatcher |
 | your app scope | call ownership, so a call outlives whatever screen is showing it |
@@ -953,8 +824,8 @@ up, and that no FFI call is initiated from the main dispatcher.
 Why *not* for media frames: 30 frames a second queued behind membership and stats calls, for no benefit. Neither
 `captureAudio` nor `captureVideo` suspends.
 
-Why blocking calls must not go on the FFI dispatcher: parking that single thread for the length of a call leaves
-nothing to start `leave()`, the media connection or any feed on — the call simply hangs.
+Why nothing long-lived goes on the FFI dispatcher: parking that single thread leaves nothing to start `leave()` or
+the media connection on — the call simply hangs. `next()` suspends rather than blocks, so it is safe anywhere.
 
 **Own the call above the UI.** Driving it from a screen's presenter makes the composition the call's lifetime, so
 navigating away ends the call and the only shape the UI can take is full-screen in its own task. Holding it in an
@@ -1009,13 +880,11 @@ gesture that reaches the notification shade is the gesture that blanks the scree
 - [ ] AAR + JNA on the classpath, FFI imports confined to one module
 - [ ] `MatrixRtc.initialize()` before `uniffiEnsureInitialized()`, both before any FFI use
 - [ ] Logging configured before the first FFI call (native logcat sink)
-- [ ] `CommandSenderCallback` implemented — all seven, failures classified, to-device encrypted and reported per recipient
-- [ ] To-device key feed subscribed **for the whole session**, both key types, encrypted only
-- [ ] Room members and encryption fed **before** join; memberships **after** join and **after** subscribing
-- [ ] Empty-snapshot rules applied per source (members: never; sticky: always; legacy state: never)
-- [ ] Core started at login, not at call time
-- [ ] Transport discovery with the well-known fallback
-- [ ] Slot id starts with `{application}#`
+- [ ] `MatrixBackend` implemented — sends verbatim, failures carry errcode and status, to-device encrypted and reported per recipient
+- [ ] `subscribeRoom` returns at once; every set delivered current-first, **an empty set included**; members include you
+- [ ] Each state type delivered under its own spelling; to-device encryption info from the client, never the content
+- [ ] Your room routable before `RtcClient.room()`, closed only after `shutdown()`
+- [ ] `rtcTransports()` with the well-known fallback; joins `Advertised`
 - [ ] Member id taken from the core, never derived
 - [ ] `notify` only when *starting* a call
 - [ ] Event pump and roster sweep before announcing "connected"
@@ -1035,7 +904,7 @@ gesture that reaches the notification shade is the gesture that blanks the scree
 - [ ] Renderer release exclusive with drawing; `JavaI420Buffer.wrap` given a release callback
 - [ ] `setConstraints` driven from real tile sizes, de-duplicated
 - [ ] Off-screen tiles report `NotVisible` after a detach delay; tiles evicted from composition are reported by the layout
-- [ ] Teardown: subscription closed before leave; capture and projection released explicitly
+- [ ] Teardown: leave, then shut the room down; capture and projection released explicitly
 - [ ] Audio/video receive stats logged (packets, lost, concealment, frames decoded)
 
 ---
@@ -1061,7 +930,7 @@ Each of these looked like something else first.
 | Remote video at 5–9 fps and the phone is hot | `setConstraints` never called |
 | Receiver draws a grey tile for a screen share that ended | share stopped by muting; use `unpublish(SCREEN_SHARE)` |
 | First media call dereferences null in `RtcRuntime()` | `MatrixRtc.initialize()` not called; JNA's `dlopen` never ran `JNI_OnLoad` |
-| Far end never decrypts us for a whole call after they left and rejoined, every local signal (`FrameEncryption` included) healthy — seen in `STATE_EVENTS` | our key went to the departed membership and the rejoined member (same `userId:deviceId` id in that mode) was credited with it; the deferred rotation never fired. Library-side, `FEEDBACK.md` items 24 and 25 — a fix shipped in the AAR of 2026-09-02, unverified on device |
+| Far end never decrypts us for a whole call after they left and rejoined, every local signal (`FrameEncryption` included) healthy — seen in `ROOM_STATE` | our key went to the departed membership and the rejoined member (same `userId:deviceId` id in that mode) was credited with it; the deferred rotation never fired. Library-side, `FEEDBACK.md` items 24 and 25 — a fix shipped in the AAR of 2026-09-02, unverified on device |
 | Swiping a long strip stutters, and video keeps arriving for tiles nobody has scrolled to | every tile composed however far away; or evicted tiles never reported `NotVisible` because their effect was cancelled with them |
 | A fling over the strip sends a burst of visible/not-visible flips and rebuilds renderers | no detach delay before reporting `NotVisible` |
 | Every tile recomposes many times a second in a large call | per-member audio levels reaching state unsampled |

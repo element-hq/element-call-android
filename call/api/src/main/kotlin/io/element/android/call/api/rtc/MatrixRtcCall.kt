@@ -29,29 +29,12 @@ interface MatrixRtcCall : AutoCloseable {
     /**
      * Who the RTC core currently considers joined to this slot, ourselves included.
      *
-     * This is the core's membership projection, not the media roster: it is built from the MSC4354
-     * sticky events in the room, so it is populated before - and independently of - anything being
-     * published.
-     *
-     * Known to under-report on the current library: see [memberCount], and item 7 in
-     * `libraries/rustrtc/FEEDBACK.md`. Prefer [memberCount] wherever a count is all that is needed.
+     * The core's membership projection, not the media roster, so it is populated before - and
+     * independently of - anything being published.
      */
     val members: StateFlow<List<MatrixRtcMembership>>
 
-    /**
-     * How many memberships the core counts in this slot, ourselves included.
-     *
-     * Answers the same question as `members.size`, but the core delivers the two differently, and
-     * that is why they can disagree. This one is a question we ask: the core counts the slot's
-     * memberships when called and returns a number, so it is right whenever it is read. [members]
-     * arrives instead on a subscription the core has to wake, and it does not wake it for the Element
-     * Call compat entry point - so [members] can sit empty for an entire call whose membership this
-     * tracks correctly. Only the subscription carries identities, so [members] remains the source for
-     * *who* is in the call, for as long as it reports anyone at all.
-     *
-     * Zero before the first reading, which on a call we have joined is a passing state and not a
-     * claim that the call is empty.
-     */
+    /** How many memberships the core counts in this slot, ourselves included: the size of [members]. */
     val memberCount: StateFlow<Int>
 
     /** Connect to the media transport the call was joined on. */
