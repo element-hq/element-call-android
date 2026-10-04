@@ -35,7 +35,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  *
  * Also unlike [AudioCapture], there is no mute: stopping is the only way to stop sending, because
  * the indicator light staying on while the UI says the camera is off is not a thing worth being
- * clever about. `MatrixRtcCall.setCameraEnabled` mutes the track at the transport instead.
+ * clever about. `MatrixRtcMediaSession.setCameraEnabled` mutes the track at the transport instead.
  *
  * [onFrame] receives a copy of every captured frame, for a self view. Called on a camera thread.
  */

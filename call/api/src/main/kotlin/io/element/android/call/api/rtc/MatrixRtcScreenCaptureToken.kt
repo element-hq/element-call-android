@@ -14,7 +14,7 @@ import android.content.Intent
  *
  * A wrapper around the result `Intent` of
  * `MediaProjectionManager.createScreenCaptureIntent()` rather than the `Intent` itself, so that
- * [MatrixRtcCall.setScreenShareEnabled] says what it wants in its own terms and a fake can satisfy
+ * [MatrixRtcMediaSession.setScreenShareEnabled] says what it wants in its own terms and a fake can satisfy
  * it without building a platform object.
  *
  * **Single use.** The platform spends it when the projection is claimed, so a token cannot be kept

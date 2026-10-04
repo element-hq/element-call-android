@@ -13,7 +13,7 @@ import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcTileKind
 import io.element.android.call.api.rtc.MatrixRtcTileRoster
 import io.element.android.call.api.rtc.id.UserId
-import io.element.android.call.test.FakeMatrixRtcCall
+import io.element.android.call.test.FakeMatrixRtcMediaSession
 import io.element.android.call.test.FakeMatrixRtcService
 
 /**
@@ -29,7 +29,7 @@ class ScriptedMatrixRtcSession(private val service: FakeMatrixRtcService) {
     private var detailOnly: Set<MatrixRtcTileId>? = null
 
     /** The connected call, once the controller has connected media. */
-    val call: FakeMatrixRtcCall
+    val call: FakeMatrixRtcMediaSession
         get() = checkNotNull(service.lastSession?.lastCall) { "No call connected yet" }
 
     /** The roster last pushed, before any window narrowed it. */

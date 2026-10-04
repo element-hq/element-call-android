@@ -26,7 +26,7 @@ class VideoConstraintsTest {
         val same = MatrixRtcVideoConstraints.live(widthPx = 320, heightPx = 240)
         val bigger = MatrixRtcVideoConstraints.live(widthPx = 1280, heightPx = 720)
 
-        // The de-duplication in RustMatrixRtcCall is a map lookup on this value, so value equality is
+        // The de-duplication in RustMatrixRtcMediaSession is a map lookup on this value, so value equality is
         // load-bearing rather than incidental.
         assertThat(first).isEqualTo(same)
         assertThat(first).isNotEqualTo(bigger)

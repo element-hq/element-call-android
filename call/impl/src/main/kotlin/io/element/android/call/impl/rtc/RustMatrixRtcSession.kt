@@ -10,8 +10,8 @@ package io.element.android.call.impl.rtc
 import android.content.Context
 import io.element.android.call.api.ElementCallDispatchers
 import io.element.android.call.api.matrix.ElementCallMatrixTransport
-import io.element.android.call.api.rtc.MatrixRtcCall
 import io.element.android.call.api.rtc.MatrixRtcLeaveReason
+import io.element.android.call.api.rtc.MatrixRtcMediaSession
 import io.element.android.call.api.rtc.MatrixRtcMembership
 import io.element.android.call.api.rtc.MatrixRtcSession
 import io.element.android.call.api.rtc.MatrixRtcTransport
@@ -62,7 +62,7 @@ internal class RustMatrixRtcSession(
     private val _members = MutableStateFlow(emptyList<MatrixRtcMembership>())
     override val members: StateFlow<List<MatrixRtcMembership>> = _members
 
-    private var call: RustMatrixRtcCall? = null
+    private var call: RustMatrixRtcMediaSession? = null
     private val hasLeft = AtomicBoolean(false)
 
     /**
@@ -134,7 +134,7 @@ internal class RustMatrixRtcSession(
         }
     }
 
-    override suspend fun connectMedia(transport: MatrixRtcTransport.LiveKit): Result<MatrixRtcCall> = runCatchingExceptions {
+    override suspend fun connectMedia(transport: MatrixRtcTransport.LiveKit): Result<MatrixRtcMediaSession> = runCatchingExceptions {
         call?.let { return@runCatchingExceptions it }
 
         val mediaSession = withContext(ffiDispatcher) {
@@ -154,8 +154,8 @@ internal class RustMatrixRtcSession(
         }
 
         // A child of the session scope, so leaving the session tears the media down with it.
-        val callScope = sessionScope.childScope(dispatchers.io, "MatrixRtcCall-$roomId-$slotId")
-        RustMatrixRtcCall(
+        val callScope = sessionScope.childScope(dispatchers.io, "MatrixRtcMediaSession-$roomId-$slotId")
+        RustMatrixRtcMediaSession(
             // The id the core minted at join time, which is also what the media roster reports us
             // under - so nothing here has to reconcile two spellings of ourselves.
             localMemberId = localMemberId,

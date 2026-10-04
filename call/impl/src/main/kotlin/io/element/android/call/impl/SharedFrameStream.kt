@@ -23,7 +23,7 @@ import java.util.concurrent.CopyOnWriteArrayList
  *
  * Two requirements meet here, and the ordinary tools satisfy one each.
  *
- * **One stream, however many tiles draw it.** `MatrixRtcCall.videoFrames` is cold and opens a
+ * **One stream, however many tiles draw it.** `MatrixRtcMediaSession.videoFrames` is cold and opens a
  * `videoStream` handle per collector; two handles on one track crashed the core inside
  * `VideoSinkWrapper::on_frame`. That is what `shareIn` was doing here.
  *

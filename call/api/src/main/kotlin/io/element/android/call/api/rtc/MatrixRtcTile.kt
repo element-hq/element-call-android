@@ -21,7 +21,7 @@ enum class MatrixRtcTileKind {
     SCREEN_SHARE,
     ;
 
-    /** The stream this kind of tile draws: what [MatrixRtcCall.videoFrames] and [MatrixRtcCall.setVideoConstraints] take. */
+    /** The stream this kind of tile draws: what [MatrixRtcMediaSession.videoFrames] and [MatrixRtcMediaSession.setVideoConstraints] take. */
     val videoStreamKind: MatrixRtcStreamKind
         get() = when (this) {
             PERSON -> MatrixRtcStreamKind.CAMERA

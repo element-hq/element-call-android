@@ -10,12 +10,12 @@ package io.element.android.call.impl.rtc
 import android.content.Context
 import io.element.android.call.api.ElementCallDispatchers
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
-import io.element.android.call.api.rtc.MatrixRtcCall
 import io.element.android.call.api.rtc.MatrixRtcCallEvent
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionDiagnostic
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcLocalState
+import io.element.android.call.api.rtc.MatrixRtcMediaSession
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
@@ -66,7 +66,7 @@ import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.roundToInt
 import kotlin.time.Duration.Companion.seconds
 
-internal class RustMatrixRtcCall(
+internal class RustMatrixRtcMediaSession(
     override val localMemberId: String,
     private val mediaSession: MediaSession,
     private val callScope: CoroutineScope,
@@ -78,7 +78,7 @@ internal class RustMatrixRtcCall(
      * collector's thread every decoded frame would be copied on the main one, thirty times a second.
      */
     private val dispatchers: ElementCallDispatchers,
-) : MatrixRtcCall {
+) : MatrixRtcMediaSession {
     private val _events = MutableSharedFlow<MatrixRtcCallEvent>(extraBufferCapacity = 32)
     override val events: SharedFlow<MatrixRtcCallEvent> = _events
 

@@ -743,7 +743,7 @@ class DefaultElementCallControllerTest {
     /**
      * Two tiles on one member must open one stream, not two.
      *
-     * `MatrixRtcCall.videoFrames` is cold and documents "collect it once per member; two collectors
+     * `MatrixRtcMediaSession.videoFrames` is cold and documents "collect it once per member; two collectors
      * means two streams". The call UI legitimately draws a member twice - spotlight and strip - so
      * the controller shares the flow. Getting this wrong is not a rendering glitch: two handles on
      * one track, with the second closing under the first, crashed the core inside

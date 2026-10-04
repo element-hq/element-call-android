@@ -52,7 +52,7 @@ class ElementCallTestPattern(
 
     /**
      * A cold stream at [framesPerSecond], for as long as it is collected. Each collector runs its own
-     * producer, as a cold `MatrixRtcCall.videoFrames` would.
+     * producer, as a cold `MatrixRtcMediaSession.videoFrames` would.
      */
     fun frames(): Flow<MatrixRtcVideoFrame> = flow {
         val frameDurationMs = MILLIS_PER_SECOND / framesPerSecond

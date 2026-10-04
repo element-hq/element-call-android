@@ -13,7 +13,7 @@ import io.element.android.call.api.rtc.MatrixRtcTileKind
 import io.element.android.call.api.rtc.MatrixRtcTileRef
 import io.element.android.call.api.rtc.MatrixRtcTileRoster
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
-import io.element.android.call.test.FakeMatrixRtcCall
+import io.element.android.call.test.FakeMatrixRtcMediaSession
 import io.element.android.call.test.scenario.MatrixRtcScenario
 import kotlin.math.roundToInt
 
@@ -27,7 +27,7 @@ internal object CallStageDump {
         source: String,
         hooks: CallStageTestHooks,
         roster: MatrixRtcTileRoster,
-        call: FakeMatrixRtcCall,
+        call: FakeMatrixRtcMediaSession,
     ): String {
         val layout = hooks.layout
         val offset = hooks.scrollOffset()
