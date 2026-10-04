@@ -50,7 +50,7 @@ interface ElementCallMatrixRoom {
     /**
      * Send a message-like room event with the given raw JSON content, encrypted like any other event in an
      * encrypted room. The core sends its MSC4075 notification this way when the membership is room state
-     * ([io.element.android.call.api.rtc.MatrixRtcElementCallCompat.STATE_EVENTS]), so this is what makes a
+     * ([io.element.android.call.api.rtc.MatrixRtcMembershipFormat.ROOM_STATE]), so this is what makes a
      * call ring; it also carries reactions and raised hands, and a raised hand is lowered by redacting the id
      * returned here.
      * @return the event id the homeserver assigned.

@@ -12,15 +12,19 @@ import io.element.android.call.api.rtc.id.UserId
 import kotlinx.coroutines.flow.StateFlow
 
 /**
- * A MatrixRTC session we have joined: one `(roomId, slotId)` pair.
+ * Our participation in a call, as the core's `RtcCall`: one `(roomId, slotId)` pair, joined with
+ * [MatrixRtcRoom.joinCall].
  *
  * Membership. Media is attached separately with [connectMedia], and what participants are actually
  * publishing belongs to the [MatrixRtcMediaSession] that returns - but [members] is available from the
  * moment we join, before there is any media at all.
  */
-interface MatrixRtcSession : AutoCloseable {
+interface MatrixRtcCall : AutoCloseable {
     val roomId: RoomId
     val slotId: String
+
+    /** Our own MSC4143 member id, minted by the core for this join. */
+    val memberId: String
 
     /**
      * Who the RTC core currently considers joined to this slot, ourselves included.
@@ -50,15 +54,11 @@ interface MatrixRtcSession : AutoCloseable {
      */
     val memberCount: StateFlow<Int>
 
-    /**
-     * Connect to the session's media transport.
-     *
-     * @param transport where to connect. Must be one the session was joined with.
-     */
-    suspend fun connectMedia(transport: MatrixRtcTransport.LiveKit): Result<MatrixRtcMediaSession>
+    /** Connect to the media transport the call was joined on. */
+    suspend fun connectMedia(): Result<MatrixRtcMediaSession>
 
     /**
-     * Leave the session, publishing a leave membership event.
+     * Leave the call, publishing a leave membership event.
      */
     suspend fun leave(reason: MatrixRtcLeaveReason? = null): Result<Unit>
 }
@@ -81,7 +81,7 @@ data class MatrixRtcMembership(
 )
 
 /**
- * Why we are leaving a session. [code] is the machine-readable MSC4143 reason.
+ * Why we are leaving a call. [code] is the machine-readable MSC4143 reason.
  */
 data class MatrixRtcLeaveReason(
     val code: String,

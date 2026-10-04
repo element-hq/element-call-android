@@ -10,8 +10,8 @@ package io.element.android.call.impl.rtc
 import com.google.common.truth.Truth.assertThat
 import io.element.android.call.api.matrix.ElementCallRoomStateEvent
 import io.element.android.call.api.matrix.ElementCallStickyEvent
-import io.element.android.call.api.rtc.MatrixRtcElementCallCompat
 import io.element.android.call.api.rtc.MatrixRtcEventTypes
+import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 import io.element.android.call.api.rtc.id.EventId
 import io.element.android.call.api.rtc.id.UserId
 import io.element.android.call.test.A_ROOM_ID
@@ -90,7 +90,7 @@ class RoomStateFeederTest {
         val manager = RecordingSessionManager()
         val stickyEvents = MutableStateFlow(listOf(aMemberStickyEvent()))
 
-        startFeeder(manager, stickyEvents, elementCallCompat = MatrixRtcElementCallCompat.STICKY_EVENTS)
+        startFeeder(manager, stickyEvents, membershipFormat = MatrixRtcMembershipFormat.STICKY2025)
 
         assertThat(manager.stickyStates).isEmpty()
         val (roomId, memberEvents, legacyStateEvents) = manager.memberships.single()
@@ -114,7 +114,7 @@ class RoomStateFeederTest {
             listOf(aMemberStickyEvent(memberId = "legacyMember", contentJson = legacyContent))
         )
 
-        startFeeder(manager, stickyEvents, elementCallCompat = MatrixRtcElementCallCompat.STICKY_EVENTS)
+        startFeeder(manager, stickyEvents, membershipFormat = MatrixRtcMembershipFormat.STICKY2025)
 
         assertThat(manager.memberships.single().second).hasSize(1)
     }
@@ -129,7 +129,7 @@ class RoomStateFeederTest {
         val manager = RecordingSessionManager()
         val stateEvents = MutableStateFlow(listOf(aMemberStateEvent()))
 
-        startFeeder(manager, stateEvents = stateEvents, elementCallCompat = MatrixRtcElementCallCompat.STATE_EVENTS)
+        startFeeder(manager, stateEvents = stateEvents, membershipFormat = MatrixRtcMembershipFormat.ROOM_STATE)
 
         assertThat(manager.stickyStates).isEmpty()
         val (roomId, memberEvents, legacyStateEvents) = manager.memberships.single()
@@ -155,7 +155,7 @@ class RoomStateFeederTest {
         val manager = RecordingSessionManager()
         val stateEvents = MutableStateFlow(emptyList<ElementCallRoomStateEvent>())
 
-        startFeeder(manager, stateEvents = stateEvents, elementCallCompat = MatrixRtcElementCallCompat.STATE_EVENTS)
+        startFeeder(manager, stateEvents = stateEvents, membershipFormat = MatrixRtcMembershipFormat.ROOM_STATE)
 
         assertThat(manager.memberships).isEmpty()
 
@@ -176,7 +176,7 @@ class RoomStateFeederTest {
         val manager = RecordingSessionManager()
         val stateEvents = MutableStateFlow(listOf(aMemberStateEvent(contentJson = "{}")))
 
-        startFeeder(manager, stateEvents = stateEvents, elementCallCompat = MatrixRtcElementCallCompat.STATE_EVENTS)
+        startFeeder(manager, stateEvents = stateEvents, membershipFormat = MatrixRtcMembershipFormat.ROOM_STATE)
 
         assertThat(manager.memberships.single().third.single().contentJson).isEqualTo("{}")
     }
@@ -193,7 +193,7 @@ class RoomStateFeederTest {
         val second = aMemberStateEvent(stateKey = "_@bob_B")
         val stateEvents = MutableStateFlow(listOf(first, second))
 
-        startFeeder(manager, stateEvents = stateEvents, elementCallCompat = MatrixRtcElementCallCompat.STATE_EVENTS)
+        startFeeder(manager, stateEvents = stateEvents, membershipFormat = MatrixRtcMembershipFormat.ROOM_STATE)
 
         stateEvents.value = listOf(second, first)
         runCurrent()
@@ -214,7 +214,7 @@ class RoomStateFeederTest {
             listOf(aMemberStateEvent(), aMemberStateEvent(stateKey = "").copy(eventType = "m.room.topic"))
         )
 
-        startFeeder(manager, stateEvents = stateEvents, elementCallCompat = MatrixRtcElementCallCompat.STATE_EVENTS)
+        startFeeder(manager, stateEvents = stateEvents, membershipFormat = MatrixRtcMembershipFormat.ROOM_STATE)
 
         assertThat(manager.memberships.single().third.map { it.stateKey }).containsExactly(A_STATE_KEY)
     }
@@ -230,7 +230,7 @@ class RoomStateFeederTest {
         val manager = RecordingSessionManager()
         val stateEvents = MutableStateFlow(listOf(aMemberStateEvent(timestampMs = null)))
 
-        startFeeder(manager, stateEvents = stateEvents, elementCallCompat = MatrixRtcElementCallCompat.STATE_EVENTS)
+        startFeeder(manager, stateEvents = stateEvents, membershipFormat = MatrixRtcMembershipFormat.ROOM_STATE)
 
         assertThat(manager.memberships.single().third.single().originServerTs).isEqualTo(0uL)
     }
@@ -249,7 +249,7 @@ class RoomStateFeederTest {
         startFeeder(
             manager,
             stateEvents = stateEvents,
-            elementCallCompat = MatrixRtcElementCallCompat.STATE_EVENTS,
+            membershipFormat = MatrixRtcMembershipFormat.ROOM_STATE,
             joinedMemberIds = emptyFlow(),
         )
 
@@ -271,7 +271,7 @@ class RoomStateFeederTest {
         startFeeder(
             manager,
             stateEvents = MutableStateFlow(listOf(aMemberStateEvent())),
-            elementCallCompat = MatrixRtcElementCallCompat.STATE_EVENTS,
+            membershipFormat = MatrixRtcMembershipFormat.ROOM_STATE,
             memberCount = memberCount,
         )
 
@@ -287,7 +287,7 @@ class RoomStateFeederTest {
      */
     @Test
     fun `the member count is published in every compatibility mode`() = runTest {
-        MatrixRtcElementCallCompat.entries.forEach { compat ->
+        MatrixRtcMembershipFormat.entries.forEach { compat ->
             val memberCount = MutableStateFlow(0)
 
             startFeeder(
@@ -295,7 +295,7 @@ class RoomStateFeederTest {
                 // Both sources supplied, so whichever one this mode reads has something to feed.
                 stickyEvents = MutableStateFlow(listOf(aMemberStickyEvent())),
                 stateEvents = MutableStateFlow(listOf(aMemberStateEvent())),
-                elementCallCompat = compat,
+                membershipFormat = compat,
                 memberCount = memberCount,
             )
 
@@ -316,7 +316,7 @@ class RoomStateFeederTest {
         startFeeder(
             manager,
             stateEvents = MutableStateFlow(listOf(aMemberStateEvent())),
-            elementCallCompat = MatrixRtcElementCallCompat.STATE_EVENTS,
+            membershipFormat = MatrixRtcMembershipFormat.ROOM_STATE,
             memberCount = memberCount,
         )
 
@@ -332,7 +332,7 @@ class RoomStateFeederTest {
         manager: RtcSessionManagerHandleInterface,
         stickyEvents: MutableStateFlow<List<ElementCallStickyEvent>> = MutableStateFlow(emptyList()),
         stateEvents: MutableStateFlow<List<ElementCallRoomStateEvent>> = MutableStateFlow(emptyList()),
-        elementCallCompat: MatrixRtcElementCallCompat = MatrixRtcElementCallCompat.OFF,
+        membershipFormat: MatrixRtcMembershipFormat = MatrixRtcMembershipFormat.CURRENT,
         joinedMemberIds: Flow<List<UserId>> = flowOf(listOf(A_USER_ID)),
         slotId: String? = A_SLOT_ID,
         memberCount: MutableStateFlow<Int> = MutableStateFlow(0),
@@ -346,7 +346,7 @@ class RoomStateFeederTest {
             ),
             ownUserId = A_USER_ID,
             scope = backgroundScope,
-            elementCallCompat = elementCallCompat,
+            membershipFormat = membershipFormat,
             slotId = slotId,
             memberCount = memberCount,
         ).apply {

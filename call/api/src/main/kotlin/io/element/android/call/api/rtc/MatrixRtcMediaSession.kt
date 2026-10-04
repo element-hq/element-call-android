@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
 
 /**
- * A live media connection for a joined [MatrixRtcSession].
+ * A live media connection for a joined [MatrixRtcCall].
  *
  * The RTC library owns the transport and hands us decoded frames; capture and playback are ours.
  * Audio is handled entirely internally: microphone frames are captured and published, and every
@@ -216,7 +216,7 @@ interface MatrixRtcMediaSession : AutoCloseable {
     suspend fun setScreenShareEnabled(enabled: Boolean, token: MatrixRtcScreenCaptureToken? = null): Result<Unit>
 
     /**
-     * Leave the transport. Does not leave the RTC session, see [MatrixRtcSession.leave].
+     * Leave the transport. Does not leave the RTC session, see [MatrixRtcCall.leave].
      */
     suspend fun disconnect(): Result<Unit>
 }

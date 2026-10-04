@@ -12,7 +12,11 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 ## Unreleased
 
-_Nothing yet._
+- The RTC API follows the core's room-first names: `MatrixRtcClient.room()` opens a `MatrixRtcRoom`, whose `joinCall()`
+  returns a `MatrixRtcCall` (was `MatrixRtcSession`), whose `connectMedia()` returns a `MatrixRtcMediaSession` (was
+  `MatrixRtcCall`). `ElementCallStack.Builder.rtcService` is `rtcClient`. `MatrixRtcTransport` is gone: the join picks it.
+- `ElementCallOptions.elementCallCompat` is `membershipFormat`, a `MatrixRtcMembershipFormat` (`CURRENT`, `STICKY2025`,
+  `ROOM_STATE`; were `OFF`, `STICKY_EVENTS`, `STATE_EVENTS`).
 
 ## 0.1.0-rc.6 - 2026-09-29
 

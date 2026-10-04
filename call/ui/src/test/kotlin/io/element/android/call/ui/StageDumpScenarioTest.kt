@@ -30,20 +30,19 @@ import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertWithMessage
 import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.rtc.MatrixRtcTileKind
-import io.element.android.call.api.rtc.MatrixRtcTransport
 import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.call.impl.ElementCallStack
 import io.element.android.call.test.FakeElementCallLifecycleListener
 import io.element.android.call.test.FakeElementCallMatrixTransport
 import io.element.android.call.test.FakeElementCallRoomContextProvider
-import io.element.android.call.test.FakeMatrixRtcService
+import io.element.android.call.test.FakeMatrixRtcClient
 import io.element.android.call.test.audio.FakeAudioFocus
 import io.element.android.call.test.audio.FakeCallAudioDeviceController
 import io.element.android.call.test.scenario.MatrixRtcScenario
 import io.element.android.call.test.scenario.ScenarioAction
 import io.element.android.call.test.scenario.ScenarioContent
 import io.element.android.call.test.scenario.ScenarioFrame
-import io.element.android.call.test.scenario.ScriptedMatrixRtcSession
+import io.element.android.call.test.scenario.ScriptedMatrixRtcCall
 import io.element.android.call.tests.testutils.robolectric.RobolectricTest
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -94,9 +93,9 @@ class StageDumpScenarioTest : RobolectricTest() {
             mainClock.autoAdvance = false
             val application = ApplicationProvider.getApplicationContext<Application>()
             shadowOf(application).grantPermissions(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA)
-            val service = FakeMatrixRtcService(transports = listOf(MatrixRtcTransport.LiveKit("https://sfu.example.org/jwt")))
+            val client = FakeMatrixRtcClient()
             val stack = ElementCallStack.Builder(application, FakeElementCallMatrixTransport())
-                .rtcService(service)
+                .rtcClient(client)
                 .audioDeviceController(FakeCallAudioDeviceController())
                 .audioFocus(FakeAudioFocus(requestAudioFocusResult = {}, releaseAudioFocusResult = {}))
                 .roomContext(FakeElementCallRoomContextProvider())
@@ -124,7 +123,7 @@ class StageDumpScenarioTest : RobolectricTest() {
             // Joining reads the room context with a timeout; the clock has no origin yet, so let it pass.
             mainClock.advanceTimeBy(JOIN_MS)
             settle(scheduler)
-            val session = ScriptedMatrixRtcSession(service)
+            val session = ScriptedMatrixRtcCall(client)
             session.start()
             settle(scheduler)
             chromeHeight = DEFAULT_HEIGHT - hooks.stageSize.height
@@ -151,7 +150,7 @@ class StageDumpScenarioTest : RobolectricTest() {
 
     private fun AndroidComposeUiTest<ComponentActivity>.apply(
         frame: ScenarioFrame,
-        session: ScriptedMatrixRtcSession,
+        session: ScriptedMatrixRtcCall,
         hooks: CallStageTestHooks,
         controller: io.element.android.call.api.ElementCallController,
         viewport: IntSize,

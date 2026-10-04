@@ -47,7 +47,7 @@ object MatrixRtcEventTypes {
     /**
      * Element Call's pre-MSC4354 membership, carried as a room state event rather than a sticky one.
      *
-     * Only meaningful in [MatrixRtcElementCallCompat.STATE_EVENTS]. Both spellings exist in the wild;
+     * Only meaningful in [MatrixRtcMembershipFormat.ROOM_STATE]. Both spellings exist in the wild;
      * the unstable one is what that generation actually publishes.
      */
     const val MEMBER_ELEMENT_CALL_STATE = "m.call.member"
