@@ -110,8 +110,8 @@ class ElementCallForegroundService : Service() {
      * action is part of the style rather than added: `CallStyle` insists on one, which is the right
      * insistence.
      *
-     * Re-posted by [followCall] whenever what it shows changes, so the mute button and the title
-     * follow the call rather than whatever they were when the service last started.
+     * Re-posted by [followCall] whenever what it shows changes, so the mute button, the title and the
+     * video flag follow the call rather than whatever they were when the service last started.
      */
     private fun buildNotification(content: NotificationContent, config: ElementCallNotificationConfig): Notification {
         val isMuted = content.isMuted
@@ -127,7 +127,7 @@ class ElementCallForegroundService : Service() {
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .setCategory(NotificationCompat.CATEGORY_CALL)
-            .setStyle(NotificationCompat.CallStyle.forOngoingCall(caller, hangUpIntent))
+            .setStyle(NotificationCompat.CallStyle.forOngoingCall(caller, hangUpIntent).setIsVideo(content.isVideo))
             .addPerson(caller)
             // Tapping it comes back to the call rather than doing nothing. The host says where the
             // call is drawn; by default its launch Activity, which is where a host that draws the call
@@ -244,11 +244,13 @@ class ElementCallForegroundService : Service() {
 internal data class NotificationContent(
     val roomName: String?,
     val isMuted: Boolean,
+    val isVideo: Boolean,
 )
 
 internal fun ElementCallSnapshot?.notificationContent() = NotificationContent(
     roomName = this?.roomName,
     isMuted = this?.isMicrophoneMuted == true,
+    isVideo = this?.hasVideo == true,
 )
 
 /** What the notification shows, each time it changes after the one already posted. */

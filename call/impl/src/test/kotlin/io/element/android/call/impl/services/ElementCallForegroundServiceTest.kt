@@ -24,9 +24,9 @@ class ElementCallForegroundServiceTest {
 
         state.notificationContentChanges().test {
             state.value = aCall(isMicrophoneMuted = true)
-            assertThat(awaitItem()).isEqualTo(NotificationContent(roomName = A_ROOM_NAME, isMuted = true))
+            assertThat(awaitItem()).isEqualTo(aNotificationContent(isMuted = true))
             state.value = aCall(isMicrophoneMuted = false)
-            assertThat(awaitItem()).isEqualTo(NotificationContent(roomName = A_ROOM_NAME, isMuted = false))
+            assertThat(awaitItem()).isEqualTo(aNotificationContent())
         }
     }
 
@@ -36,7 +36,17 @@ class ElementCallForegroundServiceTest {
 
         state.notificationContentChanges().test {
             state.value = aCall()
-            assertThat(awaitItem()).isEqualTo(NotificationContent(roomName = A_ROOM_NAME, isMuted = false))
+            assertThat(awaitItem()).isEqualTo(aNotificationContent())
+        }
+    }
+
+    @Test
+    fun `turning the camera on re-posts the notification as a video call`() = runTest {
+        val state = MutableStateFlow<ElementCallSnapshot?>(aCall())
+
+        state.notificationContentChanges().test {
+            state.value = aCall(isCameraEnabled = true)
+            assertThat(awaitItem()).isEqualTo(aNotificationContent(isVideo = true))
         }
     }
 
@@ -54,12 +64,23 @@ class ElementCallForegroundServiceTest {
     private fun aCall(
         roomName: String? = A_ROOM_NAME,
         isMicrophoneMuted: Boolean = false,
+        isCameraEnabled: Boolean = false,
         connection: ElementCallConnection = ElementCallConnection.Connected,
     ) = ElementCallSnapshot(
         callData = ElementCallData(roomId = A_ROOM_ID, isAudioCall = false),
         connection = connection,
         roomName = roomName,
         isMicrophoneMuted = isMicrophoneMuted,
+        isCameraEnabled = isCameraEnabled,
+    )
+
+    private fun aNotificationContent(
+        isMuted: Boolean = false,
+        isVideo: Boolean = false,
+    ) = NotificationContent(
+        roomName = A_ROOM_NAME,
+        isMuted = isMuted,
+        isVideo = isVideo,
     )
 }
 
