@@ -14,6 +14,7 @@ import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallOptions
 import io.element.android.call.api.ElementCallRoomContext
+import io.element.android.call.api.ElementCallWindowRect
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
 import io.element.android.call.api.rtc.MatrixRtcCallEvent
 import io.element.android.call.api.rtc.MatrixRtcCallIntent
@@ -1113,6 +1114,22 @@ class DefaultElementCallControllerTest {
 
         assertThat(controller.isInPictureInPicture.value).isFalse()
         assertThat(controller.state.value?.isMaximized).isTrue()
+    }
+
+    /**
+     * The window keeps the shape it was entered with: in it nothing draws the tile, and the screen
+     * going away reports null, which would let the next params update reset the window's shape.
+     */
+    @Test
+    fun `the picture-in-picture source is frozen while in picture-in-picture`() = runTest {
+        val controller = createController(rtcClient = FakeMatrixRtcClient())
+        val tile = ElementCallWindowRect(left = 0, top = 100, right = 400, bottom = 400)
+        controller.setPictureInPictureSource(tile)
+
+        controller.setInPictureInPicture(true)
+        controller.setPictureInPictureSource(null)
+
+        assertThat(controller.pictureInPictureSource.value).isEqualTo(tile)
     }
 
     /**

@@ -152,6 +152,10 @@ internal fun HeroSpotlight(
             ReportLiveToHooks(tile.tileId, isLive = isShown)
             val appearance = if (isFullscreen) CallTileAppearance.Fullscreen else CallTileAppearance.Spotlight
             val fit by animateFloatAsState(targetValue = appearance.fitFor(tile), animationSpec = FIT_SPEC, label = "heroFit")
+            // Only the shown page: a neighbour kept composed would report a place off to the side.
+            val pictureInPictureSource = pictureInPictureSourceModifier(isShown && tile.tileId == state.pictureInPictureTileId) {
+                state.eventSink(ElementCallScreenEvent.SetPictureInPictureSource(it))
+            }
             CallTile(
                 tile = tile,
                 videoFrames = state.videoFrames[tile.tileId],
@@ -169,7 +173,8 @@ internal fun HeroSpotlight(
                         onLongClick = { state.eventSink(ElementCallScreenEvent.ToggleTileStats) },
                         indication = null,
                         interactionSource = remember { MutableInteractionSource() },
-                    ),
+                    )
+                    .then(pictureInPictureSource),
             )
         }
         if (heroIds.size > 1 && !isFullscreen) {

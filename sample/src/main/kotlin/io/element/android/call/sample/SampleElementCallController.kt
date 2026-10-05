@@ -12,6 +12,7 @@ import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.ElementCallSnapshot
+import io.element.android.call.api.ElementCallWindowRect
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
@@ -65,6 +66,21 @@ class SampleElementCallController(
     override fun setInPictureInPicture(isInPictureInPicture: Boolean) {
         _isInPictureInPicture.value = isInPictureInPicture
         if (!isInPictureInPicture && _state.value != null) setMaximized(true)
+    }
+
+    private val _pictureInPictureSource = MutableStateFlow<ElementCallWindowRect?>(null)
+    override val pictureInPictureSource: StateFlow<ElementCallWindowRect?> = _pictureInPictureSource.asStateFlow()
+
+    // Frozen in the window, as the real controller does, so the sample's window keeps its shape.
+    override fun setPictureInPictureSource(source: ElementCallWindowRect?) {
+        if (!_isInPictureInPicture.value) _pictureInPictureSource.value = source
+    }
+
+    private val _pictureInPictureEntry = MutableStateFlow<ElementCallWindowRect?>(null)
+    override val pictureInPictureEntry: StateFlow<ElementCallWindowRect?> = _pictureInPictureEntry.asStateFlow()
+
+    override fun setPictureInPictureEntry(entry: ElementCallWindowRect?) {
+        _pictureInPictureEntry.value = entry
     }
 
     override fun startCall(callData: ElementCallData) {

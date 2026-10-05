@@ -377,6 +377,7 @@ internal fun CallStage(
                 stats = state.tileStats(tile, slot.rect),
                 onLongPress = { state.eventSink(ElementCallScreenEvent.ToggleTileStats) },
                 traversalIndex = if (slot.isSticky) 0f else 1f + (gridIndex[tile.tileId] ?: gridTileIds.size),
+                isPictureInPictureSource = tile.tileId == state.pictureInPictureTileId,
                 eventSink = state.eventSink,
             )
         }
@@ -526,8 +527,13 @@ private fun PlacedTile(
     stats: TileStats?,
     onLongPress: () -> Unit,
     traversalIndex: Float,
+    /** Whether this is the tile picture-in-picture would show, which reports where it is. */
+    isPictureInPictureSource: Boolean,
     eventSink: (ElementCallScreenEvent) -> Unit,
 ) {
+    val pictureInPictureSource = pictureInPictureSourceModifier(isPictureInPictureSource) {
+        eventSink(ElementCallScreenEvent.SetPictureInPictureSource(it))
+    }
     // Zero on the first composition of a member who has just joined, so they grow into place rather
     // than being there abruptly. Not under inspection, where the animation never runs.
     val isInspecting = LocalInspectionMode.current
@@ -636,7 +642,8 @@ private fun PlacedTile(
                 onLongClick = onLongPress,
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() },
-            ),
+            )
+            .then(pictureInPictureSource),
     )
 }
 

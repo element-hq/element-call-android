@@ -78,13 +78,23 @@ cd element-x-android
 or put `elementCallAndroidDir=/abs/path/element-call-android` in `~/.gradle/gradle.properties`, which never reaches
 git. Gradle prints `Note: element-call-android from <path> (composite build)`.
 
-Layer 1 composes with layer 2 automatically: the included build carries its own `rtc/local`, so the core Element X
-runs is whatever file is there.
+**Layer 1 does not come with it on its own.** The core is an external dependency, not a project, and Gradle
+resolves a host's external dependencies with the host's repositories only: the Ivy repository over `rtc/local` in
+this repository's `settings.gradle.kts` is never consulted. Without more, Element X resolves
+`matrix-rtc-android:<MATRIX_RTC_VERSION>` from the core's GitHub release. When `rtc/local` holds an unreleased core
+under the same version, that compiles, since the library is compiled here against `rtc/local`, and fails at run
+time on the first class the release lacks (`NoClassDefFoundError: org.matrix.rtc.MatrixBackend` on the room-first
+migration). Unit tests in Element X do not catch it; a call does. So under the property, Element X's core
+repository points at this checkout's `rtc/local` instead of the release, and the core Element X runs is whatever
+file is there.
+
+**Check which core is in the APK:**
+`unzip -p app-gplay-arm64-v8a-debug.apk '*.dex' | LC_ALL=C grep -a -o 'Lorg/matrix/rtc/<a class only the new core has>;'`.
 
 **Switch back:** drop the property.
 
-**Until Element X's settings carry the property** (that lands with the second Element X pull request of the plan),
-the same effect is obtained by adding this to Element X's `settings.gradle.kts` locally, without committing it:
+**Until Element X's settings carry the property** (`feature/valere/native_call_ui`), the same effect needs two
+local, uncommitted changes to Element X's `settings.gradle.kts`. First, the composite build:
 
 ```kotlin
 includeBuild("/abs/path/element-call-android") {
@@ -99,6 +109,18 @@ includeBuild("/abs/path/element-call-android") {
 ```
 
 The project names (`api`, `impl`) differ from the artifact ids, which is why every substitution is explicit.
+
+Second, the core: in `dependencyResolutionManagement`, point the `matrix-rust-rtc` Ivy repository at the file
+rather than the release:
+
+```kotlin
+ivy {
+    url = File("/abs/path/element-call-android/rtc/local").toURI()
+    patternLayout { artifact("matrixrtc-release.[ext]") }
+    metadataSources { artifact() }
+    content { includeModule("io.element.android", "matrix-rtc-android") }
+}
+```
 
 ## Layer 3: the library as an AAR in Element X
 
@@ -135,6 +157,7 @@ Both were learned the hard way in the spike.
    `.gitignore` covers `rtc/local/*.aar` and `checkouts/`; `tools/quality/check.sh` refuses a tracked `.aar`
    and a tracked `elementCallAndroidDir` or `elementCallLocalVersion`.
 2. **Confirm which layer is live before debugging.** A stale AAR that a file check silently picked up cost a day
-   once. Compare checksums (layer 1), look for the composite note in the Gradle output (layer 2), or check the
+   once. Compare checksums (layer 1), look for the composite note in the Gradle output and the core's classes in
+   the APK (layer 2; the note alone was there on a build that shipped the released core), or check the
    resolved version with `./gradlew :app:dependencies --configuration gplayDebugRuntimeClasspath | grep element-call`
    (layer 3), before reading logcat.

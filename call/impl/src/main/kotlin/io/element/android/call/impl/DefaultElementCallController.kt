@@ -14,6 +14,7 @@ import io.element.android.call.api.ElementCallLifecycleListener
 import io.element.android.call.api.ElementCallOptions
 import io.element.android.call.api.ElementCallRoomContextProvider
 import io.element.android.call.api.ElementCallSnapshot
+import io.element.android.call.api.ElementCallWindowRect
 import io.element.android.call.api.audio.AudioFocus
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.audio.CallAudioDeviceController
@@ -111,6 +112,14 @@ internal class DefaultElementCallController(
 
     override val isInPictureInPicture: StateFlow<Boolean> = _isInPictureInPicture.asStateFlow()
 
+    private val _pictureInPictureSource = MutableStateFlow<ElementCallWindowRect?>(null)
+
+    override val pictureInPictureSource: StateFlow<ElementCallWindowRect?> = _pictureInPictureSource.asStateFlow()
+
+    private val _pictureInPictureEntry = MutableStateFlow<ElementCallWindowRect?>(null)
+
+    override val pictureInPictureEntry: StateFlow<ElementCallWindowRect?> = _pictureInPictureEntry.asStateFlow()
+
     init {
         // Keeps the audio layer told whether the phone might be at somebody's ear.
         //
@@ -150,6 +159,17 @@ internal class DefaultElementCallController(
         if (!isInPictureInPicture && _state.value != null) {
             setMaximized(true)
         }
+    }
+
+    override fun setPictureInPictureSource(source: ElementCallWindowRect?) {
+        // In the window nothing draws the tile, so the screen going away reports null; taking it
+        // would let the next params update reset the window to the system's default shape.
+        if (_isInPictureInPicture.value) return
+        _pictureInPictureSource.value = source
+    }
+
+    override fun setPictureInPictureEntry(entry: ElementCallWindowRect?) {
+        _pictureInPictureEntry.value = entry
     }
 
     /**
@@ -663,6 +683,8 @@ internal class DefaultElementCallController(
             // that no longer exist.
             composedTiles = emptySet()
             detailWindow = null
+            _pictureInPictureSource.value = null
+            _pictureInPictureEntry.value = null
             _state.value = null
         }
 

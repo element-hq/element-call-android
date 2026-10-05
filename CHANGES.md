@@ -22,6 +22,15 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
   one included. New: `timelineEvents(types)`, `redactions()` and `relations(...)`.
   `ElementCallEventEncryptionInfo.isSenderCrossSigned` is nullable: null when the client cannot say.
 - `ElementCallStack.start()` is gone: the core subscribes on its own once a room opens. Drop the call.
+- `ElementCallController` gains `pictureInPictureSource` and `setPictureInPictureSource(ElementCallWindowRect?)`: where
+  the tile picture-in-picture shows is drawn, which the screen reports and `ElementCallPictureInPicture` turns into the
+  window's aspect ratio and source rect hint, so leaving the app shrinks that tile instead of showing the app icon and
+  a stretched full screen. A controller of the host's own must supply both. `ElementCallFloatingTile` takes an
+  optional `onPictureInPictureSourceChange`.
+- `ElementCallController` gains `pictureInPictureEntry` and `setPictureInPictureEntry(ElementCallWindowRect?)`: the
+  rectangle the system is about to shrink into the window, where `ElementCallOverlay` draws the window's content on the
+  way in. Set from Android 15's `isTransitioningToPip`, and on Android 12 to 14 from
+  `ElementCallPictureInPicture.onUserLeaveHint`, which a host now calls on every version, not only below 12.
 
 ## 0.1.0-rc.6 - 2026-09-29
 

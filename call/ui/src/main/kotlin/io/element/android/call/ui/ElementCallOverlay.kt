@@ -33,23 +33,32 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.round
 import androidx.core.content.ContextCompat
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.ElementCallSnapshot
+import io.element.android.call.api.ElementCallWindowRect
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
@@ -172,6 +181,33 @@ private fun CallOverContent(
         ElementCallPictureInPictureContent(call = current, videoFrames = controller::videoFrames, spotlightId = spotlightMemory.spotlightId)
     } else {
         CallInApp(controller = controller, current = current, spotlightMemory = spotlightMemory)
+        // On the way into the window: the system shrinks this rectangle of the screen into it, so it
+        // shows what the window will rather than the layout around the tile. Gone once in the window,
+        // or on coming back if the way out ended somewhere else.
+        val entry = controller.pictureInPictureEntry.collectAsState().value
+        if (entry != null) {
+            AtWindowRect(rect = entry) {
+                ElementCallPictureInPictureContent(call = current, videoFrames = controller::videoFrames, spotlightId = spotlightMemory.spotlightId)
+            }
+        }
+    }
+}
+
+/** [content] at exactly [rect] of the window, wherever this is composed. */
+@Composable
+private fun AtWindowRect(rect: ElementCallWindowRect, content: @Composable () -> Unit) {
+    var origin by remember { mutableStateOf(IntOffset.Zero) }
+    Box(modifier = Modifier.fillMaxSize().onGloballyPositioned { origin = it.positionInWindow().round() }) {
+        Box(
+            modifier = Modifier
+                .offset { IntOffset(rect.left - origin.x, rect.top - origin.y) }
+                .layout { measurable, _ ->
+                    val placeable = measurable.measure(Constraints.fixed(rect.width, rect.height))
+                    layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+                },
+        ) {
+            content()
+        }
     }
 }
 
@@ -294,6 +330,7 @@ private fun CallInApp(
         videoFrames = controller::videoFrames,
         spotlightId = spotlightMemory.spotlightId,
         onClick = { controller.setMaximized(true) },
+        onPictureInPictureSourceChange = controller::setPictureInPictureSource,
     )
 
     // The stage counts as mounted until its exit animation has finished, see UnmountedStageWindow.
@@ -333,6 +370,7 @@ private fun FloatingCall(
     videoFrames: (memberId: String, kind: MatrixRtcStreamKind) -> Flow<MatrixRtcVideoFrame>,
     spotlightId: MatrixRtcTileId?,
     onClick: () -> Unit,
+    onPictureInPictureSourceChange: (ElementCallWindowRect?) -> Unit,
 ) {
     AnimatedVisibility(
         visible = isVisible,
@@ -345,6 +383,8 @@ private fun FloatingCall(
             onClick = onClick,
             modifier = Modifier.systemBarsPadding(),
             spotlightId = spotlightId,
+            // Not while fading out on a maximise: the screen reports from then on.
+            onPictureInPictureSourceChange = onPictureInPictureSourceChange.takeIf { isVisible },
         )
     }
 }

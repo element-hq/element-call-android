@@ -44,6 +44,27 @@ interface ElementCallController {
     fun setInPictureInPicture(isInPictureInPicture: Boolean)
 
     /**
+     * Where the tile the floating window will show is drawn in the app, or null when it is not on
+     * screen. The window takes its shape and its way in from it, so that leaving the app shrinks
+     * that tile rather than the whole screen. Frozen while in picture-in-picture, where nothing
+     * draws the tile and the window must keep its shape.
+     */
+    val pictureInPictureSource: StateFlow<ElementCallWindowRect?>
+
+    /** Sent by the screen, which is the only thing that knows where the tile is. See [pictureInPictureSource]. */
+    fun setPictureInPictureSource(source: ElementCallWindowRect?)
+
+    /**
+     * Where the system is about to shrink the app from into the floating window, while it is on its
+     * way in, and null otherwise. The screen draws the window's content there, so that what shrinks
+     * is what the window shows rather than the layout around the tile.
+     */
+    val pictureInPictureEntry: StateFlow<ElementCallWindowRect?>
+
+    /** Sent by `ElementCallPictureInPicture`, which is told when the app is leaving. See [pictureInPictureEntry]. */
+    fun setPictureInPictureEntry(entry: ElementCallWindowRect?)
+
+    /**
      * Begin a call. Does nothing if one is already running, including for the same room.
      *
      * Nothing happens beyond [ElementCallConnection.RequestingPermission] until the host answers with

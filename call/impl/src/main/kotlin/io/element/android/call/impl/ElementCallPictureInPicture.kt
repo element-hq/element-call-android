@@ -12,14 +12,19 @@ import android.app.PictureInPictureParams
 import android.app.RemoteAction
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Rect
 import android.graphics.drawable.Icon
 import android.os.Build
+import android.util.Rational
+import android.util.Size
 import androidx.activity.ComponentActivity
 import androidx.annotation.RequiresApi
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import io.element.android.call.api.ElementCallController
+import io.element.android.call.api.ElementCallWindowRect
 import io.element.android.call.impl.receivers.ElementCallActionIntents
 import io.element.android.call.impl.util.runCatchingExceptions
 import kotlinx.coroutines.flow.combine
@@ -29,6 +34,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import kotlin.math.roundToInt
 
 /**
  * Follows a full-screen call out of the app as a floating window, from the host's Activity.
@@ -62,11 +68,16 @@ object ElementCallPictureInPicture {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             activity.lifecycleScope.launch {
                 activity.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                    combine(controller.shouldEnterPictureInPicture, controller.state.map { it?.isMicrophoneMuted }, ::Pair)
+                    combine(
+                        controller.shouldEnterPictureInPicture,
+                        controller.state.map { it?.isMicrophoneMuted },
+                        controller.pictureInPictureSource,
+                        ::Triple,
+                    )
                         .distinctUntilChanged()
-                        .collect { (shouldEnter, isMuted) ->
+                        .collect { (shouldEnter, isMuted, source) ->
                             runCatchingExceptions {
-                                activity.setPictureInPictureParams(pictureInPictureParams(activity, shouldEnter, isMuted))
+                                activity.setPictureInPictureParams(pictureInPictureParams(activity, shouldEnter, isMuted, source))
                             }.onFailure { Timber.w(it, "ElementCall: cannot set picture-in-picture params") }
                         }
                 }
@@ -92,34 +103,136 @@ object ElementCallPictureInPicture {
         }
         activity.addOnPictureInPictureModeChangedListener { info ->
             Timber.d("ElementCall: in picture-in-picture: ${info.isInPictureInPictureMode}")
+            // In this order, so the frame that drops the entry is already the window's content.
             controller.setInPictureInPicture(info.isInPictureInPictureMode)
+            controller.setPictureInPictureEntry(null)
         }
+        // Android 15 says the window is coming before the system shows its way in: time to draw the
+        // window's content where the way in starts from.
+        activity.addOnPictureInPictureUiStateChangedListener { uiState ->
+            if (uiState.isTransitioningToPip) showEntry(activity, controller)
+        }
+        // A way out that did not end in the window - a dialog of our own, Recents left again - must
+        // not keep the window's content over the call.
+        activity.lifecycle.addObserver(
+            LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) controller.setPictureInPictureEntry(null)
+            }
+        )
     }
 
     /**
-     * The pre-S path into picture-in-picture. Call from the Activity's `onUserLeaveHint()` override.
+     * Call from the Activity's `onUserLeaveHint()` override.
      *
-     * Deliberately a no-op on S and above: `setAutoEnterEnabled` already covers every way out of the app
-     * there, and entering here as well would do it twice.
+     * Before S, the path into picture-in-picture. From S, `setAutoEnterEnabled` already covers every way
+     * out of the app, and entering here as well would do it twice; on S to U this only draws the window's
+     * content where the way in starts from, the closest those versions come to Android 15's notice
+     * that the window is coming. It can lose the race with the system's own animation, and it is also
+     * called for ways out that end in no window (another Activity of ours), which the next resume undoes.
      */
     fun onUserLeaveHint(activity: Activity, controller: ElementCallController) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM && activity.supportsPictureInPicture()) {
+                showEntry(activity, controller)
+            }
+            return
+        }
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         if (!controller.shouldEnterPictureInPicture.value) return
         if (!activity.supportsPictureInPicture()) return
-        val params = pictureInPictureParams(activity, shouldEnter = true, isMuted = controller.state.value?.isMicrophoneMuted)
+        val params = pictureInPictureParams(
+            activity = activity,
+            shouldEnter = true,
+            isMuted = controller.state.value?.isMicrophoneMuted,
+            source = controller.pictureInPictureSource.value,
+        )
         runCatchingExceptions { activity.enterPictureInPictureMode(params) }
             .onFailure { Timber.w(it, "ElementCall: cannot enter picture-in-picture") }
     }
 
-    /** [isMuted] is null without a call, and then the window carries no actions. */
+    /**
+     * Have the screen draw the window's content over the rectangle the system is about to shrink, so
+     * the way in shows what the window will, not the layout around the tile.
+     */
+    internal fun showEntry(activity: Activity, controller: ElementCallController) {
+        if (!controller.shouldEnterPictureInPicture.value || controller.isInPictureInPicture.value) return
+        val tile = controller.pictureInPictureSource.value ?: return
+        val entry = sourceRectHint(activity, tile) ?: return
+        Timber.d("ElementCall: drawing the picture-in-picture content at $entry on the way in")
+        controller.setPictureInPictureEntry(entry)
+    }
+
+    /**
+     * [isMuted] is null without a call, and then the window carries no actions.
+     *
+     * [source] is where the tile the window will show is drawn. Without it the system knows neither
+     * the window's shape nor what in the screen becomes the window, so it covers the way in with the
+     * app's icon and then squeezes the last full-screen frame into a window of its default shape
+     * until the app draws again. With it the window has the tile's shape, and the system crops the
+     * screen down onto the tile, which is already what the window will show.
+     *
+     * The hint is the tile grown to fill the screen, not the tile: Android 14 ignores a hint smaller
+     * than the window it lands in (it will not scale up), and a grid tile is about half the screen's
+     * width, the size the window opens at on a phone.
+     */
     @RequiresApi(Build.VERSION_CODES.O)
-    internal fun pictureInPictureParams(activity: Activity, shouldEnter: Boolean, isMuted: Boolean?): PictureInPictureParams {
+    internal fun pictureInPictureParams(
+        activity: Activity,
+        shouldEnter: Boolean,
+        isMuted: Boolean?,
+        source: ElementCallWindowRect? = null,
+    ): PictureInPictureParams {
         val actions = if (isMuted == null) emptyList() else listOf(microphoneAction(activity, isMuted), hangUpAction(activity))
+        val tile = source?.takeIf { isMuted != null && it.width > 0 && it.height > 0 }
         return PictureInPictureParams.Builder()
             .setActions(actions.take(activity.maxNumPictureInPictureActions))
             .apply { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) setAutoEnterEnabled(shouldEnter) }
+            .apply {
+                if (tile != null) {
+                    setAspectRatio(tile.aspectRatio())
+                    sourceRectHint(activity, tile)?.let { setSourceRectHint(Rect(it.left, it.top, it.right, it.bottom)) }
+                }
+            }
             .build()
     }
+
+    /**
+     * What the system shrinks into the window: the tile grown to the largest rectangle of its shape
+     * that fits the window, centred on it as far as the window's edges allow. Null for a tile not of a
+     * shape a window can take, or not all on screen: the system ignores such a hint and falls back to
+     * the icon, which is no worse than none.
+     */
+    internal fun sourceRectHint(activity: Activity, tile: ElementCallWindowRect): ElementCallWindowRect? {
+        val window = activity.windowSize() ?: return null
+        if (tile.width <= 0 || tile.height <= 0) return null
+        if (tile.aspectRatio() != Rational(tile.width, tile.height) || !tile.isWithin(window)) return null
+        val scale = minOf(window.width.toFloat() / tile.width, window.height.toFloat() / tile.height)
+        val width = (tile.width * scale).roundToInt().coerceAtMost(window.width)
+        val height = (tile.height * scale).roundToInt().coerceAtMost(window.height)
+        val left = ((tile.left + tile.right - width) / 2).coerceIn(0, window.width - width)
+        val top = ((tile.top + tile.bottom - height) / 2).coerceIn(0, window.height - height)
+        return ElementCallWindowRect(left = left, top = top, right = left + width, bottom = top + height)
+    }
+
+    /** The tile's shape, within what the system accepts for a window (it refuses the params otherwise). */
+    private fun ElementCallWindowRect.aspectRatio(): Rational {
+        val ratio = Rational(width, height)
+        return when {
+            ratio > MAX_ASPECT_RATIO -> MAX_ASPECT_RATIO
+            ratio < MIN_ASPECT_RATIO -> MIN_ASPECT_RATIO
+            else -> ratio
+        }
+    }
+
+    private fun Activity.windowSize(): Size? =
+        window?.decorView?.let { Size(it.width, it.height) }?.takeIf { it.width > 0 && it.height > 0 }
+
+    private fun ElementCallWindowRect.isWithin(window: Size): Boolean =
+        left >= 0 && top >= 0 && right <= window.width && bottom <= window.height
+
+    // android.R.dimen.config_pictureInPictureMin/MaxAspectRatio's defaults, which the platform does not expose.
+    private val MAX_ASPECT_RATIO = Rational(239, 100)
+    private val MIN_ASPECT_RATIO = Rational(100, 239)
 
     @RequiresApi(Build.VERSION_CODES.O)
     private fun microphoneAction(context: Context, isMuted: Boolean): RemoteAction {
