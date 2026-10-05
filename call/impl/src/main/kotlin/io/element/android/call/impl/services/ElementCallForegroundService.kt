@@ -19,6 +19,7 @@ import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.PendingIntentCompat
@@ -110,8 +111,8 @@ class ElementCallForegroundService : Service() {
      * action is part of the style rather than added: `CallStyle` insists on one, which is the right
      * insistence.
      *
-     * Re-posted by [followCall] whenever what it shows changes, so the mute button and the title
-     * follow the call rather than whatever they were when the service last started.
+     * Re-posted by [followCall] whenever what it shows changes, so the mute button, the title and the
+     * duration follow the call rather than whatever they were when the service last started.
      */
     private fun buildNotification(content: NotificationContent, config: ElementCallNotificationConfig): Notification {
         val isMuted = content.isMuted
@@ -129,6 +130,13 @@ class ElementCallForegroundService : Service() {
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setStyle(NotificationCompat.CallStyle.forOngoingCall(caller, hangUpIntent))
             .addPerson(caller)
+            // The duration, from when media connected. `setWhen` takes wall-clock time, the snapshot elapsed realtime.
+            .apply {
+                val connectedAtWallMs = content.connectedAtElapsedMs?.let { System.currentTimeMillis() - (SystemClock.elapsedRealtime() - it) }
+                setShowWhen(connectedAtWallMs != null)
+                setUsesChronometer(connectedAtWallMs != null)
+                connectedAtWallMs?.let(::setWhen)
+            }
             // Tapping it comes back to the call rather than doing nothing. The host says where the
             // call is drawn; by default its launch Activity, which is where a host that draws the call
             // in its main Activity wants to land.
@@ -244,11 +252,13 @@ class ElementCallForegroundService : Service() {
 internal data class NotificationContent(
     val roomName: String?,
     val isMuted: Boolean,
+    val connectedAtElapsedMs: Long?,
 )
 
 internal fun ElementCallSnapshot?.notificationContent() = NotificationContent(
     roomName = this?.roomName,
     isMuted = this?.isMicrophoneMuted == true,
+    connectedAtElapsedMs = this?.connectedAtElapsedMs,
 )
 
 /** What the notification shows, each time it changes after the one already posted. */
