@@ -297,6 +297,7 @@ private fun Int.toCallAudioDeviceType(): CallAudioDeviceType? = when (this) {
     AudioDeviceInfo.TYPE_USB_DEVICE -> CallAudioDeviceType.USB_DEVICE
     AudioDeviceInfo.TYPE_USB_ACCESSORY -> CallAudioDeviceType.USB_ACCESSORY
     AudioDeviceInfo.TYPE_WIRED_HEADSET -> CallAudioDeviceType.WIRED_HEADSET
+    AudioDeviceInfo.TYPE_LINE_ANALOG,
     AudioDeviceInfo.TYPE_WIRED_HEADPHONES -> CallAudioDeviceType.WIRED_HEADPHONES
     AudioDeviceInfo.TYPE_BUILTIN_EARPIECE -> CallAudioDeviceType.EARPIECE
     AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> CallAudioDeviceType.SPEAKER
