@@ -284,6 +284,8 @@ private fun AudioDeviceInfo.toCallAudioDevice(): CallAudioDevice? {
 
 /** Null for anything a call cannot sensibly come out of, which is what filters the raw device list. */
 private fun Int.toCallAudioDeviceType(): CallAudioDeviceType? = when (this) {
+    AudioDeviceInfo.TYPE_BLE_HEADSET,
+    AudioDeviceInfo.TYPE_BLE_SPEAKER,
     AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> CallAudioDeviceType.BLUETOOTH
     AudioDeviceInfo.TYPE_USB_HEADSET -> CallAudioDeviceType.USB_HEADSET
     AudioDeviceInfo.TYPE_USB_DEVICE -> CallAudioDeviceType.USB_DEVICE
