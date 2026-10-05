@@ -36,6 +36,7 @@
     <string name="element_call_a11y_enter_fullscreen">Full screen</string>
     <string name="element_call_a11y_exit_fullscreen">Exit full screen</string>
     <string name="element_call_sharing_your_screen">You’re sharing your screen</string>
+    <string name="element_call_audio_device_hearing_aid">Hearing aid</string>
     <string name="element_call_audio_device_bluetooth">Bluetooth</string>
     <string name="element_call_audio_device_usb">USB device</string>
     <string name="element_call_audio_device_headphones">Headphones</string>

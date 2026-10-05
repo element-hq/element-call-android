@@ -12,7 +12,7 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 ## Unreleased
 
-_Nothing yet._
+- `CallAudioDeviceType` gains `HEARING_AID`. A host with an exhaustive `when` over it must handle the new value.
 
 ## 0.1.0-rc.6 - 2026-09-29
 

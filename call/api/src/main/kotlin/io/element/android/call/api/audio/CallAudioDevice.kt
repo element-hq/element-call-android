@@ -24,6 +24,10 @@ data class CallAudioDevice(
 )
 
 enum class CallAudioDeviceType {
+    /** ASHA hearing aids. LE Audio ones report as a Bluetooth headset and come out as [BLUETOOTH], under their own name. */
+    HEARING_AID,
+
+    /** A Bluetooth headset or speaker, over SCO or LE Audio. */
     BLUETOOTH,
     USB_HEADSET,
     USB_DEVICE,
