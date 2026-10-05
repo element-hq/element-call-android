@@ -148,12 +148,12 @@ private fun CallAudioDeviceType.labelRes(): Int = when (this) {
  * the toolbar button says at a glance whether the phone is on loudspeaker. A handset glyph for the
  * earpiece read as a second call button next to hang-up.
  *
- * Compound has no Bluetooth glyph, so that one comes from the Material set. Hearing aids share it,
- * as wired and USB headsets share the headphones icon: each is told apart by its label.
+ * Compound has no Bluetooth or hearing-aid glyph, so those come from the Material set. Wired and USB
+ * headsets share the headphones icon and are told apart by their label.
  */
 @Composable
 internal fun CallAudioDeviceType.icon() = when (this) {
-    CallAudioDeviceType.HEARING_AID,
+    CallAudioDeviceType.HEARING_AID -> ElementCallTheme.icons.hearingAid
     CallAudioDeviceType.BLUETOOTH -> ElementCallTheme.icons.bluetooth
     CallAudioDeviceType.USB_HEADSET,
     CallAudioDeviceType.USB_DEVICE,
