@@ -38,46 +38,46 @@ class ChromeVisibilityTest {
 
     @Test
     fun aTapUprightHidesTheControlBarAndKeepsTheTopBar() {
-        launchSample(SampleFixture.TWO_HUNDRED).use {
-            composeRule.waitUntil(CHROME_TIMEOUT_MS) { isShown(hangUp) }
+        launchSample(SampleFixture.LISTEN_MODE).use {
+            composeRule.waitForChrome { isShown(hangUp) }
 
             composeRule.onRoot().performTouchInput { click(center) }
-            composeRule.waitUntil(CHROME_TIMEOUT_MS) { !isShown(hangUp) }
+            composeRule.waitForChrome { !isShown(hangUp) }
             composeRule.onNodeWithContentDescription(minimize).assertIsDisplayed()
 
             Thread.sleep(DOUBLE_TAP_GAP_MS)
             composeRule.onRoot().performTouchInput { click(center) }
-            composeRule.waitUntil(CHROME_TIMEOUT_MS) { isShown(hangUp) }
+            composeRule.waitForChrome { isShown(hangUp) }
         }
     }
 
     @Test
     fun swipingUpHidesTheControlBarAndItComesBackAfterRelease() {
-        launchSample(SampleFixture.TWO_HUNDRED).use {
-            composeRule.waitUntil(CHROME_TIMEOUT_MS) { isShown(hangUp) }
+        launchSample(SampleFixture.LISTEN_MODE).use {
+            composeRule.waitForChrome { isShown(hangUp) }
 
             composeRule.onRoot().performTouchInput { swipe(center, center.copy(y = center.y - height / 4), durationMillis = 300) }
-            composeRule.waitUntil(CHROME_TIMEOUT_MS) { !isShown(hangUp) }
+            composeRule.waitForChrome { !isShown(hangUp) }
 
             // Two seconds after the scrolling has come to rest, fling included (R20).
-            composeRule.waitUntil(RETURN_TIMEOUT_MS) { isShown(hangUp) }
+            composeRule.waitForChrome(RETURN_TIMEOUT_MS) { isShown(hangUp) }
         }
     }
 
     @Test
     fun sidewaysTheChromeStartsHiddenATapShowsItAndUprightItIsBack() {
-        launchSample(SampleFixture.TWO_HUNDRED).use { scenario ->
-            composeRule.waitUntil(CHROME_TIMEOUT_MS) { isShown(hangUp) }
+        launchSample(SampleFixture.LISTEN_MODE).use { scenario ->
+            composeRule.waitForChrome { isShown(hangUp) }
             scenario.onActivity { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
-            composeRule.waitUntil(CHROME_TIMEOUT_MS) { !isShown(hangUp) && !isShown(minimize) }
+            composeRule.waitForChrome { !isShown(hangUp) && !isShown(minimize) }
 
             composeRule.showStageChrome()
             composeRule.onNodeWithContentDescription(minimize).assertIsDisplayed()
 
             composeRule.onRoot().performTouchInput { click(center) }
-            composeRule.waitUntil(CHROME_TIMEOUT_MS) { !isShown(hangUp) }
+            composeRule.waitForChrome { !isShown(hangUp) }
             scenario.onActivity { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT }
-            composeRule.waitUntil(CHROME_TIMEOUT_MS) { isShown(hangUp) }
+            composeRule.waitForChrome { isShown(hangUp) }
         }
     }
 

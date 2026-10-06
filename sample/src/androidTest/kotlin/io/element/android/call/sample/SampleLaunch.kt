@@ -57,9 +57,23 @@ internal fun ComposeTestRule.showStageChrome() {
     val hangUp = ApplicationProvider.getApplicationContext<Context>().getString(R.string.element_call_a11y_hang_up)
     if (onAllNodesWithContentDescription(hangUp).fetchSemanticsNodes().isNotEmpty()) return
     onRoot().performTouchInput { click(center) }
-    waitUntil(CHROME_TIMEOUT_MS) { onAllNodesWithContentDescription(hangUp).fetchSemanticsNodes().isNotEmpty() }
+    waitForChrome { onAllNodesWithContentDescription(hangUp).fetchSemanticsNodes().isNotEmpty() }
     waitForIdle()
 }
 
-/** Generous against the tap window, the slide and a slow emulator. */
+/**
+ * Waits for [condition] while moving the composition's clock on in large steps. The chrome's timers run
+ * on that clock, which `waitUntil` moves a frame per poll: too slowly on an emulator to see them fire.
+ */
+internal fun ComposeTestRule.waitForChrome(timeoutMillis: Long = CHROME_TIMEOUT_MS, condition: () -> Boolean) {
+    var elapsed = 0L
+    while (!condition()) {
+        check(elapsed < timeoutMillis) { "Chrome condition still not satisfied after $timeoutMillis ms of clock time" }
+        mainClock.advanceTimeBy(CHROME_CLOCK_STEP_MS)
+        elapsed += CHROME_CLOCK_STEP_MS
+    }
+}
+
+/** Generous against the tap window and the slide, in the composition's clock. */
 internal const val CHROME_TIMEOUT_MS = 2_000L
+private const val CHROME_CLOCK_STEP_MS = 100L
