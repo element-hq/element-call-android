@@ -145,9 +145,9 @@ fun ElementCallScreen(
             val reduceMotion = rememberReduceMotion()
             ReportScreenReader(state.eventSink)
             val fullscreen = state.fullscreenTile
-            // Held sideways the status bar goes with whichever chrome is in play; upright it stays (014 R8, R9).
-            val isChromeVisible = if (fullscreen != null) state.isFullscreenChromeVisible else state.isStageChromeVisible
-            CallSystemBars(isStatusBarHidden = isLandscape && !isChromeVisible)
+            // Held sideways the status bar stays away, chrome or not: over the picture it has no
+            // background of its own, and it tells nothing worth the strip it takes (014 R8, as proposed).
+            CallSystemBars(isStatusBarHidden = isLandscape)
 
             Box(modifier = Modifier.fillMaxSize()) {
                 if (state.tiles.isEmpty()) {

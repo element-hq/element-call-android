@@ -13,8 +13,7 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 ## Unreleased
 
 - While it is shown, `ElementCallScreen` drives the window's system bars through `WindowInsetsControllerCompat`:
-  light status and navigation bar icons, since the call is always dark, and no status bar held sideways while
-  its chrome is down. It
+  light status and navigation bar icons, since the call is always dark, and no status bar held sideways. It
   restores the host's appearance and status bar when it goes. A host that sets either itself while the call screen
   is up will fight it.
 - `ElementCallScreenState` gains `isStageChromeVisible`; `ElementCallScreenEvent.ToggleFullscreenChrome` is gone.
