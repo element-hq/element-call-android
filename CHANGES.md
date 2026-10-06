@@ -12,6 +12,8 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 ## Unreleased
 
+- Core: matrix-rust-rtc `0.5.0-rc.1` (backend and room-first API). A host's Ivy repository over the core's release
+  asset (README, "Consuming a release") must point at the `v0.5.0-rc.1` asset. `MatrixRtcEndReason` gains `SlotClosed`.
 - The RTC API follows the core's room-first names: `MatrixRtcClient.room()` opens a `MatrixRtcRoom`, whose `joinCall()`
   returns a `MatrixRtcCall` (was `MatrixRtcSession`), whose `connectMedia()` returns a `MatrixRtcMediaSession` (was
   `MatrixRtcCall`). `ElementCallStack.Builder.rtcService` is `rtcClient`. `MatrixRtcTransport` is gone: the join picks it.
