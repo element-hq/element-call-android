@@ -12,6 +12,8 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 ## Unreleased
 
+- Core: matrix-rust-rtc `0.5.0-rc.1` (backend and room-first API). A host's Ivy repository over the core's release
+  asset (README, "Consuming a release") must point at the `v0.5.0-rc.1` asset. `MatrixRtcEndReason` gains `SlotClosed`.
 - While it is shown, `ElementCallScreen` drives the window's system bars through `WindowInsetsControllerCompat`:
   light status and navigation bar icons, since the call is always dark, and no status bar held sideways. It
   restores the host's appearance and status bar when it goes. A host that sets either itself while the call screen
