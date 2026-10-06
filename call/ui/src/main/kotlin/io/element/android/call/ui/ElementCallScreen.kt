@@ -161,6 +161,32 @@ fun ElementCallScreen(
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
+                if (!isLandscape) {
+                    // Faded rather than removed when a tile goes fullscreen, in step with the stage's scrim: removed
+                    // at once, the rows scrolled under it showed until the growing tile covered them (000 R7).
+                    AnimatedVisibility(
+                        visible = fullscreen == null,
+                        enter = fadeIn(tween(FULLSCREEN_SCRIM_OUT_MS)),
+                        exit = fadeOut(tween(FULLSCREEN_SCRIM_IN_MS)),
+                    ) {
+                        // Opaque, so a row scrolled up passes under it; a drag on it is its own, as on the controls (003 B10).
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(ElementCallTheme.colors.bgCanvas)
+                                .scrollable(rememberScrollableState { it }, Orientation.Vertical)
+                                .statusBarsPadding(),
+                        ) {
+                            CallTopBar(state, modifier = Modifier.height(TOP_BAR_HEIGHT))
+                            ScreenShareBanner(
+                                state = state,
+                                modifier = Modifier
+                                    .align(Alignment.CenterHorizontally)
+                                    .onSizeChanged { bannerHeight = with(density) { it.height.toDp() } },
+                            )
+                        }
+                    }
+                }
                 if (fullscreen != null) {
                     // A tile filling the stage, with no chrome but the HUD when asked for (spec 000 R1, R8).
                     // The status bar keeps the canvas behind it rather than the grid rows under the bar.
@@ -225,22 +251,6 @@ fun ElementCallScreen(
                         controls(Modifier)
                     }
                 } else {
-                    // Opaque, so a row scrolled up passes under it; a drag on it is its own, as on the controls (003 B10).
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(ElementCallTheme.colors.bgCanvas)
-                            .scrollable(rememberScrollableState { it }, Orientation.Vertical)
-                            .statusBarsPadding(),
-                    ) {
-                        CallTopBar(state, modifier = Modifier.height(TOP_BAR_HEIGHT))
-                        ScreenShareBanner(
-                            state = state,
-                            modifier = Modifier
-                                .align(Alignment.CenterHorizontally)
-                                .onSizeChanged { bannerHeight = with(density) { it.height.toDp() } },
-                        )
-                    }
                     CallDurationLabel(
                         state = state,
                         modifier = Modifier

@@ -415,7 +415,25 @@ internal fun CallStage(
         // The whole grid moves as one layer: a scroll changes this translation and nothing else, so no
         // tile is re-placed or recomposed for it. Sticky slots counter-translate in their own
         // placement (animatedSlot), which is the only placement a scroll reaches.
+        // Between the tiles a fullscreen tile replaces and the tile growing over them, so no stripe of the stage
+        // shows along the edges it has not reached yet (000 R7). Opaque quickly on the way in, slower out.
+        val scrim = remember { Animatable(if (fullscreenId != null) 1f else 0f) }
+        LaunchedEffect(fullscreenId != null) {
+            val isIn = fullscreenId != null
+            scrim.animateTo(if (isIn) 1f else 0f, tween(if (isIn) FULLSCREEN_SCRIM_IN_MS else FULLSCREEN_SCRIM_OUT_MS))
+        }
         Box(modifier = Modifier.fillMaxSize().graphicsLayer { translationY = gridTop - scrollOffset.floatValue }) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .zIndex(FULLSCREEN_SCRIM_Z_INDEX)
+                // Undoes the grid's translation: the scrim covers the stage, not the content.
+                .graphicsLayer {
+                    translationY = scrollOffset.floatValue - gridTop
+                    alpha = scrim.value
+                }
+                .background(ElementCallTheme.colors.bgCanvas),
+        )
         state.tiles.forEach { tile ->
             val isComposed = tile.tileId == stickyTileId ||
                 tile.tileId == fullscreenId && tile.tileId !in heroIds ||
@@ -887,6 +905,11 @@ private const val OWN_TILE_OVERLAY_Z_INDEX = 1.5f
 internal const val SPOTLIGHT_Z_INDEX = 2f
 private const val OVERLAY_Z_INDEX = 3f
 internal const val FULLSCREEN_Z_INDEX = 4f
+private const val FULLSCREEN_SCRIM_Z_INDEX = 3.5f
+
+/** The fullscreen scrim's way in and out; the portrait top bar fades on the same timings. */
+internal const val FULLSCREEN_SCRIM_IN_MS = 150
+internal const val FULLSCREEN_SCRIM_OUT_MS = 350
 
 /** The zoom runs from fitted up to 4x (000 R22); constraints step at the simulcast layers' powers of two (000 R13). */
 internal const val MAX_ZOOM = 4f
