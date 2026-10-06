@@ -9,9 +9,12 @@ package io.element.android.call.impl.rtc
 
 import com.google.common.truth.Truth.assertThat
 import io.element.android.call.api.matrix.ElementCallDelayedEventAction
+import io.element.android.call.api.matrix.ElementCallEventEncryptionInfo
 import io.element.android.call.api.matrix.ElementCallMatrixException
 import io.element.android.call.api.matrix.ElementCallMatrixRoom
 import io.element.android.call.api.matrix.ElementCallMatrixTransport
+import io.element.android.call.api.matrix.ElementCallRoomEvent
+import io.element.android.call.api.matrix.ElementCallToDeviceMessage
 import io.element.android.call.api.rtc.id.DeviceId
 import io.element.android.call.api.rtc.id.EventId
 import io.element.android.call.api.rtc.id.UserId
@@ -23,19 +26,28 @@ import io.element.android.call.test.FakeElementCallMatrixRoom
 import io.element.android.call.test.FakeElementCallMatrixTransport
 import io.element.android.call.tests.testutils.lambda.lambdaRecorder
 import io.element.android.call.tests.testutils.lambda.value
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Test
-import org.matrix.rtc.CommandSenderException
+import org.matrix.rtc.FfiBackendException
+import org.matrix.rtc.FfiEventEncryption
+import org.matrix.rtc.FfiEventIn
+import org.matrix.rtc.FfiRoomSubjects
+import org.matrix.rtc.FfiToDeviceMessageIn
 import org.matrix.rtc.FfiToDeviceRecipient
 
-class MatrixRtcCommandSenderTest {
+@OptIn(ExperimentalCoroutinesApi::class)
+class DefaultMatrixBackendTest {
     @Test
     fun `restartDelayedEvent restarts the delay`() = runTest {
         val updateDelayedEvent = lambdaRecorder { _: String, _: ElementCallDelayedEventAction -> Result.success(Unit) }
-        val sender = createSender(room = FakeElementCallMatrixRoom(updateDelayedEventResult = updateDelayedEvent))
+        val backend = createBackend(room = FakeElementCallMatrixRoom(updateDelayedEventResult = updateDelayedEvent))
 
-        sender.restartDelayedEvent(A_ROOM_ID.value, A_DELAY_ID)
+        backend.restartDelayedEvent(A_ROOM_ID.value, A_DELAY_ID)
 
         updateDelayedEvent.assertions().isCalledOnce()
             .with(value(A_DELAY_ID), value(ElementCallDelayedEventAction.RESTART))
@@ -49,9 +61,9 @@ class MatrixRtcCommandSenderTest {
     @Test
     fun `cancelDelayedEvent cancels the delay`() = runTest {
         val updateDelayedEvent = lambdaRecorder { _: String, _: ElementCallDelayedEventAction -> Result.success(Unit) }
-        val sender = createSender(room = FakeElementCallMatrixRoom(updateDelayedEventResult = updateDelayedEvent))
+        val backend = createBackend(room = FakeElementCallMatrixRoom(updateDelayedEventResult = updateDelayedEvent))
 
-        sender.cancelDelayedEvent(A_ROOM_ID.value, A_DELAY_ID)
+        backend.cancelDelayedEvent(A_ROOM_ID.value, A_DELAY_ID)
 
         updateDelayedEvent.assertions().isCalledOnce()
             .with(value(A_DELAY_ID), value(ElementCallDelayedEventAction.CANCEL))
@@ -62,9 +74,9 @@ class MatrixRtcCommandSenderTest {
         val sendToDevice = lambdaRecorder { _: String, _: Map<UserId, Map<DeviceId, String>> ->
             Result.success(emptyMap<UserId, List<DeviceId>>())
         }
-        val sender = createSender(transport = FakeElementCallMatrixTransport(sendToDeviceMessageResult = sendToDevice))
+        val backend = createBackend(transport = FakeElementCallMatrixTransport(sendToDeviceMessageResult = sendToDevice))
 
-        val deliveries = sender.sendToDeviceMessage(
+        val deliveries = backend.sendToDeviceMessage(
             recipients = listOf(
                 FfiToDeviceRecipient(A_REMOTE_USER_ID.value, A_REMOTE_DEVICE_ID),
                 FfiToDeviceRecipient(A_REMOTE_USER_ID.value, ANOTHER_REMOTE_DEVICE_ID),
@@ -103,7 +115,7 @@ class MatrixRtcCommandSenderTest {
             },
         )
 
-        val deliveries = createSender(transport = transport).sendToDeviceMessage(
+        val deliveries = createBackend(transport = transport).sendToDeviceMessage(
             recipients = listOf(
                 FfiToDeviceRecipient(A_REMOTE_USER_ID.value, A_REMOTE_DEVICE_ID),
                 FfiToDeviceRecipient(A_REMOTE_USER_ID.value, ANOTHER_REMOTE_DEVICE_ID),
@@ -127,7 +139,7 @@ class MatrixRtcCommandSenderTest {
             sendToDeviceMessageResult = { _, _ -> Result.success(mapOf(A_USER_ID to listOf(A_DEVICE_ID))) },
         )
 
-        val deliveries = createSender(transport = transport).sendToDeviceMessage(
+        val deliveries = createBackend(transport = transport).sendToDeviceMessage(
             recipients = listOf(FfiToDeviceRecipient(A_USER_ID.value, A_DEVICE_ID.value)),
             messageType = AN_EVENT_TYPE,
             contentJson = A_CONTENT,
@@ -147,31 +159,14 @@ class MatrixRtcCommandSenderTest {
         )
 
         val thrown = runCatchingExceptions {
-            createSender(transport = transport).sendToDeviceMessage(
+            createBackend(transport = transport).sendToDeviceMessage(
                 recipients = listOf(FfiToDeviceRecipient(A_REMOTE_USER_ID.value, A_REMOTE_DEVICE_ID)),
                 messageType = AN_EVENT_TYPE,
                 contentJson = A_CONTENT,
             )
         }.exceptionOrNull()
 
-        assertThat(thrown).isInstanceOf(CommandSenderException.SendException::class.java)
-    }
-
-    /**
-     * The widget-driver transport cannot send sticky events at all, and the core should hear exactly that: a
-     * `NotSupported` retires the operation, where a send failure would have it retried for the whole call.
-     */
-    @Test
-    fun `a sticky event the transport cannot send is reported as unsupported`() = runTest {
-        val room = FakeElementCallMatrixRoom(
-            sendStickyEventResult = { _, _, _ -> Result.failure(ElementCallMatrixException.NotSupported("sticky")) },
-        )
-
-        val thrown = runCatchingExceptions {
-            createSender(room = room).sendStickyEvent(A_ROOM_ID.value, AN_EVENT_TYPE, A_CONTENT, durationMs = 60_000uL)
-        }.exceptionOrNull()
-
-        assertThat(thrown).isInstanceOf(CommandSenderException.NotSupported::class.java)
+        assertThat(thrown).isInstanceOf(FfiBackendException.Failed::class.java)
     }
 
     /**
@@ -181,9 +176,9 @@ class MatrixRtcCommandSenderTest {
     @Test
     fun `sendStickyEvent passes the core's duration through and reports the event id`() = runTest {
         val sendStickyEvent = lambdaRecorder { _: String, _: String, _: ULong -> Result.success(AN_EVENT_ID.value) }
-        val sender = createSender(room = FakeElementCallMatrixRoom(sendStickyEventResult = sendStickyEvent))
+        val backend = createBackend(room = FakeElementCallMatrixRoom(sendStickyEventResult = sendStickyEvent))
 
-        val eventId = sender.sendStickyEvent(A_ROOM_ID.value, AN_EVENT_TYPE, A_CONTENT, durationMs = 60_000uL)
+        val eventId = backend.sendStickyEvent(A_ROOM_ID.value, AN_EVENT_TYPE, A_CONTENT, durationMs = 60_000uL)
 
         assertThat(eventId).isEqualTo(AN_EVENT_ID.value)
         sendStickyEvent.assertions().isCalledOnce()
@@ -198,108 +193,21 @@ class MatrixRtcCommandSenderTest {
     fun `sendStateEvent reports the event id the homeserver assigned`() = runTest {
         val room = FakeElementCallMatrixRoom(sendStateEventResult = { _, _, _ -> Result.success(AN_EVENT_ID) })
 
-        val eventId = createSender(room = room).sendStateEvent(A_ROOM_ID.value, AN_EVENT_TYPE, A_STATE_KEY, A_CONTENT)
+        val eventId = createBackend(room = room).sendStateEvent(A_ROOM_ID.value, AN_EVENT_TYPE, A_STATE_KEY, A_CONTENT)
 
         assertThat(eventId).isEqualTo(AN_EVENT_ID.value)
     }
 
     /**
-     * A homeserver with no MSC4140 at all. Reported as [CommandSenderException.NotSupported] so the core stops
-     * arming a dead man's switch for the rest of the session instead of re-probing a homeserver that has already
-     * answered; the join carries on either way.
+     * The dead man's switch for a membership carried as room state: without its state key the delayed
+     * leave would be published under no membership at all and would never retire ours.
      */
     @Test
-    fun `a homeserver that does not implement delayed events is reported as unsupported`() = runTest {
-        val room = FakeElementCallMatrixRoom(
-            sendDelayedEventResult = { _, _, _, _ -> Result.failure(matrixApiError("M_UNRECOGNIZED", 404, "Unrecognized request")) },
-        )
-
-        val thrown = runCatchingExceptions {
-            createSender(room = room).sendDelayedEvent(A_ROOM_ID.value, AN_EVENT_TYPE, A_CONTENT, delayMs = 8_000uL)
-        }.exceptionOrNull()
-
-        assertThat(thrown).isInstanceOf(CommandSenderException.NotSupported::class.java)
-    }
-
-    /**
-     * matrix.org implements MSC4140 and refuses to let anyone use it, which is a different errcode reaching the
-     * same conclusion.
-     */
-    @Test
-    fun `a homeserver that has disallowed delayed events is reported as unsupported`() = runTest {
-        val room = FakeElementCallMatrixRoom(
-            updateDelayedEventResult = { _, _ ->
-                Result.failure(matrixApiError("M_FORBIDDEN", 403, "Sending delayed events has been disallowed"))
-            },
-        )
-
-        val thrown = runCatchingExceptions { createSender(room = room).restartDelayedEvent(A_ROOM_ID.value, A_DELAY_ID) }.exceptionOrNull()
-
-        assertThat(thrown).isInstanceOf(CommandSenderException.NotSupported::class.java)
-    }
-
-    /**
-     * The same errcode for the opposite reason: a delayed *state* event refused because our power level is too
-     * low is our problem, not the homeserver's, and would start working the moment that changed. Reporting it as
-     * unsupported would retire the dead man's switch for the session over something transient.
-     */
-    @Test
-    fun `a delayed state event refused on power levels stays a retryable send failure`() = runTest {
-        val room = FakeElementCallMatrixRoom(
-            sendDelayedEventResult = { _, _, _, _ ->
-                Result.failure(matrixApiError("M_FORBIDDEN", 403, "You don't have permission to post that to the room"))
-            },
-        )
-
-        val thrown = runCatchingExceptions {
-            createSender(room = room).sendDelayedStateEvent(A_ROOM_ID.value, A_LEGACY_MEMBER_EVENT_TYPE, A_STATE_KEY, A_CONTENT, delayMs = 8_000uL)
-        }.exceptionOrNull()
-
-        assertThat(thrown).isInstanceOf(CommandSenderException.SendException::class.java)
-    }
-
-    @Test
-    fun `a delayed event that fails for any other reason stays a retryable send failure`() = runTest {
-        val room = FakeElementCallMatrixRoom(sendDelayedEventResult = { _, _, _, _ -> Result.failure(IllegalStateException("boom")) })
-
-        val thrown = runCatchingExceptions {
-            createSender(room = room).sendDelayedEvent(A_ROOM_ID.value, AN_EVENT_TYPE, A_CONTENT, delayMs = 8_000uL)
-        }.exceptionOrNull()
-
-        assertThat(thrown).isInstanceOf(CommandSenderException.SendException::class.java)
-    }
-
-    /**
-     * A room that is not open, or that heard nothing back, has said nothing about the homeserver: the next
-     * attempt may well have one, so the dead man's switch is not retired over it.
-     */
-    @Test
-    fun `a room that is not open or timed out stays a retryable send failure`() = runTest {
-        listOf(
-            ElementCallMatrixException.NotRunning(A_ROOM_ID),
-            ElementCallMatrixException.Timeout("send_event"),
-        ).forEach { failure ->
-            val room = FakeElementCallMatrixRoom(sendDelayedEventResult = { _, _, _, _ -> Result.failure(failure) })
-
-            val thrown = runCatchingExceptions {
-                createSender(room = room).sendDelayedEvent(A_ROOM_ID.value, AN_EVENT_TYPE, A_CONTENT, delayMs = 8_000uL)
-            }.exceptionOrNull()
-
-            assertThat(thrown).isInstanceOf(CommandSenderException.SendException::class.java)
-        }
-    }
-
-    /**
-     * The dead man's switch for a membership carried as room state. Pinned because the message-like
-     * `sendDelayedEvent` has no state key and so cannot stand in for it: routed there, the delayed leave
-     * would be published under no membership at all and would never retire ours.
-     */
-    @Test
-    fun `sendDelayedStateEvent schedules the leave under its state key`() = runTest {
+    fun `a delayed state event is scheduled under its state key`() = runTest {
         val sendDelayedEvent = lambdaRecorder { _: String, _: String?, _: String, _: ULong -> Result.success(A_DELAY_ID) }
-        val sender = createSender(room = FakeElementCallMatrixRoom(sendDelayedEventResult = sendDelayedEvent))
+        val backend = createBackend(room = FakeElementCallMatrixRoom(sendDelayedEventResult = sendDelayedEvent))
 
-        val delayId = sender.sendDelayedStateEvent(
+        val delayId = backend.sendDelayedEvent(
             roomId = A_ROOM_ID.value,
             eventType = A_LEGACY_MEMBER_EVENT_TYPE,
             stateKey = A_STATE_KEY,
@@ -313,11 +221,11 @@ class MatrixRtcCommandSenderTest {
     }
 
     @Test
-    fun `sendDelayedEvent sends a message-like event, with no state key`() = runTest {
+    fun `a delayed event with no state key is message-like`() = runTest {
         val sendDelayedEvent = lambdaRecorder { _: String, _: String?, _: String, _: ULong -> Result.success(A_DELAY_ID) }
-        val sender = createSender(room = FakeElementCallMatrixRoom(sendDelayedEventResult = sendDelayedEvent))
+        val backend = createBackend(room = FakeElementCallMatrixRoom(sendDelayedEventResult = sendDelayedEvent))
 
-        val delayId = sender.sendDelayedEvent(A_ROOM_ID.value, AN_EVENT_TYPE, A_CONTENT, delayMs = 8_000uL)
+        val delayId = backend.sendDelayedEvent(A_ROOM_ID.value, AN_EVENT_TYPE, stateKey = null, A_CONTENT, delayMs = 8_000uL)
 
         assertThat(delayId).isEqualTo(A_DELAY_ID)
         sendDelayedEvent.assertions().isCalledOnce()
@@ -325,17 +233,17 @@ class MatrixRtcCommandSenderTest {
     }
 
     @Test
-    fun `a command for a room that is not open fails rather than crossing the FFI`() = runTest {
-        val sender = createSender(room = null)
+    fun `a send for a room that is not open fails as the core reads failures`() = runTest {
+        val backend = createBackend(room = null)
 
         listOf<suspend () -> Any>(
-            { sender.cancelDelayedEvent(A_ROOM_ID.value, A_DELAY_ID) },
-            { sender.sendStateEvent(A_ROOM_ID.value, AN_EVENT_TYPE, A_STATE_KEY, A_CONTENT) },
-            { sender.sendRoomEvent(A_ROOM_ID.value, A_NOTIFICATION_EVENT_TYPE, A_CONTENT) },
-            { sender.redactEvent(A_ROOM_ID.value, AN_EVENT_ID.value, reason = null) },
+            { backend.cancelDelayedEvent(A_ROOM_ID.value, A_DELAY_ID) },
+            { backend.sendStateEvent(A_ROOM_ID.value, AN_EVENT_TYPE, A_STATE_KEY, A_CONTENT) },
+            { backend.sendRoomEvent(A_ROOM_ID.value, A_NOTIFICATION_EVENT_TYPE, A_CONTENT) },
+            { backend.redactEvent(A_ROOM_ID.value, AN_EVENT_ID.value, reason = null) },
         ).forEach { command ->
             val thrown = runCatchingExceptions { command() }.exceptionOrNull()
-            assertThat(thrown).isInstanceOf(CommandSenderException.SendException::class.java)
+            assertThat(thrown).isInstanceOf(FfiBackendException.Failed::class.java)
         }
     }
 
@@ -346,35 +254,146 @@ class MatrixRtcCommandSenderTest {
     @Test
     fun `sendRoomEvent sends the event to the room and returns its id`() = runTest {
         val sendRoomEvent = lambdaRecorder { _: String, _: String -> Result.success(AN_EVENT_ID) }
-        val sender = createSender(room = FakeElementCallMatrixRoom(sendRoomEventResult = sendRoomEvent))
+        val backend = createBackend(room = FakeElementCallMatrixRoom(sendRoomEventResult = sendRoomEvent))
 
-        val eventId = sender.sendRoomEvent(A_ROOM_ID.value, A_NOTIFICATION_EVENT_TYPE, A_CONTENT)
+        val eventId = backend.sendRoomEvent(A_ROOM_ID.value, A_NOTIFICATION_EVENT_TYPE, A_CONTENT)
 
         assertThat(eventId).isEqualTo(AN_EVENT_ID.value)
         sendRoomEvent.assertions().isCalledOnce().with(value(A_NOTIFICATION_EVENT_TYPE), value(A_CONTENT))
     }
 
     @Test
-    fun `a room event the homeserver refuses is a send failure`() = runTest {
-        val sender = createSender(
-            room = FakeElementCallMatrixRoom(
-                sendRoomEventResult = { _, _ -> Result.failure(matrixApiError("M_FORBIDDEN", 403, "You cannot send this event")) },
-            ),
+    fun `redactEvent redacts the event in the room`() = runTest {
+        val redactEvent = lambdaRecorder { _: EventId, _: String? -> Result.success(Unit) }
+        val backend = createBackend(room = FakeElementCallMatrixRoom(redactEventResult = redactEvent))
+
+        backend.redactEvent(A_ROOM_ID.value, AN_EVENT_ID.value, reason = "hand lowered")
+
+        redactEvent.assertions().isCalledOnce().with(value(AN_EVENT_ID), value("hand lowered"))
+    }
+
+    /** The core classifies a failure (a delayed-event refusal, for one) from the errcode and status alone. */
+    @Test
+    fun `a Matrix error reaches the core with its errcode and status`() = runTest {
+        val room = FakeElementCallMatrixRoom(
+            sendDelayedEventResult = { _, _, _, _ -> Result.failure(matrixApiError("M_UNRECOGNIZED", 404, "Unrecognized request")) },
         )
 
-        val thrown = runCatchingExceptions { sender.sendRoomEvent(A_ROOM_ID.value, A_NOTIFICATION_EVENT_TYPE, A_CONTENT) }.exceptionOrNull()
+        val thrown = runCatchingExceptions {
+            createBackend(room = room).sendDelayedEvent(A_ROOM_ID.value, AN_EVENT_TYPE, stateKey = null, A_CONTENT, delayMs = 8_000uL)
+        }.exceptionOrNull() as FfiBackendException.Failed
 
-        assertThat(thrown).isInstanceOf(CommandSenderException.SendException::class.java)
+        assertThat(thrown.errcode).isEqualTo("M_UNRECOGNIZED")
+        assertThat(thrown.status).isEqualTo(404.toUShort())
+    }
+
+    /** The core opens a room only once each subject has delivered, so an empty set must still be delivered. */
+    @Test
+    fun `a room subscription delivers every subject's current set, an empty one included`() = runTest {
+        val room = FakeElementCallMatrixRoom(
+            stickyEvents = MutableStateFlow(emptyList()),
+            // Both spellings share one bucket in the port; each reaches the core under its own type.
+            stateEventsResult = { MutableStateFlow(listOf(aStateEvent(A_LEGACY_MEMBER_EVENT_TYPE), aStateEvent(A_STABLE_MEMBER_EVENT_TYPE))) },
+        )
+        val sink = RecordingRoomSink()
+
+        createBackend(
+            room = room
+        ).subscribeRoom(A_ROOM_ID.value, FfiRoomSubjects(listOf(A_LEGACY_MEMBER_EVENT_TYPE, A_STABLE_MEMBER_EVENT_TYPE), emptyList()), sink)
+        runCurrent()
+
+        assertThat(sink.sticky).containsExactly(emptyList<FfiEventIn>())
+        assertThat(sink.state.map { (type, events) -> type to events.map { it.eventType } }).containsExactly(
+            A_LEGACY_MEMBER_EVENT_TYPE to listOf(A_LEGACY_MEMBER_EVENT_TYPE),
+            A_STABLE_MEMBER_EVENT_TYPE to listOf(A_STABLE_MEMBER_EVENT_TYPE),
+        )
+        assertThat(sink.members).containsExactly(listOf(A_USER_ID.value))
+        assertThat(sink.encryption).containsExactly(true)
     }
 
     @Test
-    fun `redactEvent redacts the event in the room`() = runTest {
-        val redactEvent = lambdaRecorder { _: EventId, _: String? -> Result.success(Unit) }
-        val sender = createSender(room = FakeElementCallMatrixRoom(redactEventResult = redactEvent))
+    fun `cancelling a room subscription stops its feeds, and cancelling twice is harmless`() = runTest {
+        val sticky = MutableStateFlow(emptyList<ElementCallRoomEvent>())
+        val sink = RecordingRoomSink()
+        val subscription = createBackend(room = FakeElementCallMatrixRoom(stickyEvents = sticky))
+            .subscribeRoom(A_ROOM_ID.value, FfiRoomSubjects(emptyList(), emptyList()), sink)
+        runCurrent()
 
-        sender.redactEvent(A_ROOM_ID.value, AN_EVENT_ID.value, reason = "hand lowered")
+        subscription.cancel()
+        subscription.cancel()
+        sticky.value = listOf(aStateEvent(AN_EVENT_TYPE))
+        runCurrent()
 
-        redactEvent.assertions().isCalledOnce().with(value(AN_EVENT_ID), value("hand lowered"))
+        assertThat(sink.sticky).hasSize(1)
+    }
+
+    /** Only what the client said: a cross-signing status it could not give stays null. */
+    @Test
+    fun `a to-device message reaches the core with what the client said about its encryption`() = runTest {
+        val transport = FakeElementCallMatrixTransport()
+        val received = mutableListOf<FfiToDeviceMessageIn>()
+        createBackend(transport = transport).subscribeToDevice(listOf(AN_EVENT_TYPE)) { received += it }
+        runCurrent()
+
+        transport.givenToDeviceMessage(
+            ElementCallToDeviceMessage(
+                eventType = AN_EVENT_TYPE,
+                senderId = A_REMOTE_USER_ID,
+                content = A_CONTENT,
+                encryptionInfo = ElementCallEventEncryptionInfo(A_REMOTE_USER_ID, DeviceId(A_REMOTE_DEVICE_ID), null, isSenderCrossSigned = null),
+            )
+        )
+        runCurrent()
+
+        assertThat(received.single().encryption).isEqualTo(FfiEventEncryption(encrypted = true, senderDeviceId = A_REMOTE_DEVICE_ID, senderCrossSigned = null))
+    }
+
+    @Test
+    fun `the transports are answered verbatim, as the JSON array the core parses`() = runTest {
+        val transport = FakeElementCallMatrixTransport(
+            getUrlResult = { Result.success("""{"rtc_transports":[{"type":"livekit","livekit_service_url":"https://sfu.example.org"}]}""") },
+        )
+
+        val transports = createBackend(transport = transport).rtcTransports()
+
+        assertThat(transports).isEqualTo("""[{"type":"livekit","livekit_service_url":"https://sfu.example.org"}]""")
+    }
+
+    private fun aStateEvent(type: String) = ElementCallRoomEvent(
+        eventId = AN_EVENT_ID,
+        sender = A_REMOTE_USER_ID,
+        eventType = type,
+        stateKey = A_STATE_KEY,
+        timestampMs = 0L,
+        contentJson = A_CONTENT,
+        encryptionInfo = null,
+    )
+
+    private class RecordingRoomSink : RoomSubjectSink {
+        val sticky = mutableListOf<List<FfiEventIn>>()
+        val state = mutableListOf<Pair<String, List<FfiEventIn>>>()
+        val members = mutableListOf<List<String>>()
+        val encryption = mutableListOf<Boolean>()
+
+        override fun onStickyEvents(events: List<FfiEventIn>) {
+            sticky += events
+        }
+
+        override fun onStateEvents(eventType: String, events: List<FfiEventIn>) {
+            state += eventType to events
+        }
+
+        override fun onJoinedMembers(userIds: List<String>) {
+            members += userIds
+        }
+
+        override fun onEncryption(encrypted: Boolean) {
+            encryption += encrypted
+        }
+
+        override fun onTimelineEvents(events: List<FfiEventIn>) = Unit
+
+        override fun onRedaction(eventId: String) = Unit
     }
 
     private fun matrixApiError(errcode: String, httpStatus: Int, message: String) = ElementCallMatrixException.MatrixApi(
@@ -383,13 +402,15 @@ class MatrixRtcCommandSenderTest {
         message = message,
     )
 
-    private fun createSender(
+    private fun TestScope.createBackend(
         transport: ElementCallMatrixTransport = FakeElementCallMatrixTransport(),
         room: ElementCallMatrixRoom? = FakeElementCallMatrixRoom(),
-    ) = MatrixRtcCommandSender(
+    ) = DefaultMatrixBackend(
         transport = transport,
-        commandDispatcher = Dispatchers.Unconfined,
+        transportDiscovery = RtcTransportDiscovery(transport),
         roomProvider = { room },
+        scope = backgroundScope,
+        ioDispatcher = StandardTestDispatcher(testScheduler),
     )
 
     private companion object {
@@ -402,6 +423,7 @@ class MatrixRtcCommandSenderTest {
         // Only ever sent in STATE_EVENTS compatibility, where the membership is room state keyed by
         // user, device and application.
         const val A_LEGACY_MEMBER_EVENT_TYPE = "org.matrix.msc3401.call.member"
+        const val A_STABLE_MEMBER_EVENT_TYPE = "m.call.member"
         const val A_STATE_KEY = "_@alice:example.org_ADEVICEID_m.call"
 
         // Distinct from the A_DEVICE_ID / A_USER_ID the fake transport uses for our own identity,

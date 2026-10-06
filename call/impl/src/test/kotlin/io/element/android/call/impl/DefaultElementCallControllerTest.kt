@@ -174,12 +174,7 @@ class DefaultElementCallControllerTest {
         assertThat(rtcClient.lastCall?.leaveCount).isEqualTo(0)
     }
 
-    /**
-     * The roster used to be left unsubscribed in the state-event mode, because no membership reached the
-     * core to project. Room state is readable now and `RoomStateFeeder` feeds it, so the count is as real
-     * here as anywhere - and a mode-specific branch that skipped the subscription would report a call with
-     * nobody in it while media and key distribution both worked.
-     */
+    /** In every format: a branch that skipped the count would report an empty call while media worked. */
     @Test
     fun `a call reports the core's member count`() = runTest {
         val rtcClient = FakeMatrixRtcClient()

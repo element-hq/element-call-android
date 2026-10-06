@@ -35,27 +35,15 @@ import kotlinx.coroutines.CoroutineScope
  *     .lifecycleListener(listener)           // host only
  *     .options(ElementCallOptions())
  *     .build(scope = sessionScope)
- * stack.start()                              // brings the RTC core up: with the session, not the call
  * stack.controller                           // what the UI and the host drive
  * ```
  *
- * Build one per Matrix session and keep it for the session's life. [start] is what makes an incoming
- * media key land: the core's to-device subscription exists from then on, between calls included.
+ * Build one per Matrix session and keep it for the session's life.
  */
 class ElementCallStack private constructor(
     val controller: ElementCallController,
     val options: ElementCallOptions,
-    private val startCore: suspend () -> Unit,
 ) {
-    /**
-     * Bring the RTC core up. Call it as soon as the session exists, not when a call starts: a key
-     * sent while nothing is subscribed is gone, and the symptom is a member stuck at `MISSING_KEY`
-     * for the rest of the call. Idempotent.
-     */
-    suspend fun start() {
-        startCore()
-    }
-
     /** Forget the stack. The session scope it was built with tears the rest down. */
     fun close() {
         ElementCallStackRegistry.unregister(this)
@@ -103,17 +91,12 @@ class ElementCallStack private constructor(
         fun build(scope: CoroutineScope): ElementCallStack {
             // Recorded before the library loads; applied on the first native call.
             options.logging?.let { MatrixRtcFfi.setLoggingConfiguration(it) }
-            val rustClient = if (rtcClient == null) {
-                RustMatrixRtcClient(
-                    transport = transport,
-                    dispatchers = dispatchers,
-                    context = context,
-                    sessionCoroutineScope = scope,
-                )
-            } else {
-                null
-            }
-            val rtcClient = rtcClient ?: checkNotNull(rustClient)
+            val rtcClient = rtcClient ?: RustMatrixRtcClient(
+                transport = transport,
+                dispatchers = dispatchers,
+                context = context,
+                sessionCoroutineScope = scope,
+            )
             val controller = DefaultElementCallController(
                 scope = scope,
                 platform = DefaultElementCallPlatform(context),
@@ -124,7 +107,7 @@ class ElementCallStack private constructor(
                 roomContextProvider = roomContextProvider,
                 options = options,
             )
-            return ElementCallStack(controller, options, startCore = { rustClient?.start() }).also { ElementCallStackRegistry.register(it) }
+            return ElementCallStack(controller, options).also { ElementCallStackRegistry.register(it) }
         }
     }
 }

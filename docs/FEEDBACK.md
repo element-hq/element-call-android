@@ -208,8 +208,10 @@ between entries.
    so `MISSING_KEY` for that member no longer says whether their audio, their video or both are affected — and the
    two are separately diagnosable faults. `receiveStats(memberId, kind)` is already keyed by both; the encryption
    report is the one per-member signal that is not.
-7. **`subscribeMembershipSnapshots` delivers one snapshot at subscribe time and then goes silent
-   through membership changes the core is visibly acting on.** Seen against Element Call in
+7. **~~`subscribeMembershipSnapshots` delivers one snapshot at subscribe time and then goes silent
+   through membership changes the core is visibly acting on.~~ — resolved by the room-first core:**
+   `MembershipSnapshotSubscription.next()` suspends until the roster changes and returns the current one first.
+   Our reader also stopped at the first quiet poll of the old `nextSnapshot()`, which played its part. Seen against Element Call in
    `STICKY_EVENTS`, with the subscription established *before* anything was fed:
 
    ```
@@ -282,8 +284,9 @@ between entries.
 
 ### Not in the core
 
-11. **`on_room_slots_received` has no data source** in matrix-rust-sdk, so the host cannot obtain MSC4143 slot state
-   at all and the core falls back to its default slot handling. Our two ends of a call agree on a hardcoded slot id.
+11. **~~`on_room_slots_received` has no data source~~ — resolved by the backend core:** the core subscribes to the
+   slot state itself through `MatrixBackend.subscribeRoom`, and a join takes the application slot id, so the host no
+   longer composes or validates one. The corollary below is why that matters.
 
    **A corollary that cost us a live test: `join` accepts a slot id that `openSlot` would refuse.** Because
    `openSlot` has no data source here we never call it, so nothing ever validated ours — we joined with a bare
@@ -291,7 +294,8 @@ between entries.
    connected, audio flowing. Element Call refused the membership on sight (`slot_id must start with m.call#`) and
    the only place that was visible was the *other* client's console. Validating in `join` too — the one call every
    host must make — would turn a silent mutual invisibility into an immediate error.
-12. **Transport discovery is not in the core**, so every host reimplements an authenticated
+12. **~~Transport discovery is not in the core~~ — resolved by the backend core:** a join picks from the backend's
+    `rtcTransports()`, which the host answers verbatim; the host still fetches it. Every host reimplemented an authenticated
     `GET /_matrix/client/v1/rtc/transports` (`RtcTransportDiscovery.kt`). A helper — even just the response
     parsing — would remove duplicated work. In practice the endpoint answered `401` for us and we fell back to
     well-known.
