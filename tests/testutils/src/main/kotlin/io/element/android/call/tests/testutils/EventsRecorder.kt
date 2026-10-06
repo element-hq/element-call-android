@@ -42,6 +42,8 @@ class EventsRecorder<T>(
         assertThat(predicate(events[index])).isTrue()
     }
 
+    fun recorded(): List<T> = events.toList()
+
     fun clear() {
         events.clear()
     }

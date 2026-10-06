@@ -68,9 +68,6 @@ sealed interface ElementCallScreenEvent {
     /** A double tap on a tile, or a screen reader's action: fill the stage with it, or leave if it already does (spec 000 R1, R2). */
     data class ToggleFullscreen(val tileId: String) : ElementCallScreenEvent
 
-    /** A single tap on the fullscreen tile shows and hides the HUD (000 R8, R9). */
-    data object ToggleFullscreenChrome : ElementCallScreenEvent
-
     /** The HUD's close button: leaves fullscreen, never the call (000 R12). */
     data object ExitFullscreen : ElementCallScreenEvent
 
@@ -96,4 +93,28 @@ sealed interface ElementCallScreenEvent {
     data object Minimize : ElementCallScreenEvent
 
     data object HangUp : ElementCallScreenEvent
+}
+
+/** What the stage and the screen tell the presenter about the chrome (spec 014). Theirs alone, so not a host's to send. */
+internal sealed interface StageChromeEvent : ElementCallScreenEvent {
+    /**
+     * A single tap on the stage: after a short wait, shows or hides the fullscreen HUD or the stage's
+     * chrome, whichever is in play (000 R9, 014 R14, R16). A double tap inside the wait cancels it.
+     */
+    data object TapStage : StageChromeEvent
+
+    /** The stage is up, in this orientation (014 R10, R11). */
+    data class StageAppeared(val isLandscape: Boolean) : StageChromeEvent
+
+    /** The stage changed shape (014 R12). */
+    data class StageRotated(val isLandscape: Boolean) : StageChromeEvent
+
+    /** The user scrolled the grid, never the app (014 R18, R19, R23). */
+    data class UserScrolled(val towardEnd: Boolean) : StageChromeEvent
+
+    /** The user's scrolling has come to rest (014 R20). */
+    data object ScrollIdle : StageChromeEvent
+
+    /** TalkBack started or stopped (014 R24). */
+    data class ScreenReaderChanged(val isRunning: Boolean) : StageChromeEvent
 }

@@ -5,13 +5,26 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
+@file:OptIn(ExperimentalLayoutApi::class)
+
 package io.element.android.call.ui
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.provider.Settings
+import android.view.accessibility.AccessibilityManager
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.Orientation
@@ -21,6 +34,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -30,10 +44,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.systemBarsIgnoringVisibility
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
@@ -44,9 +59,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,12 +73,19 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.audio.CallAudioDeviceType
 import io.element.android.call.ui.preview.ElementCallPreview
@@ -100,7 +125,9 @@ fun ElementCallScreen(
             // because stacked, the two bars take about two fifths of a phone's landscape height,
             // which is exactly the height the video wanted. One call site, so the scroll offset, the
             // linger and the rest of what the stage remembers survive rotation and fullscreen (003 R63, R66).
-            val statusBarTop = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+            // Ignoring visibility, because the status bar comes and goes with the chrome in landscape
+            // (spec 014 R8) and nothing the stage is given may change with the chrome (R4).
+            val statusBarTop = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
             // Kept while the bar is not drawn, so the grid does not move under a fullscreen tile.
             var bannerHeight by remember { mutableStateOf(0.dp) }
             val topClearance = if (isLandscape) 0.dp else statusBarTop + TOP_BAR_HEIGHT + bannerHeight
@@ -112,14 +139,21 @@ fun ElementCallScreen(
                         // Behind the floating controls, so they stay readable over a bright tile.
                         .background(Brush.verticalGradient(listOf(Color.Transparent, ElementCallTheme.colors.controlsScrim))),
                 ) {
-                    CallControlsBar(state, isCompact = isLandscape, modifier = Modifier.systemBarsPadding())
+                    CallControlsBar(state, isCompact = isLandscape, modifier = Modifier.windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility))
                 }
             }
+            val reduceMotion = rememberReduceMotion()
+            ReportScreenReader(state.eventSink)
+            val fullscreen = state.fullscreenTile
+            // Held sideways the status bar stays away, chrome or not: over the picture it has no
+            // background of its own, and it tells nothing worth the strip it takes (014 R8, as proposed).
+            CallSystemBars(isStatusBarHidden = isLandscape)
 
             Box(modifier = Modifier.fillMaxSize()) {
                 if (state.tiles.isEmpty()) {
                     ConnectingPlaceholder(state)
                 } else {
+                    ReportStageOrientation(isLandscape = isLandscape, eventSink = state.eventSink)
                     CallStage(
                         state = state,
                         controlsClearance = controlsClearance,
@@ -128,18 +162,43 @@ fun ElementCallScreen(
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
-                val fullscreen = state.fullscreenTile
+                if (!isLandscape) {
+                    // Faded rather than removed when a tile goes fullscreen, in step with the stage's scrim: removed
+                    // at once, the rows scrolled under it showed until the growing tile covered them (000 R7).
+                    AnimatedVisibility(
+                        visible = fullscreen == null,
+                        enter = fadeIn(tween(FULLSCREEN_SCRIM_OUT_MS)),
+                        exit = fadeOut(tween(FULLSCREEN_SCRIM_IN_MS)),
+                    ) {
+                        // Opaque, so a row scrolled up passes under it; a drag on it is its own, as on the controls (003 B10).
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(ElementCallTheme.colors.bgCanvas)
+                                .scrollable(rememberScrollableState { it }, Orientation.Vertical)
+                                .statusBarsPadding(),
+                        ) {
+                            CallTopBar(state, modifier = Modifier.height(TOP_BAR_HEIGHT))
+                            ScreenShareBanner(
+                                state = state,
+                                modifier = Modifier
+                                    .align(Alignment.CenterHorizontally)
+                                    .onSizeChanged { bannerHeight = with(density) { it.height.toDp() } },
+                            )
+                        }
+                    }
+                }
                 if (fullscreen != null) {
                     // A tile filling the stage, with no chrome but the HUD when asked for (spec 000 R1, R8).
                     // The status bar keeps the canvas behind it rather than the grid rows under the bar.
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .windowInsetsTopHeight(WindowInsets.statusBars)
+                            .windowInsetsTopHeight(WindowInsets.statusBarsIgnoringVisibility)
                             .background(ElementCallTheme.colors.bgCanvas),
                     )
                     if (state.isFullscreenChromeVisible) {
-                        Box(modifier = Modifier.fillMaxSize().statusBarsPadding()) {
+                        Box(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility)) {
                             CallFullscreenChrome(
                                 tile = fullscreen,
                                 onExitFullscreen = { state.eventSink(ElementCallScreenEvent.ExitFullscreen) },
@@ -148,48 +207,173 @@ fun ElementCallScreen(
                         }
                     }
                 } else if (isLandscape) {
-                    CallTopBar(state, modifier = Modifier.systemBarsPadding())
+                    // Both bars over the picture, shown and hidden as one (014 R1, R2).
+                    StageChrome(isVisible = state.isStageChromeVisible, edge = Alignment.Top, reduceMotion = reduceMotion) {
+                        Box {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(statusBarTop + TOP_BAR_HEIGHT + TOP_SCRIM_EXTENT)
+                                    .background(Brush.verticalGradient(listOf(ElementCallTheme.colors.controlsScrim, Color.Transparent))),
+                            )
+                            CallTopBar(state, modifier = Modifier.windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility))
+                        }
+                    }
+                    // The banner is not chrome: it stays, and takes the top bar's place while that is away (R3).
+                    val bannerTop by animateDpAsState(
+                        targetValue = if (state.isStageChromeVisible) TOP_BAR_HEIGHT else 0.dp,
+                        animationSpec = tween(CHROME_SLIDE_MS),
+                        label = "bannerTop",
+                    )
                     // Stacked so a share that is still running when the call becomes one-to-one does
                     // not draw its banner through the duration.
                     Column(
                         modifier = Modifier
                             .align(Alignment.TopCenter)
-                            .systemBarsPadding()
-                            .padding(top = TOP_BAR_HEIGHT),
+                            .windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility)
+                            .padding(top = bannerTop),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         ScreenShareBanner(state = state)
-                        CallDurationLabel(state = state)
+                        AnimatedVisibility(
+                            visible = state.isStageChromeVisible,
+                            enter = fadeIn(tween(CHROME_SLIDE_MS)),
+                            exit = fadeOut(tween(CHROME_SLIDE_MS))
+                        ) {
+                            CallDurationLabel(state = state)
+                        }
                     }
-                    controls(Modifier.align(Alignment.BottomCenter))
-                } else {
-                    // Opaque, so a row scrolled up passes under it; a drag on it is its own, as on the controls (003 B10).
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(ElementCallTheme.colors.bgCanvas)
-                            .scrollable(rememberScrollableState { it }, Orientation.Vertical)
-                            .statusBarsPadding(),
+                    StageChrome(
+                        isVisible = state.isStageChromeVisible,
+                        edge = Alignment.Bottom,
+                        reduceMotion = reduceMotion,
+                        modifier = Modifier.align(Alignment.BottomCenter),
                     ) {
-                        CallTopBar(state, modifier = Modifier.height(TOP_BAR_HEIGHT))
-                        ScreenShareBanner(
-                            state = state,
-                            modifier = Modifier
-                                .align(Alignment.CenterHorizontally)
-                                .onSizeChanged { bannerHeight = with(density) { it.height.toDp() } },
-                        )
+                        controls(Modifier)
                     }
+                } else {
                     CallDurationLabel(
                         state = state,
                         modifier = Modifier
                             .align(Alignment.TopCenter)
                             .padding(top = topClearance + 12.dp),
                     )
-                    controls(Modifier.align(Alignment.BottomCenter))
+                    // Upright only the control bar goes; the top bar stays (014 R30).
+                    StageChrome(
+                        isVisible = state.isStageChromeVisible,
+                        edge = Alignment.Bottom,
+                        reduceMotion = reduceMotion,
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                    ) {
+                        controls(Modifier)
+                    }
                 }
             }
         }
     }
+}
+
+/**
+ * Chrome that slides off the [edge] it sits on, or fades with animations removed (spec 014 R25).
+ *
+ * Removed once hidden, so it takes no touches and TalkBack cannot reach it, and moved as a whole, so
+ * the buttons travel with their background.
+ */
+@Composable
+private fun StageChrome(
+    isVisible: Boolean,
+    edge: Alignment.Vertical,
+    reduceMotion: Boolean,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    val fromTop = edge == Alignment.Top
+    val enter: EnterTransition
+    val exit: ExitTransition
+    if (reduceMotion) {
+        enter = fadeIn(tween(CHROME_SLIDE_MS))
+        exit = fadeOut(tween(CHROME_SLIDE_MS))
+    } else {
+        enter = slideInVertically(tween(CHROME_SLIDE_MS)) { if (fromTop) -it else it } + fadeIn(tween(CHROME_SLIDE_MS))
+        exit = slideOutVertically(tween(CHROME_SLIDE_MS)) { if (fromTop) -it else it } + fadeOut(tween(CHROME_SLIDE_MS))
+    }
+    AnimatedVisibility(visible = isVisible, modifier = modifier, enter = enter, exit = exit) {
+        content()
+    }
+}
+
+/** Tells the presenter the stage is up, and each time it changes shape after that (014 R10 to R12). */
+@Composable
+private fun ReportStageOrientation(isLandscape: Boolean, eventSink: (ElementCallScreenEvent) -> Unit) {
+    val currentEventSink by rememberUpdatedState(eventSink)
+    val hasAppeared = remember { mutableStateOf(false) }
+    LaunchedEffect(isLandscape) {
+        currentEventSink(if (hasAppeared.value) StageChromeEvent.StageRotated(isLandscape) else StageChromeEvent.StageAppeared(isLandscape))
+        hasAppeared.value = true
+    }
+}
+
+/** Tells the presenter whether TalkBack is exploring the screen, which keeps the chrome up (014 R24). */
+@Composable
+private fun ReportScreenReader(eventSink: (ElementCallScreenEvent) -> Unit) {
+    val context = LocalContext.current
+    val currentEventSink by rememberUpdatedState(eventSink)
+    DisposableEffect(context) {
+        val manager = context.getSystemService(AccessibilityManager::class.java)
+        val listener = AccessibilityManager.TouchExplorationStateChangeListener { currentEventSink(StageChromeEvent.ScreenReaderChanged(it)) }
+        currentEventSink(StageChromeEvent.ScreenReaderChanged(manager?.isTouchExplorationEnabled == true))
+        manager?.addTouchExplorationStateChangeListener(listener)
+        onDispose { manager?.removeTouchExplorationStateChangeListener(listener) }
+    }
+}
+
+/**
+ * The screen's system bars: light icons, since the call is always dark, and the status bar hidden
+ * while asked to (014 R8). The host's appearance and its status bar come back when the screen goes.
+ *
+ * The icons are asked for again on every change, because a rotation or the status bar coming back
+ * can restore the window's own appearance underneath us.
+ */
+@Composable
+private fun CallSystemBars(isStatusBarHidden: Boolean) {
+    if (LocalInspectionMode.current) return
+    val view = LocalView.current
+    val window = remember(view) { view.context.findActivity()?.window } ?: return
+    val controller = remember(window, view) { WindowCompat.getInsetsController(window, view) }
+    DisposableEffect(controller) {
+        val wasLightStatusBars = controller.isAppearanceLightStatusBars
+        val wasLightNavigationBars = controller.isAppearanceLightNavigationBars
+        onDispose {
+            controller.show(WindowInsetsCompat.Type.statusBars())
+            controller.isAppearanceLightStatusBars = wasLightStatusBars
+            controller.isAppearanceLightNavigationBars = wasLightNavigationBars
+        }
+    }
+    val orientation = LocalConfiguration.current.orientation
+    DisposableEffect(controller, isStatusBarHidden, orientation) {
+        if (isStatusBarHidden) {
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller.hide(WindowInsetsCompat.Type.statusBars())
+        } else {
+            controller.show(WindowInsetsCompat.Type.statusBars())
+        }
+        controller.isAppearanceLightStatusBars = false
+        controller.isAppearanceLightNavigationBars = false
+        onDispose {}
+    }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
+
+/** Settings, Accessibility, Remove animations: Android's reduce motion (014 R25). */
+@Composable
+private fun rememberReduceMotion(): Boolean {
+    val context = LocalContext.current
+    return remember(context) { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f }
 }
 
 /**
@@ -484,6 +668,12 @@ private fun ElementCallConnection.label(): String = when (this) {
 
 /** The controls bar's height: its vertical padding either side of a button. What the stage keeps its last row clear of. */
 private val CONTROLS_HEIGHT = 20.dp + BUTTON_SIZE + 20.dp
+
+/** How long the chrome takes to slide away or back (014 R25). */
+private const val CHROME_SLIDE_MS = 250
+
+/** How far the landscape top bar's scrim runs past the bar, so it fades out over the picture rather than ending in an edge. */
+private val TOP_SCRIM_EXTENT = 24.dp
 
 /** The top bar's height: an icon button and the bar's padding either side of it. */
 private val TOP_BAR_HEIGHT = 56.dp

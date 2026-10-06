@@ -10,13 +10,11 @@ package io.element.android.call.ui
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.rememberScrollableState
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.gestures.transformable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -85,6 +83,8 @@ internal fun HeroSpotlight(
     isLandscape: Boolean,
     tilesById: ImmutableMap<String, CallTileData>,
     state: ElementCallScreenState,
+    /** A single tap on the shown hero: the stage's, so it can tell a tap from one that stopped a fling. */
+    onTap: () -> Unit,
 ) {
     val shownIndex = heroIds.indexOf(shownId).coerceAtLeast(0)
     val currentHeroIds by rememberUpdatedState(heroIds)
@@ -163,12 +163,10 @@ internal fun HeroSpotlight(
                 modifier = Modifier
                     .fillMaxSize()
                     .testTag(ElementCallTestTags.tile(tile.tileId))
-                    .combinedClickable(
-                        onClick = { if (isFullscreen) state.eventSink(ElementCallScreenEvent.ToggleFullscreenChrome) },
-                        onDoubleClick = { state.eventSink(ElementCallScreenEvent.ToggleFullscreen(tile.tileId)) },
-                        onLongClick = { state.eventSink(ElementCallScreenEvent.ToggleTileStats) },
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() },
+                    .tileTapGestures(
+                        onTap = onTap,
+                        onDoubleTap = { state.eventSink(ElementCallScreenEvent.ToggleFullscreen(tile.tileId)) },
+                        onLongPress = { state.eventSink(ElementCallScreenEvent.ToggleTileStats) },
                     ),
             )
         }

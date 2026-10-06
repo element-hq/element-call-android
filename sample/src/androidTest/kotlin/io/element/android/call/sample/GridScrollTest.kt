@@ -65,6 +65,7 @@ class GridScrollTest {
         launchSample(SampleFixture.TWO_SHARES).use { scenario ->
             scenario.onActivity { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
             composeRule.waitForIdle()
+            composeRule.showStageChrome()
             val root = composeRule.onRoot().getBoundsInRoot()
             assertThat(root.right).isGreaterThan(root.bottom)
             // The strip's lower tile, whose bottom the control bar floats over (R43).
@@ -91,6 +92,7 @@ class GridScrollTest {
         launchSample(SampleFixture.TWO_SHARES).use { scenario ->
             scenario.onActivity { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
             composeRule.waitForIdle()
+            composeRule.showStageChrome()
             val tiles = { composeRule.onAllNodes(isTile).fetchSemanticsNodes().associate { it.config[SemanticsProperties.TestTag] to it.boundsInRoot } }
             val before = tiles()
 

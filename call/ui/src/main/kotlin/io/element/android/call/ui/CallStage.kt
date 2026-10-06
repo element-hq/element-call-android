@@ -15,14 +15,14 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.rememberScrollableState
 import androidx.compose.foundation.gestures.rememberTransformableState
 import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.gestures.transformable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -51,6 +51,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,6 +60,8 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInspectionMode
@@ -85,6 +88,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
@@ -118,14 +122,32 @@ internal fun CallStage(
 ) {
     val scrollOffset = remember { mutableFloatStateOf(0f) }
     val currentLayout = remember { LayoutRef() }
+    val userScroll = remember { UserScrollTracker() }
+    val currentEventSink by rememberUpdatedState(state.eventSink)
     val scrollable = rememberScrollableState { delta ->
         val max = currentLayout.value?.maxScroll(currentLayout.viewportHeight) ?: 0f
         val target = (scrollOffset.floatValue + delta).coerceIn(0f, max)
         val consumed = target - scrollOffset.floatValue
         scrollOffset.floatValue = target
+        userScroll.onScrolled(consumed, maxScroll = max, viewportHeight = currentLayout.viewportHeight)?.let { towardEnd ->
+            currentEventSink(StageChromeEvent.UserScrolled(towardEnd))
+        }
         // What was actually consumed rather than what was asked for: the difference is what tells
         // a fling it has reached the end.
         consumed
+    }
+    // A drag and its fling are two scrolls in Compose, so a rest can fall between them; the fling
+    // reporting a direction is what cancels the return armed there (014 R20).
+    LaunchedEffect(scrollable) {
+        snapshotFlow { scrollable.isScrollInProgress }.collect { inProgress ->
+            if (!inProgress && userScroll.onRest()) currentEventSink(StageChromeEvent.ScrollIdle)
+        }
+    }
+    // Whether the touch that began the current gesture landed on a moving grid: that touch stops the
+    // fling and does nothing else (014 R17).
+    val downStoppedScroll = remember { BooleanRef(false) }
+    val onTap = {
+        if (!downStoppedScroll.value) state.eventSink(StageChromeEvent.TapStage)
     }
     // The stage clips to its bounds so a grid tile passing under the spotlight is still drawn up to
     // the edge (R27). Screen readers read the spotlight first, then the grid in order (R69).
@@ -133,10 +155,18 @@ internal fun CallStage(
         modifier = modifier
             .clipToBounds()
             .semantics { isTraversalGroup = true }
+            .pointerInput(scrollable) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    downStoppedScroll.value = scrollable.isScrollInProgress
+                }
+            }
+            .stageGapTaps(onTap)
             // Not while a tile fills the stage: a drag there pans the picture (000 R23).
             .scrollable(scrollable, Orientation.Vertical, reverseDirection = true, enabled = state.fullscreenTileId == null),
     ) {
         val density = LocalDensity.current
+        userScroll.thresholdPx = with(density) { SCROLL_DIRECTION_THRESHOLD.toPx() }
         val gridTop = with(density) { topClearance.toPx() }
         // From here on, coordinates are those of the area under the top bar, which is what the
         // arrangement divides up; only a fullscreen tile reaches above it.
@@ -178,7 +208,7 @@ internal fun CallStage(
             // Not while fullscreen: the grid waits where it was left for the way out (R63).
             if (fullscreenId != null) return@LaunchedEffect
             val excess = scrollOffset.floatValue - layout.maxScroll(height)
-            if (excess > 0f) scrollable.animateScrollBy(-excess)
+            if (excess > 0f) userScroll.appScroll { scrollable.animateScrollBy(-excess) }
         }
 
         // The composed band, as a set that only changes when a tile crosses its edge, so scrolling by
@@ -226,7 +256,6 @@ internal fun CallStage(
         val lingerJobs = remember { mutableMapOf<String, Job>() }
         val lastBand = remember { SetRef() }
         val lastShown = remember { StringRef() }
-        val currentEventSink by rememberUpdatedState(state.eventSink)
         val tilesById = remember(state.tiles) { state.tiles.associateBy { it.tileId }.toImmutableMap() }
         LaunchedEffect(bandIds, spotlightTileId, fullscreenId) {
             fun constrain(id: String, constraints: MatrixRtcVideoConstraints) {
@@ -323,7 +352,9 @@ internal fun CallStage(
                 hooks.eventSink = state.eventSink
                 hooks.scrollTo = { target -> scrollOffset.floatValue = target.coerceIn(0f, layout.maxScroll(height)) }
                 hooks.animateScrollTo = { target ->
-                    lingerScope.launch { scrollable.animateScrollBy(target.coerceIn(0f, layout.maxScroll(height)) - scrollOffset.floatValue) }
+                    lingerScope.launch {
+                        userScroll.appScroll { scrollable.animateScrollBy(target.coerceIn(0f, layout.maxScroll(height)) - scrollOffset.floatValue) }
+                    }
                 }
             }
             DisposableEffect(Unit) {
@@ -376,6 +407,7 @@ internal fun CallStage(
                 isArrival = tile.tileId !in knownIds,
                 stats = state.tileStats(tile, slot.rect),
                 onLongPress = { state.eventSink(ElementCallScreenEvent.ToggleTileStats) },
+                onTap = onTap,
                 traversalIndex = if (slot.isSticky) 0f else 1f + (gridIndex[tile.tileId] ?: gridTileIds.size),
                 eventSink = state.eventSink,
             )
@@ -383,7 +415,25 @@ internal fun CallStage(
         // The whole grid moves as one layer: a scroll changes this translation and nothing else, so no
         // tile is re-placed or recomposed for it. Sticky slots counter-translate in their own
         // placement (animatedSlot), which is the only placement a scroll reaches.
+        // Between the tiles a fullscreen tile replaces and the tile growing over them, so no stripe of the stage
+        // shows along the edges it has not reached yet (000 R7). Opaque quickly on the way in, slower out.
+        val scrim = remember { Animatable(if (fullscreenId != null) 1f else 0f) }
+        LaunchedEffect(fullscreenId != null) {
+            val isIn = fullscreenId != null
+            scrim.animateTo(if (isIn) 1f else 0f, tween(if (isIn) FULLSCREEN_SCRIM_IN_MS else FULLSCREEN_SCRIM_OUT_MS))
+        }
         Box(modifier = Modifier.fillMaxSize().graphicsLayer { translationY = gridTop - scrollOffset.floatValue }) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .zIndex(FULLSCREEN_SCRIM_Z_INDEX)
+                // Undoes the grid's translation: the scrim covers the stage, not the content.
+                .graphicsLayer {
+                    translationY = scrollOffset.floatValue - gridTop
+                    alpha = scrim.value
+                }
+                .background(ElementCallTheme.colors.bgCanvas),
+        )
         state.tiles.forEach { tile ->
             val isComposed = tile.tileId == stickyTileId ||
                 tile.tileId == fullscreenId && tile.tileId !in heroIds ||
@@ -408,6 +458,7 @@ internal fun CallStage(
                 isLandscape = metrics.isLandscape,
                 tilesById = tilesById,
                 state = state,
+                onTap = onTap,
             )
         }
 
@@ -417,7 +468,7 @@ internal fun CallStage(
         val own = state.tiles.firstOrNull { it.isLocal && it.tileId in composedGridIds && state.videoFrames[it.tileId] != null }
         val ownSlot = own?.let { lastSlots[it.tileId] }
         if (ownSlot != null && fullscreenId == null) {
-            Box(modifier = Modifier.animatedSlot(ownSlot.rect, isSticky = ownSlot.isSticky, scrollOffset = scrollOffset).zIndex(OVERLAY_Z_INDEX)) {
+            Box(modifier = Modifier.animatedSlot(ownSlot.rect, isSticky = ownSlot.isSticky, scrollOffset = scrollOffset).zIndex(OWN_TILE_OVERLAY_Z_INDEX)) {
                 SwitchCameraButton(
                     onClick = { state.eventSink(ElementCallScreenEvent.SwitchCamera) },
                     modifier = Modifier
@@ -525,6 +576,7 @@ private fun PlacedTile(
     isArrival: Boolean,
     stats: TileStats?,
     onLongPress: () -> Unit,
+    onTap: () -> Unit,
     traversalIndex: Float,
     eventSink: (ElementCallScreenEvent) -> Unit,
 ) {
@@ -626,16 +678,13 @@ private fun PlacedTile(
             // that reports every delta consumed leaves nothing for the stage's own scrollable.
             .then(if (slot.isSticky) Modifier.scrollable(rememberScrollableState { it }, Orientation.Vertical) else Modifier)
             .then(if (slot.isFullscreen) Modifier.transformable(transformable) else Modifier)
-            // One pointer node per tile: a double tap enters and leaves fullscreen (000 R1, R2, R4), a
-            // single tap toggles the HUD there (000 R9), a long press the debug readout. A drag past
-            // the touch slop cancels a tap (003 R65); a down during a fling stops it without consuming
-            // it, so a double tap right after a scroll is two clean taps.
-            .combinedClickable(
-                onClick = { if (slot.isFullscreen) eventSink(ElementCallScreenEvent.ToggleFullscreenChrome) },
-                onDoubleClick = { eventSink(ElementCallScreenEvent.ToggleFullscreen(tile.tileId)) },
-                onLongClick = onLongPress,
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() },
+            // A double tap enters and leaves fullscreen (000 R1, R2, R4), a single tap toggles the
+            // chrome (000 R9, 014 R14), a long press the debug readout. A down during a fling stops it
+            // without consuming it, so a double tap right after a scroll is two clean taps.
+            .tileTapGestures(
+                onTap = onTap,
+                onDoubleTap = { eventSink(ElementCallScreenEvent.ToggleFullscreen(tile.tileId)) },
+                onLongPress = onLongPress,
             ),
     )
 }
@@ -767,6 +816,51 @@ private class BooleanRef(initial: Boolean) {
     var value: Boolean = initial
 }
 
+/**
+ * Which way the user is scrolling the grid, measured from the last point it reported (014 R18, R19,
+ * R23). Fed what the scrollable consumed, so a drag held against an end reports nothing. The app's own
+ * scrolls run inside [appScroll] and are not the user's.
+ */
+private class UserScrollTracker {
+    var thresholdPx: Float = 0f
+    private var appScrolls = 0
+    private var travel = 0f
+    private var maxScroll = 0f
+    private var hasScrolledSinceRest = false
+
+    suspend fun appScroll(block: suspend () -> Unit) {
+        appScrolls++
+        try {
+            block()
+        } finally {
+            appScrolls--
+        }
+    }
+
+    /** Toward the end or not, once the travel since the last report passes the threshold; null otherwise. */
+    fun onScrolled(consumed: Float, maxScroll: Float, viewportHeight: Float): Boolean? {
+        if (consumed == 0f || appScrolls > 0) return null
+        hasScrolledSinceRest = true
+        // A direction is measured over one content: the grid changing length is not a scroll.
+        if (maxScroll != this.maxScroll) {
+            this.maxScroll = maxScroll
+            travel = 0f
+        }
+        travel += consumed
+        if (abs(travel) < thresholdPx) return null
+        val towardEnd = travel > 0f
+        travel = 0f
+        // Toward the end hides only a grid with something worth hiding for; toward the start always shows (014 R18).
+        return if (towardEnd && maxScroll < viewportHeight * SCROLL_HIDE_MINIMUM_FRACTION) null else towardEnd
+    }
+
+    /** Whether this rest follows the user's scrolling, which is what starts the chrome's return (014 R20). */
+    fun onRest(): Boolean {
+        travel = 0f
+        return hasScrolledSinceRest.also { hasScrolledSinceRest = false }
+    }
+}
+
 private class SetRef {
     var value: Set<String> = emptySet()
 }
@@ -780,6 +874,12 @@ private class LastFrames {
 }
 
 internal val TILE_SPACING = 8.dp
+
+/** A finger resting on the glass drifts by a few pixels; less than this is not a direction (014 R23). */
+private val SCROLL_DIRECTION_THRESHOLD = 8.dp
+
+/** How far the grid must scroll, as a share of the viewport, before scrolling hides the chrome (014 R18). */
+private const val SCROLL_HIDE_MINIMUM_FRACTION = 0.5f
 
 /**
  * How long a tile stays composed, and its stream subscribed, after leaving the band (R58). The same
@@ -799,9 +899,17 @@ private const val ENTER_SCALE = 0.85f
 
 /** Our tile sits over the others, the spotlight over everything passing under it, overlays over every tile, a fullscreen tile over all. */
 private const val LOCAL_Z_INDEX = 1f
+
+/** What sits on our own tile goes under the spotlight with it when the grid scrolls our tile there. */
+private const val OWN_TILE_OVERLAY_Z_INDEX = 1.5f
 internal const val SPOTLIGHT_Z_INDEX = 2f
 private const val OVERLAY_Z_INDEX = 3f
 internal const val FULLSCREEN_Z_INDEX = 4f
+private const val FULLSCREEN_SCRIM_Z_INDEX = 3.5f
+
+/** The fullscreen scrim's way in and out; the portrait top bar fades on the same timings. */
+internal const val FULLSCREEN_SCRIM_IN_MS = 150
+internal const val FULLSCREEN_SCRIM_OUT_MS = 350
 
 /** The zoom runs from fitted up to 4x (000 R22); constraints step at the simulcast layers' powers of two (000 R13). */
 internal const val MAX_ZOOM = 4f
