@@ -73,6 +73,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInspectionMode
@@ -146,7 +147,7 @@ fun ElementCallScreen(
             val fullscreen = state.fullscreenTile
             // Held sideways the status bar goes with whichever chrome is in play; upright it stays (014 R8, R9).
             val isChromeVisible = if (fullscreen != null) state.isFullscreenChromeVisible else state.isStageChromeVisible
-            StatusBarVisibility(isHidden = isLandscape && !isChromeVisible)
+            CallSystemBars(isStatusBarHidden = isLandscape && !isChromeVisible)
 
             Box(modifier = Modifier.fillMaxSize()) {
                 if (state.tiles.isEmpty()) {
@@ -326,18 +327,39 @@ private fun ReportScreenReader(eventSink: (ElementCallScreenEvent) -> Unit) {
     }
 }
 
-/** Hides the status bar on the screen's window while asked to, and gives it back when the screen goes (014 R8). */
+/**
+ * The screen's system bars: light icons, since the call is always dark, and the status bar hidden
+ * while asked to (014 R8). The host's appearance and its status bar come back when the screen goes.
+ *
+ * The icons are asked for again on every change, because a rotation or the status bar coming back
+ * can restore the window's own appearance underneath us.
+ */
 @Composable
-private fun StatusBarVisibility(isHidden: Boolean) {
+private fun CallSystemBars(isStatusBarHidden: Boolean) {
     if (LocalInspectionMode.current) return
     val view = LocalView.current
-    DisposableEffect(view, isHidden) {
-        val window = view.context.findActivity()?.window
-        if (window == null || !isHidden) return@DisposableEffect onDispose {}
-        val controller = WindowCompat.getInsetsController(window, view)
-        controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        controller.hide(WindowInsetsCompat.Type.statusBars())
-        onDispose { controller.show(WindowInsetsCompat.Type.statusBars()) }
+    val window = remember(view) { view.context.findActivity()?.window } ?: return
+    val controller = remember(window, view) { WindowCompat.getInsetsController(window, view) }
+    DisposableEffect(controller) {
+        val wasLightStatusBars = controller.isAppearanceLightStatusBars
+        val wasLightNavigationBars = controller.isAppearanceLightNavigationBars
+        onDispose {
+            controller.show(WindowInsetsCompat.Type.statusBars())
+            controller.isAppearanceLightStatusBars = wasLightStatusBars
+            controller.isAppearanceLightNavigationBars = wasLightNavigationBars
+        }
+    }
+    val orientation = LocalConfiguration.current.orientation
+    DisposableEffect(controller, isStatusBarHidden, orientation) {
+        if (isStatusBarHidden) {
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller.hide(WindowInsetsCompat.Type.statusBars())
+        } else {
+            controller.show(WindowInsetsCompat.Type.statusBars())
+        }
+        controller.isAppearanceLightStatusBars = false
+        controller.isAppearanceLightNavigationBars = false
+        onDispose {}
     }
 }
 
