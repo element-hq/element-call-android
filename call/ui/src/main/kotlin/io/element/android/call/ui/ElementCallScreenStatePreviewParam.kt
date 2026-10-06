@@ -282,6 +282,14 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
                 handRaisedIds = setOf(aCrowdMemberId(1)),
                 videoFrames = mapOf("$A_REMOTE_MEMBER_ID#SCREEN_SHARE" to emptyFlow()),
             ),
+            // Upright with the chrome away: the control bar is gone and the top bar stays (spec 014 R30).
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
+                memberCount = 6,
+                participants = listOf(aLocalParticipant(), aRemoteParticipant()) + (1..4).map { aCrowdParticipant(it) },
+                videoFrames = mapOf(A_REMOTE_MEMBER_ID to emptyFlow()),
+                isStageChromeVisible = false,
+            ),
         )
 }
 
@@ -320,6 +328,7 @@ fun anElementCallScreenState(
     coreVersion: String = "0.3.0",
     fullscreenTileId: String? = null,
     isFullscreenChromeVisible: Boolean = false,
+    isStageChromeVisible: Boolean = true,
     eventSink: (ElementCallScreenEvent) -> Unit = {},
 ) = ElementCallScreenState(
     connection = connection,
@@ -349,6 +358,7 @@ fun anElementCallScreenState(
     spotlight = CallSpotlight.choose(previewCallTiles(participants, activeSpeakerIds, handRaisedIds, isFrontCamera), shownHeroId = null, lastSpeakerId = null),
     fullscreenTileId = fullscreenTileId,
     isFullscreenChromeVisible = isFullscreenChromeVisible,
+    isStageChromeVisible = isStageChromeVisible,
     libraryVersion = libraryVersion,
     coreVersion = coreVersion,
     eventSink = eventSink,

@@ -37,6 +37,10 @@ import io.element.android.call.tests.testutils.WarmUpRule
 import io.element.android.call.tests.testutils.consumeItemsUntilPredicate
 import io.element.android.call.tests.testutils.consumeItemsUntilTimeout
 import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.currentTime
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
@@ -51,6 +55,7 @@ private val A_ROOM_MEMBER = ElementCallRoomMember(userId = UserId("@bob:example.
  * reads the state. How the snapshot comes to say what it says is `DefaultElementCallControllerTest`'s
  * business, in the impl module.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class ElementCallScreenStateTest {
     @get:Rule val warmUpRule = WarmUpRule()
 
@@ -610,7 +615,7 @@ class ElementCallScreenStateTest {
             assertThat(entered.fullscreenTile?.memberId).isEqualTo(A_REMOTE_MEMBER_ID)
             assertThat(entered.isFullscreenChromeVisible).isFalse()
 
-            entered.eventSink(ElementCallScreenEvent.ToggleFullscreenChrome)
+            entered.eventSink(StageChromeEvent.TapStage)
             val withChrome = consumeItemsUntilPredicate { it.isFullscreenChromeVisible }.last()
             assertThat(withChrome.fullscreenTileId).isEqualTo(A_REMOTE_MEMBER_ID)
 
@@ -651,6 +656,130 @@ class ElementCallScreenStateTest {
             cancelAndIgnoreRemainingEvents()
         }
     }
+
+    /** A tap waits a window of its own before it toggles, and a double tap inside it cancels it (spec 014 R14, R16). */
+    @Test
+    fun `a tap toggles the stage chrome after a short wait, and a double tap cancels it`() = runTest {
+        val controller = FakeElementCallController(initialState = aConnectedSnapshot(participants = twoCameras()))
+
+        moleculeFlow(RecompositionMode.Immediate) { rememberElementCallScreenState(controller, aNavigator()) }.test {
+            val initial = awaitItem()
+            initial.eventSink(StageChromeEvent.StageAppeared(isLandscape = false))
+            assertThat(initial.isStageChromeVisible).isTrue()
+
+            val tappedAt = currentTime
+            initial.eventSink(StageChromeEvent.TapStage)
+            consumeItemsUntilPredicate { !it.isStageChromeVisible }
+            assertThat(currentTime - tappedAt).isEqualTo(CHROME_TAP_DELAY_MS)
+
+            initial.eventSink(StageChromeEvent.TapStage)
+            consumeItemsUntilPredicate { it.isStageChromeVisible }
+
+            initial.eventSink(StageChromeEvent.TapStage)
+            initial.eventSink(ElementCallScreenEvent.ToggleFullscreen(A_REMOTE_MEMBER_ID))
+            val entered = consumeItemsUntilPredicate { it.fullscreenTileId == A_REMOTE_MEMBER_ID }.last()
+            advanceTimeBy(CHROME_TAP_DELAY_MS * 2)
+            runCurrent()
+            expectNoEvents()
+            assertThat(entered.isStageChromeVisible).isTrue()
+            assertThat(entered.isFullscreenChromeVisible).isFalse()
+        }
+    }
+
+    /** Chrome a scroll hid comes back two seconds after the scrolling stops; scrolling again restarts the wait (014 R18, R20). */
+    @Test
+    fun `scroll-hidden chrome returns once the scrolling has stopped for long enough`() = runTest {
+        val controller = FakeElementCallController(initialState = aConnectedSnapshot(participants = twoCameras()))
+
+        moleculeFlow(RecompositionMode.Immediate) { rememberElementCallScreenState(controller, aNavigator()) }.test {
+            val initial = awaitItem()
+            initial.eventSink(StageChromeEvent.StageAppeared(isLandscape = false))
+            initial.eventSink(StageChromeEvent.UserScrolled(towardEnd = true))
+            consumeItemsUntilPredicate { !it.isStageChromeVisible }
+
+            initial.eventSink(StageChromeEvent.ScrollIdle)
+            advanceTimeBy(CHROME_RETURN_DELAY_MS / 2)
+            initial.eventSink(StageChromeEvent.UserScrolled(towardEnd = true))
+            initial.eventSink(StageChromeEvent.ScrollIdle)
+            val idleAt = currentTime
+            consumeItemsUntilPredicate { it.isStageChromeVisible }
+            assertThat(currentTime - idleAt).isEqualTo(CHROME_RETURN_DELAY_MS)
+        }
+    }
+
+    /** Chrome a tap hid stays hidden whatever the scrolling does after, until a tap or a scroll toward the start (014 R19, R21). */
+    @Test
+    fun `tap-hidden chrome does not return by itself`() = runTest {
+        val controller = FakeElementCallController(initialState = aConnectedSnapshot(participants = twoCameras()))
+
+        moleculeFlow(RecompositionMode.Immediate) { rememberElementCallScreenState(controller, aNavigator()) }.test {
+            val initial = awaitItem()
+            initial.eventSink(StageChromeEvent.StageAppeared(isLandscape = false))
+            initial.eventSink(StageChromeEvent.TapStage)
+            consumeItemsUntilPredicate { !it.isStageChromeVisible }
+
+            initial.eventSink(StageChromeEvent.ScrollIdle)
+            advanceTimeBy(CHROME_RETURN_DELAY_MS * 2)
+            runCurrent()
+            expectNoEvents()
+
+            initial.eventSink(StageChromeEvent.UserScrolled(towardEnd = false))
+            consumeItemsUntilPredicate { it.isStageChromeVisible }
+        }
+    }
+
+    /**
+     * Held sideways the chrome starts hidden; leaving fullscreen yourself puts it back there, and a
+     * departure ending it shows it (014 R10, R27, R28).
+     */
+    @Test
+    fun `fullscreen ending resets the stage chrome, or shows it after a departure`() = runTest {
+        val controller = FakeElementCallController(initialState = aConnectedSnapshot(participants = twoCameras()))
+
+        moleculeFlow(RecompositionMode.Immediate) { rememberElementCallScreenState(controller, aNavigator()) }.test {
+            val initial = awaitItem()
+            initial.eventSink(StageChromeEvent.StageAppeared(isLandscape = true))
+            consumeItemsUntilPredicate { !it.isStageChromeVisible }
+
+            initial.eventSink(StageChromeEvent.TapStage)
+            consumeItemsUntilPredicate { it.isStageChromeVisible }
+            initial.eventSink(ElementCallScreenEvent.ToggleFullscreen(A_REMOTE_MEMBER_ID))
+            initial.eventSink(ElementCallScreenEvent.ExitFullscreen)
+            val left = consumeItemsUntilPredicate { it.fullscreenTileId == null && !it.isStageChromeVisible }.last()
+
+            left.eventSink(ElementCallScreenEvent.ToggleFullscreen(A_REMOTE_MEMBER_ID))
+            consumeItemsUntilPredicate { it.fullscreenTileId == A_REMOTE_MEMBER_ID }
+            controller.state.value = controller.state.value?.copy(roster = emptyList<MatrixRtcTile>().previewRoster())
+            consumeItemsUntilPredicate { it.fullscreenTileId == null && it.isStageChromeVisible }
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    /** Until there is a stage there is nothing to look at and hang up stays in reach; TalkBack keeps the chrome up (014 R13, R24). */
+    @Test
+    fun `the stage chrome stays up with no stage, and while a screen reader runs`() = runTest {
+        val controller = FakeElementCallController()
+
+        moleculeFlow(RecompositionMode.Immediate) { rememberElementCallScreenState(controller, aNavigator()) }.test {
+            val initial = awaitItem()
+            initial.eventSink(StageChromeEvent.StageAppeared(isLandscape = true))
+            controller.state.value = aConnectedSnapshot(participants = twoCameras())
+            val items = listOf(initial) + consumeItemsUntilPredicate { it.tiles.isNotEmpty() && !it.isStageChromeVisible }
+            assertThat(items.filter { it.tiles.isEmpty() }.map { it.isStageChromeVisible }).doesNotContain(false)
+
+            initial.eventSink(StageChromeEvent.ScreenReaderChanged(isRunning = true))
+            consumeItemsUntilPredicate { it.isStageChromeVisible }
+            initial.eventSink(StageChromeEvent.TapStage)
+            advanceTimeBy(CHROME_TAP_DELAY_MS * 2)
+            runCurrent()
+            expectNoEvents()
+        }
+    }
+
+    private fun twoCameras() = listOf(
+        aCameraParticipant(A_LOCAL_MEMBER_ID, isLocal = true, isCameraMuted = false),
+        aCameraParticipant(A_REMOTE_MEMBER_ID, isLocal = false, isCameraMuted = false),
+    )
 
     /** The core's tiles default to its shape for [participants]; pass [tiles] to rank them yourself. */
     private fun aConnectedSnapshot(

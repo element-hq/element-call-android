@@ -7,11 +7,18 @@
 
 package io.element.android.call.sample
 
+import android.content.Context
 import android.content.Intent
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.test.click
+import androidx.compose.ui.test.junit4.ComposeTestRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performTouchInput
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
+import io.element.android.call.ui.R
 
 /** Open the sample straight into [fixture], the way `--es fixture` on the launch intent does. */
 internal fun launchSample(fixture: SampleFixture): ActivityScenario<SampleActivity> {
@@ -41,3 +48,18 @@ internal fun ImageBitmap.distinctColours(grid: Int = COLOUR_GRID): Int {
 
 private const val COLOUR_GRID = 24
 private const val COLOUR_LEVELS = 7
+
+/**
+ * Brings the stage's chrome up where it starts hidden, held sideways (spec 014 R10): a tap on the
+ * middle of the stage, then a wait for the control bar, since the tap toggles after a short window.
+ */
+internal fun ComposeTestRule.showStageChrome() {
+    val hangUp = ApplicationProvider.getApplicationContext<Context>().getString(R.string.element_call_a11y_hang_up)
+    if (onAllNodesWithContentDescription(hangUp).fetchSemanticsNodes().isNotEmpty()) return
+    onRoot().performTouchInput { click(center) }
+    waitUntil(CHROME_TIMEOUT_MS) { onAllNodesWithContentDescription(hangUp).fetchSemanticsNodes().isNotEmpty() }
+    waitForIdle()
+}
+
+/** Generous against the tap window, the slide and a slow emulator. */
+internal const val CHROME_TIMEOUT_MS = 2_000L

@@ -13,6 +13,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import io.element.android.call.api.ElementCallConnection
@@ -26,7 +27,10 @@ import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableMap
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.launch
 
 /**
  * Presents whatever call [controller] is running, as the state [ElementCallScreen] draws.
@@ -69,10 +73,20 @@ fun rememberElementCallScreenState(
     // screen when the call is minimised (R25), and ended when the tile leaves (R19).
     var fullscreenTileId by rememberSaveable { mutableStateOf<String?>(null) }
     var isFullscreenChromeVisible by rememberSaveable { mutableStateOf(false) }
+    // The stage's chrome (spec 014). Not saved: a rotation resets it (R12), and minimizing or Picture
+    // in Picture disposes this presenter, so coming back starts from the orientation's start (R29).
+    var stageChrome by remember { mutableStateOf(ElementCallChromeVisibility.Initial) }
+    val chromeScope = rememberCoroutineScope()
+    val pendingTap = remember { JobRef() }
+    val pendingReturn = remember { JobRef() }
+    fun applyStageChrome(event: ElementCallChromeVisibility.Event) {
+        stageChrome = stageChrome.apply(event)
+    }
     LaunchedEffect(tiles) {
         if (fullscreenTileId != null && tiles.none { it.tileId == fullscreenTileId }) {
             fullscreenTileId = null
             isFullscreenChromeVisible = false
+            applyStageChrome(ElementCallChromeVisibility.Event.FullscreenEnded(byDeparture = true))
         }
     }
     LaunchedEffect(spotlight, heroes) {
@@ -123,15 +137,51 @@ fun rememberElementCallScreenState(
                 if (event.tileId in heroes) spotlightMemory.shownHeroId = event.tileId
             }
             is ElementCallScreenEvent.ToggleFullscreen -> {
-                fullscreenTileId = if (fullscreenTileId == event.tileId) null else event.tileId
+                // The tap that began this double tap toggles nothing (014 R16).
+                pendingTap.cancel()
+                val isLeaving = fullscreenTileId == event.tileId
+                fullscreenTileId = if (isLeaving) null else event.tileId
                 // Hidden on entry (000 R8), and nothing to show on the way out.
                 isFullscreenChromeVisible = false
+                if (isLeaving) applyStageChrome(ElementCallChromeVisibility.Event.FullscreenEnded(byDeparture = false))
             }
-            ElementCallScreenEvent.ToggleFullscreenChrome -> isFullscreenChromeVisible = !isFullscreenChromeVisible
             ElementCallScreenEvent.ExitFullscreen -> {
                 fullscreenTileId = null
                 isFullscreenChromeVisible = false
+                applyStageChrome(ElementCallChromeVisibility.Event.FullscreenEnded(byDeparture = false))
             }
+            StageChromeEvent.TapStage -> {
+                pendingReturn.cancel()
+                // A second tap inside the wait is the other half of a double tap.
+                if (pendingTap.isActive) {
+                    pendingTap.cancel()
+                } else {
+                    pendingTap.job = chromeScope.launch {
+                        delay(CHROME_TAP_DELAY_MS)
+                        if (fullscreenTileId != null) {
+                            isFullscreenChromeVisible = !isFullscreenChromeVisible
+                        } else {
+                            applyStageChrome(ElementCallChromeVisibility.Event.Tap)
+                        }
+                    }
+                }
+            }
+            is StageChromeEvent.StageAppeared -> applyStageChrome(ElementCallChromeVisibility.Event.StageAppeared(event.isLandscape))
+            is StageChromeEvent.StageRotated -> applyStageChrome(ElementCallChromeVisibility.Event.Rotated(event.isLandscape))
+            is StageChromeEvent.UserScrolled -> {
+                pendingReturn.cancel()
+                applyStageChrome(ElementCallChromeVisibility.Event.UserScrolled(event.towardEnd))
+            }
+            StageChromeEvent.ScrollIdle -> {
+                if (stageChrome.isAwaitingReturn) {
+                    pendingReturn.cancel()
+                    pendingReturn.job = chromeScope.launch {
+                        delay(CHROME_RETURN_DELAY_MS)
+                        applyStageChrome(ElementCallChromeVisibility.Event.ScrollIdleElapsed)
+                    }
+                }
+            }
+            is StageChromeEvent.ScreenReaderChanged -> applyStageChrome(ElementCallChromeVisibility.Event.ScreenReader(event.isRunning))
             ElementCallScreenEvent.ToggleScreenShare -> {
                 if (current?.isScreenSharing == true) {
                     controller.setScreenShareEnabled(token = null)
@@ -155,8 +205,19 @@ fun rememberElementCallScreenState(
         spotlight = spotlight,
         fullscreenTileId = fullscreenTileId,
         isFullscreenChromeVisible = isFullscreenChromeVisible,
+        isStageChromeVisible = tiles.isEmpty() || stageChrome.isVisible,
         eventSink = ::handleEvent,
     )
+}
+
+private class JobRef {
+    var job: Job? = null
+    val isActive: Boolean get() = job?.isActive == true
+
+    fun cancel() {
+        job?.cancel()
+        job = null
+    }
 }
 
 /**
@@ -188,6 +249,7 @@ private fun ElementCallSnapshot?.toState(
     spotlight: CallSpotlight.Choice,
     fullscreenTileId: String?,
     isFullscreenChromeVisible: Boolean,
+    isStageChromeVisible: Boolean,
     eventSink: (ElementCallScreenEvent) -> Unit,
 ) = ElementCallScreenState(
     connection = this?.connection ?: ElementCallConnection.RequestingPermission,
@@ -214,6 +276,7 @@ private fun ElementCallSnapshot?.toState(
     spotlight = spotlight,
     fullscreenTileId = fullscreenTileId,
     isFullscreenChromeVisible = isFullscreenChromeVisible,
+    isStageChromeVisible = isStageChromeVisible,
     libraryVersion = ElementCallVersion.library,
     coreVersion = ElementCallVersion.core,
     eventSink = eventSink,

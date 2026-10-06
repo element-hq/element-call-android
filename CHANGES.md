@@ -12,7 +12,10 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 ## Unreleased
 
-_Nothing yet._
+- Held sideways, `ElementCallScreen` hides the status bar while its chrome is down, through the window's
+  `WindowInsetsControllerCompat`, and shows it again when the screen goes (spec 014 R8). A host that sets the
+  status bar's visibility itself while the call screen is up will fight it.
+- `ElementCallScreenState` gains `isStageChromeVisible`; `ElementCallScreenEvent.ToggleFullscreenChrome` is gone.
 
 ## 0.1.0-rc.6 - 2026-09-29
 

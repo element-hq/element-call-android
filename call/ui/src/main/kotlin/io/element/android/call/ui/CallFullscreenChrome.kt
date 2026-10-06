@@ -5,14 +5,19 @@
  * Please see LICENSE files in the repository root for full details.
  */
 
+@file:OptIn(ExperimentalLayoutApi::class)
+
 package io.element.android.call.ui
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.systemBarsIgnoringVisibility
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CloseFullscreen
 import androidx.compose.material3.Icon
@@ -45,7 +50,8 @@ internal fun CallFullscreenChrome(
         Row(
             modifier = Modifier
                 .align(Alignment.TopStart)
-                .systemBarsPadding()
+                // Ignoring visibility: held sideways the status bar comes and goes with this HUD (014 R8).
+                .windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility)
                 .fillMaxWidth()
                 .padding(horizontal = 4.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,

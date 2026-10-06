@@ -108,6 +108,11 @@ data class ElementCallScreenState(
     /** Whether the fullscreen HUD is shown: hidden on entry, toggled by a single tap (000 R8, R9). */
     val isFullscreenChromeVisible: Boolean,
     /**
+     * Whether the stage's chrome is shown: in landscape the top bar and the control bar, in portrait
+     * the control bar alone (spec 014 R1, R30). Always true until there is a stage to look at (R13).
+     */
+    val isStageChromeVisible: Boolean,
+    /**
      * What the overflow menu shows: the library version and the core it was built against. Carried in
      * state rather than read from `ElementCallVersion` where they are drawn, so previews and screenshots
      * show a fixed value rather than one that changes with every release.
