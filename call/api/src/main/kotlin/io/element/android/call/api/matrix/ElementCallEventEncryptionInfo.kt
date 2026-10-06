@@ -23,11 +23,11 @@ data class ElementCallEventEncryptionInfo(
     /** The curve25519 key of the sending device, when the source reports it. */
     val senderCurve25519Key: String?,
     /**
-     * Whether we are willing to vouch for the sender of this event.
+     * Whether we are willing to vouch for the sender of this event, or null when the client did not say.
      *
      * Not "have I verified this user": a device belonging to an identity we have never verified still
      * counts. False only when the cryptographic story is wrong rather than unconfirmed - a mismatched
      * sender, an identity that changed under us, an unsigned device.
      */
-    val isSenderCrossSigned: Boolean,
+    val isSenderCrossSigned: Boolean?,
 )

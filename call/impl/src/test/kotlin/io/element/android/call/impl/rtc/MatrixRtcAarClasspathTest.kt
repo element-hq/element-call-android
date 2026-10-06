@@ -22,7 +22,10 @@ import org.junit.Test
 class MatrixRtcAarClasspathTest {
     @Test
     fun `uniffi bindings are on the classpath`() {
-        assertThat(Class.forName("org.matrix.rtc.RtcSessionManagerHandle")).isNotNull()
+        assertThat(Class.forName("org.matrix.rtc.RtcClient")).isNotNull()
+        assertThat(Class.forName("org.matrix.rtc.RtcRoom")).isNotNull()
+        assertThat(Class.forName("org.matrix.rtc.RtcCall")).isNotNull()
+        assertThat(Class.forName("org.matrix.rtc.MatrixBackend")).isNotNull()
         assertThat(Class.forName("org.matrix.rtc.MediaSession")).isNotNull()
         assertThat(Class.forName("org.matrix.rtc.MembershipSnapshotSubscription")).isNotNull()
     }

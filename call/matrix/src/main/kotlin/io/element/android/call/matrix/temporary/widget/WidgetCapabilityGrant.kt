@@ -30,6 +30,9 @@ internal object WidgetCapabilityGrant : WidgetCapabilitiesProvider {
     /** Element Call's pre-MSC4354 membership, the one state type the bridge feeds and publishes. */
     val stateEventTypes = listOf(MatrixRtcEventTypes.MEMBER_ELEMENT_CALL_STATE_UNSTABLE)
 
+    /** MSC4143 slots, which the core reads and the library never writes. */
+    val readOnlyStateEventTypes = listOf("m.rtc.slot", "org.matrix.msc4143.rtc.slot")
+
     /** Both media-key dialects, sent and received. */
     val toDeviceEventTypes = listOf(MatrixRtcEventTypes.ENCRYPTION_KEY, MatrixRtcEventTypes.ENCRYPTION_KEY_ELEMENT_CALL)
 
@@ -47,9 +50,14 @@ internal object WidgetCapabilityGrant : WidgetCapabilitiesProvider {
         "m.reaction",
     )
 
+    /** Message-like events the core reads: reactions and raised hands, and the redaction that lowers one. */
+    val receivedRoomEventTypes = listOf("io.element.call.reaction", "m.reaction", "m.room.redaction")
+
     /** MSC2762 / MSC3819 / MSC4157 capability strings for the same set as the grant. */
     val capabilityStrings: List<String> =
         stateEventTypes.flatMap { listOf("$RECEIVE_STATE:$it", "$SEND_STATE:$it") } +
+            readOnlyStateEventTypes.map { "$RECEIVE_STATE:$it" } +
+            receivedRoomEventTypes.map { "$RECEIVE_EVENT:$it" } +
             toDeviceEventTypes.flatMap { listOf("$RECEIVE_TO_DEVICE:$it", "$SEND_TO_DEVICE:$it") } +
             roomEventTypes.map { "$SEND_EVENT:$it" } +
             listOf(SEND_DELAYED_EVENT, UPDATE_DELAYED_EVENT)
@@ -62,8 +70,10 @@ internal object WidgetCapabilityGrant : WidgetCapabilitiesProvider {
     override suspend fun acquireCapabilities(capabilities: WidgetCapabilities): WidgetCapabilities {
         val stateFilters = stateEventTypes.map { WidgetEventFilter.StateWithType(it) }
         val toDeviceFilters = toDeviceEventTypes.map { WidgetEventFilter.ToDevice(it) }
+        val readOnlyFilters = readOnlyStateEventTypes.map { WidgetEventFilter.StateWithType(it) } +
+            receivedRoomEventTypes.map { WidgetEventFilter.MessageLikeWithType(it) }
         return capabilities.copy(
-            read = stateFilters + toDeviceFilters,
+            read = stateFilters + toDeviceFilters + readOnlyFilters,
             send = stateFilters + toDeviceFilters + roomEventTypes.map { WidgetEventFilter.MessageLikeWithType(it) },
             requiresClient = false,
             updateDelayedEvent = true,
@@ -74,6 +84,7 @@ internal object WidgetCapabilityGrant : WidgetCapabilitiesProvider {
     private const val RECEIVE_STATE = "org.matrix.msc2762.receive.state_event"
     private const val SEND_STATE = "org.matrix.msc2762.send.state_event"
     private const val SEND_EVENT = "org.matrix.msc2762.send.event"
+    private const val RECEIVE_EVENT = "org.matrix.msc2762.receive.event"
     private const val RECEIVE_TO_DEVICE = "org.matrix.msc3819.receive.to_device"
     private const val SEND_TO_DEVICE = "org.matrix.msc3819.send.to_device"
     private const val SEND_DELAYED_EVENT = "org.matrix.msc4157.send.delayed_event"

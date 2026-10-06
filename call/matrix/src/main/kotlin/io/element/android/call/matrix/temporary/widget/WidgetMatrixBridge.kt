@@ -16,8 +16,7 @@ package io.element.android.call.matrix.temporary.widget
 import io.element.android.call.api.matrix.ElementCallDelayedEventAction
 import io.element.android.call.api.matrix.ElementCallEventEncryptionInfo
 import io.element.android.call.api.matrix.ElementCallMatrixException
-import io.element.android.call.api.matrix.ElementCallRoomStateEvent
-import io.element.android.call.api.matrix.ElementCallStickyEvent
+import io.element.android.call.api.matrix.ElementCallRoomEvent
 import io.element.android.call.api.matrix.ElementCallToDeviceMessage
 import io.element.android.call.api.rtc.MatrixRtcEventTypes
 import io.element.android.call.api.rtc.id.DeviceId
@@ -35,9 +34,11 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.channelFlow
-import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.update
@@ -78,6 +79,8 @@ import kotlin.time.Duration.Companion.seconds
  * State arrives as deltas (`update_state` from sync, `send_event` for timeline-borne state) while the
  * core wants the full state on every tick. Room state is replace-only, a leave being a present `{}`
  * event, so the latest event per state key *is* the full state and the map below re-emits it whole.
+ * The machine pushes the initial state of every granted type in one `update_state`, an empty one
+ * included, so after the first one an empty map means none.
  *
  * [parentScope] is where the driver's loops and the feeds run. The bridge makes its own child of it
  * so [stop] can cancel the loops without cancelling the caller; a child of the client session scope
@@ -105,7 +108,14 @@ internal class WidgetMatrixBridge(
     private val pending = ConcurrentHashMap<String, CompletableDeferred<JsonObject>>()
 
     /** Canonical event type -> state key -> latest event: the current state of every type we receive. */
-    private val stateByType = ConcurrentHashMap<String, MutableStateFlow<Map<String, ElementCallRoomStateEvent>>>()
+    private val stateByType = ConcurrentHashMap<String, MutableStateFlow<Map<String, ElementCallRoomEvent>>>()
+
+    /** Whether the initial state push has arrived, before which no state is known. */
+    private val hasInitialState = MutableStateFlow(false)
+
+    private val timeline = MutableSharedFlow<ElementCallRoomEvent>(extraBufferCapacity = 64)
+
+    private val redacted = MutableSharedFlow<EventId>(extraBufferCapacity = 64)
 
     private val toDevice = MutableSharedFlow<ElementCallToDeviceMessage>(extraBufferCapacity = 64)
 
@@ -253,18 +263,28 @@ internal class WidgetMatrixBridge(
 
     // Feeds
 
-    fun stickyEvents(): Flow<List<ElementCallStickyEvent>> {
-        Timber.w("WidgetBridge: sticky events are not available through the widget driver, no sticky snapshot will be fed for $roomId")
-        return emptyFlow()
+    /** The widget API carries no sticky events, so there are none to see; the sticky formats are pinned off. */
+    fun stickyEvents(): Flow<List<ElementCallRoomEvent>> {
+        Timber.w("WidgetBridge: sticky events are not available through the widget driver, $roomId reports none")
+        return flowOf(emptyList())
     }
 
-    fun stateEvents(eventType: String): Flow<List<ElementCallRoomStateEvent>> {
+    fun stateEvents(eventType: String): Flow<List<ElementCallRoomEvent>> {
         return stateFlow(canonicalType(eventType))
-            // Never an empty list: the feeder reads that as "not synced".
-            .filter { it.isNotEmpty() }
+            .combine(hasInitialState) { state, isKnown -> state.takeIf { isKnown } }
+            .filterNotNull()
             .map { it.values.toList() }
             .untilStopped()
     }
+
+    fun timelineEvents(eventTypes: List<String>): Flow<List<ElementCallRoomEvent>> {
+        return timeline
+            .filter { it.eventType in eventTypes }
+            .map { listOf(it) }
+            .untilStopped()
+    }
+
+    fun redactions(): Flow<EventId> = redacted.untilStopped()
 
     fun toDeviceMessages(): Flow<ElementCallToDeviceMessage> = toDevice.untilStopped()
 
@@ -353,9 +373,12 @@ internal class WidgetMatrixBridge(
                 putJsonArray("capabilities") { WidgetCapabilityGrant.capabilityStrings.forEach { add(it) } }
             }
             NOTIFY_CAPABILITIES -> didNegotiate(approved = (data["approved"] as? JsonArray)?.size ?: 0)
-            UPDATE_STATE -> applyStateEvents((data["state"] as? JsonArray)?.filterIsInstance<JsonObject>().orEmpty())
+            UPDATE_STATE -> {
+                applyStateEvents((data["state"] as? JsonArray)?.filterIsInstance<JsonObject>().orEmpty())
+                hasInitialState.value = true
+            }
             // A state event in the timeline comes through here rather than as update_state.
-            SEND_EVENT -> if (data.containsKey("state_key")) applyStateEvents(listOf(data))
+            SEND_EVENT -> if (data.containsKey("state_key")) applyStateEvents(listOf(data)) else deliverTimelineEvent(data)
             SEND_TO_DEVICE -> deliverToDevice(data)
             else -> Unit
         }
@@ -429,13 +452,14 @@ internal class WidgetMatrixBridge(
      * batch held. Emitting per event made the first tick show one member instead of two.
      */
     private fun applyStateEvents(events: List<JsonObject>) {
-        val changes = mutableMapOf<String, MutableMap<String, ElementCallRoomStateEvent>>()
-        for (mapped in events.mapNotNull { it.toStateEvent() }) {
+        val changes = mutableMapOf<String, MutableMap<String, ElementCallRoomEvent>>()
+        for (mapped in events.mapNotNull { it.toRoomEvent() }) {
+            val stateKey = mapped.stateKey ?: continue
             val type = canonicalType(mapped.eventType)
-            val held = stateByType[type]?.value?.get(mapped.stateKey)
             // The same change through both doors.
-            if (mapped.eventId != null && held?.eventId == mapped.eventId) continue
-            changes.getOrPut(type) { mutableMapOf() }[mapped.stateKey] = mapped
+            if (stateByType[type]?.value?.get(stateKey)?.eventId != mapped.eventId) {
+                changes.getOrPut(type) { mutableMapOf() }[stateKey] = mapped
+            }
         }
         for ((type, perKey) in changes) {
             stateFlow(type).update { it + perKey }
@@ -454,24 +478,43 @@ internal class WidgetMatrixBridge(
         else -> eventType
     }
 
-    private fun malformedStateEvent(): ElementCallRoomStateEvent? {
-        Timber.w("WidgetBridge: ignoring a malformed state event")
+    private fun malformedEvent(): ElementCallRoomEvent? {
+        Timber.w("WidgetBridge: ignoring a malformed room event")
         return null
     }
 
-    private fun JsonObject.toStateEvent(): ElementCallRoomStateEvent? {
-        val eventType = string("type") ?: return malformedStateEvent()
-        val stateKey = string("state_key") ?: return malformedStateEvent()
-        val sender = string("sender")?.let { runCatchingExceptions { UserId(it) }.getOrNull() } ?: return malformedStateEvent()
-        val content = this["content"] as? JsonObject ?: return malformedStateEvent()
-        return ElementCallRoomStateEvent(
-            eventType = eventType,
-            stateKey = stateKey,
+    /**
+     * The driver hands over the decrypted event and does not say whether it was encrypted, so none is
+     * reported: state is cleartext anyway, and the core binds a reaction to its member by sender.
+     */
+    private fun JsonObject.toRoomEvent(): ElementCallRoomEvent? {
+        val eventType = string("type") ?: return malformedEvent()
+        val sender = string("sender")?.let { runCatchingExceptions { UserId(it) }.getOrNull() } ?: return malformedEvent()
+        val content = this["content"] as? JsonObject ?: return malformedEvent()
+        val eventId = string("event_id")?.let { runCatchingExceptions { EventId(it) }.getOrNull() } ?: return malformedEvent()
+        val timestampMs = (this["origin_server_ts"] as? JsonPrimitive)?.longOrNull ?: return malformedEvent()
+        return ElementCallRoomEvent(
+            eventId = eventId,
             sender = sender,
+            eventType = eventType,
+            stateKey = string("state_key"),
+            timestampMs = timestampMs,
             contentJson = encode(content),
-            eventId = string("event_id")?.let { runCatchingExceptions { EventId(it) }.getOrNull() },
-            timestampMs = (this["origin_server_ts"] as? JsonPrimitive)?.longOrNull,
+            encryptionInfo = null,
         )
+    }
+
+    // Timeline
+
+    private suspend fun deliverTimelineEvent(data: JsonObject) {
+        val event = data.toRoomEvent() ?: return
+        if (event.eventType == REDACTION) {
+            // `redacts` moved into the content in room version 11.
+            val redacts = data.string("redacts") ?: (data["content"] as? JsonObject)?.string("redacts")
+            redacts?.let { runCatchingExceptions { EventId(it) }.getOrNull() }?.let { redacted.emit(it) }
+        } else {
+            timeline.emit(event)
+        }
     }
 
     // To-device
@@ -557,5 +600,7 @@ internal class WidgetMatrixBridge(
         const val CAPABILITIES = "capabilities"
         const val NOTIFY_CAPABILITIES = "notify_capabilities"
         const val UPDATE_STATE = "update_state"
+
+        const val REDACTION = "m.room.redaction"
     }
 }

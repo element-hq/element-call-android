@@ -12,6 +12,8 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 ## Unreleased
 
+- Core: matrix-rust-rtc `0.5.0-rc.1` (backend and room-first API). A host's Ivy repository over the core's release
+  asset (README, "Consuming a release") must point at the `v0.5.0-rc.1` asset. `MatrixRtcEndReason` gains `SlotClosed`.
 - While it is shown, `ElementCallScreen` drives the window's system bars through `WindowInsetsControllerCompat`:
   light status and navigation bar icons, since the call is always dark, and no status bar held sideways. It
   restores the host's appearance and status bar when it goes. A host that sets either itself while the call screen
@@ -22,6 +24,11 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
   `MatrixRtcCall`). `ElementCallStack.Builder.rtcService` is `rtcClient`. `MatrixRtcTransport` is gone: the join picks it.
 - `ElementCallOptions.elementCallCompat` is `membershipFormat`, a `MatrixRtcMembershipFormat` (`CURRENT`, `STICKY2025`,
   `ROOM_STATE`; were `OFF`, `STICKY_EVENTS`, `STATE_EVENTS`).
+- `ElementCallMatrixRoom`, for a host implementing it: `stickyEvents()` and `stateEvents()` carry `ElementCallRoomEvent`
+  (replacing `ElementCallStickyEvent` and `ElementCallRoomStateEvent`) and must emit the current set first, an empty
+  one included. New: `timelineEvents(types)`, `redactions()` and `relations(...)`.
+  `ElementCallEventEncryptionInfo.isSenderCrossSigned` is nullable: null when the client cannot say.
+- `ElementCallStack.start()` is gone: the core subscribes on its own once a room opens. Drop the call.
 
 ## 0.1.0-rc.6 - 2026-09-29
 

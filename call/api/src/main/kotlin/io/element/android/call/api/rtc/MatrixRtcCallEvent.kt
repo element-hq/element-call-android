@@ -69,6 +69,9 @@ sealed interface MatrixRtcCallEvent {
 sealed interface MatrixRtcEndReason {
     data object Left : MatrixRtcEndReason
 
+    /** The call's slot was closed, which ended the call without us asking. */
+    data object SlotClosed : MatrixRtcEndReason
+
     data class ConnectionClosed(val message: String) : MatrixRtcEndReason
 }
 

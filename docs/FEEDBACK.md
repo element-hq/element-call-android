@@ -208,8 +208,10 @@ between entries.
    so `MISSING_KEY` for that member no longer says whether their audio, their video or both are affected — and the
    two are separately diagnosable faults. `receiveStats(memberId, kind)` is already keyed by both; the encryption
    report is the one per-member signal that is not.
-7. **`subscribeMembershipSnapshots` delivers one snapshot at subscribe time and then goes silent
-   through membership changes the core is visibly acting on.** Seen against Element Call in
+7. **~~`subscribeMembershipSnapshots` delivers one snapshot at subscribe time and then goes silent
+   through membership changes the core is visibly acting on.~~ — resolved by the room-first core:**
+   `MembershipSnapshotSubscription.next()` suspends until the roster changes and returns the current one first.
+   Our reader also stopped at the first quiet poll of the old `nextSnapshot()`, which played its part. Seen against Element Call in
    `STICKY_EVENTS`, with the subscription established *before* anything was fed:
 
    ```
@@ -282,8 +284,9 @@ between entries.
 
 ### Not in the core
 
-11. **`on_room_slots_received` has no data source** in matrix-rust-sdk, so the host cannot obtain MSC4143 slot state
-   at all and the core falls back to its default slot handling. Our two ends of a call agree on a hardcoded slot id.
+11. **~~`on_room_slots_received` has no data source~~ — resolved by the backend core:** the core subscribes to the
+   slot state itself through `MatrixBackend.subscribeRoom`, and a join takes the application slot id, so the host no
+   longer composes or validates one. The corollary below is why that matters.
 
    **A corollary that cost us a live test: `join` accepts a slot id that `openSlot` would refuse.** Because
    `openSlot` has no data source here we never call it, so nothing ever validated ours — we joined with a bare
@@ -291,7 +294,8 @@ between entries.
    connected, audio flowing. Element Call refused the membership on sight (`slot_id must start with m.call#`) and
    the only place that was visible was the *other* client's console. Validating in `join` too — the one call every
    host must make — would turn a silent mutual invisibility into an immediate error.
-12. **Transport discovery is not in the core**, so every host reimplements an authenticated
+12. **~~Transport discovery is not in the core~~ — resolved by the backend core:** a join picks from the backend's
+    `rtcTransports()`, which the host answers verbatim; the host still fetches it. Every host reimplemented an authenticated
     `GET /_matrix/client/v1/rtc/transports` (`RtcTransportDiscovery.kt`). A helper — even just the response
     parsing — would remove duplicated work. In practice the endpoint answered `401` for us and we fell back to
     well-known.
@@ -1109,6 +1113,17 @@ stopgap is:
   core keeps the id of a raised hand's `m.reaction` to redact it later - so the message-like room event (the MSC4075
   notification of the state-event mode too, a plain room event since core v0.3.0-rc.1) goes through the widget
   machine's `send_event`, which answers with the id, until `sendRaw` does. `Room.redact` already lowers the hand.
+- Querying the reactions already in the room, with raw content and encryption info. Live reactions arrive as
+  timeline events; the ones sent before we joined cannot be fetched: `Room.loadOrFetchEventWithRelations` returns
+  typed content with neither, and the widget API has no `read_relations`. `ElementCallMatrixRoom.relations` answers
+  `NotSupported`, so a hand raised before we joined is not seen until it changes.
+- Timeline events with their encryption info. The widget driver forwards decrypted reactions without saying whether
+  they were encrypted, so the bridge reports them without any; the core binds a reaction to its member by sender.
+  Membership is unaffected. `Room.subscribeToMessageLikeEvents`, with raw content and encryption info, is
+  [matrix-rust-sdk#7163](https://github.com/matrix-org/matrix-rust-sdk/pull/7163); read reactions and redactions
+  there once released.
+- `Room.stickyEvents` / `subscribeToStickyEvents` with encryption info: on SDK main since `516229640`, not in
+  26.09.26. Once released, `stickyEvents()` reads them from the SDK, not the bridge.
 
 **Trust relaxation while the stopgap is in place.** The core drops a media key whose sender is not cross-signed
 and the mapper drops one without a sender device. Through the widget driver neither is knowable, so the bridge
