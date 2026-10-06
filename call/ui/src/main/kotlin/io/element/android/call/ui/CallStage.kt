@@ -450,7 +450,7 @@ internal fun CallStage(
         val own = state.tiles.firstOrNull { it.isLocal && it.tileId in composedGridIds && state.videoFrames[it.tileId] != null }
         val ownSlot = own?.let { lastSlots[it.tileId] }
         if (ownSlot != null && fullscreenId == null) {
-            Box(modifier = Modifier.animatedSlot(ownSlot.rect, isSticky = ownSlot.isSticky, scrollOffset = scrollOffset).zIndex(OVERLAY_Z_INDEX)) {
+            Box(modifier = Modifier.animatedSlot(ownSlot.rect, isSticky = ownSlot.isSticky, scrollOffset = scrollOffset).zIndex(OWN_TILE_OVERLAY_Z_INDEX)) {
                 SwitchCameraButton(
                     onClick = { state.eventSink(ElementCallScreenEvent.SwitchCamera) },
                     modifier = Modifier
@@ -881,6 +881,9 @@ private const val ENTER_SCALE = 0.85f
 
 /** Our tile sits over the others, the spotlight over everything passing under it, overlays over every tile, a fullscreen tile over all. */
 private const val LOCAL_Z_INDEX = 1f
+
+/** What sits on our own tile goes under the spotlight with it when the grid scrolls our tile there. */
+private const val OWN_TILE_OVERLAY_Z_INDEX = 1.5f
 internal const val SPOTLIGHT_Z_INDEX = 2f
 private const val OVERLAY_Z_INDEX = 3f
 internal const val FULLSCREEN_Z_INDEX = 4f
