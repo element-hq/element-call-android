@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import io.element.android.call.ui.theme.ElementCallAvatarData
@@ -44,7 +45,7 @@ fun rememberLoudElementCallStyle(): ElementCallStyle {
                 bgCanvas = Color(0xFF1B0A2E),
                 bgSubtlePrimary = Color(0xFF3A1D5C),
                 bgSubtleSecondary = Color(0xFF2A1445),
-                borderActiveSpeaker = Color(0xFFFFD60A),
+                borderActiveSpeaker = SolidColor(Color(0xFFFFD60A)),
                 borderThumbnail = Color(0xFFFFD60A),
                 hangUp = Color(0xFFFF7A00),
                 barBackground = Color(0xFF4B2A7A),
