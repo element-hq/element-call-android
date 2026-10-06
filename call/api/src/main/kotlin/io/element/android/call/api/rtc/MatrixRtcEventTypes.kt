@@ -37,17 +37,15 @@ object MatrixRtcEventTypes {
      * The same thing as Element Call sends it: a `keys` array rather than a single `media_key`.
      *
      * A to-device message has exactly one type, so a peer speaking this dialect sends its keys under
-     * this name *instead of* [ENCRYPTION_KEY] - which is why we subscribe to both regardless of the
-     * compatibility mode. The content shapes are not interchangeable and the library parses this one
-     * itself, so it is handed over raw rather than through
-     * [io.element.android.call.impl.rtc.EncryptionKeyMapper].
+     * this name *instead of* [ENCRYPTION_KEY] - which is why the bridge grants both regardless of the
+     * membership format.
      */
     const val ENCRYPTION_KEY_ELEMENT_CALL = "io.element.call.encryption_keys"
 
     /**
      * Element Call's pre-MSC4354 membership, carried as a room state event rather than a sticky one.
      *
-     * Only meaningful in [MatrixRtcElementCallCompat.STATE_EVENTS]. Both spellings exist in the wild;
+     * Only meaningful in [MatrixRtcMembershipFormat.ROOM_STATE]. Both spellings exist in the wild;
      * the unstable one is what that generation actually publishes.
      */
     const val MEMBER_ELEMENT_CALL_STATE = "m.call.member"

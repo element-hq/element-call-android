@@ -10,21 +10,21 @@ package io.element.android.call.test
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
 import io.element.android.call.api.rtc.MatrixRtcCall
 import io.element.android.call.api.rtc.MatrixRtcCallEvent
+import io.element.android.call.api.rtc.MatrixRtcClient
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
-import io.element.android.call.api.rtc.MatrixRtcElementCallCompat
 import io.element.android.call.api.rtc.MatrixRtcLeaveReason
 import io.element.android.call.api.rtc.MatrixRtcLocalState
+import io.element.android.call.api.rtc.MatrixRtcMediaSession
 import io.element.android.call.api.rtc.MatrixRtcMembership
+import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 import io.element.android.call.api.rtc.MatrixRtcNotify
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
+import io.element.android.call.api.rtc.MatrixRtcRoom
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
-import io.element.android.call.api.rtc.MatrixRtcService
-import io.element.android.call.api.rtc.MatrixRtcSession
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcTileRoster
-import io.element.android.call.api.rtc.MatrixRtcTransport
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.api.rtc.id.RoomId
@@ -36,47 +36,58 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flow
 
-class FakeMatrixRtcService(
-    private val transports: List<MatrixRtcTransport> = emptyList(),
-    private val joinResult: () -> Result<MatrixRtcSession>? = { null },
-) : MatrixRtcService {
-    var joinCallCount = 0
+class FakeMatrixRtcClient(
+    private val roomResult: () -> Result<MatrixRtcRoom>? = { null },
+    private val joinResult: () -> Result<MatrixRtcCall>? = { null },
+) : MatrixRtcClient {
+    var roomCount = 0
         private set
-    var lastSession: FakeMatrixRtcSession? = null
+    var lastRoom: FakeMatrixRtcRoom? = null
         private set
-    var startCount = 0
-        private set
-    var lastElementCallCompat: MatrixRtcElementCallCompat? = null
-        private set
-    var lastNotify: MatrixRtcNotify? = null
+    var lastMembershipFormat: MatrixRtcMembershipFormat? = null
         private set
 
-    override suspend fun start() {
-        startCount++
-    }
+    /** The call joined in the last room. */
+    val lastCall: FakeMatrixRtcCall? get() = lastRoom?.lastCall
 
-    override suspend fun discoverTransports(): Result<List<MatrixRtcTransport>> = Result.success(transports)
-
-    override suspend fun joinSession(
-        roomId: RoomId,
-        slotId: String,
-        application: String,
-        transport: MatrixRtcTransport?,
-        elementCallCompat: MatrixRtcElementCallCompat,
-        notify: MatrixRtcNotify?,
-    ): Result<MatrixRtcSession> {
-        joinCallCount++
-        lastElementCallCompat = elementCallCompat
-        lastNotify = notify
-        joinResult()?.let { return it }
-        return Result.success(FakeMatrixRtcSession(roomId, slotId).also { lastSession = it })
+    override suspend fun room(roomId: RoomId, format: MatrixRtcMembershipFormat): Result<MatrixRtcRoom> {
+        roomCount++
+        lastMembershipFormat = format
+        roomResult()?.let { return it }
+        return Result.success(FakeMatrixRtcRoom(roomId, joinResult).also { lastRoom = it })
     }
 }
 
-class FakeMatrixRtcSession(
+class FakeMatrixRtcRoom(
+    override val roomId: RoomId,
+    private val joinResult: () -> Result<MatrixRtcCall>? = { null },
+) : MatrixRtcRoom {
+    var joinCallCount = 0
+        private set
+    var lastCall: FakeMatrixRtcCall? = null
+        private set
+    var lastNotify: MatrixRtcNotify? = null
+        private set
+    var shutdownCount = 0
+        private set
+
+    override suspend fun joinCall(applicationSlotId: String?, notify: MatrixRtcNotify?): Result<MatrixRtcCall> {
+        joinCallCount++
+        lastNotify = notify
+        joinResult()?.let { return it }
+        return Result.success(FakeMatrixRtcCall(roomId, "m.call#${applicationSlotId ?: "room"}").also { lastCall = it })
+    }
+
+    override suspend fun shutdown() {
+        shutdownCount++
+    }
+}
+
+class FakeMatrixRtcCall(
     override val roomId: RoomId,
     override val slotId: String,
-) : MatrixRtcSession {
+) : MatrixRtcCall {
+    override val memberId: String = "aLocalMemberId"
     override val members = MutableStateFlow(emptyList<MatrixRtcMembership>())
     override val memberCount = MutableStateFlow(0)
 
@@ -84,12 +95,12 @@ class FakeMatrixRtcSession(
         private set
     var leaveCount = 0
         private set
-    var lastCall: FakeMatrixRtcCall? = null
+    var lastMediaSession: FakeMatrixRtcMediaSession? = null
         private set
 
-    override suspend fun connectMedia(transport: MatrixRtcTransport.LiveKit): Result<MatrixRtcCall> {
+    override suspend fun connectMedia(): Result<MatrixRtcMediaSession> {
         connectMediaCount++
-        return Result.success(FakeMatrixRtcCall().also { lastCall = it })
+        return Result.success(FakeMatrixRtcMediaSession().also { lastMediaSession = it })
     }
 
     override suspend fun leave(reason: MatrixRtcLeaveReason?): Result<Unit> {
@@ -100,7 +111,7 @@ class FakeMatrixRtcSession(
     override fun close() = Unit
 }
 
-class FakeMatrixRtcCall : MatrixRtcCall {
+class FakeMatrixRtcMediaSession : MatrixRtcMediaSession {
     override val localMemberId: String = "aLocalMemberId"
 
     private val _events = MutableSharedFlow<MatrixRtcCallEvent>(extraBufferCapacity = 8)

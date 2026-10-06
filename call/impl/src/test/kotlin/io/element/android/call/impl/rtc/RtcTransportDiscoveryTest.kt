@@ -8,8 +8,9 @@
 package io.element.android.call.impl.rtc
 
 import com.google.common.truth.Truth.assertThat
-import io.element.android.call.api.rtc.MatrixRtcTransport
 import io.element.android.call.test.FakeElementCallMatrixTransport
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
 import org.junit.Test
 
 private const val A_SERVICE_URL = "https://sfu.example.org/jwt"
@@ -25,7 +26,7 @@ class RtcTransportDiscoveryTest {
             RtcTransportDiscovery.TRANSPORTS_KEY,
         )
 
-        assertThat(transports).containsExactly(MatrixRtcTransport.LiveKit(A_SERVICE_URL))
+        assertThat(transports).containsExactly(liveKit(A_SERVICE_URL))
     }
 
     @Test
@@ -40,7 +41,7 @@ class RtcTransportDiscoveryTest {
             RtcTransportDiscovery.RTC_FOCI_KEY,
         )
 
-        assertThat(transports).containsExactly(MatrixRtcTransport.LiveKit(A_SERVICE_URL))
+        assertThat(transports).containsExactly(liveKit(A_SERVICE_URL))
     }
 
     @Test
@@ -50,7 +51,7 @@ class RtcTransportDiscoveryTest {
             RtcTransportDiscovery.RTC_FOCI_KEY_ALIAS,
         )
 
-        assertThat(transports).containsExactly(MatrixRtcTransport.LiveKit(A_SERVICE_URL))
+        assertThat(transports).containsExactly(liveKit(A_SERVICE_URL))
     }
 
     @Test
@@ -68,25 +69,25 @@ class RtcTransportDiscoveryTest {
         )
 
         assertThat(transports).containsExactly(
-            MatrixRtcTransport.LiveKit("https://first.example.org/jwt"),
-            MatrixRtcTransport.LiveKit("https://second.example.org/jwt"),
+            liveKit("https://first.example.org/jwt"),
+            liveKit("https://second.example.org/jwt"),
         ).inOrder()
     }
 
     @Test
-    fun `an unknown transport type is kept but marked unsupported`() {
+    fun `an entry is passed through verbatim for the core to judge`() {
         val transports = sut.parseTransports(
             """{ "rtc_transports": [ { "type": "somethingelse", "url": "https://example.org" } ] }""",
             RtcTransportDiscovery.TRANSPORTS_KEY,
         )
 
-        assertThat(transports).containsExactly(MatrixRtcTransport.Unsupported("somethingelse"))
+        assertThat(transports).containsExactly(json("""{ "type": "somethingelse", "url": "https://example.org" }"""))
     }
 
     @Test
-    fun `a livekit entry with no service url is dropped`() {
+    fun `an entry with no type is dropped`() {
         val transports = sut.parseTransports(
-            """{ "rtc_transports": [ { "type": "livekit" } ] }""",
+            """{ "rtc_transports": [ { "livekit_service_url": "$A_SERVICE_URL" } ] }""",
             RtcTransportDiscovery.TRANSPORTS_KEY,
         )
 
@@ -107,4 +108,8 @@ class RtcTransportDiscoveryTest {
     fun `unparseable json yields nothing rather than throwing`() {
         assertThat(sut.parseTransports("not json", RtcTransportDiscovery.TRANSPORTS_KEY)).isEmpty()
     }
+
+    private fun json(text: String) = Json.parseToJsonElement(text).jsonObject
+
+    private fun liveKit(serviceUrl: String) = json("""{ "type": "livekit", "livekit_service_url": "$serviceUrl" }""")
 }

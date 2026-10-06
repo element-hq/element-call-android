@@ -20,17 +20,17 @@ import io.element.android.call.api.audio.CallAudioDeviceController
 import io.element.android.call.api.rtc.MatrixRtcCall
 import io.element.android.call.api.rtc.MatrixRtcCallEvent
 import io.element.android.call.api.rtc.MatrixRtcCallIntent
+import io.element.android.call.api.rtc.MatrixRtcClient
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
-import io.element.android.call.api.rtc.MatrixRtcElementCallCompat
 import io.element.android.call.api.rtc.MatrixRtcLeaveReason
+import io.element.android.call.api.rtc.MatrixRtcMediaSession
+import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 import io.element.android.call.api.rtc.MatrixRtcNotificationType
 import io.element.android.call.api.rtc.MatrixRtcNotify
+import io.element.android.call.api.rtc.MatrixRtcRoom
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
-import io.element.android.call.api.rtc.MatrixRtcService
-import io.element.android.call.api.rtc.MatrixRtcSession
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTileId
-import io.element.android.call.api.rtc.MatrixRtcTransport
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import kotlinx.collections.immutable.toImmutableList
@@ -82,7 +82,7 @@ import kotlin.time.Duration.Companion.milliseconds
 internal class DefaultElementCallController(
     private val scope: CoroutineScope,
     private val platform: ElementCallPlatform,
-    private val rtcService: MatrixRtcService,
+    private val rtcClient: MatrixRtcClient,
     private val audioDeviceController: CallAudioDeviceController,
     private val audioFocus: AudioFocus,
     private val lifecycleListener: ElementCallLifecycleListener,
@@ -182,8 +182,9 @@ internal class DefaultElementCallController(
     /** Hosts the sharing above. Tied to the media connection, since that is what the flows read. */
     private var videoSharingScope: CoroutineScope? = null
 
-    private var session: MatrixRtcSession? = null
-    private var call: MatrixRtcCall? = null
+    private var rtcRoom: MatrixRtcRoom? = null
+    private var rtcCall: MatrixRtcCall? = null
+    private var call: MatrixRtcMediaSession? = null
     private var composedTiles: Set<MatrixRtcTileId> = emptySet()
     private var detailWindow: MatrixRtcDetailWindow? = null
 
@@ -368,7 +369,7 @@ internal class DefaultElementCallController(
     }
 
     /**
-     * Shared rather than handed straight through, because [MatrixRtcCall.videoFrames] is **cold and
+     * Shared rather than handed straight through, because [MatrixRtcMediaSession.videoFrames] is **cold and
      * one stream per collector** - its own KDoc says "collect it once per member; two collectors
      * means two streams". Two tiles on one member opened two `videoStream` handles on the same track,
      * and the second one closing under the first crashed the core inside `VideoSinkWrapper::on_frame`.
@@ -456,48 +457,34 @@ internal class DefaultElementCallController(
         updateState { it.copy(connection = ElementCallConnection.Joining) }
         Timber.i("ElementCall: joining ${callData.roomId}")
 
-        val transport = rtcService.discoverTransports()
-            .getOrElse {
-                fail("Transport discovery failed: ${it.message}")
-                return
-            }
-            .also { Timber.i("ElementCall: discovered transports=$it") }
-            .filterIsInstance<MatrixRtcTransport.LiveKit>()
-            .firstOrNull()
-        if (transport == null) {
-            fail("Homeserver offers no LiveKit transport")
-            return
-        }
-
-        // Read once, here, rather than observed: the mode is fixed for the lifetime of a session -
+        // Read once, here, rather than observed: the format is fixed for the lifetime of a room -
         // it decides the member id, the SFU identity and the token endpoint as well as the wire
         // format - so changing it mid-call is not something the core could act on.
         //
-        // Temporary: pinned to the state-event mode while the library builds against the released Rust SDK.
-        // The two sticky modes need MSC4354, which the widget-driver stopgap cannot carry - see
+        // Temporary: pinned to the room-state format while the library builds against the released Rust SDK.
+        // The two sticky formats need MSC4354, which the widget-driver stopgap cannot carry - see
         // `docs/FEEDBACK.md`, "Widget-driver stopgap". The option is still read so the pin is visible in
         // the log, and so that lifting it is a one-line change here.
-        val preferredElementCallCompat = options.elementCallCompat
-        val elementCallCompat = MatrixRtcElementCallCompat.STATE_EVENTS
-        if (preferredElementCallCompat != elementCallCompat) {
-            Timber.i("ElementCall: Element Call compatibility $preferredElementCallCompat is not available on the released SDK, pinned to $elementCallCompat")
+        val preferredMembershipFormat = options.membershipFormat
+        val membershipFormat = MatrixRtcMembershipFormat.ROOM_STATE
+        if (preferredMembershipFormat != membershipFormat) {
+            Timber.i("ElementCall: membership format $preferredMembershipFormat is not available on the released SDK, pinned to $membershipFormat")
         }
-        Timber.i("ElementCall: joining with Element Call compatibility $elementCallCompat")
+        Timber.i("ElementCall: joining with membership format $membershipFormat")
 
-        val joined = rtcService.joinSession(
-            roomId = callData.roomId,
-            slotId = DEFAULT_SLOT_ID,
-            transport = transport,
-            elementCallCompat = elementCallCompat,
-            notify = notifyFor(callData),
-        ).getOrElse {
+        val room = rtcClient.room(callData.roomId, membershipFormat).getOrElse {
             fail("Join failed: ${it.message}")
             return
         }
-        session = joined
+        rtcRoom = room
+        val joined = room.joinCall(notify = notifyFor(callData)).getOrElse {
+            fail("Join failed: ${it.message}")
+            return
+        }
+        rtcCall = joined
 
         updateState { it.copy(connection = ElementCallConnection.ConnectingMedia) }
-        val connected = joined.connectMedia(transport).getOrElse {
+        val connected = joined.connectMedia().getOrElse {
             fail("Media failed: ${it.message}")
             return
         }
@@ -576,12 +563,10 @@ internal class DefaultElementCallController(
      * screen while nothing was yet listening to the events that call raises.
      */
     @OptIn(FlowPreview::class)
-    private fun CoroutineScope.startObservers(session: MatrixRtcSession, call: MatrixRtcCall) {
+    private fun CoroutineScope.startObservers(rtcCall: MatrixRtcCall, call: MatrixRtcMediaSession) {
         fun observe(block: suspend () -> Unit) = launch(start = CoroutineStart.UNDISPATCHED) { block() }
 
-        // The core's count query rather than members.size: the projection behind members can sit at
-        // zero for a whole call. See MatrixRtcSession.memberCount.
-        observe { session.memberCount.collect { value -> updateState { it.copy(memberCount = value) } } }
+        observe { rtcCall.memberCount.collect { value -> updateState { it.copy(memberCount = value) } } }
         observe { call.tiles.collect { value -> updateState { it.copy(roster = value) } } }
         observe {
             call.localState
@@ -651,8 +636,9 @@ internal class DefaultElementCallController(
      * from the far end and from the user's hang-up at the same moment.
      */
     private suspend fun endCall(leave: Boolean) {
-        val leavingSession: MatrixRtcSession?
-        val leavingCall: MatrixRtcCall?
+        val leavingRoom: MatrixRtcRoom?
+        val leavingRtcCall: MatrixRtcCall?
+        val leavingCall: MatrixRtcMediaSession?
         val endedCallData: ElementCallData?
         mutex.withLock {
             if (_state.value == null && callJob == null) return
@@ -667,9 +653,11 @@ internal class DefaultElementCallController(
             videoSharingScope?.cancel()
             videoSharingScope = null
             sharedVideoFlows.clear()
-            leavingSession = session
+            leavingRoom = rtcRoom
+            leavingRtcCall = rtcCall
             leavingCall = call
-            session = null
+            rtcRoom = null
+            rtcCall = null
             call = null
             // The next call's screen declares afresh; a window from this one would be about tiles
             // that no longer exist.
@@ -682,10 +670,12 @@ internal class DefaultElementCallController(
         // block a start for the next call behind a network round trip.
         leavingCall?.disconnect()
         leavingCall?.close()
-        if (leavingSession != null) {
-            if (leave) leavingSession.leave(MatrixRtcLeaveReason(code = HANGUP_REASON))
-            leavingSession.close()
+        if (leavingRtcCall != null) {
+            if (leave) leavingRtcCall.leave(MatrixRtcLeaveReason(code = HANGUP_REASON))
+            leavingRtcCall.close()
         }
+        // Last: the leave goes through the room.
+        leavingRoom?.shutdown()
 
         audioDeviceController.stop()
         audioFocus.releaseAudioFocus()
@@ -696,22 +686,6 @@ internal class DefaultElementCallController(
     }
 
     internal companion object {
-        /**
-         * MSC4143 slots are not readable from the SDK yet, so both ends of a call agree on a fixed one.
-         * Revisit once slot state is exposed.
-         *
-         * The `m.call#` prefix is not decoration: MSC4143 requires a slot id to start with
-         * `{applicationType}#`, and the bare `m.call` we used before is invalid. Nothing on our side
-         * says so - the core validates this in `openSlot`, which we never call, and `join` accepts
-         * whatever it is given - so the first thing to notice was Element Call refusing our
-         * membership outright with "slot_id must start with m.call#" while our own logs showed a
-         * perfectly healthy call.
-         *
-         * The suffix is `ROOM` because that is the slot Element Call opens for a room-wide call, and a
-         * slot id is what decides whether two clients are in the same call at all. A different one
-         * would leave us technically valid and still alone.
-         */
-        const val DEFAULT_SLOT_ID = "m.call#ROOM"
         const val HANGUP_REASON = "m.hangup"
 
         /**

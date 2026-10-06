@@ -8,7 +8,6 @@
 package io.element.android.call.impl.rtc
 
 import io.element.android.call.api.matrix.ElementCallMatrixTransport
-import io.element.android.call.api.rtc.MatrixRtcTransport
 import io.element.android.call.impl.util.runCatchingExceptions
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -35,15 +34,18 @@ internal class RtcTransportDiscovery(
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
-    suspend fun discover(): Result<List<MatrixRtcTransport>> = runCatchingExceptions {
+    suspend fun discover(): Result<List<JsonObject>> = runCatchingExceptions {
         fromEndpoint() ?: fromWellKnown()
     }
+
+    /** The transports as the JSON array the core's backend answers with, entries verbatim; `[]` for none. */
+    suspend fun discoverJson(): Result<String> = discover().map { JsonArray(it).toString() }
 
     /**
      * @return the advertised transports, or null if the endpoint is unavailable, in which case the
      * caller should fall back.
      */
-    private suspend fun fromEndpoint(): List<MatrixRtcTransport>? {
+    private suspend fun fromEndpoint(): List<JsonObject>? {
         val url = "${transport.homeserverUrl.trimEnd('/')}$TRANSPORTS_PATH"
         return transport.getUrl(url).fold(
             onSuccess = { body ->
@@ -59,7 +61,7 @@ internal class RtcTransportDiscovery(
         )
     }
 
-    private suspend fun fromWellKnown(): List<MatrixRtcTransport> {
+    private suspend fun fromWellKnown(): List<JsonObject> {
         // Well-known is served from the server name, which is usually not the homeserver URL.
         val url = "https://${transport.userIdServerName()}$WELL_KNOWN_PATH"
         return transport.getUrl(url).fold(
@@ -76,7 +78,7 @@ internal class RtcTransportDiscovery(
         )
     }
 
-    internal fun parseTransports(body: String, key: String): List<MatrixRtcTransport> {
+    internal fun parseTransports(body: String, key: String): List<JsonObject> {
         val root = try {
             json.parseToJsonElement(body) as? JsonObject
         } catch (throwable: Throwable) {
@@ -85,14 +87,8 @@ internal class RtcTransportDiscovery(
         } ?: return emptyList()
 
         val transports = root[key] as? JsonArray ?: return emptyList()
-        return transports.mapNotNull { element ->
-            val transport = element as? JsonObject ?: return@mapNotNull null
-            when (val type = transport.string("type")) {
-                null -> null
-                LIVEKIT -> transport.string("livekit_service_url")?.let(MatrixRtcTransport::LiveKit)
-                else -> MatrixRtcTransport.Unsupported(type)
-            }
-        }
+        // Verbatim: the core reads the transport, so only an entry with no type at all is dropped.
+        return transports.mapNotNull { element -> (element as? JsonObject)?.takeIf { it.string("type") != null } }
     }
 
     private fun JsonObject.string(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
@@ -100,7 +96,6 @@ internal class RtcTransportDiscovery(
     companion object {
         private const val TRANSPORTS_PATH = "/_matrix/client/unstable/org.matrix.msc4143/rtc/transports"
         private const val WELL_KNOWN_PATH = "/.well-known/matrix/client"
-        private const val LIVEKIT = "livekit"
 
         /** The MSC4143 discovery endpoint's response field. */
         internal const val TRANSPORTS_KEY = "rtc_transports"

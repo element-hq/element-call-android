@@ -22,6 +22,10 @@ import kotlinx.coroutines.flow.Flow
  * `element-call-matrix`; when the SDK gains them, that implementation changes and this interface does
  * not.
  *
+ * Every feed of sets ([stickyEvents], [stateEvents], [joinedMemberIds]) emits the current set first,
+ * then the whole set again on every change. An empty set means there is none: the core waits for a
+ * first emission of each before the room is ready, so a feed that holds back an empty set stalls it.
+ *
  * Failures are [ElementCallMatrixException]s, so a caller can tell a homeserver refusal from a room
  * that is not open.
  */
@@ -36,8 +40,8 @@ interface ElementCallMatrixRoom {
     val isEncrypted: Flow<Boolean>
 
     /**
-     * The user ids of the room's joined members, whole list per change. Never empty for a room the
-     * session is joined to; an implementation that has not loaded the members yet emits nothing.
+     * The user ids of the room's joined members, ourselves included, whole list per change. An
+     * implementation that has not loaded the members yet emits nothing.
      */
     val joinedMemberIds: Flow<List<UserId>>
 
@@ -50,7 +54,7 @@ interface ElementCallMatrixRoom {
     /**
      * Send a message-like room event with the given raw JSON content, encrypted like any other event in an
      * encrypted room. The core sends its MSC4075 notification this way when the membership is room state
-     * ([io.element.android.call.api.rtc.MatrixRtcElementCallCompat.STATE_EVENTS]), so this is what makes a
+     * ([io.element.android.call.api.rtc.MatrixRtcMembershipFormat.ROOM_STATE]), so this is what makes a
      * call ring; it also carries reactions and raised hands, and a raised hand is lowered by redacting the id
      * returned here.
      * @return the event id the homeserver assigned.
@@ -75,20 +79,31 @@ interface ElementCallMatrixRoom {
      */
     suspend fun sendStickyEvent(eventType: String, contentJson: String, durationMs: ULong): Result<String>
 
-    /** The sticky events currently live in the room, as complete snapshots. */
-    fun stickyEvents(): Flow<List<ElementCallStickyEvent>>
+    /** The sticky events currently live in the room (MSC4354), as complete sets. */
+    fun stickyEvents(): Flow<List<ElementCallRoomEvent>>
 
     /**
-     * The room's current state events of [eventType], one per state key, as complete snapshots.
-     *
-     * A subscriber is handed the current state right away when there is any, then the whole state again
-     * on every change. An empty snapshot is never emitted: room state is replaced, never removed, so a
-     * departure is a present event with `{}` content, and an empty list can only mean "not synced yet".
+     * The room's current state events of [eventType], one per state key, as complete sets.
      *
      * @param eventType the wire type. Types ruma treats as aliases of one another (`m.call.member` and
      * `org.matrix.msc3401.call.member`) share one bucket whichever spelling is asked for.
      */
-    fun stateEvents(eventType: String): Flow<List<ElementCallRoomStateEvent>>
+    fun stateEvents(eventType: String): Flow<List<ElementCallRoomEvent>>
+
+    /**
+     * Message-like events of [eventTypes] as they arrive in the timeline, decrypted: reactions and
+     * raised hands. Not a set: each emission is the batch that just arrived.
+     */
+    fun timelineEvents(eventTypes: List<String>): Flow<List<ElementCallRoomEvent>>
+
+    /** The id of each event redacted from now on: a lowered hand. */
+    fun redactions(): Flow<EventId>
+
+    /**
+     * The events related to [eventId] by [relType] (`m.annotation`) and of [eventType], decrypted: the
+     * reactions to a membership already in the room when we arrive.
+     */
+    suspend fun relations(eventId: EventId, relType: String, eventType: String): Result<List<ElementCallRoomEvent>>
 
     /** Release whatever the implementation holds for this room. In-flight requests fail, feeds complete. Idempotent. */
     suspend fun close()

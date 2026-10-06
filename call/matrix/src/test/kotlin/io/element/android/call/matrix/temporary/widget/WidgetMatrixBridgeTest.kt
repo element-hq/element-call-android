@@ -63,8 +63,11 @@ class WidgetMatrixBridgeTest {
             "org.matrix.msc3819.send.to_device:io.element.call.encryption_keys",
             "org.matrix.msc2762.send.event:org.matrix.msc4075.rtc.notification",
             "org.matrix.msc4157.send.delayed_event",
+            "org.matrix.msc2762.receive.state_event:m.rtc.slot",
+            "org.matrix.msc2762.receive.event:m.reaction",
+            "org.matrix.msc2762.receive.event:m.room.redaction",
         )
-        assertThat(granted).hasSize(14)
+        assertThat(granted).hasSize(19)
         assertThat(start.isCompleted).isFalse()
 
         val notifyReply = driver.deliver(toWidget(NOTIFY_CAPABILITIES, "cap-2", approvedCapabilities()))
@@ -186,7 +189,7 @@ class WidgetMatrixBridgeTest {
     }
 
     @Test
-    fun `a late subscriber gets the current state at once, and nothing for a type with none`() = runTest {
+    fun `a late subscriber gets the current state at once, and an empty set for a type with none`() = runTest {
         val driver = FakeWidgetDriver()
         val bridge = negotiatedBridge(driver)
         driver.deliver(toWidget(UPDATE_STATE, "s-1", stateBatch(stateEvent(ALICE_KEY, "\$alice1", ALICE, aMembership("ALICEDEV")))))
@@ -195,9 +198,51 @@ class WidgetMatrixBridgeTest {
             assertThat(awaitItem().map { it.stateKey }).containsExactly(ALICE_KEY)
             expectNoEvents()
         }
-        // Never an empty list: the feeder would read it as a deserted call.
-        bridge.stateEvents("m.room.topic").test {
+        // The machine pushes every granted type in that first batch, so a type absent from it has none.
+        bridge.stateEvents("m.rtc.slot").test {
+            assertThat(awaitItem()).isEmpty()
             expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `no state is reported before the initial push, and an empty push is reported as empty`() = runTest {
+        val driver = FakeWidgetDriver()
+        val bridge = negotiatedBridge(driver)
+
+        bridge.stateEvents(A_MEMBER_TYPE).test {
+            expectNoEvents()
+            driver.deliver(toWidget(UPDATE_STATE, "s-1", stateBatch()))
+            assertThat(awaitItem()).isEmpty()
+        }
+    }
+
+    @Test
+    fun `timeline events of the asked types are delivered as they arrive`() = runTest {
+        val driver = FakeWidgetDriver()
+        val bridge = negotiatedBridge(driver)
+
+        bridge.timelineEvents(listOf("m.reaction")).test {
+            driver.deliver(toWidget(SEND_EVENT, "t-1", timelineEvent("io.element.call.reaction", "\$other")))
+            driver.deliver(toWidget(SEND_EVENT, "t-2", timelineEvent("m.reaction", "\$hand")))
+            val event = awaitItem().single()
+            assertThat(event.eventId.value).isEqualTo("\$hand")
+            assertThat(event.stateKey).isNull()
+            assertThat(event.timestampMs).isEqualTo(A_TIMESTAMP)
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `a redaction reports the id it redacts, in either room version's shape`() = runTest {
+        val driver = FakeWidgetDriver()
+        val bridge = negotiatedBridge(driver)
+
+        bridge.redactions().test {
+            driver.deliver(toWidget(SEND_EVENT, "r-1", timelineEvent("m.room.redaction", "\$r1", redactsAtTop = "\$hand1")))
+            assertThat(awaitItem().value).isEqualTo("\$hand1")
+            driver.deliver(toWidget(SEND_EVENT, "r-2", timelineEvent("m.room.redaction", "\$r2", content = buildJsonObject { put("redacts", "\$hand2") })))
+            assertThat(awaitItem().value).isEqualTo("\$hand2")
         }
     }
 
@@ -611,7 +656,11 @@ class WidgetMatrixBridgeTest {
 
         assertThat(result.exceptionOrNull()).isInstanceOf(ElementCallMatrixException.NotSupported::class.java)
         assertThat(driver.sentMessages.size).isEqualTo(sentBefore)
-        bridge.stickyEvents().test { awaitComplete() }
+        // The widget API has no sticky events, so there are none to report; empty, so the room still seeds.
+        bridge.stickyEvents().test {
+            assertThat(awaitItem()).isEmpty()
+            awaitComplete()
+        }
     }
 
     // Helpers
@@ -681,6 +730,21 @@ class WidgetMatrixBridgeTest {
         put("event_id", eventId)
         put("origin_server_ts", A_TIMESTAMP)
         put("room_id", A_ROOM_ID.value)
+        put("content", content)
+    }
+
+    private fun timelineEvent(
+        type: String,
+        eventId: String,
+        content: JsonObject = buildJsonObject {},
+        redactsAtTop: String? = null,
+    ) = buildJsonObject {
+        put("type", type)
+        put("sender", ALICE.value)
+        put("event_id", eventId)
+        put("origin_server_ts", A_TIMESTAMP)
+        put("room_id", A_ROOM_ID.value)
+        if (redactsAtTop != null) put("redacts", redactsAtTop)
         put("content", content)
     }
 

@@ -92,13 +92,13 @@ interface ElementCallController {
     /** Tell the core how big a member's video is actually being drawn, so it sends the right layer. */
     fun setVideoConstraints(memberId: String, kind: MatrixRtcStreamKind, constraints: MatrixRtcVideoConstraints)
 
-    /** Tell the call which tiles the screen composes, so it only polls statistics for those. See [MatrixRtcCall.setComposedTiles]. */
+    /** Tell the call which tiles the screen composes, so it only polls statistics for those. See [MatrixRtcMediaSession.setComposedTiles]. */
     fun setComposedTiles(tileIds: Set<MatrixRtcTileId>)
 
     /**
      * Tell the call which tiles the screen needs full records for, so the roster costs what is drawn
      * rather than the whole call. Kept and replayed to a call that connects later. See
-     * [MatrixRtcCall.setDetailWindow].
+     * [MatrixRtcMediaSession.setDetailWindow].
      */
     fun setDetailWindow(window: MatrixRtcDetailWindow)
 

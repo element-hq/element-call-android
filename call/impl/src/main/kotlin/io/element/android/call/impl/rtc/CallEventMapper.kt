@@ -100,6 +100,7 @@ internal fun JoinedMembership.map() = MatrixRtcMembership(
 
 internal fun FfiEndedReason.map(): MatrixRtcEndReason = when (this) {
     is FfiEndedReason.Left -> MatrixRtcEndReason.Left
+    is FfiEndedReason.SlotClosed -> MatrixRtcEndReason.SlotClosed
     is FfiEndedReason.ConnectionClosed -> MatrixRtcEndReason.ConnectionClosed(message)
 }
 

@@ -140,7 +140,7 @@ until one does.
   constraints are what the layout and the call do *together*, and its output is a dump, not an assertion.
 - A snapshot carries the roster whole: `ElementCallSnapshot.roster.order` is every remote tile in rank order and
   `roster.detail` the full records inside the declared window (`setDetailWindow`). A test that pushes a roster
-  through `FakeMatrixRtcCall.pushRoster` gets the window applied as the core would; `tiles.value = aRoster(...)`
+  through `FakeMatrixRtcMediaSession.pushRoster` gets the window applied as the core would; `tiles.value = aRoster(...)`
   is the core's default window, detail for everything.
 
 ### No DI framework, no Appyx, no Activity

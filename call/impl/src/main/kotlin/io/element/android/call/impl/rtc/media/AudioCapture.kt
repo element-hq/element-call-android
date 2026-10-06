@@ -50,7 +50,7 @@ internal class AudioCapture(
         muted.set(value)
     }
 
-    /** Replace what the microphone hears with a fixed tone, see `MatrixRtcCall.setAudioTestToneEnabled`. */
+    /** Replace what the microphone hears with a fixed tone, see `MatrixRtcMediaSession.setAudioTestToneEnabled`. */
     fun setTestToneEnabled(value: Boolean) {
         testTone.set(value)
     }
