@@ -349,6 +349,8 @@ fun anElementCallScreenState(
     spotlight = CallSpotlight.choose(previewCallTiles(participants, activeSpeakerIds, handRaisedIds, isFrontCamera), shownHeroId = null, lastSpeakerId = null),
     fullscreenTileId = fullscreenTileId,
     isFullscreenChromeVisible = isFullscreenChromeVisible,
+    // Nothing to report where a tile is drawn to: a preview has no window to grow out of.
+    pictureInPictureTileId = null,
     libraryVersion = libraryVersion,
     coreVersion = coreVersion,
     eventSink = eventSink,

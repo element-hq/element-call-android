@@ -119,6 +119,7 @@ fun rememberElementCallScreenState(
                 controller.setVideoConstraints(event.memberId, event.kind, event.constraints)
             is ElementCallScreenEvent.SetComposedTiles -> controller.setComposedTiles(event.tileIds)
             is ElementCallScreenEvent.SetDetailWindow -> controller.setDetailWindow(event.window)
+            is ElementCallScreenEvent.SetPictureInPictureSource -> controller.setPictureInPictureSource(event.source)
             is ElementCallScreenEvent.ShowHero -> {
                 if (event.tileId in heroes) spotlightMemory.shownHeroId = event.tileId
             }
@@ -149,12 +150,21 @@ fun rememberElementCallScreenState(
         }
     }
 
+    // The same choice the window makes, so the tile reporting where it is is the one the window shows.
+    // Not ours: the window draws a placeholder rather than our own camera. Only while maximized: the
+    // screen plays its way out after a minimise, and the floating tile reports from then on.
+    val pictureInPictureTileId = current?.takeIf { it.isMaximized }
+        ?.pictureInPictureCandidate(spotlightMemory.spotlightId)
+        ?.takeIf { !it.isLocal }
+        ?.let { candidate -> tiles.firstOrNull { it.id == candidate.id }?.tileId }
+
     return current.toState(
         videoFrames = videoFrames,
         tiles = tiles,
         spotlight = spotlight,
         fullscreenTileId = fullscreenTileId,
         isFullscreenChromeVisible = isFullscreenChromeVisible,
+        pictureInPictureTileId = pictureInPictureTileId,
         eventSink = ::handleEvent,
     )
 }
@@ -188,6 +198,7 @@ private fun ElementCallSnapshot?.toState(
     spotlight: CallSpotlight.Choice,
     fullscreenTileId: String?,
     isFullscreenChromeVisible: Boolean,
+    pictureInPictureTileId: String?,
     eventSink: (ElementCallScreenEvent) -> Unit,
 ) = ElementCallScreenState(
     connection = this?.connection ?: ElementCallConnection.RequestingPermission,
@@ -214,6 +225,7 @@ private fun ElementCallSnapshot?.toState(
     spotlight = spotlight,
     fullscreenTileId = fullscreenTileId,
     isFullscreenChromeVisible = isFullscreenChromeVisible,
+    pictureInPictureTileId = pictureInPictureTileId,
     libraryVersion = ElementCallVersion.library,
     coreVersion = ElementCallVersion.core,
     eventSink = eventSink,

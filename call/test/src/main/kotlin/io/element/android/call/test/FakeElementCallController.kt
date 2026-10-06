@@ -10,6 +10,7 @@ package io.element.android.call.test
 import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallSnapshot
+import io.element.android.call.api.ElementCallWindowRect
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
@@ -36,6 +37,8 @@ class FakeElementCallController(
     override val state = MutableStateFlow(initialState)
     override val shouldEnterPictureInPicture = MutableStateFlow(false)
     override val isInPictureInPicture = MutableStateFlow(false)
+    override val pictureInPictureSource = MutableStateFlow<ElementCallWindowRect?>(null)
+    override val pictureInPictureEntry = MutableStateFlow<ElementCallWindowRect?>(null)
 
     val startedCalls = mutableListOf<ElementCallData>()
     val microphonePermissionAnswers = mutableListOf<Boolean>()
@@ -68,6 +71,14 @@ class FakeElementCallController(
 
     override fun setInPictureInPicture(isInPictureInPicture: Boolean) {
         this.isInPictureInPicture.value = isInPictureInPicture
+    }
+
+    override fun setPictureInPictureSource(source: ElementCallWindowRect?) {
+        pictureInPictureSource.value = source
+    }
+
+    override fun setPictureInPictureEntry(entry: ElementCallWindowRect?) {
+        pictureInPictureEntry.value = entry
     }
 
     override fun startCall(callData: ElementCallData) {

@@ -108,6 +108,11 @@ data class ElementCallScreenState(
     /** Whether the fullscreen HUD is shown: hidden on entry, toggled by a single tap (000 R8, R9). */
     val isFullscreenChromeVisible: Boolean,
     /**
+     * The [CallTileData.tileId] picture-in-picture would show, or null when it shows no tile of ours
+     * (alone in the call). The tile drawing it reports where it is, so the window grows out of it.
+     */
+    val pictureInPictureTileId: String?,
+    /**
      * What the overflow menu shows: the library version and the core it was built against. Carried in
      * state rather than read from `ElementCallVersion` where they are drawn, so previews and screenshots
      * show a fixed value rather than one that changes with every release.

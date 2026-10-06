@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.ElementCallSnapshot
+import io.element.android.call.api.ElementCallWindowRect
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
@@ -85,8 +86,16 @@ fun ElementCallFloatingTile(
     modifier: Modifier = Modifier,
     /** What the call screen's spotlight showed, which this follows (spec 003 R68). */
     spotlightId: MatrixRtcTileId? = null,
+    /**
+     * Where the tile is drawn, as it moves, and null once it is gone: leaving the app hands this tile
+     * to picture-in-picture, which grows out of it. See `ElementCallController.setPictureInPictureSource`.
+     */
+    onPictureInPictureSourceChange: ((ElementCallWindowRect?) -> Unit)? = null,
 ) {
     val tile = call.floatingTile(spotlightId) ?: return
+    val pictureInPictureSource = pictureInPictureSourceModifier(isSource = onPictureInPictureSourceChange != null) {
+        onPictureInPictureSourceChange?.invoke(it)
+    }
     var videoSize by remember(tile.memberId, tile.kind) { mutableStateOf<IntSize?>(null) }
     val targetSize = floatingTileSize(videoSize.takeIf { tile.memberId != null })
     val tileWidth by animateDpAsState(targetSize.width, RESIZE_SPEC, label = "floatingTileWidth")
@@ -150,7 +159,8 @@ fun ElementCallFloatingTile(
                     )
                 }
                 .clickable(onClick = onClick)
-                .testTag(ElementCallTestTags.FLOATING_TILE),
+                .testTag(ElementCallTestTags.FLOATING_TILE)
+                .then(pictureInPictureSource),
         ) {
             val frames = tile.memberId?.let { videoFrames(it, tile.kind) }
             if (frames != null) {
