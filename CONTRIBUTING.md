@@ -29,7 +29,7 @@ enforces. The build needs a locally built `matrix-rust-rtc` AAR, see [docs/local
 
 - Sentence-style title; it becomes the changelog entry, so it says what changes for a user of the library.
 - Exactly one `pr-` label from [.github/release.yml](.github/release.yml); `pr-task` for a change no host could
-  observe, which keeps it out of the release notes.
+  observe, which keeps it out of the release notes. CI checks it.
 - Add the `Record-Screenshots` label when a Composable preview is added or changed, so that CI records the screenshots.
 - Screenshots or a video for visual changes.
 
