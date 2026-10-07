@@ -98,9 +98,14 @@ fun CallTile(
             // The ring is how "who is talking" is answered at a glance, and it is drawn from the
             // SFU's own view of who it can hear rather than from our decoded audio - so it still
             // lights up for a member whose media we cannot decrypt, which is the case worth being
-            // able to see. A decoration changes on the tile without moving it (R40).
+            // able to see. A decoration changes on the tile without moving it (R40). Grid only: the
+            // design leaves the spotlight bare, its position already says who is talking.
             .then(
-                if (tile.isActiveSpeaker) Modifier.border(2.dp, ElementCallTheme.colors.borderActiveSpeaker, shape) else Modifier
+                if (tile.isActiveSpeaker && appearance == CallTileAppearance.Grid) {
+                    Modifier.border(ACTIVE_SPEAKER_BORDER, ElementCallTheme.colors.borderActiveSpeaker, shape)
+                } else {
+                    Modifier
+                }
             ),
     ) {
         if (videoFrames != null) {
@@ -288,10 +293,12 @@ private fun CallTileData.accessibilityDescription(): String {
 /** A camera in the spotlight is drawn halfway between fill and fit (spec 003 R16, contract B7). */
 const val SPOTLIGHT_CAMERA_FIT = 0.5f
 
-private val TILE_CORNER = 12.dp
+private val TILE_CORNER = 16.dp
 
 /** Edge to edge, so square (contract B3); the grid keeps its margins and its corners. */
 private val SPOTLIGHT_CORNER = 0.dp
+
+private val ACTIVE_SPEAKER_BORDER = 4.dp
 
 @PreviewsDayNight
 @Composable

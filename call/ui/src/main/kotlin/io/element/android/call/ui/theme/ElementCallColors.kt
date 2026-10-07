@@ -8,6 +8,7 @@
 package io.element.android.call.ui.theme
 
 import androidx.compose.runtime.Immutable
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 
 /**
@@ -32,8 +33,8 @@ data class ElementCallColors(
     val bgSubtlePrimary: Color,
     /** An inactive control button. */
     val bgSubtleSecondary: Color,
-    /** The ring around whoever is talking. */
-    val borderActiveSpeaker: Color,
+    /** What fills the ring around whoever is talking; a `SolidColor` for a plain one. */
+    val borderActiveSpeaker: Brush,
     /** The hairline around our own thumbnail. */
     val borderThumbnail: Color,
     /** The ring around an inactive control button, which tells it apart from the tile it floats over. */
@@ -72,7 +73,7 @@ data class ElementCallColors(
             bgCanvas = Color(0xFF101317),
             bgSubtlePrimary = Color(0xFF26282D),
             bgSubtleSecondary = Color(0xFF1D1F24),
-            borderActiveSpeaker = Color(0xFF003D29),
+            borderActiveSpeaker = ActiveSpeakerBrush,
             borderThumbnail = Color(0xFF3C3F44),
             borderControl = Color(0xFF3C3F44),
             hangUp = Color(0xFFE5484D),

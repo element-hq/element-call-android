@@ -873,7 +873,7 @@ private class LastFrames {
     var value: Flow<MatrixRtcVideoFrame>? = null
 }
 
-internal val TILE_SPACING = 8.dp
+internal val TILE_SPACING = 16.dp
 
 /** A finger resting on the glass drifts by a few pixels; less than this is not a direction (014 R23). */
 private val SCROLL_DIRECTION_THRESHOLD = 8.dp
