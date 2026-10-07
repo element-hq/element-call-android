@@ -293,7 +293,7 @@ private fun CallTileData.accessibilityDescription(): String {
 /** A camera in the spotlight is drawn halfway between fill and fit (spec 003 R16, contract B7). */
 const val SPOTLIGHT_CAMERA_FIT = 0.5f
 
-private val TILE_CORNER = 12.dp
+private val TILE_CORNER = 16.dp
 
 /** Edge to edge, so square (contract B3); the grid keeps its margins and its corners. */
 private val SPOTLIGHT_CORNER = 0.dp
