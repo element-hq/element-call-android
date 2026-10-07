@@ -169,8 +169,8 @@ cat "$NOTES_OUT"
 echo "-------------------------------------------------------------------------------"
 echo
 
-# An unlabelled pull request lands under Others, per the "*" catch-all in .github/release.yml. Nothing
-# enforces the label at merge time, so this is where it gets noticed; the notes are generated now rather
+# An unlabelled pull request lands under Others, per the "*" catch-all in .github/release.yml. pr-label.yml
+# requires the label before merge, so this catches one removed afterwards; the notes are generated now rather
 # than at merge, so relabelling the merged pull request and running again is the whole fix.
 if grep -q '^### Others' "$NOTES_OUT"; then
     echo "note: there are entries under 'Others'. Those pull requests are missing a pr- label."

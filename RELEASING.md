@@ -96,7 +96,8 @@ tag, and this is the moment to check them, because:
 
 > Anything under **Others** is a pull request that was merged without a `pr-` label.
 
-Nothing enforces that label at merge time. When one slips through, add the label to the *merged* pull request and
+`.github/workflows/pr-label.yml` fails a pull request without exactly one, so this should only catch older ones
+or a label removed after merge. When one slips through, add the label to the *merged* pull request and
 dry-run again: the notes are generated at release time, not at merge time, so a late label still works. The same
 lateness takes an entry *out*: `pr-task` on a merged pull request excludes it from the notes entirely.
 

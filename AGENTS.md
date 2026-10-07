@@ -181,7 +181,7 @@ without the flag it also builds and lays out the assets in `build/release-assets
 ## Pull requests
 
 - Sentence-style titles; the title is the changelog entry, generated at release time from the `pr-` label (exactly
-  one, see `.github/release.yml`; `pr-task` keeps a change out of the notes).
+  one, see `.github/release.yml`, checked by `pr-label.yml`; `pr-task` keeps a change out of the notes).
 - 500 production lines max; tests can be larger. No history rewrites.
 - Commits have a title, and a description only when the title leaves a later reader missing something (the why,
   the non-obvious decision). When there is one, it is a single line under 80 characters.
