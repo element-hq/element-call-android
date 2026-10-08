@@ -69,4 +69,17 @@ class PictureInPictureCandidateTest {
         assertThat(chosen?.hasVideo).isTrue()
         assertThat(aCallSnapshot().pictureInPictureCandidate(null)).isNull()
     }
+
+    /** A small call alone names our own tile, which is not in the order: it is still the one shown (019 R15). */
+    @Test
+    fun `named ourselves, ourselves`() {
+        val snapshot = aCallSnapshot(participants = listOf(aCameraParticipant(A_LOCAL_MEMBER_ID, isLocal = true, isCameraMuted = false)))
+            .copy(isCameraEnabled = true)
+        val own = checkNotNull(snapshot.ownTile).id
+
+        val chosen = snapshot.pictureInPictureCandidate(own)
+
+        assertThat(chosen?.isLocal).isTrue()
+        assertThat(chosen?.hasVideo).isTrue()
+    }
 }

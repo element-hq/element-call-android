@@ -34,6 +34,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.PreviewParameter
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
@@ -73,6 +74,10 @@ fun CallTile(
     showName: Boolean = true,
     /** The zoom and pan applied to the picture in fullscreen (000 R14). */
     videoTransform: VideoTransform = VideoTransform.None,
+    /** Told the decoded picture's size, for a placement that follows its shape (019 R4, R10). */
+    onVideoSizeChange: ((IntSize) -> Unit)? = null,
+    /** The corner our own tile floats in, which a screen reader says (019 R26); null when it does not float. */
+    floatingCorner: ElementCallOwnTileCorner? = null,
 ) {
     // One per tile, for the life of the tile. Emphatically *not* keyed on [stats], which is rebuilt on
     // every recomposition: keying on it gave every recomposition a fresh counter, so the overlay read
@@ -85,11 +90,15 @@ fun CallTile(
     // Animated because the same tile changes appearance in place, and a corner snapping while the
     // tile is still travelling to its new rectangle reads as a glitch on top of the move.
     val corner by animateDpAsState(
-        targetValue = if (appearance == CallTileAppearance.Grid) TILE_CORNER else SPOTLIGHT_CORNER,
+        targetValue = when (appearance) {
+            CallTileAppearance.Grid -> TILE_CORNER
+            CallTileAppearance.Floating -> FLOATING_CORNER
+            else -> SPOTLIGHT_CORNER
+        },
         label = "tileCorner",
     )
     val shape = RoundedCornerShape(corner)
-    val description = tile.accessibilityDescription()
+    val description = tile.accessibilityDescription(hasPicture = videoFrames != null, floatingCorner = floatingCorner)
     Box(
         modifier = modifier
             .semantics { contentDescription = description }
@@ -98,13 +107,16 @@ fun CallTile(
             // The ring is how "who is talking" is answered at a glance, and it is drawn from the
             // SFU's own view of who it can hear rather than from our decoded audio - so it still
             // lights up for a member whose media we cannot decrypt, which is the case worth being
-            // able to see. A decoration changes on the tile without moving it (R40). Grid only: the
-            // design leaves the spotlight bare, its position already says who is talking.
+            // able to see. A decoration changes on the tile without moving it (R40). Grid and our
+            // floating tile only: the spotlight's position already says who is talking, and the one
+            // other person in a one-to-one call could be nobody else (019 R9).
             .then(
-                if (tile.isActiveSpeaker && appearance == CallTileAppearance.Grid) {
-                    Modifier.border(ACTIVE_SPEAKER_BORDER, ElementCallTheme.colors.borderActiveSpeaker, shape)
-                } else {
-                    Modifier
+                when {
+                    tile.isActiveSpeaker && (appearance == CallTileAppearance.Grid || appearance == CallTileAppearance.Floating) ->
+                        Modifier.border(ACTIVE_SPEAKER_BORDER, ElementCallTheme.colors.borderActiveSpeaker, shape)
+                    // Over a tile it overlaps, ours needs an edge of its own (019 R2).
+                    appearance == CallTileAppearance.Floating -> Modifier.border(FLOATING_BORDER, ElementCallTheme.colors.borderThumbnail, shape)
+                    else -> Modifier
                 }
             ),
     ) {
@@ -122,6 +134,7 @@ fun CallTile(
                         translationY = videoTransform.offset.y
                     },
                 frameCounter = frameCounter,
+                onVideoSizeChange = onVideoSizeChange,
                 fit = fit,
             )
         } else {
@@ -133,7 +146,10 @@ fun CallTile(
                 ElementCallAvatar(
                     userId = tile.userId,
                     roomMember = tile.roomMember,
-                    size = if (appearance == CallTileAppearance.Grid) ElementCallAvatarSize.Tile else ElementCallAvatarSize.Spotlight,
+                    size = when (appearance) {
+                        CallTileAppearance.Grid, CallTileAppearance.Floating -> ElementCallAvatarSize.Tile
+                        else -> ElementCallAvatarSize.Spotlight
+                    },
                 )
             }
         }
@@ -188,12 +204,19 @@ enum class CallTileAppearance {
 
     /** Filling the stage (spec 000): square, unnamed, the whole picture with black bars (000 R5). */
     Fullscreen,
+
+    /** The one other person of a one-to-one call, edge to edge behind the bars (019 R4): square, unnamed, unringed. */
+    FullBleed,
+
+    /** Our own tile floating over the stage (019 R2): rounded, bordered, unnamed. */
+    Floating,
     ;
 
     internal fun fitFor(tile: CallTileData): Float = when (this) {
         Grid -> 0f
         Spotlight -> if (tile.isScreenShare) 1f else SPOTLIGHT_CAMERA_FIT
         Fullscreen -> 1f
+        FullBleed, Floating -> 0f
     }
 }
 
@@ -280,15 +303,36 @@ private fun HandRaisedBadge(modifier: Modifier = Modifier) {
 
 /** The name and the states a screen reader has to say, since none of the badges say them (R69). */
 @Composable
-private fun CallTileData.accessibilityDescription(): String {
+private fun CallTileData.accessibilityDescription(hasPicture: Boolean, floatingCorner: ElementCallOwnTileCorner?): String {
     val states = buildList {
+        // Ours says its camera, which no badge on it shows, and its corner while it floats (019 R26).
+        if (isLocal) add(stringResource(if (hasPicture) R.string.element_call_a11y_camera_on else R.string.element_call_a11y_camera_off))
         if (isScreenShare) add(stringResource(R.string.element_call_a11y_sharing_screen))
         if (hasDetail && !isScreenShare && isMuted) add(stringResource(R.string.element_call_a11y_muted))
         if (isActiveSpeaker) add(stringResource(R.string.element_call_a11y_speaking))
         if (isHandRaised) add(stringResource(R.string.element_call_a11y_hand_raised))
+        if (floatingCorner != null) add(stringResource(floatingCorner.label))
     }
     return (listOf(label()) + states).joinToString(", ")
 }
+
+/** A corner as a screen reader says it. */
+internal val ElementCallOwnTileCorner.label: Int
+    get() = when (this) {
+        ElementCallOwnTileCorner.TOP_LEFT -> R.string.element_call_a11y_corner_top_left
+        ElementCallOwnTileCorner.TOP_RIGHT -> R.string.element_call_a11y_corner_top_right
+        ElementCallOwnTileCorner.BOTTOM_LEFT -> R.string.element_call_a11y_corner_bottom_left
+        ElementCallOwnTileCorner.BOTTOM_RIGHT -> R.string.element_call_a11y_corner_bottom_right
+    }
+
+/** The screen reader's way of moving our floating tile, which a drag alone is not (019 R25). */
+internal val ElementCallOwnTileCorner.moveLabel: Int
+    get() = when (this) {
+        ElementCallOwnTileCorner.TOP_LEFT -> R.string.element_call_a11y_move_to_top_left
+        ElementCallOwnTileCorner.TOP_RIGHT -> R.string.element_call_a11y_move_to_top_right
+        ElementCallOwnTileCorner.BOTTOM_LEFT -> R.string.element_call_a11y_move_to_bottom_left
+        ElementCallOwnTileCorner.BOTTOM_RIGHT -> R.string.element_call_a11y_move_to_bottom_right
+    }
 
 /** A camera in the spotlight is drawn halfway between fill and fit (spec 003 R16, contract B7). */
 const val SPOTLIGHT_CAMERA_FIT = 0.5f
@@ -297,6 +341,9 @@ private val TILE_CORNER = 16.dp
 
 /** Edge to edge, so square (contract B3); the grid keeps its margins and its corners. */
 private val SPOTLIGHT_CORNER = 0.dp
+
+private val FLOATING_CORNER = 12.dp
+private val FLOATING_BORDER = 1.5.dp
 
 private val ACTIVE_SPEAKER_BORDER = 4.dp
 

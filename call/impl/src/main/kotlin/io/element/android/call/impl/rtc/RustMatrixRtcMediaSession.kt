@@ -373,6 +373,16 @@ internal class RustMatrixRtcMediaSession(
         }
     }
 
+    override fun setRankingThreshold(tiles: Int) {
+        callScope.launch(ffiDispatcher) {
+            runCatchingExceptions {
+                mediaSession.setRankingThreshold(tiles.coerceAtLeast(0).toUInt())
+            }.onFailure {
+                Timber.w(it, "MatrixRTC: could not set the ranking threshold")
+            }
+        }
+    }
+
     /**
      * The counters come from RTCP, which reports about once a second, so polling faster would only
      * repeat values. One batched call a second for the streams of the tiles the screen composes, plus

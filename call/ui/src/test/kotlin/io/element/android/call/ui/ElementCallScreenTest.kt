@@ -13,15 +13,19 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.doubleClick
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipe
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.v2.runAndroidComposeUiTest
 import com.google.common.truth.Truth.assertThat
@@ -161,6 +165,180 @@ class ElementCallScreenTest : RobolectricTest() {
         onNodeWithContentDescription(activity!!.getString(R.string.element_call_a11y_hang_up)).assertDoesNotExist()
         onNodeWithContentDescription(activity!!.getString(R.string.element_call_a11y_minimize_call)).assertIsDisplayed()
     }
+
+    /** One to one the picture is the whole screen, so upright the top bar goes with the control bar too (019 R30). */
+    @Test
+    fun `hidden chrome one to one upright takes the top bar as well`() = runAndroidComposeUiTest<ComponentActivity> {
+        setContent {
+            ElementCallScreen(state = anElementCallScreenState(participants = listOf(aLocalParticipant(), aRemoteParticipant()), isStageChromeVisible = false))
+        }
+
+        onNodeWithContentDescription(activity!!.getString(R.string.element_call_a11y_hang_up)).assertDoesNotExist()
+        onNodeWithContentDescription(activity!!.getString(R.string.element_call_a11y_minimize_call)).assertDoesNotExist()
+    }
+
+    /** With three tiles the portrait top bar stays, as 014 R30 has it (019 R30). */
+    @Test
+    fun `hidden chrome with three upright keeps the top bar`() = runAndroidComposeUiTest<ComponentActivity> {
+        setContent {
+            ElementCallScreen(
+                state = anElementCallScreenState(
+                    participants = listOf(aLocalParticipant(), aRemoteParticipant(), aCrowdParticipant(1)),
+                    isStageChromeVisible = false,
+                ),
+            )
+        }
+
+        onNodeWithContentDescription(activity!!.getString(R.string.element_call_a11y_minimize_call)).assertIsDisplayed()
+    }
+
+    /** In a small call our own tile neither toggles the chrome nor goes fullscreen, and the tap is not the stage's (019 R14, R23). */
+    @Test
+    fun `in a small call a tap or a double tap on our tile does nothing`() = runAndroidComposeUiTest<ComponentActivity> {
+        val events = EventsRecorder<ElementCallScreenEvent>()
+        setContent {
+            CompositionLocalProvider(LocalInspectionMode provides true) {
+                ElementCallScreen(state = anElementCallScreenState(participants = listOf(aLocalParticipant(), aRemoteParticipant()), eventSink = events))
+            }
+        }
+        waitForIdle()
+        val own = onNodeWithTag(ElementCallTestTags.tile(A_LOCAL_MEMBER_ID))
+
+        events.clear()
+        own.performTouchInput { click() }
+        mainClock.advanceTimeBy(1_000)
+        own.performTouchInput { doubleClick() }
+        waitForIdle()
+        assertThat(events.recorded().filter { it is StageChromeEvent.TapStage || it is ElementCallScreenEvent.ToggleFullscreen }).isEmpty()
+    }
+
+    /** Dropped after a slow drag, our floating tile goes to the corner it was let go nearest (019 R21). */
+    @Test
+    fun `a slow drag drops our tile on the nearest corner`() = runAndroidComposeUiTest<ComponentActivity> {
+        val events = setOneToOne()
+        val tile = onNodeWithTag(ElementCallTestTags.tile(A_LOCAL_MEMBER_ID))
+        val start = tile.fetchSemanticsNode().boundsInRoot.center
+
+        onRoot().performTouchInput { swipe(start, Offset(60f, 200f), durationMillis = 1_500) }
+        waitForIdle()
+
+        assertThat(events.moves()).containsExactly(ElementCallOwnTileCorner.TOP_LEFT)
+    }
+
+    /** A flick carries our tile to the corner it was thrown towards, though it was let go in its own quadrant (019 R21). */
+    @Test
+    fun `a flick carries our tile to the corner it was thrown towards`() = runAndroidComposeUiTest<ComponentActivity> {
+        val events = setOneToOne()
+        val start = onNodeWithTag(ElementCallTestTags.tile(A_LOCAL_MEMBER_ID)).fetchSemanticsNode().boundsInRoot.center
+
+        onRoot().performTouchInput {
+            down(start)
+            repeat(6) { moveBy(Offset(-8f, 0f), delayMillis = 8) }
+            up()
+        }
+        waitForIdle()
+
+        assertThat(events.moves()).containsExactly(ElementCallOwnTileCorner.BOTTOM_LEFT)
+    }
+
+    /** The same flick held still before letting go is a drop: no motion is left to carry (contract C5). */
+    @Test
+    fun `a flick that rests before the release is a drop`() = runAndroidComposeUiTest<ComponentActivity> {
+        val events = setOneToOne()
+        val start = onNodeWithTag(ElementCallTestTags.tile(A_LOCAL_MEMBER_ID)).fetchSemanticsNode().boundsInRoot.center
+
+        onRoot().performTouchInput {
+            down(start)
+            repeat(6) { moveBy(Offset(-8f, 0f), delayMillis = 8) }
+            advanceEventTime(300)
+            up()
+        }
+        waitForIdle()
+
+        assertThat(events.moves()).containsExactly(ElementCallOwnTileCorner.BOTTOM_RIGHT)
+    }
+
+    /** A tap on the camera button switches the camera and moves nothing (019 R22). */
+    @Test
+    fun `a tap on the camera button switches the camera and does not move our tile`() = runAndroidComposeUiTest<ComponentActivity> {
+        val events = setOneToOne()
+
+        clickOnContentDescription(R.string.element_call_a11y_switch_camera)
+        waitForIdle()
+
+        assertThat(events.recorded()).contains(ElementCallScreenEvent.SwitchCamera)
+        assertThat(events.moves()).isEmpty()
+    }
+
+    /** A drag that starts on the camera button moves our tile and does not switch the camera (019 R22). */
+    @Test
+    fun `a drag from the camera button moves our tile and does not switch the camera`() = runAndroidComposeUiTest<ComponentActivity> {
+        val events = setOneToOne()
+        val button = onNodeWithContentDescription(activity!!.getString(R.string.element_call_a11y_switch_camera)).fetchSemanticsNode().boundsInRoot.center
+
+        onRoot().performTouchInput { swipe(button, Offset(60f, 200f), durationMillis = 1_500) }
+        waitForIdle()
+
+        assertThat(events.moves()).containsExactly(ElementCallOwnTileCorner.TOP_LEFT)
+        assertThat(events.recorded()).doesNotContain(ElementCallScreenEvent.SwitchCamera)
+    }
+
+    /** With a single camera there is nothing to switch to, so no button (019 R24). */
+    @Test
+    fun `with one camera our tile has no switch button`() = runAndroidComposeUiTest<ComponentActivity> {
+        setOneToOne(isCameraSwitchAvailable = false)
+
+        onNodeWithContentDescription(activity!!.getString(R.string.element_call_a11y_switch_camera)).assertDoesNotExist()
+    }
+
+    /** A screen reader hears our floating tile with its camera and its corner (019 R26). */
+    @Test
+    fun `our floating tile is announced with its camera and its corner`() = runAndroidComposeUiTest<ComponentActivity> {
+        setOneToOne()
+
+        onNodeWithTag(ElementCallTestTags.tile(A_LOCAL_MEMBER_ID))
+            .assert(hasContentDescription("You, Camera on, Bottom right"))
+    }
+
+    /** A drag does not exist for TalkBack, so our floating tile offers the other three corners as actions (019 R25). */
+    @Test
+    fun `our floating tile offers to move to the three other corners`() = runAndroidComposeUiTest<ComponentActivity> {
+        val events = setOneToOne()
+        val tile = onNodeWithTag(ElementCallTestTags.tile(A_LOCAL_MEMBER_ID))
+
+        val actions = tile.fetchSemanticsNode().config[SemanticsActions.CustomActions]
+        assertThat(actions.map { it.label }).containsExactly("Move to top left", "Move to top right", "Move to bottom left")
+        // Ours never goes fullscreen in a small call (019 R14).
+        assertThat(actions.map { it.label }).doesNotContain(activity!!.getString(R.string.element_call_a11y_enter_fullscreen))
+
+        runOnUiThread { actions.first { it.label == "Move to top left" }.action() }
+        assertThat(events.moves()).containsExactly(ElementCallOwnTileCorner.TOP_LEFT)
+    }
+
+    private fun androidx.compose.ui.test.AndroidComposeUiTest<ComponentActivity>.setOneToOne(
+        isCameraSwitchAvailable: Boolean = true,
+    ): EventsRecorder<ElementCallScreenEvent> {
+        val events = EventsRecorder<ElementCallScreenEvent>()
+        setContent {
+            CompositionLocalProvider(LocalInspectionMode provides true) {
+                ElementCallScreen(
+                    state = anElementCallScreenState(
+                        participants = listOf(aLocalParticipant(), aRemoteParticipant()),
+                        isCameraEnabled = true,
+                        isCameraPermissionGranted = true,
+                        isCameraSwitchAvailable = isCameraSwitchAvailable,
+                        videoFrames = mapOf(A_LOCAL_MEMBER_ID to emptyFlow(), A_REMOTE_MEMBER_ID to emptyFlow()),
+                        eventSink = events,
+                    ),
+                )
+            }
+        }
+        waitForIdle()
+        events.clear()
+        return events
+    }
+
+    private fun EventsRecorder<ElementCallScreenEvent>.moves() = recorded().filterIsInstance<SmallCallEvent.MoveOwnTile>().map { it.corner }
 
     /** A tap on a tile is the stage's tap, sent on its touch-up; a double tap is fullscreen and no second tap (014 R14, R16). */
     @Test

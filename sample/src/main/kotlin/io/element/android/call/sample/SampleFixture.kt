@@ -188,6 +188,49 @@ enum class SampleFixture(val key: String, val category: Category, val title: Str
     ) {
         override fun snapshot() = aConnected(remotes = listOf(person("Bob", "v")), isDm = true).copy(isMaximized = false)
     },
+    ALONE(
+        key = "alone",
+        category = Category.CONNECTED,
+        title = "Alone",
+        description = "Only us, our tile floating in its corner. Turn the camera off for the square avatar.",
+    ) {
+        override fun snapshot() = aConnected(me = "v", remotes = emptyList())
+    },
+    ONE_TO_ONE_LANDSCAPE(
+        key = "one_to_one_landscape",
+        category = Category.CONNECTED,
+        title = "One to one, landscape camera",
+        description = "Carol sends landscape: upright, her whole picture shows with bars, where Bob's fills.",
+    ) {
+        override fun snapshot() = aConnected(me = "v", remotes = listOf(person("Carol", "v")), isDm = true)
+    },
+    SMALL_THREE(
+        key = "small_three",
+        category = Category.CONNECTED,
+        title = "Small call of three",
+        description = "Three tiles, ours inline and first.",
+    ) {
+        override fun snapshot() = aConnected(me = "v", remotes = listOf(person("Carol", "v"), person("Bob", "v")))
+    },
+    SMALL_FOUR(
+        key = "small_four",
+        category = Category.CONNECTED,
+        title = "Small call of four",
+        description = "Carol speaks, so she has the border and nobody moves; Dan's camera is off.",
+    ) {
+        override fun snapshot() = aConnected(me = "v", remotes = listOf(person("Carol", "!v"), person("Bob", "v"), person("Dan")))
+    },
+    SMALL_FIVE(
+        key = "small_five",
+        category = Category.CONNECTED,
+        title = "Small call of five",
+        description = "Five tiles: the most the small-call layout holds.",
+    ) {
+        override fun snapshot() = aConnected(
+            me = "v",
+            remotes = listOf(person("Carol", "v"), person("Bob", "v"), person("Dan"), person("Erin", "v")),
+        )
+    },
     ;
 
     /** Built when opened rather than once, so the duration counter starts from now. */

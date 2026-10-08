@@ -27,6 +27,8 @@ internal data class CallStageMetrics(
     val columns: Int = PORTRAIT_COLUMNS,
     val landscapeColumns: Int = LANDSCAPE_COLUMNS,
     val spotlightAspect: Float = SPOTLIGHT_ASPECT,
+    /** Pixels per dp, for the sizes a layout states in dp (019 R17). */
+    val density: Float = 1f,
 ) {
     val isLandscape: Boolean get() = width > height
 
@@ -53,6 +55,9 @@ internal fun interface CallStageArrangement {
     companion object {
         /** Spec 003: a two-column 4:3 grid scrolling under a sticky 16:9 spotlight. */
         val RankedGrid: CallStageArrangement = CallStageArrangement(::computeRankedGrid)
+
+        /** Spec 019: at most five tiles, nothing scrolling, ours floating with one or two. */
+        val SmallCall: CallStageArrangement = CallStageArrangement(SmallCallLayout::compute)
     }
 }
 
@@ -78,6 +83,12 @@ internal data class CallStageLayout(
     val hiddenTileIds: Set<String>,
     /** The heroes as a stack and which one is shown, or null with none (R19). */
     val heroStack: HeroStack?,
+    /** Our own tile while it floats (019 R2); also in [tiles], at the same rect. */
+    val floating: FloatingOwnTile? = null,
+    /** The one tile drawn edge to edge behind the bars (019 R4), or null. */
+    val fullBleedTileId: String? = null,
+    /** Nothing scrolls (019 R30): the stage's scroll is off. */
+    val isStatic: Boolean = false,
 ) {
     data class Input(
         /**
@@ -89,6 +100,12 @@ internal data class CallStageLayout(
         /** Every hero in the model's order, shown or not (R20). */
         val heroIds: List<String>,
         val metrics: CallStageMetrics,
+        /** Ours, for a layout that treats it apart (019); null when we are not in the call yet. */
+        val own: OwnTileInput? = null,
+        /** How far above the stage's top the screen reaches, behind the top bar (019 R4). */
+        val topBleed: Float = 0f,
+        /** The part of the stage the visible chrome leaves, which our floating tile stays inside (019 R19). Null is the whole stage. */
+        val floatingArea: Rect? = null,
     )
 
     data class HeroStack(val count: Int, val shownIndex: Int)
@@ -216,64 +233,17 @@ private fun placeWithSpotlight(gridTileIds: List<String>, metrics: CallStageMetr
 }
 
 /**
- * Small calls (R34 to R36, contract B4): alone fills the stage above the controls (002 R18); two share it equally,
- * stacked in portrait and side by side in landscape; three are full-width rows in portrait when
- * they fit above the controls and otherwise the grid, and one row in landscape. Two and three in
- * landscape sit centred on the stage's height. Four or more: the grid, two columns in portrait and
- * four in landscape, width-driven, rows from the top, a partial last row left-aligned (R29 to R32).
+ * No spotlight: the grid, two columns in portrait and four in landscape, width-driven, rows from the
+ * top, a partial last row left-aligned (R29 to R32). Calls of up to five tiles are spec 019's layout,
+ * so 003's small-call arrangements (R34 to R36) are never reached here.
  */
 private fun placeWithoutSpotlight(gridTileIds: List<String>, metrics: CallStageMetrics): Placement {
     val gap = metrics.gap
     val margin = metrics.margin
-    val gridWidth = metrics.width - 2 * margin
-    val areaBottom = metrics.height - metrics.controlsClearance
-    val areaHeight = areaBottom - margin
-    val count = gridTileIds.size
-    fun grid(): Placement {
-        val columns = if (metrics.isLandscape) metrics.landscapeColumns else metrics.columns
-        val tileWidth = (gridWidth - (columns - 1) * gap) / columns
-        val rows = placeRows(gridTileIds, columns, left = margin, top = margin, tileWidth = tileWidth, tileHeight = tileWidth / metrics.tileAspect, gap = gap)
-        return Placement(rows.tiles, rows.positions, null, contentHeight(rows.bottom, metrics))
-    }
-    fun centredRow(): Placement {
-        var tileWidth = (gridWidth - (count - 1) * gap) / count
-        var tileHeight = tileWidth / metrics.tileAspect
-        if (tileHeight > metrics.height) {
-            tileHeight = metrics.height
-            tileWidth = tileHeight * metrics.tileAspect
-        }
-        val rowWidth = count * tileWidth + (count - 1) * gap
-        val left = (metrics.width - rowWidth) / 2
-        val top = (metrics.height - tileHeight) / 2
-        val rows = placeRows(gridTileIds, columns = count, left = left, top = top, tileWidth = tileWidth, tileHeight = tileHeight, gap = gap)
-        return Placement(rows.tiles, rows.positions, null, metrics.height)
-    }
-    return when {
-        count == 0 -> Placement(emptyMap(), emptyMap(), null, metrics.height)
-        // Alone: the stage, above the controls, so nothing of ours sits under the bar (R44).
-        count == 1 -> Placement(
-            mapOf(gridTileIds.single() to Rect(margin, margin, metrics.width - margin, areaBottom)),
-            mapOf(gridTileIds.single() to CallStageLayout.GridPosition(0, 0)),
-            null,
-            metrics.height,
-        )
-        count == 2 && !metrics.isLandscape -> {
-            val tileHeight = (areaHeight - gap) / 2
-            val rows = placeRows(gridTileIds, columns = 1, left = margin, top = margin, tileWidth = gridWidth, tileHeight = tileHeight, gap = gap)
-            Placement(rows.tiles, rows.positions, null, metrics.height)
-        }
-        count == 3 && !metrics.isLandscape -> {
-            val tileHeight = gridWidth / metrics.tileAspect
-            if (3 * tileHeight + 2 * gap <= areaHeight) {
-                val rows = placeRows(gridTileIds, columns = 1, left = margin, top = margin, tileWidth = gridWidth, tileHeight = tileHeight, gap = gap)
-                Placement(rows.tiles, rows.positions, null, contentHeight(rows.bottom, metrics))
-            } else {
-                grid()
-            }
-        }
-        count <= 3 && metrics.isLandscape -> centredRow()
-        else -> grid()
-    }
+    val columns = if (metrics.isLandscape) metrics.landscapeColumns else metrics.columns
+    val tileWidth = (metrics.width - 2 * margin - (columns - 1) * gap) / columns
+    val rows = placeRows(gridTileIds, columns, left = margin, top = margin, tileWidth = tileWidth, tileHeight = tileWidth / metrics.tileAspect, gap = gap)
+    return Placement(rows.tiles, rows.positions, null, contentHeight(rows.bottom, metrics))
 }
 
 private data class Rows(val tiles: Map<String, Rect>, val positions: Map<String, CallStageLayout.GridPosition>, val bottom: Float)

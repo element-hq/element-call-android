@@ -57,6 +57,8 @@ data class ElementCallScreenState(
     val isCameraEnabled: Boolean,
     /** Whether the camera in use faces the user, which is what decides if the self view mirrors. */
     val isFrontCamera: Boolean,
+    /** Whether there is another camera to switch to; without, our tile has no switch button (019 R24). */
+    val isCameraSwitchAvailable: Boolean,
     /**
      * Whether the camera permission has been granted. False also covers "never asked" - the camera is
      * only requested when the user reaches for it, so the two are the same thing as far as the screen
@@ -112,6 +114,8 @@ data class ElementCallScreenState(
      * the control bar alone (spec 014 R1, R30). Always true until there is a stage to look at (R13).
      */
     val isStageChromeVisible: Boolean,
+    /** The corner our floating tile is in (019 R18, R20). */
+    val ownTileCorner: ElementCallOwnTileCorner,
     /**
      * What the overflow menu shows: the library version and the core it was built against. Carried in
      * state rather than read from `ElementCallVersion` where they are drawn, so previews and screenshots

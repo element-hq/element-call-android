@@ -100,7 +100,10 @@ fun rememberElementCallScreenState(
             CallSpotlight.Choice.None -> spotlightMemory.lastSpeakerId = null
         }
         spotlightMemory.lastHeroes = heroes
-        spotlightMemory.spotlightId = spotlight.tileId?.let { id -> tiles.firstOrNull { it.tileId == id }?.id }
+        // A small call's window follows its speaker, chosen above the screen (019 R15).
+        if (!SmallCallLayout.applies(tiles)) {
+            spotlightMemory.spotlightId = spotlight.tileId?.let { id -> tiles.firstOrNull { it.tileId == id }?.id }
+        }
     }
 
     // One stream per tile, by the tile's own member and kind: a sharer's camera and screen are two
@@ -182,6 +185,7 @@ fun rememberElementCallScreenState(
                 }
             }
             is StageChromeEvent.ScreenReaderChanged -> applyStageChrome(ElementCallChromeVisibility.Event.ScreenReader(event.isRunning))
+            is SmallCallEvent.MoveOwnTile -> spotlightMemory.ownTileCorner = event.corner
             ElementCallScreenEvent.ToggleScreenShare -> {
                 if (current?.isScreenSharing == true) {
                     controller.setScreenShareEnabled(token = null)
@@ -206,6 +210,7 @@ fun rememberElementCallScreenState(
         fullscreenTileId = fullscreenTileId,
         isFullscreenChromeVisible = isFullscreenChromeVisible,
         isStageChromeVisible = tiles.isEmpty() || stageChrome.isVisible,
+        ownTileCorner = spotlightMemory.ownTileCorner,
         eventSink = ::handleEvent,
     )
 }
@@ -228,7 +233,7 @@ private class JobRef {
  * the end of a big call, and first is where iOS puts it. Our mute and camera come from the call
  * rather than from the core's tile, so a tap shows on the badge before the round trip does.
  */
-private fun ElementCallSnapshot.callTiles(): ImmutableList<CallTileData> {
+internal fun ElementCallSnapshot.callTiles(): ImmutableList<CallTileData> {
     val own = ownTile?.let {
         it.copy(isHero = false, isMicrophoneMuted = isMicrophoneMuted, hasVideo = isCameraEnabled)
             .toCallTileData(roomMembers, isLocal = true, isFrontCamera = isFrontCamera)
@@ -250,6 +255,7 @@ private fun ElementCallSnapshot?.toState(
     fullscreenTileId: String?,
     isFullscreenChromeVisible: Boolean,
     isStageChromeVisible: Boolean,
+    ownTileCorner: ElementCallOwnTileCorner,
     eventSink: (ElementCallScreenEvent) -> Unit,
 ) = ElementCallScreenState(
     connection = this?.connection ?: ElementCallConnection.RequestingPermission,
@@ -264,6 +270,7 @@ private fun ElementCallSnapshot?.toState(
     isMicrophonePermissionGranted = this?.isMicrophonePermissionGranted == true,
     isCameraEnabled = this?.isCameraEnabled == true,
     isFrontCamera = this?.isFrontCamera != false,
+    isCameraSwitchAvailable = this?.isCameraSwitchAvailable != false,
     isCameraPermissionGranted = this?.isCameraPermissionGranted == true,
     isScreenShareAvailable = this?.isScreenShareAvailable == true,
     isScreenSharing = this?.isScreenSharing == true,
@@ -277,6 +284,7 @@ private fun ElementCallSnapshot?.toState(
     fullscreenTileId = fullscreenTileId,
     isFullscreenChromeVisible = isFullscreenChromeVisible,
     isStageChromeVisible = isStageChromeVisible,
+    ownTileCorner = ownTileCorner,
     libraryVersion = ElementCallVersion.library,
     coreVersion = ElementCallVersion.core,
     eventSink = eventSink,

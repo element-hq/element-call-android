@@ -78,8 +78,23 @@ internal object CallStageDump {
             return "spot" to rect(spotlight.left, spotlight.top + offset, spotlight.width, spotlight.height)
         }
         val tile = layout.tiles[id] ?: return "hidden" to "-"
-        val position = layout.gridPositions.getValue(id)
-        return "grid ${position.row},${position.column}" to rect(tile.left, tile.top, tile.width, tile.height)
+        val position = layout.gridPositions[id]
+        val floating = layout.floating
+        val slot = when {
+            id == floating?.tileId -> "float ${floating.corner.dumpName()}"
+            // A small call's own places, by the order it reads them in (019 R7, R27).
+            layout.isStatic && (hooks.stageSize.width <= hooks.stageSize.height || id == layout.fullBleedTileId) -> "small ${layout.tiles.keys.indexOf(id)}"
+            layout.isStatic -> "inline ${position?.row},${position?.column}"
+            else -> "grid ${position?.row},${position?.column}"
+        }
+        return slot to rect(tile.left, tile.top, tile.width, tile.height)
+    }
+
+    private fun ElementCallOwnTileCorner.dumpName() = when (this) {
+        ElementCallOwnTileCorner.TOP_LEFT -> "tl"
+        ElementCallOwnTileCorner.TOP_RIGHT -> "tr"
+        ElementCallOwnTileCorner.BOTTOM_LEFT -> "bl"
+        ElementCallOwnTileCorner.BOTTOM_RIGHT -> "br"
     }
 
     private fun visibility(id: String, hooks: CallStageTestHooks, isMounted: Boolean): String = when {

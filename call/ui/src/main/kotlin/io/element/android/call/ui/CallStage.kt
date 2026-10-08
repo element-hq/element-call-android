@@ -8,6 +8,7 @@
 package io.element.android.call.ui
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector2D
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.VisibilityThreshold
@@ -117,9 +118,15 @@ internal fun CallStage(
     topClearance: Dp,
     /** Where a fullscreen tile starts, keeping the status bar clear (000 R1). */
     fullscreenTop: Dp,
+    /** How far in from the stage's edges the visible chrome reaches, which our floating tile keeps clear of (019 R19). */
+    floatingInsets: FloatingInsets,
     modifier: Modifier = Modifier,
-    arrangement: CallStageArrangement = CallStageArrangement.RankedGrid,
+    /** Null to choose by the call: the small-call layout up to five tiles, the ranked grid beyond (019 R1, R8). */
+    arrangement: CallStageArrangement? = null,
 ) {
+    val chosen = arrangement ?: if (SmallCallLayout.applies(state.tiles)) CallStageArrangement.SmallCall else CallStageArrangement.RankedGrid
+    // Nothing scrolls in a small call (019 R30), and a drag on the stage is then nobody's.
+    val isStatic = chosen == CallStageArrangement.SmallCall
     val scrollOffset = remember { mutableFloatStateOf(0f) }
     val currentLayout = remember { LayoutRef() }
     val userScroll = remember { UserScrollTracker() }
@@ -163,7 +170,7 @@ internal fun CallStage(
             }
             .stageGapTaps(onTap)
             // Not while a tile fills the stage: a drag there pans the picture (000 R23).
-            .scrollable(scrollable, Orientation.Vertical, reverseDirection = true, enabled = state.fullscreenTileId == null),
+            .scrollable(scrollable, Orientation.Vertical, reverseDirection = true, enabled = state.fullscreenTileId == null && !isStatic),
     ) {
         val density = LocalDensity.current
         userScroll.thresholdPx = with(density) { SCROLL_DIRECTION_THRESHOLD.toPx() }
@@ -183,6 +190,7 @@ internal fun CallStage(
                     gap = TILE_SPACING.toPx(),
                     margin = TILE_SPACING.toPx(),
                     controlsClearance = controlsClearance.toPx(),
+                    density = density.density,
                 )
             }
         }
@@ -196,8 +204,19 @@ internal fun CallStage(
         val fullscreenRect = Rect(0f, with(density) { fullscreenTop.toPx() } - gridTop, width, height)
         val gridTileIds = remember(state.tiles, spotlightTileId) { state.gridTiles.map { it.tileId } }
         val heroIds = remember(state.tiles) { state.heroes }
-        val layout = remember(gridTileIds, spotlightTileId, heroIds, metrics, arrangement) {
-            arrangement.compute(CallStageLayout.Input(gridTileIds, spotlightTileId, heroIds, metrics))
+        // Ours as the small layout needs it: its shape follows our picture's (019 R10, R28).
+        var ownVideoAspect by remember { mutableStateOf<Float?>(null) }
+        val ownTile = state.tiles.firstOrNull { it.isLocal }
+        val ownInput = ownTile?.let {
+            OwnTileInput(it.tileId, hasVideo = state.videoFrames[it.tileId] != null, videoAspect = ownVideoAspect, corner = state.ownTileCorner)
+        }
+        // Where the finger has taken our floating tile from its corner; zero at rest (019 R21).
+        val ownDrag = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
+        val floatingArea = with(density) {
+            Rect(floatingInsets.left.toPx(), floatingInsets.top.toPx(), width - floatingInsets.right.toPx(), height - floatingInsets.bottom.toPx())
+        }
+        val layout = remember(gridTileIds, spotlightTileId, heroIds, metrics, chosen, ownInput, gridTop, floatingArea) {
+            chosen.compute(CallStageLayout.Input(gridTileIds, spotlightTileId, heroIds, metrics, ownInput, topBleed = gridTop, floatingArea = floatingArea))
         }
         currentLayout.value = layout
         currentLayout.viewportHeight = height
@@ -317,10 +336,17 @@ internal fun CallStage(
         // Where each tile was last placed, so a leaver keeps fading where it was while the others
         // close over the gap (the arrangement drops them at once).
         val lastSlots = remember { mutableMapOf<String, TileSlot>() }
-        layout.tiles.forEach { (tileId, rect) -> lastSlots[tileId] = TileSlot(rect, isSticky = false) }
+        // The small layout's full-bleed and floating tiles are in viewport coordinates, like the spotlight.
+        layout.tiles.forEach { (tileId, rect) ->
+            lastSlots[tileId] = when (tileId) {
+                layout.fullBleedTileId -> TileSlot(rect, isSticky = true, CallTileAppearance.FullBleed)
+                layout.floating?.tileId -> TileSlot(rect, isSticky = true, CallTileAppearance.Floating)
+                else -> TileSlot(rect, isSticky = false, CallTileAppearance.Grid)
+            }
+        }
         val spotlightRect = layout.spotlight
-        if (stickyTileId != null && spotlightRect != null) lastSlots[stickyTileId] = TileSlot(spotlightRect, isSticky = true)
-        if (fullscreenId != null && fullscreenId !in heroIds) lastSlots[fullscreenId] = TileSlot(fullscreenRect, isSticky = true, isFullscreen = true)
+        if (stickyTileId != null && spotlightRect != null) lastSlots[stickyTileId] = TileSlot(spotlightRect, isSticky = true, CallTileAppearance.Spotlight)
+        if (fullscreenId != null && fullscreenId !in heroIds) lastSlots[fullscreenId] = TileSlot(fullscreenRect, isSticky = true, CallTileAppearance.Fullscreen)
 
         // Who has just left and has not finished fading out. Their tile plays them out and removes
         // itself when it has; parked beyond the band it does so in a frame.
@@ -366,6 +392,7 @@ internal fun CallStage(
             }
         }
 
+        val onOwnVideoSize: (IntSize) -> Unit = { size -> ownVideoAspect = size.aspect() }
         val gridIndex = remember(gridTileIds) { gridTileIds.withIndex().associate { it.value to it.index } }
         @Composable
         fun Placed(tile: CallTileData, isPresent: Boolean) {
@@ -390,14 +417,13 @@ internal fun CallStage(
                     }
                 }
             }
+            // In a small call our tile neither goes fullscreen nor toggles the chrome; its taps are
+            // still its own, so they do not fall through to the stage (019 R14, R23).
+            val isOwnSmallCallTile = tile.isLocal && layout.isStatic
             PlacedTile(
                 tile = tile,
                 videoFrames = state.videoFrames[tile.tileId],
-                appearance = when {
-                    slot.isFullscreen -> CallTileAppearance.Fullscreen
-                    slot.isSticky -> CallTileAppearance.Spotlight
-                    else -> CallTileAppearance.Grid
-                },
+                appearance = slot.appearance,
                 slot = slot,
                 scrollOffset = scrollOffset,
                 isVisible = isVisible,
@@ -407,8 +433,18 @@ internal fun CallStage(
                 isArrival = tile.tileId !in knownIds,
                 stats = state.tileStats(tile, slot.rect),
                 onLongPress = { state.eventSink(ElementCallScreenEvent.ToggleTileStats) },
-                onTap = onTap,
-                traversalIndex = if (slot.isSticky) 0f else 1f + (gridIndex[tile.tileId] ?: gridTileIds.size),
+                onTap = if (isOwnSmallCallTile) NoOp else onTap,
+                allowsFullscreen = !isOwnSmallCallTile,
+                isLandscapeStage = metrics.isLandscape,
+                drag = ownDrag.takeIf { slot.appearance == CallTileAppearance.Floating },
+                floatingCorner = layout.floating?.corner?.takeIf { slot.appearance == CallTileAppearance.Floating },
+                onVideoSizeChange = if (tile.isLocal) onOwnVideoSize else null,
+                // Our floating tile is read after the person it floats over (019 R27).
+                traversalIndex = when {
+                    slot.appearance == CallTileAppearance.Floating -> 1f + gridTileIds.size
+                    slot.isSticky -> 0f
+                    else -> 1f + (gridIndex[tile.tileId] ?: gridTileIds.size)
+                },
                 eventSink = state.eventSink,
             )
         }
@@ -465,16 +501,43 @@ internal fun CallStage(
         // On our own tile, as the design frames draw it: it acts on the picture it sits on, and the
         // bar has one fewer button to fit. A sibling anchored to the slot rather than a child of
         // the tile, so its tap is its own (000 R16). Only with a picture to turn around.
-        val own = state.tiles.firstOrNull { it.isLocal && it.tileId in composedGridIds && state.videoFrames[it.tileId] != null }
+        // Floating, the same box carries the drag, so a drag that starts on the button moves the tile (019 R22).
+        val own = state.tiles.firstOrNull { it.isLocal && it.tileId in composedGridIds }
         val ownSlot = own?.let { lastSlots[it.tileId] }
-        if (ownSlot != null && fullscreenId == null) {
-            Box(modifier = Modifier.animatedSlot(ownSlot.rect, isSticky = ownSlot.isSticky, scrollOffset = scrollOffset).zIndex(OWN_TILE_OVERLAY_Z_INDEX)) {
-                SwitchCameraButton(
-                    onClick = { state.eventSink(ElementCallScreenEvent.SwitchCamera) },
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(8.dp),
-                )
+        val isFloating = ownSlot?.appearance == CallTileAppearance.Floating
+        // Not with our video off, nor with only one camera to switch to (019 R24).
+        val showsSwitch = own != null && state.videoFrames[own.tileId] != null && state.isCameraSwitchAvailable
+        val currentOwnRect by rememberUpdatedState(ownSlot?.rect ?: Rect.Zero)
+        val currentStage by rememberUpdatedState(Rect(0f, -gridTop, width, height))
+        val currentArea by rememberUpdatedState(floatingArea)
+        val hasOverlay = isFloating || showsSwitch
+        if (ownSlot != null && fullscreenId == null && hasOverlay) {
+            Box(
+                modifier = Modifier
+                    .animatedSlot(ownSlot.rect, isSticky = ownSlot.isSticky, scrollOffset = scrollOffset, drag = ownDrag.takeIf { isFloating })
+                    .zIndex(if (isFloating) FLOATING_OVERLAY_Z_INDEX else OWN_TILE_OVERLAY_Z_INDEX)
+                    .then(
+                        if (isFloating) {
+                            Modifier.ownTileDragGesture(
+                                drag = ownDrag,
+                                slot = { currentOwnRect },
+                                stage = { currentStage },
+                                area = { currentArea },
+                                onRelease = { corner -> currentEventSink(SmallCallEvent.MoveOwnTile(corner)) },
+                            )
+                        } else {
+                            Modifier
+                        }
+                    ),
+            ) {
+                if (showsSwitch) {
+                    SwitchCameraButton(
+                        onClick = { state.eventSink(ElementCallScreenEvent.SwitchCamera) },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(8.dp),
+                    )
+                }
             }
         }
 
@@ -577,6 +640,14 @@ private fun PlacedTile(
     stats: TileStats?,
     onLongPress: () -> Unit,
     onTap: () -> Unit,
+    /** False for our own tile in a small call (019 R14): no double tap and no action to go fullscreen. */
+    allowsFullscreen: Boolean,
+    isLandscapeStage: Boolean,
+    /** Our floating tile's offset from its corner while dragged. */
+    drag: Animatable<Offset, AnimationVector2D>?,
+    /** The corner our tile floats in, or null when it does not float. */
+    floatingCorner: ElementCallOwnTileCorner?,
+    onVideoSizeChange: ((IntSize) -> Unit)?,
     traversalIndex: Float,
     eventSink: (ElementCallScreenEvent) -> Unit,
 ) {
@@ -624,9 +695,26 @@ private fun PlacedTile(
     // entered, and lowered only once the way back has landed, never at its start (000 R7).
     var isRaised by remember { mutableStateOf(slot.isFullscreen) }
     if (slot.isFullscreen) isRaised = true
+    // A landscape picture on an upright stage is shown whole when it fills the stage (019 R4).
+    var videoSize by remember { mutableStateOf<IntSize?>(null) }
+    val targetFit = if (appearance == CallTileAppearance.FullBleed) {
+        if (!isLandscapeStage && videoSize?.aspect() ?: 0f > 1f) 1f else 0f
+    } else {
+        appearance.fitFor(tile)
+    }
     // The change from cropped to fitted is travelled across the move, never applied at either end (000 R7).
-    val fit by animateFloatAsState(targetValue = appearance.fitFor(tile), animationSpec = FIT_SPEC, label = "tileFit")
+    val fit by animateFloatAsState(targetValue = targetFit, animationSpec = FIT_SPEC, label = "tileFit")
     val fullscreenLabel = stringResource(if (slot.isFullscreen) R.string.element_call_a11y_exit_fullscreen else R.string.element_call_a11y_enter_fullscreen)
+    // Floating, ours offers the three corners it is not in (019 R25).
+    val moves = floatingCorner?.let { current ->
+        ElementCallOwnTileCorner.entries.filter { it != current }.map { corner ->
+            val label = stringResource(corner.moveLabel)
+            CustomAccessibilityAction(label) {
+                eventSink(SmallCallEvent.MoveOwnTile(corner))
+                true
+            }
+        }
+    }.orEmpty()
 
     // A member who has left is gone from the frame map in the same breath, and swapping their video
     // for an avatar for the moment they spend fading out reads as a glitch. Their last stream is
@@ -642,26 +730,36 @@ private fun PlacedTile(
         appearance = appearance,
         stats = stats,
         fit = fit,
-        // The HUD names the fullscreen tile (000 R11); the tile's own pill would double it.
-        showName = !slot.isFullscreen,
+        // The HUD names the fullscreen tile (000 R11); the tile's own pill would double it. A full-bleed
+        // tile's corner is under the bars, and our floating tile is too small and obviously us (019 R2, R4).
+        showName = appearance != CallTileAppearance.Fullscreen && appearance != CallTileAppearance.FullBleed && appearance != CallTileAppearance.Floating,
         videoTransform = if (slot.isFullscreen) zoom else VideoTransform.None,
+        onVideoSizeChange = { size ->
+            videoSize = size
+            onVideoSizeChange?.invoke(size)
+        },
+        floatingCorner = floatingCorner,
         modifier = Modifier
             .testTag(ElementCallTestTags.tile(tile.tileId))
             .semantics {
                 this.traversalIndex = traversalIndex
                 // Double tap is how TalkBack activates anything, so the gesture cannot reach it (000 R21).
-                customActions = listOf(CustomAccessibilityAction(fullscreenLabel) {
+                val fullscreenAction = CustomAccessibilityAction(fullscreenLabel) {
                     eventSink(ElementCallScreenEvent.ToggleFullscreen(tile.tileId))
                     true
-                })
+                }
+                val actions = moves + listOfNotNull(fullscreenAction.takeIf { allowsFullscreen })
+                if (actions.isNotEmpty()) customActions = actions
             }
-            .animatedSlot(slot.rect, isSticky = slot.isSticky, scrollOffset = scrollOffset, onArrive = { isRaised = slot.isFullscreen })
+            .animatedSlot(slot.rect, isSticky = slot.isSticky, scrollOffset = scrollOffset, onArrive = { isRaised = slot.isFullscreen }, drag = drag)
             // The spotlight draws over the grid passing underneath it (R27); we draw over the rest
             // for the moment a move overlaps; a tile filling the stage is above everything for the
             // whole of its move, including the tiles on their way out (000 R7).
             .zIndex(
                 when {
                     isRaised -> FULLSCREEN_Z_INDEX
+                    appearance == CallTileAppearance.Floating -> FLOATING_Z_INDEX
+                    appearance == CallTileAppearance.FullBleed -> 0f
                     slot.isSticky -> SPOTLIGHT_Z_INDEX
                     tile.isLocal -> LOCAL_Z_INDEX
                     else -> 0f
@@ -676,14 +774,14 @@ private fun PlacedTile(
             }
             // A vertical drag that starts on the spotlight does not scroll the grid (R64): a state
             // that reports every delta consumed leaves nothing for the stage's own scrollable.
-            .then(if (slot.isSticky) Modifier.scrollable(rememberScrollableState { it }, Orientation.Vertical) else Modifier)
+            .then(if (appearance == CallTileAppearance.Spotlight) Modifier.scrollable(rememberScrollableState { it }, Orientation.Vertical) else Modifier)
             .then(if (slot.isFullscreen) Modifier.transformable(transformable) else Modifier)
             // A double tap enters and leaves fullscreen (000 R1, R2, R4), a single tap toggles the
             // chrome (000 R9, 014 R14), a long press the debug readout. A down during a fling stops it
             // without consuming it, so a double tap right after a scroll is two clean taps.
             .tileTapGestures(
                 onTap = onTap,
-                onDoubleTap = { eventSink(ElementCallScreenEvent.ToggleFullscreen(tile.tileId)) },
+                onDoubleTap = { if (allowsFullscreen) eventSink(ElementCallScreenEvent.ToggleFullscreen(tile.tileId)) },
                 onLongPress = onLongPress,
             ),
     )
@@ -765,6 +863,8 @@ internal fun Modifier.animatedSlot(
     scrollOffset: FloatState,
     /** Told when the move to [slot] has finished; not told when a newer slot cancelled it. */
     onArrive: (() -> Unit)? = null,
+    /** Added to the slot at layout time: a finger's offset, which moves the content without recomposing it. */
+    drag: Animatable<Offset, AnimationVector2D>? = null,
 ): Modifier {
     val bounds = remember { Animatable(slot, Rect.VectorConverter) }
     val currentOnArrived by rememberUpdatedState(onArrive)
@@ -787,13 +887,26 @@ internal fun Modifier.animatedSlot(
             // rest does not read the offset at all, so a scroll does not re-place it.
             val factor = stickyFactor.value
             val shift = if (factor == 0f) 0f else scrollOffset.floatValue * factor
-            placeable.place(current.left.roundToInt(), (current.top + shift).roundToInt())
+            val dragged = drag?.value ?: Offset.Zero
+            placeable.place((current.left + dragged.x).roundToInt(), (current.top + shift + dragged.y).roundToInt())
         }
     }
 }
 
+/**
+ * The chrome's reach into the stage from each edge, physical left and right. The top is measured from
+ * the stage's own top, under the portrait top bar, so it is negative when that bar hides (019 R30).
+ */
+internal data class FloatingInsets(val left: Dp, val top: Dp, val right: Dp, val bottom: Dp)
+
 /** A tile's rectangle, and whether it is sticky (viewport coordinates) or scrolls (content coordinates). */
-private data class TileSlot(val rect: Rect, val isSticky: Boolean, val isFullscreen: Boolean = false)
+private data class TileSlot(val rect: Rect, val isSticky: Boolean, val appearance: CallTileAppearance) {
+    val isFullscreen: Boolean get() = appearance == CallTileAppearance.Fullscreen
+}
+
+private val NoOp: () -> Unit = {}
+
+private fun IntSize.aspect(): Float? = if (width > 0 && height > 0) width.toFloat() / height else null
 
 /** Holders that change without recomposing anything. */
 private class LayoutRef {
@@ -903,6 +1016,10 @@ private const val LOCAL_Z_INDEX = 1f
 /** What sits on our own tile goes under the spotlight with it when the grid scrolls our tile there. */
 private const val OWN_TILE_OVERLAY_Z_INDEX = 1.5f
 internal const val SPOTLIGHT_Z_INDEX = 2f
+
+/** Our floating tile over the tile it overlaps (019 R2), and its camera button over it. */
+private const val FLOATING_Z_INDEX = 2.5f
+private const val FLOATING_OVERLAY_Z_INDEX = 2.6f
 private const val OVERLAY_Z_INDEX = 3f
 internal const val FULLSCREEN_Z_INDEX = 4f
 private const val FULLSCREEN_SCRIM_Z_INDEX = 3.5f

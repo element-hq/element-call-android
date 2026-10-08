@@ -23,11 +23,13 @@ import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.test.ElementCallTestPattern
 import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -56,6 +58,13 @@ class SampleElementCallController(
     override val isInPictureInPicture: StateFlow<Boolean> = _isInPictureInPicture.asStateFlow()
 
     private val patterns = mutableMapOf<Pair<String, MatrixRtcStreamKind>, Flow<MatrixRtcVideoFrame>>()
+
+    /** Our camera is upright in the stage's orientation, as a real one is, so our own pattern follows it. */
+    private val isStageLandscape = MutableStateFlow(false)
+
+    fun setStageLandscape(isLandscape: Boolean) {
+        isStageLandscape.value = isLandscape
+    }
 
     /** Open a fixture as the running call, replacing whatever was running. */
     fun start(snapshot: ElementCallSnapshot) {
@@ -109,13 +118,20 @@ class SampleElementCallController(
     /**
      * One pattern per stream, stable for the life of the controller, as the real controller's flows are.
      * Bob's and Erin's cameras are portrait and everything else landscape, as on iOS (feature-hq
-     * `harness/fixtures.md`), so both aspects are on the stage at once.
+     * `harness/fixtures.md`), so both aspects are on the stage at once. Ours follows the stage.
      */
+    @OptIn(ExperimentalCoroutinesApi::class)
     override fun videoFrames(memberId: String, kind: MatrixRtcStreamKind): Flow<MatrixRtcVideoFrame> =
         patterns.getOrPut(memberId to kind) {
-            val isPortrait = kind == MatrixRtcStreamKind.CAMERA && memberId in PORTRAIT_MEMBERS
-            val pattern = if (isPortrait) ElementCallTestPattern.portrait() else ElementCallTestPattern.landscape()
-            pattern.frames()
+            when {
+                kind == MatrixRtcStreamKind.CAMERA && memberId == OWN_MEMBER -> {
+                    val portrait = ElementCallTestPattern.portrait()
+                    val landscape = ElementCallTestPattern.landscape()
+                    isStageLandscape.flatMapLatest { if (it) landscape.frames() else portrait.frames() }
+                }
+                kind == MatrixRtcStreamKind.CAMERA && memberId in PORTRAIT_MEMBERS -> ElementCallTestPattern.portrait().frames()
+                else -> ElementCallTestPattern.landscape().frames()
+            }
         }
 
     override fun setScreenShareEnabled(token: MatrixRtcScreenCaptureToken?) = update { it.copy(isScreenSharing = token != null) }
@@ -149,6 +165,11 @@ class SampleElementCallController(
         Timber.d("Sample: detail window $window")
     }
 
+    override fun setRankingThreshold(tiles: Int) {
+        // The fixtures list their rosters in the order the scenarios mean, which is already join order.
+        Timber.d("Sample: ranking threshold $tiles")
+    }
+
     override fun setVideoConstraints(memberId: String, kind: MatrixRtcStreamKind, constraints: MatrixRtcVideoConstraints) {
         // Logged rather than acted on: there is no encoder to tell, but seeing the sizes tiles ask for is
         // exactly what the harness is for.
@@ -165,5 +186,6 @@ class SampleElementCallController(
 
     private companion object {
         val PORTRAIT_MEMBERS = setOf(SampleFixture.memberIdOf("Bob"), SampleFixture.memberIdOf("Erin"))
+        val OWN_MEMBER = SampleFixture.memberIdOf("Alice")
     }
 }

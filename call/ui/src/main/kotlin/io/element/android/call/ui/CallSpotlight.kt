@@ -96,6 +96,8 @@ class CallSpotlightMemory internal constructor(
     lastSpeakerId: String?,
     lastHeroes: List<String>,
     spotlightId: MatrixRtcTileId?,
+    ownTileCorner: ElementCallOwnTileCorner = ElementCallOwnTileCorner.Initial,
+    smallCallSpeakerId: String? = null,
 ) {
     var shownHeroId: String? by mutableStateOf(shownHeroId)
         internal set
@@ -108,18 +110,29 @@ class CallSpotlightMemory internal constructor(
     var spotlightId: MatrixRtcTileId? by mutableStateOf(spotlightId)
         internal set
 
+    /** The corner our floating tile is in, for the rest of the call: through rotation, the grid and minimising (019 R20). */
+    var ownTileCorner: ElementCallOwnTileCorner by mutableStateOf(ownTileCorner)
+        internal set
+
+    /** Who a small call holds as its speaker, for Picture in Picture and the minimised tile (019 R15). */
+    var smallCallSpeakerId: String? by mutableStateOf(smallCallSpeakerId)
+        internal set
+
     internal companion object {
         val Saver: Saver<CallSpotlightMemory, List<String?>> = Saver(
             save = {
-                listOf(it.shownHeroId, it.lastSpeakerId, it.spotlightId?.memberId, it.spotlightId?.kind?.name) + it.lastHeroes
+                listOf(it.shownHeroId, it.lastSpeakerId, it.spotlightId?.memberId, it.spotlightId?.kind?.name, it.ownTileCorner.name, it.smallCallSpeakerId) +
+                    it.lastHeroes
             },
             restore = { saved ->
                 val spotlightId = saved[2]?.let { memberId -> MatrixRtcTileId(memberId, MatrixRtcTileKind.valueOf(checkNotNull(saved[3]))) }
                 CallSpotlightMemory(
                     shownHeroId = saved[0],
                     lastSpeakerId = saved[1],
-                    lastHeroes = saved.drop(4).filterNotNull(),
+                    lastHeroes = saved.drop(6).filterNotNull(),
                     spotlightId = spotlightId,
+                    ownTileCorner = ElementCallOwnTileCorner.valueOf(checkNotNull(saved[4])),
+                    smallCallSpeakerId = saved[5],
                 )
             },
         )

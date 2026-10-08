@@ -919,6 +919,69 @@ class DefaultElementCallControllerTest {
         assertThat(nextCall.composedTiles).containsExactly(emptySet<MatrixRtcTileId>())
     }
 
+    /** The layout sets it once, above every call: it reaches a call that connects later, and the next one. */
+    @Test
+    fun `the ranking threshold reaches the call, including one that connects later, and the next call`() = runTest {
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
+        controller.setRankingThreshold(4)
+
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+        val call = rtcClient.lastCall?.lastMediaSession!!
+        assertThat(call.rankingThresholds).containsExactly(4)
+
+        controller.hangUp()
+        runCurrent()
+        controller.startCall(ElementCallData(roomId = A_ROOM_ID, isAudioCall = true))
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+        val nextCall = rtcClient.lastCall?.lastMediaSession!!
+        assertThat(nextCall).isNotSameInstanceAs(call)
+        assertThat(nextCall.rankingThresholds).containsExactly(4)
+    }
+
+    /** A device with one camera says so from the start, so our tile never offers a switch (019 R24). */
+    @Test
+    fun `the snapshot says whether there is a camera to switch to`() = runTest {
+        val single = createController(platform = FakeElementCallPlatform(isCameraSwitchAvailable = false))
+        assertThat(single.state.value?.isCameraSwitchAvailable).isFalse()
+
+        val both = createController(platform = FakeElementCallPlatform(isCameraSwitchAvailable = true))
+        assertThat(both.state.value?.isCameraSwitchAvailable).isTrue()
+    }
+
+    /** At or below the threshold the order is join order, heroes first, whoever speaks (019 R7). */
+    @Test
+    fun `at or below the ranking threshold the order is join order`() = runTest {
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
+        controller.setRankingThreshold(2)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+        val call = rtcClient.lastCall?.lastMediaSession!!
+
+        call.pushRoster(aRoster(aTile(A_REMOTE_MEMBER_ID)))
+        call.pushRoster(aRoster(aTile(ANOTHER_REMOTE_MEMBER_ID, isSpeaking = true), aTile(A_REMOTE_MEMBER_ID)))
+        runCurrent()
+        assertThat(controller.state.value?.roster?.order?.map { it.id.memberId })
+            .containsExactly(A_REMOTE_MEMBER_ID, ANOTHER_REMOTE_MEMBER_ID)
+            .inOrder()
+
+        call.pushRoster(
+            aRoster(
+                aTile(ANOTHER_REMOTE_MEMBER_ID, isSpeaking = true),
+                aTile(A_REMOTE_MEMBER_ID),
+                aTile(ANOTHER_REMOTE_MEMBER_ID, MatrixRtcTileKind.SCREEN_SHARE),
+            )
+        )
+        runCurrent()
+        // Three tiles is above the threshold: the core's ranking, as given.
+        assertThat(controller.state.value?.roster?.order?.map { it.id.memberId })
+            .containsExactly(ANOTHER_REMOTE_MEMBER_ID, A_REMOTE_MEMBER_ID, ANOTHER_REMOTE_MEMBER_ID)
+            .inOrder()
+    }
+
     /**
      * The only way to reach this is having just tapped the camera button, so making the user tap it
      * again after saying yes would be a strange reward for granting it.

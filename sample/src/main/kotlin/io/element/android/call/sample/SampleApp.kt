@@ -35,6 +35,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.element.android.call.test.scenario.MatrixRtcScenario
@@ -65,6 +66,9 @@ fun SampleApp(
     onRotate: (isLandscape: Boolean) -> Unit = {},
 ) {
     var isStyleOverridden by rememberSaveable { mutableStateOf(false) }
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
+    LaunchedEffect(isLandscape) { controller.setStageLandscape(isLandscape) }
     val fixtures = remember { SampleFixture.entries.toImmutableList() }
     val driver = remember { ElementCallStageDriver() }
     var player by remember { mutableStateOf(initialScenario?.let { SampleScenarioPlayer(controller, it, driver, onRotate) }) }

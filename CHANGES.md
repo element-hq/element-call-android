@@ -12,8 +12,12 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 ## Unreleased
 
-- Core: matrix-rust-rtc `0.5.0-rc.1` (backend and room-first API). A host's Ivy repository over the core's release
-  asset (README, "Consuming a release") must point at the `v0.5.0-rc.1` asset. `MatrixRtcEndReason` gains `SlotClosed`.
+- Core: matrix-rust-rtc `0.5.0-rc.2` (backend, room-first API, ranking threshold). A host's Ivy repository over the core's release
+  asset (README, "Consuming a release") must point at the `v0.5.0-rc.2` asset. `MatrixRtcEndReason` gains `SlotClosed`.
+- `MatrixRtcMediaSession` and `ElementCallController` gain `setRankingThreshold(tiles)`, for a host implementing
+  either. `ElementCallOverlay` sets it; a host drawing `ElementCallScreen` without the overlay sets it to 4 itself.
+- `ElementCallScreenState` gains `isCameraSwitchAvailable` and `ownTileCorner` (`ElementCallOwnTileCorner`), and
+  `CallTileAppearance` gains `FullBleed` and `Floating`, for a host that builds the state or switches over appearances.
 - While it is shown, `ElementCallScreen` drives the window's system bars through `WindowInsetsControllerCompat`:
   light status and navigation bar icons, since the call is always dark, and no status bar held sideways. It
   restores the host's appearance and status bar when it goes. A host that sets either itself while the call screen

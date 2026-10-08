@@ -221,6 +221,16 @@ class ElementCallOverlayTest : RobolectricTest() {
         assertThat(controller.maximizedCalls).containsExactly(true)
     }
 
+    /** Set above every window, so a call that starts minimised has its order by arrival too (019 R7). */
+    @Test
+    fun `a call sets the small layout's ranking threshold, minimised or not`() = runAndroidComposeUiTest<ComponentActivity> {
+        val controller = FakeElementCallController(initialState = aConnectedSnapshot(isMaximized = false))
+        setOverlay(controller)
+        waitForIdle()
+
+        assertThat(controller.rankingThresholds).containsExactly(SmallCallLayout.RANKING_THRESHOLD)
+    }
+
     /** A video call floats as a tile instead: a 56dp strip is no way to show a picture. */
     @Test
     fun `a minimized video call floats as a tile instead of the bar`() = runAndroidComposeUiTest<ComponentActivity> {
@@ -248,6 +258,34 @@ class ElementCallOverlayTest : RobolectricTest() {
         onNodeWithText(HOST_CONTENT).assertIsNotDisplayed()
         assertNoNodeWithContentDescription(R.string.element_call_a11y_hang_up)
         assertNoNodeWithContentDescription(R.string.element_call_a11y_minimize_call)
+    }
+
+    /** Minimised, a small call's window follows whoever speaks, and holds them through silence (019 R15). */
+    @Test
+    fun `minimised, a small call follows its speaker and holds them`() = runAndroidComposeUiTest<ComponentActivity> {
+        val participants = listOf(aLocalParticipant(), aRemoteParticipant(), aCrowdParticipant(1))
+        val controller = FakeElementCallController(
+            initialState = aCallSnapshot(isMaximized = false, participants = participants, speakingIds = setOf(aCrowdMemberId(1)))
+                .copy(isMicrophonePermissionGranted = true),
+        )
+        setOverlay(controller)
+        waitForIdle()
+        assertThat(controller.detailWindows.last().also.map { it.memberId }).containsExactly(aCrowdMemberId(1))
+
+        controller.state.value = aCallSnapshot(isMaximized = false, participants = participants).copy(isMicrophonePermissionGranted = true)
+        waitForIdle()
+        assertThat(controller.detailWindows.last().also.map { it.memberId }).containsExactly(aCrowdMemberId(1))
+    }
+
+    /** Alone, the window shows us rather than an empty "call in progress" (019 R15). */
+    @Test
+    fun `in picture-in-picture alone, our own tile is shown`() = runAndroidComposeUiTest<ComponentActivity> {
+        val controller = FakeElementCallController(initialState = aConnectedSnapshot(isMaximized = true, participants = listOf(aLocalParticipant())))
+        controller.setInPictureInPicture(true)
+        setOverlay(controller)
+        waitForIdle()
+
+        assertNoNodeWithContentDescription(R.string.element_call_call_in_progress)
     }
 
     /**
