@@ -102,6 +102,12 @@ interface ElementCallController {
      */
     fun setDetailWindow(window: MatrixRtcDetailWindow)
 
+    /**
+     * Below how many remote tiles the order is arrival rather than rank. Kept and applied to every
+     * call that connects later. See [MatrixRtcMediaSession.setRankingThreshold].
+     */
+    fun setRankingThreshold(tiles: Int)
+
     /** End the call and publish a leave membership. */
     fun hangUp()
 }

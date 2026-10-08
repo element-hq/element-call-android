@@ -221,6 +221,16 @@ class ElementCallOverlayTest : RobolectricTest() {
         assertThat(controller.maximizedCalls).containsExactly(true)
     }
 
+    /** Set above every window, so a call that starts minimised has its order by arrival too (019 R7). */
+    @Test
+    fun `a call sets the small layout's ranking threshold, minimised or not`() = runAndroidComposeUiTest<ComponentActivity> {
+        val controller = FakeElementCallController(initialState = aConnectedSnapshot(isMaximized = false))
+        setOverlay(controller)
+        waitForIdle()
+
+        assertThat(controller.rankingThresholds).containsExactly(SmallCallLayout.RANKING_THRESHOLD)
+    }
+
     /** A video call floats as a tile instead: a 56dp strip is no way to show a picture. */
     @Test
     fun `a minimized video call floats as a tile instead of the bar`() = runAndroidComposeUiTest<ComponentActivity> {

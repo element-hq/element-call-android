@@ -188,6 +188,9 @@ internal class DefaultElementCallController(
     private var composedTiles: Set<MatrixRtcTileId> = emptySet()
     private var detailWindow: MatrixRtcDetailWindow? = null
 
+    /** Not cleared with the call: it is the layout's, set once for the controller. */
+    private var rankingThreshold: Int? = null
+
     /**
      * Begin a call. Does nothing if one is already running, including for the same room: rejoining
      * would mint a new member id and leave the old membership behind as a ghost.
@@ -449,6 +452,11 @@ internal class DefaultElementCallController(
         call?.setDetailWindow(window)
     }
 
+    override fun setRankingThreshold(tiles: Int) {
+        rankingThreshold = tiles
+        call?.setRankingThreshold(tiles)
+    }
+
     override fun hangUp() {
         scope.launch { endCall(leave = true) }
     }
@@ -491,6 +499,7 @@ internal class DefaultElementCallController(
         call = connected
         connected.setComposedTiles(composedTiles)
         detailWindow?.let { connected.setDetailWindow(it) }
+        rankingThreshold?.let { connected.setRankingThreshold(it) }
         // A child of the session scope rather than this coroutine: the shared flows have to outlive
         // any one tile's collection, and are torn down with the call in endCall().
         videoSharingScope = CoroutineScope(scope.coroutineContext + SupervisorJob())

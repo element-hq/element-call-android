@@ -83,6 +83,12 @@ interface MatrixRtcMediaSession : AutoCloseable {
     fun setDetailWindow(window: MatrixRtcDetailWindow)
 
     /**
+     * At or below [tiles] remote tiles, [tiles] keeps them in join order, heroes first, rather than
+     * ranked: the same order on every device. Above it the core ranks as usual.
+     */
+    fun setRankingThreshold(tiles: Int)
+
+    /**
      * Whether our microphone is currently muted.
      *
      * Muting stops frames being captured rather than publishing silence, and tells the transport

@@ -131,13 +131,32 @@ class FakeMatrixRtcMediaSession : MatrixRtcMediaSession {
     /** The last roster pushed, before the window narrowed it: what a re-declared window is applied to. */
     private var pushedRoster: MatrixRtcTileRoster? = null
 
+    /** Every threshold [setRankingThreshold] was given, in order. */
+    val rankingThresholds = mutableListOf<Int>()
+
+    /** Every tile [pushRoster] has seen, in the order it first appeared: the fake's join order. */
+    private val arrivals = LinkedHashSet<MatrixRtcTileId>()
+
     /**
      * Publish [roster] as the core would: the order whole, detail only inside the declared window.
-     * With no window declared, detail for everything.
+     * With no window declared, detail for everything. At or below the ranking threshold, the order
+     * is heroes first, then the order each tile was first pushed in.
      */
     fun pushRoster(roster: MatrixRtcTileRoster) {
-        pushedRoster = roster
-        tiles.value = detailWindow?.let { roster.windowed(it) } ?: roster
+        roster.order.forEach { arrivals += it.id }
+        val threshold = rankingThresholds.lastOrNull()
+        val ordered = if (threshold != null && roster.order.size <= threshold) {
+            val arrival = arrivals.withIndex().associate { it.value to it.index }
+            roster.copy(order = roster.order.sortedWith(compareBy({ !it.isHero }, { arrival.getValue(it.id) })))
+        } else {
+            roster
+        }
+        pushedRoster = ordered
+        tiles.value = detailWindow?.let { ordered.windowed(it) } ?: ordered
+    }
+
+    override fun setRankingThreshold(tiles: Int) {
+        rankingThresholds += tiles
     }
 
     override fun setDetailWindow(window: MatrixRtcDetailWindow) {

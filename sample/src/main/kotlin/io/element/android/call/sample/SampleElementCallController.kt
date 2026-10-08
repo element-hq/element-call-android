@@ -149,6 +149,11 @@ class SampleElementCallController(
         Timber.d("Sample: detail window $window")
     }
 
+    override fun setRankingThreshold(tiles: Int) {
+        // The fixtures list their rosters in the order the scenarios mean, which is already join order.
+        Timber.d("Sample: ranking threshold $tiles")
+    }
+
     override fun setVideoConstraints(memberId: String, kind: MatrixRtcStreamKind, constraints: MatrixRtcVideoConstraints) {
         // Logged rather than acted on: there is no encoder to tell, but seeing the sizes tiles ask for is
         // exactly what the harness is for.

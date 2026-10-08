@@ -167,6 +167,7 @@ private fun CallOverContent(
     // the hero shown and the speaker held survive rotation and minimising, and Picture in
     // Picture and the floating tile show what the spotlight showed (spec 003 R67, R68).
     val spotlightMemory = rememberCallSpotlightMemory()
+    LaunchedEffect(controller) { controller.setRankingThreshold(SmallCallLayout.RANKING_THRESHOLD) }
     if (isInPictureInPicture) {
         UnmountedStageWindow(controller = controller, current = current, spotlightMemory = spotlightMemory, isStageMounted = false)
         ElementCallPictureInPictureContent(call = current, videoFrames = controller::videoFrames, spotlightId = spotlightMemory.spotlightId)

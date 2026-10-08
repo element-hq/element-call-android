@@ -134,6 +134,13 @@ class FakeElementCallController(
         detailWindows += window
     }
 
+    /** Every threshold [setRankingThreshold] was given, in order. */
+    val rankingThresholds = mutableListOf<Int>()
+
+    override fun setRankingThreshold(tiles: Int) {
+        rankingThresholds += tiles
+    }
+
     override fun setVideoConstraints(memberId: String, kind: MatrixRtcStreamKind, constraints: MatrixRtcVideoConstraints) {
         videoConstraints += MatrixRtcStreamRef(memberId, kind) to constraints
     }
