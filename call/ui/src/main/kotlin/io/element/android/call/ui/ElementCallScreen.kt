@@ -140,7 +140,7 @@ fun ElementCallScreen(
                         // Behind the floating controls, so they stay readable over a bright tile.
                         .background(Brush.verticalGradient(listOf(Color.Transparent, ElementCallTheme.colors.controlsScrim))),
                 ) {
-                    CallControlsBar(state, isCompact = isLandscape, modifier = Modifier.windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility))
+                    CallControlsBar(state, modifier =Modifier.windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility))
                 }
             }
             val reduceMotion = rememberReduceMotion()
@@ -541,26 +541,28 @@ private fun ConnectingPlaceholder(state: ElementCallScreenState) {
     }
 }
 
+/**
+ * The buttons sit together in a pill in the middle, as the design has them, in both orientations:
+ * spread across the phone they read as unrelated buttons rather than one bar.
+ */
 @Composable
 private fun CallControlsBar(
     state: ElementCallScreenState,
-    /**
-     * Held sideways the buttons sit together in the middle, as the design has them, rather than
-     * spread across a width that is twice what they need. Upright they spread across the phone.
-     */
-    isCompact: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Row(
         modifier = modifier
             .fillMaxWidth()
-            // Held sideways the bar is the buttons alone, so a drag beside them reaches the strip under it.
-            .then(if (isCompact) Modifier.wrapContentWidth(Alignment.CenterHorizontally) else Modifier)
+            .padding(horizontal = 8.dp, vertical = BAR_VERTICAL_PADDING)
+            // The bar is the pill alone, so a drag beside it reaches the stage under it.
+            .wrapContentWidth(Alignment.CenterHorizontally)
             // A drag that starts on the bar does not scroll the grid it floats over (spec 003 R45):
             // a state that reports every delta consumed leaves nothing for the stage's scrollable.
             .scrollable(rememberScrollableState { it }, Orientation.Vertical)
-            .padding(horizontal = 8.dp, vertical = 20.dp),
-        horizontalArrangement = if (isCompact) Arrangement.spacedBy(COMPACT_BUTTON_GAP, Alignment.CenterHorizontally) else Arrangement.SpaceEvenly,
+            .clip(CircleShape)
+            .background(ElementCallTheme.colors.bgSubtleSecondary)
+            .padding(PILL_PADDING),
+        horizontalArrangement = Arrangement.spacedBy(BUTTON_GAP),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         RoundCallButton(
@@ -614,9 +616,9 @@ private fun AudioDeviceButton(state: ElementCallScreenState) {
         onClick = { isPickerVisible = true },
         icon = selectedType.icon(),
         contentDescription = stringResource(R.string.element_call_audio_output_title),
-        // Same reading as mic and camera: the highlighted button is the one that is switched off,
-        // and the earpiece is "loudspeaker off".
-        isActive = selectedType == CallAudioDeviceType.EARPIECE,
+        // Highlighted when audio goes anywhere but the earpiece - loudspeaker, headset, Bluetooth -
+        // as the design has it: the earpiece is the quiet, private default.
+        isActive = selectedType != CallAudioDeviceType.EARPIECE,
         enabled = state.audioDevices.isNotEmpty(),
     )
     if (isPickerVisible) {
@@ -640,7 +642,8 @@ private fun RoundCallButton(
     tint: Color? = null,
 ) {
     val resolvedBackground = background
-        ?: if (isActive) ElementCallTheme.colors.controlActiveBackground else ElementCallTheme.colors.bgSubtleSecondary
+        // Darker than the pill it sits in, which is bgSubtleSecondary.
+        ?: if (isActive) ElementCallTheme.colors.controlActiveBackground else ElementCallTheme.colors.bgCanvas
     val resolvedTint = tint
         ?: if (isActive) ElementCallTheme.colors.controlActiveContent else ElementCallTheme.colors.iconPrimary
     // A dark button over a dark tile would be only its icon; the ring tells it apart from what it
@@ -665,13 +668,19 @@ private fun RoundCallButton(
 
 /**
  * As the design has it. The bar holds at most five - microphone, camera, audio output, screen share,
- * hang up; switching camera is on our own tile - and five 52dp circles leave room between them
- * across a 360dp phone.
+ * hang up; switching camera is on our own tile - and five 48dp circles make a 288dp pill, which
+ * fits a 360dp phone.
  */
-private val BUTTON_SIZE = 52.dp
+private val BUTTON_SIZE = 48.dp
 
-/** Between the buttons when they sit together in the middle of a landscape bar. */
-private val COMPACT_BUTTON_GAP = 16.dp
+/** Between the buttons in the pill. */
+private val BUTTON_GAP = 8.dp
+
+/** Between the pill's edge and the buttons. */
+private val PILL_PADDING = 8.dp
+
+/** Above and below the pill. */
+private val BAR_VERTICAL_PADDING = 14.dp
 
 /** What the placeholder says about the connection while there is nobody to show. */
 @Composable
@@ -685,8 +694,8 @@ private fun ElementCallConnection.label(): String = when (this) {
     ElementCallConnection.Ended -> stringResource(R.string.element_call_call_ended)
 }
 
-/** The controls bar's height: its vertical padding either side of a button. What the stage keeps its last row clear of. */
-private val CONTROLS_HEIGHT = 20.dp + BUTTON_SIZE + 20.dp
+/** The controls bar's height: its vertical padding either side of the pill. What the stage keeps its last row clear of. */
+private val CONTROLS_HEIGHT = BAR_VERTICAL_PADDING + PILL_PADDING + BUTTON_SIZE + PILL_PADDING + BAR_VERTICAL_PADDING
 
 /** How long the chrome takes to slide away or back (014 R25). */
 private const val CHROME_SLIDE_MS = 250

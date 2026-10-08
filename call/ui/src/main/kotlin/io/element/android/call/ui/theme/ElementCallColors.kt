@@ -27,11 +27,11 @@ data class ElementCallColors(
     val iconSecondary: Color,
     val iconCritical: Color,
     val iconAccent: Color,
-    /** The call screen's own background. */
+    /** The call screen's own background, and an inactive control button. */
     val bgCanvas: Color,
     /** A tile with no video, the floating tile's background. */
     val bgSubtlePrimary: Color,
-    /** An inactive control button. */
+    /** The control bar's pill. */
     val bgSubtleSecondary: Color,
     /** What fills the ring around whoever is talking; a `SolidColor` for a plain one. */
     val borderActiveSpeaker: Brush,
