@@ -82,6 +82,9 @@ class StageDumpScenarioTest : RobolectricTest() {
     @Test
     fun `006 two hundred`() = play("006_two_hundred")
 
+    @Test
+    fun `007 small call arrival`() = play("007_small_call_arrival")
+
     private fun play(name: String) {
         val scenario = MatrixRtcScenario.load(name)
         val scheduler = TestCoroutineScheduler()

@@ -93,7 +93,15 @@ class ScenarioParserTest {
 
     @Test
     fun `the vendored corpus parses`() {
-        for (name in listOf("001_small_calls", "002_listen_mode", "003_two_shares", "004_scroll_and_rank", "005_rotation_and_fullscreen", "006_two_hundred")) {
+        for (name in listOf(
+                "001_small_calls",
+                "002_listen_mode",
+                "003_two_shares",
+                "004_scroll_and_rank",
+                "005_rotation_and_fullscreen",
+                "006_two_hundred",
+                "007_small_call_arrival"
+            )) {
             assertThat(MatrixRtcScenario.load(name).frames).isNotEmpty()
         }
     }
