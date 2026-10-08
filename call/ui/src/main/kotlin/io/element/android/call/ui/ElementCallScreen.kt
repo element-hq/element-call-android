@@ -140,7 +140,7 @@ fun ElementCallScreen(
                         // Behind the floating controls, so they stay readable over a bright tile.
                         .background(Brush.verticalGradient(listOf(Color.Transparent, ElementCallTheme.colors.controlsScrim))),
                 ) {
-                    CallControlsBar(state, modifier =Modifier.windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility))
+                    CallControlsBar(state, modifier = Modifier.windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility))
                 }
             }
             val reduceMotion = rememberReduceMotion()
