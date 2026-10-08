@@ -58,7 +58,8 @@ fun ElementCallPictureInPictureContent(
     /** What the call screen's spotlight showed, which this follows (spec 003 R68). */
     spotlightId: MatrixRtcTileId? = null,
 ) {
-    val spotlit = call.pictureInPictureCandidate(spotlightId)?.takeIf { !it.isLocal }
+    // Ourselves only when nobody else is in the call (019 R15).
+    val spotlit = call.pictureInPictureCandidate(spotlightId)
     val memberId = spotlit?.id?.memberId
     val kind = spotlit?.kind ?: MatrixRtcStreamKind.CAMERA
     val hasVideo = spotlit?.hasVideo == true
@@ -68,8 +69,8 @@ fun ElementCallPictureInPictureContent(
             when {
                 memberId != null && hasVideo -> CallVideoRenderer(
                     frames = videoFrames(memberId, kind),
-                    // Never our own camera here - the spotlight is never us - so never mirrored.
-                    isMirrored = false,
+                    // Our own front camera mirrors, as the self view does everywhere.
+                    isMirrored = spotlit.isLocal && call.isFrontCamera,
                     modifier = Modifier.fillMaxSize(),
                 )
                 spotlit != null -> ElementCallAvatar(

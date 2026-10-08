@@ -100,7 +100,10 @@ fun rememberElementCallScreenState(
             CallSpotlight.Choice.None -> spotlightMemory.lastSpeakerId = null
         }
         spotlightMemory.lastHeroes = heroes
-        spotlightMemory.spotlightId = spotlight.tileId?.let { id -> tiles.firstOrNull { it.tileId == id }?.id }
+        // A small call's window follows its speaker, chosen above the screen (019 R15).
+        if (!SmallCallLayout.applies(tiles)) {
+            spotlightMemory.spotlightId = spotlight.tileId?.let { id -> tiles.firstOrNull { it.tileId == id }?.id }
+        }
     }
 
     // One stream per tile, by the tile's own member and kind: a sharer's camera and screen are two
@@ -230,7 +233,7 @@ private class JobRef {
  * the end of a big call, and first is where iOS puts it. Our mute and camera come from the call
  * rather than from the core's tile, so a tap shows on the badge before the round trip does.
  */
-private fun ElementCallSnapshot.callTiles(): ImmutableList<CallTileData> {
+internal fun ElementCallSnapshot.callTiles(): ImmutableList<CallTileData> {
     val own = ownTile?.let {
         it.copy(isHero = false, isMicrophoneMuted = isMicrophoneMuted, hasVideo = isCameraEnabled)
             .toCallTileData(roomMembers, isLocal = true, isFrontCamera = isFrontCamera)

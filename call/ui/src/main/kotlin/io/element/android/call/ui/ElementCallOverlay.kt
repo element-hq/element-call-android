@@ -168,6 +168,14 @@ private fun CallOverContent(
     // Picture and the floating tile show what the spotlight showed (spec 003 R67, R68).
     val spotlightMemory = rememberCallSpotlightMemory()
     LaunchedEffect(controller) { controller.setRankingThreshold(SmallCallLayout.RANKING_THRESHOLD) }
+    // Here rather than in the screen, which is gone while minimised: the window keeps following the speaker (019 R15).
+    val tiles = remember(current) { current.callTiles() }
+    LaunchedEffect(tiles) {
+        if (!SmallCallLayout.applies(tiles)) return@LaunchedEffect
+        val speaker = SmallCallLayout.speaker(tiles, spotlightMemory.smallCallSpeakerId)
+        spotlightMemory.smallCallSpeakerId = speaker
+        spotlightMemory.spotlightId = SmallCallLayout.pictureInPictureTile(tiles, speaker)?.id
+    }
     if (isInPictureInPicture) {
         UnmountedStageWindow(controller = controller, current = current, spotlightMemory = spotlightMemory, isStageMounted = false)
         ElementCallPictureInPictureContent(call = current, videoFrames = controller::videoFrames, spotlightId = spotlightMemory.spotlightId)

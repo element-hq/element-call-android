@@ -34,6 +34,8 @@ data class PictureInPictureCandidate(
  * video" scans.
  */
 fun ElementCallSnapshot.pictureInPictureCandidate(spotlightId: MatrixRtcTileId?): PictureInPictureCandidate? {
+    // Named only by a small call with nobody else in it (019 R15).
+    if (spotlightId != null && spotlightId == ownTile?.id) return ownCandidate()
     val order = roster.order
     val chosen = spotlightId?.let { id -> order.firstOrNull { it.id == id } }
         ?: order.firstOrNull { roster.detail[it.id]?.hasVideo == true }
@@ -47,6 +49,10 @@ fun ElementCallSnapshot.pictureInPictureCandidate(spotlightId: MatrixRtcTileId?)
             isLocal = false,
         )
     }
+    return ownCandidate()
+}
+
+private fun ElementCallSnapshot.ownCandidate(): PictureInPictureCandidate? {
     val own = ownTile ?: return null
     return PictureInPictureCandidate(
         id = own.id,

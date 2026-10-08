@@ -260,6 +260,34 @@ class ElementCallOverlayTest : RobolectricTest() {
         assertNoNodeWithContentDescription(R.string.element_call_a11y_minimize_call)
     }
 
+    /** Minimised, a small call's window follows whoever speaks, and holds them through silence (019 R15). */
+    @Test
+    fun `minimised, a small call follows its speaker and holds them`() = runAndroidComposeUiTest<ComponentActivity> {
+        val participants = listOf(aLocalParticipant(), aRemoteParticipant(), aCrowdParticipant(1))
+        val controller = FakeElementCallController(
+            initialState = aCallSnapshot(isMaximized = false, participants = participants, speakingIds = setOf(aCrowdMemberId(1)))
+                .copy(isMicrophonePermissionGranted = true),
+        )
+        setOverlay(controller)
+        waitForIdle()
+        assertThat(controller.detailWindows.last().also.map { it.memberId }).containsExactly(aCrowdMemberId(1))
+
+        controller.state.value = aCallSnapshot(isMaximized = false, participants = participants).copy(isMicrophonePermissionGranted = true)
+        waitForIdle()
+        assertThat(controller.detailWindows.last().also.map { it.memberId }).containsExactly(aCrowdMemberId(1))
+    }
+
+    /** Alone, the window shows us rather than an empty "call in progress" (019 R15). */
+    @Test
+    fun `in picture-in-picture alone, our own tile is shown`() = runAndroidComposeUiTest<ComponentActivity> {
+        val controller = FakeElementCallController(initialState = aConnectedSnapshot(isMaximized = true, participants = listOf(aLocalParticipant())))
+        controller.setInPictureInPicture(true)
+        setOverlay(controller)
+        waitForIdle()
+
+        assertNoNodeWithContentDescription(R.string.element_call_call_in_progress)
+    }
+
     /**
      * The microphone is the first thing a call needs and only an Activity can ask for it, so the overlay
      * asks. A permission the app already holds is answered at once, without a dialog.
