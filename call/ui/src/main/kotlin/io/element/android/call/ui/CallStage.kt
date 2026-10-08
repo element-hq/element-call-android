@@ -437,6 +437,7 @@ internal fun CallStage(
                 allowsFullscreen = !isOwnSmallCallTile,
                 isLandscapeStage = metrics.isLandscape,
                 drag = ownDrag.takeIf { slot.appearance == CallTileAppearance.Floating },
+                floatingCorner = layout.floating?.corner?.takeIf { slot.appearance == CallTileAppearance.Floating },
                 onVideoSizeChange = if (tile.isLocal) onOwnVideoSize else null,
                 // Our floating tile is read after the person it floats over (019 R27).
                 traversalIndex = when {
@@ -644,6 +645,8 @@ private fun PlacedTile(
     isLandscapeStage: Boolean,
     /** Our floating tile's offset from its corner while dragged. */
     drag: Animatable<Offset, AnimationVector2D>?,
+    /** The corner our tile floats in, or null when it does not float. */
+    floatingCorner: ElementCallOwnTileCorner?,
     onVideoSizeChange: ((IntSize) -> Unit)?,
     traversalIndex: Float,
     eventSink: (ElementCallScreenEvent) -> Unit,
@@ -702,6 +705,16 @@ private fun PlacedTile(
     // The change from cropped to fitted is travelled across the move, never applied at either end (000 R7).
     val fit by animateFloatAsState(targetValue = targetFit, animationSpec = FIT_SPEC, label = "tileFit")
     val fullscreenLabel = stringResource(if (slot.isFullscreen) R.string.element_call_a11y_exit_fullscreen else R.string.element_call_a11y_enter_fullscreen)
+    // Floating, ours offers the three corners it is not in (019 R25).
+    val moves = floatingCorner?.let { current ->
+        ElementCallOwnTileCorner.entries.filter { it != current }.map { corner ->
+            val label = stringResource(corner.moveLabel)
+            CustomAccessibilityAction(label) {
+                eventSink(SmallCallEvent.MoveOwnTile(corner))
+                true
+            }
+        }
+    }.orEmpty()
 
     // A member who has left is gone from the frame map in the same breath, and swapping their video
     // for an avatar for the moment they spend fading out reads as a glitch. Their last stream is
@@ -725,17 +738,18 @@ private fun PlacedTile(
             videoSize = size
             onVideoSizeChange?.invoke(size)
         },
+        floatingCorner = floatingCorner,
         modifier = Modifier
             .testTag(ElementCallTestTags.tile(tile.tileId))
             .semantics {
                 this.traversalIndex = traversalIndex
                 // Double tap is how TalkBack activates anything, so the gesture cannot reach it (000 R21).
-                if (allowsFullscreen) {
-                    customActions = listOf(CustomAccessibilityAction(fullscreenLabel) {
-                        eventSink(ElementCallScreenEvent.ToggleFullscreen(tile.tileId))
-                        true
-                    })
+                val fullscreenAction = CustomAccessibilityAction(fullscreenLabel) {
+                    eventSink(ElementCallScreenEvent.ToggleFullscreen(tile.tileId))
+                    true
                 }
+                val actions = moves + listOfNotNull(fullscreenAction.takeIf { allowsFullscreen })
+                if (actions.isNotEmpty()) customActions = actions
             }
             .animatedSlot(slot.rect, isSticky = slot.isSticky, scrollOffset = scrollOffset, onArrive = { isRaised = slot.isFullscreen }, drag = drag)
             // The spotlight draws over the grid passing underneath it (R27); we draw over the rest

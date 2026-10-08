@@ -13,10 +13,13 @@ import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.doubleClick
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -286,6 +289,30 @@ class ElementCallScreenTest : RobolectricTest() {
         setOneToOne(isCameraSwitchAvailable = false)
 
         onNodeWithContentDescription(activity!!.getString(R.string.element_call_a11y_switch_camera)).assertDoesNotExist()
+    }
+
+    /** A screen reader hears our floating tile with its camera and its corner (019 R26). */
+    @Test
+    fun `our floating tile is announced with its camera and its corner`() = runAndroidComposeUiTest<ComponentActivity> {
+        setOneToOne()
+
+        onNodeWithTag(ElementCallTestTags.tile(A_LOCAL_MEMBER_ID))
+            .assert(hasContentDescription("You, Camera on, Bottom right"))
+    }
+
+    /** A drag does not exist for TalkBack, so our floating tile offers the other three corners as actions (019 R25). */
+    @Test
+    fun `our floating tile offers to move to the three other corners`() = runAndroidComposeUiTest<ComponentActivity> {
+        val events = setOneToOne()
+        val tile = onNodeWithTag(ElementCallTestTags.tile(A_LOCAL_MEMBER_ID))
+
+        val actions = tile.fetchSemanticsNode().config[SemanticsActions.CustomActions]
+        assertThat(actions.map { it.label }).containsExactly("Move to top left", "Move to top right", "Move to bottom left")
+        // Ours never goes fullscreen in a small call (019 R14).
+        assertThat(actions.map { it.label }).doesNotContain(activity!!.getString(R.string.element_call_a11y_enter_fullscreen))
+
+        runOnUiThread { actions.first { it.label == "Move to top left" }.action() }
+        assertThat(events.moves()).containsExactly(ElementCallOwnTileCorner.TOP_LEFT)
     }
 
     private fun androidx.compose.ui.test.AndroidComposeUiTest<ComponentActivity>.setOneToOne(

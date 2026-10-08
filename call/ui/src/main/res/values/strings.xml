@@ -35,6 +35,16 @@
     <string name="element_call_hero_position">(%1$d of %2$d)</string>
     <string name="element_call_a11y_enter_fullscreen">Full screen</string>
     <string name="element_call_a11y_exit_fullscreen">Exit full screen</string>
+    <string name="element_call_a11y_camera_on">Camera on</string>
+    <string name="element_call_a11y_camera_off">Camera off</string>
+    <string name="element_call_a11y_corner_top_left">Top left</string>
+    <string name="element_call_a11y_corner_top_right">Top right</string>
+    <string name="element_call_a11y_corner_bottom_left">Bottom left</string>
+    <string name="element_call_a11y_corner_bottom_right">Bottom right</string>
+    <string name="element_call_a11y_move_to_top_left">Move to top left</string>
+    <string name="element_call_a11y_move_to_top_right">Move to top right</string>
+    <string name="element_call_a11y_move_to_bottom_left">Move to bottom left</string>
+    <string name="element_call_a11y_move_to_bottom_right">Move to bottom right</string>
     <string name="element_call_sharing_your_screen">You’re sharing your screen</string>
     <string name="element_call_audio_device_bluetooth">Bluetooth</string>
     <string name="element_call_audio_device_usb">USB device</string>

@@ -76,6 +76,8 @@ fun CallTile(
     videoTransform: VideoTransform = VideoTransform.None,
     /** Told the decoded picture's size, for a placement that follows its shape (019 R4, R10). */
     onVideoSizeChange: ((IntSize) -> Unit)? = null,
+    /** The corner our own tile floats in, which a screen reader says (019 R26); null when it does not float. */
+    floatingCorner: ElementCallOwnTileCorner? = null,
 ) {
     // One per tile, for the life of the tile. Emphatically *not* keyed on [stats], which is rebuilt on
     // every recomposition: keying on it gave every recomposition a fresh counter, so the overlay read
@@ -96,7 +98,7 @@ fun CallTile(
         label = "tileCorner",
     )
     val shape = RoundedCornerShape(corner)
-    val description = tile.accessibilityDescription()
+    val description = tile.accessibilityDescription(hasPicture = videoFrames != null, floatingCorner = floatingCorner)
     Box(
         modifier = modifier
             .semantics { contentDescription = description }
@@ -301,15 +303,36 @@ private fun HandRaisedBadge(modifier: Modifier = Modifier) {
 
 /** The name and the states a screen reader has to say, since none of the badges say them (R69). */
 @Composable
-private fun CallTileData.accessibilityDescription(): String {
+private fun CallTileData.accessibilityDescription(hasPicture: Boolean, floatingCorner: ElementCallOwnTileCorner?): String {
     val states = buildList {
+        // Ours says its camera, which no badge on it shows, and its corner while it floats (019 R26).
+        if (isLocal) add(stringResource(if (hasPicture) R.string.element_call_a11y_camera_on else R.string.element_call_a11y_camera_off))
         if (isScreenShare) add(stringResource(R.string.element_call_a11y_sharing_screen))
         if (hasDetail && !isScreenShare && isMuted) add(stringResource(R.string.element_call_a11y_muted))
         if (isActiveSpeaker) add(stringResource(R.string.element_call_a11y_speaking))
         if (isHandRaised) add(stringResource(R.string.element_call_a11y_hand_raised))
+        if (floatingCorner != null) add(stringResource(floatingCorner.label))
     }
     return (listOf(label()) + states).joinToString(", ")
 }
+
+/** A corner as a screen reader says it. */
+internal val ElementCallOwnTileCorner.label: Int
+    get() = when (this) {
+        ElementCallOwnTileCorner.TOP_LEFT -> R.string.element_call_a11y_corner_top_left
+        ElementCallOwnTileCorner.TOP_RIGHT -> R.string.element_call_a11y_corner_top_right
+        ElementCallOwnTileCorner.BOTTOM_LEFT -> R.string.element_call_a11y_corner_bottom_left
+        ElementCallOwnTileCorner.BOTTOM_RIGHT -> R.string.element_call_a11y_corner_bottom_right
+    }
+
+/** The screen reader's way of moving our floating tile, which a drag alone is not (019 R25). */
+internal val ElementCallOwnTileCorner.moveLabel: Int
+    get() = when (this) {
+        ElementCallOwnTileCorner.TOP_LEFT -> R.string.element_call_a11y_move_to_top_left
+        ElementCallOwnTileCorner.TOP_RIGHT -> R.string.element_call_a11y_move_to_top_right
+        ElementCallOwnTileCorner.BOTTOM_LEFT -> R.string.element_call_a11y_move_to_bottom_left
+        ElementCallOwnTileCorner.BOTTOM_RIGHT -> R.string.element_call_a11y_move_to_bottom_right
+    }
 
 /** A camera in the spotlight is drawn halfway between fill and fit (spec 003 R16, contract B7). */
 const val SPOTLIGHT_CAMERA_FIT = 0.5f
