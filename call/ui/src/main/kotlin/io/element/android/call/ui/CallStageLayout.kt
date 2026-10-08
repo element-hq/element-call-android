@@ -27,6 +27,8 @@ internal data class CallStageMetrics(
     val columns: Int = PORTRAIT_COLUMNS,
     val landscapeColumns: Int = LANDSCAPE_COLUMNS,
     val spotlightAspect: Float = SPOTLIGHT_ASPECT,
+    /** Pixels per dp, for the sizes a layout states in dp (019 R17). */
+    val density: Float = 1f,
 ) {
     val isLandscape: Boolean get() = width > height
 
@@ -53,6 +55,9 @@ internal fun interface CallStageArrangement {
     companion object {
         /** Spec 003: a two-column 4:3 grid scrolling under a sticky 16:9 spotlight. */
         val RankedGrid: CallStageArrangement = CallStageArrangement(::computeRankedGrid)
+
+        /** Spec 019: at most five tiles, nothing scrolling, ours floating with one or two. */
+        val SmallCall: CallStageArrangement = CallStageArrangement(SmallCallLayout::compute)
     }
 }
 
@@ -78,6 +83,12 @@ internal data class CallStageLayout(
     val hiddenTileIds: Set<String>,
     /** The heroes as a stack and which one is shown, or null with none (R19). */
     val heroStack: HeroStack?,
+    /** Our own tile while it floats (019 R2); also in [tiles], at the same rect. */
+    val floating: FloatingOwnTile? = null,
+    /** The one tile drawn edge to edge behind the bars (019 R4), or null. */
+    val fullBleedTileId: String? = null,
+    /** Nothing scrolls (019 R30): the stage's scroll is off. */
+    val isStatic: Boolean = false,
 ) {
     data class Input(
         /**
@@ -89,6 +100,12 @@ internal data class CallStageLayout(
         /** Every hero in the model's order, shown or not (R20). */
         val heroIds: List<String>,
         val metrics: CallStageMetrics,
+        /** Ours, for a layout that treats it apart (019); null when we are not in the call yet. */
+        val own: OwnTileInput? = null,
+        /** How far above the stage's top the screen reaches, behind the top bar (019 R4). */
+        val topBleed: Float = 0f,
+        /** The part of the stage the visible chrome leaves, which our floating tile stays inside (019 R19). Null is the whole stage. */
+        val floatingArea: Rect? = null,
     )
 
     data class HeroStack(val count: Int, val shownIndex: Int)
