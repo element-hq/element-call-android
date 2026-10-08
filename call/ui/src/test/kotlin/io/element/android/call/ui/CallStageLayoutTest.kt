@@ -86,50 +86,12 @@ class CallStageLayoutTest {
     }
 
     @Test
-    fun `alone, our tile fills the stage above the controls`() {
-        val layout = rankedGrid(gridTiles = listOf("own"), metrics = PORTRAIT)
+    fun `a few tiles without a spotlight are the ordinary grid, the small call being spec 019's`() {
+        val layout = rankedGrid(gridTiles = listOf("own", "b", "c"), metrics = PORTRAIT)
 
-        assertThat(layout.tiles.getValue("own")).isEqualTo(Rect(MARGIN, MARGIN, WIDTH - MARGIN, HEIGHT - CLEARANCE))
-        assertThat(layout.spotlight).isNull()
-        assertThat(layout.contentHeight).isEqualTo(HEIGHT)
-    }
-
-    @Test
-    fun `two tiles share the stage equally, stacked in portrait and side by side in landscape`() {
-        val portrait = rankedGrid(gridTiles = listOf("own", "b"), metrics = PORTRAIT)
-        val own = portrait.tiles.getValue("own")
-        val other = portrait.tiles.getValue("b")
-        // R35: stacked, equal.
-        assertThat(own.width).isEqualTo(WIDTH - 2 * MARGIN)
-        assertThat(own.height).isWithin(TOLERANCE).of(other.height)
-        assertThat(other.top).isWithin(TOLERANCE).of(own.bottom + GAP)
-        assertThat(other.bottom).isWithin(TOLERANCE).of(HEIGHT - CLEARANCE)
-
-        val landscape = rankedGrid(gridTiles = listOf("own", "b"), metrics = LANDSCAPE)
-        val left = landscape.tiles.getValue("own")
-        val right = landscape.tiles.getValue("b")
-        // Contract B4: side by side, 4:3, centred on the stage's height.
-        assertThat(left.top).isWithin(TOLERANCE).of(right.top)
-        assertThat(right.left).isWithin(TOLERANCE).of(left.right + GAP)
-        assertThat(left.width / left.height).isWithin(TOLERANCE).of(4f / 3f)
-        assertThat((left.top + left.bottom) / 2).isWithin(TOLERANCE).of(LANDSCAPE.height / 2)
-    }
-
-    @Test
-    fun `three tiles use the grid in portrait on a phone and one row in landscape`() {
-        // R36: three full-width 4:3 rows do not fit above the controls at 393x734, so the grid.
-        val portrait = rankedGrid(gridTiles = listOf("own", "b", "c"), metrics = PORTRAIT)
-        assertThat(portrait.tiles.values.map { it.left }.toSet()).hasSize(2)
-        assertThat(portrait.tiles.getValue("c").left).isEqualTo(MARGIN)
-
-        // Tall enough, and three rows fit.
-        val tall = rankedGrid(gridTiles = listOf("own", "b", "c"), metrics = PORTRAIT.copy(height = 1200f))
-        assertThat(tall.tiles.values.map { it.left }.toSet()).containsExactly(MARGIN)
-        assertThat(tall.tiles.getValue("own").width).isEqualTo(WIDTH - 2 * MARGIN)
-
-        val landscape = rankedGrid(gridTiles = listOf("own", "b", "c"), metrics = LANDSCAPE)
-        assertThat(landscape.tiles.values.map { it.top }.toSet()).hasSize(1)
-        assertThat(landscape.tiles.getValue("c").right).isWithin(TOLERANCE).of(LANDSCAPE.width - MARGIN)
+        val tileWidth = (WIDTH - 2 * MARGIN - GAP) / 2
+        assertThat(layout.tiles.getValue("own")).isEqualTo(Rect(MARGIN, MARGIN, MARGIN + tileWidth, MARGIN + tileWidth * 3 / 4))
+        assertThat(layout.tiles.getValue("c").left).isEqualTo(MARGIN)
     }
 
     @Test

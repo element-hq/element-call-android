@@ -184,7 +184,7 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
                     A_REMOTE_MEMBER_ID to emptyFlow(),
                 ),
             ),
-            // A DM where the other side has no camera: two equal tiles, theirs an avatar (spec 003 R35).
+            // A DM where the other side has no camera: theirs an avatar edge to edge, ours floating (spec 019 R4).
             anElementCallScreenState(
                 connection = ElementCallConnection.Connected,
                 memberCount = 2,
@@ -203,7 +203,7 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
                 isCameraPermissionGranted = true,
                 videoFrames = mapOf(A_REMOTE_MEMBER_ID to emptyFlow()),
             ),
-            // A DM that a third person has joined: three tiles fall to the two-column grid on a phone (R36).
+            // A DM that a third person has joined: one column of three, ours first (spec 019 R5).
             anElementCallScreenState(
                 connection = ElementCallConnection.Connected,
                 memberCount = 3,
@@ -231,7 +231,7 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
                 activeSpeakerIds = setOf(A_REMOTE_MEMBER_ID),
                 videoFrames = mapOf(A_REMOTE_MEMBER_ID to emptyFlow()),
             ),
-            // Alone in the call: nobody is ranked, so our own tile has the screen.
+            // Alone in the call: our own tile floats in its corner (spec 019 R3).
             anElementCallScreenState(
                 connection = ElementCallConnection.Connected,
                 memberCount = 1,
@@ -244,12 +244,18 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
                 participants = listOf(aLocalParticipant(), aRemoteSharingParticipant(), aStaleParticipant()),
                 videoFrames = mapOf("$A_REMOTE_MEMBER_ID#SCREEN_SHARE" to emptyFlow(), A_REMOTE_MEMBER_ID to emptyFlow()),
             ),
-            // Four and six people: the two-column grid, rows from the top, a partial row left-aligned (R29, R30).
+            // Four people, the small call's 2x2 (spec 019 R6); five, the fifth centred (R11); six, the grid (003 R29, R30).
             anElementCallScreenState(
                 connection = ElementCallConnection.Connected,
                 memberCount = 4,
                 participants = listOf(aLocalParticipant(), aRemoteParticipant()) + (1..2).map { aCrowdParticipant(it) },
                 videoFrames = mapOf(A_REMOTE_MEMBER_ID to emptyFlow()),
+            ),
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
+                memberCount = 5,
+                participants = listOf(aLocalParticipant(), aRemoteParticipant()) + (1..3).map { aCrowdParticipant(it) },
+                activeSpeakerIds = setOf(aCrowdMemberId(1)),
             ),
             anElementCallScreenState(
                 connection = ElementCallConnection.Connected,
