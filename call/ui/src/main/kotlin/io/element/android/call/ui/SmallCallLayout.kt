@@ -81,6 +81,10 @@ internal object SmallCallLayout {
     fun applies(tiles: List<CallTileData>): Boolean =
         tiles.none { it.isScreenShare && !it.isLocal } && tiles.count { !it.isScreenShare } <= MAX_TILES
 
+    /** One other person and us: their tile is edge to edge and the bars hide together in portrait too (R4, R30). */
+    fun isFullBleed(tiles: List<CallTileData>): Boolean =
+        applies(tiles) && tiles.any { it.isLocal } && tiles.count { !it.isScreenShare } == 2
+
     /**
      * @param input the tiles in order, ours first when we are in the call. [CallStageLayout.Input.own]
      * says which is ours; without it every tile is placed as a remote one.

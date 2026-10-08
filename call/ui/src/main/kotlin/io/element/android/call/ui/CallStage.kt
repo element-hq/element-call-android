@@ -117,6 +117,8 @@ internal fun CallStage(
     topClearance: Dp,
     /** Where a fullscreen tile starts, keeping the status bar clear (000 R1). */
     fullscreenTop: Dp,
+    /** How far in from the stage's edges the visible chrome reaches, which our floating tile keeps clear of (019 R19). */
+    floatingInsets: FloatingInsets,
     modifier: Modifier = Modifier,
     /** Null to choose by the call: the small-call layout up to five tiles, the ranked grid beyond (019 R1, R8). */
     arrangement: CallStageArrangement? = null,
@@ -207,7 +209,9 @@ internal fun CallStage(
         val ownInput = ownTile?.let {
             OwnTileInput(it.tileId, hasVideo = state.videoFrames[it.tileId] != null, videoAspect = ownVideoAspect, corner = OwnTileCorner.Initial)
         }
-        val floatingArea = Rect(0f, 0f, width, height - metrics.controlsClearance)
+        val floatingArea = with(density) {
+            Rect(floatingInsets.left.toPx(), floatingInsets.top.toPx(), width - floatingInsets.right.toPx(), height - floatingInsets.bottom.toPx())
+        }
         val layout = remember(gridTileIds, spotlightTileId, heroIds, metrics, chosen, ownInput, gridTop, floatingArea) {
             chosen.compute(CallStageLayout.Input(gridTileIds, spotlightTileId, heroIds, metrics, ownInput, topBleed = gridTop, floatingArea = floatingArea))
         }
@@ -839,6 +843,12 @@ internal fun Modifier.animatedSlot(
         }
     }
 }
+
+/**
+ * The chrome's reach into the stage from each edge, physical left and right. The top is measured from
+ * the stage's own top, under the portrait top bar, so it is negative when that bar hides (019 R30).
+ */
+internal data class FloatingInsets(val left: Dp, val top: Dp, val right: Dp, val bottom: Dp)
 
 /** A tile's rectangle, and whether it is sticky (viewport coordinates) or scrolls (content coordinates). */
 private data class TileSlot(val rect: Rect, val isSticky: Boolean, val appearance: CallTileAppearance) {

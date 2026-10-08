@@ -82,6 +82,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.PreviewParameter
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -145,9 +146,26 @@ fun ElementCallScreen(
             val reduceMotion = rememberReduceMotion()
             ReportScreenReader(state.eventSink)
             val fullscreen = state.fullscreenTile
+            // One to one, the picture is the whole screen, so upright too the top bar goes with the
+            // control bar; with any other count it stays (019 R30, 014 R30).
+            val isFullBleed = SmallCallLayout.isFullBleed(state.tiles)
+            val isTopBarHideable = isLandscape || isFullBleed
             // Held sideways the status bar stays away, chrome or not: over the picture it has no
             // background of its own, and it tells nothing worth the strip it takes (014 R8, as proposed).
-            CallSystemBars(isStatusBarHidden = isLandscape)
+            // One to one upright, it leaves with the top bar.
+            CallSystemBars(isStatusBarHidden = isLandscape || isFullBleed && !state.isStageChromeVisible)
+            val systemBars = WindowInsets.systemBarsIgnoringVisibility.asPaddingValues()
+            val floatingInsets = FloatingInsets(
+                left = systemBars.calculateLeftPadding(LayoutDirection.Ltr),
+                top = when {
+                    isLandscape -> if (state.isStageChromeVisible) statusBarTop + TOP_BAR_HEIGHT else 0.dp
+                    // Into the room the top bar leaves, short of the status bar's strip.
+                    isFullBleed && !state.isStageChromeVisible -> statusBarTop - topClearance
+                    else -> 0.dp
+                },
+                right = systemBars.calculateRightPadding(LayoutDirection.Ltr),
+                bottom = if (state.isStageChromeVisible) controlsClearance else bottomInset,
+            )
 
             Box(modifier = Modifier.fillMaxSize()) {
                 if (state.tiles.isEmpty()) {
@@ -159,10 +177,11 @@ fun ElementCallScreen(
                         controlsClearance = controlsClearance,
                         topClearance = topClearance,
                         fullscreenTop = statusBarTop,
+                        floatingInsets = floatingInsets,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
-                if (!isLandscape) {
+                if (!isTopBarHideable) {
                     // Faded rather than removed when a tile goes fullscreen, in step with the stage's scrim: removed
                     // at once, the rows scrolled under it showed until the growing tile covered them (000 R7).
                     AnimatedVisibility(
@@ -206,8 +225,8 @@ fun ElementCallScreen(
                             )
                         }
                     }
-                } else if (isLandscape) {
-                    // Both bars over the picture, shown and hidden as one (014 R1, R2).
+                } else if (isTopBarHideable) {
+                    // Both bars over the picture, shown and hidden as one (014 R1, R2; 019 R30).
                     StageChrome(isVisible = state.isStageChromeVisible, edge = Alignment.Top, reduceMotion = reduceMotion) {
                         Box {
                             Box(

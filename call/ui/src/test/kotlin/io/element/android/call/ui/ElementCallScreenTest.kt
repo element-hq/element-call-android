@@ -162,6 +162,52 @@ class ElementCallScreenTest : RobolectricTest() {
         onNodeWithContentDescription(activity!!.getString(R.string.element_call_a11y_minimize_call)).assertIsDisplayed()
     }
 
+    /** One to one the picture is the whole screen, so upright the top bar goes with the control bar too (019 R30). */
+    @Test
+    fun `hidden chrome one to one upright takes the top bar as well`() = runAndroidComposeUiTest<ComponentActivity> {
+        setContent {
+            ElementCallScreen(state = anElementCallScreenState(participants = listOf(aLocalParticipant(), aRemoteParticipant()), isStageChromeVisible = false))
+        }
+
+        onNodeWithContentDescription(activity!!.getString(R.string.element_call_a11y_hang_up)).assertDoesNotExist()
+        onNodeWithContentDescription(activity!!.getString(R.string.element_call_a11y_minimize_call)).assertDoesNotExist()
+    }
+
+    /** With three tiles the portrait top bar stays, as 014 R30 has it (019 R30). */
+    @Test
+    fun `hidden chrome with three upright keeps the top bar`() = runAndroidComposeUiTest<ComponentActivity> {
+        setContent {
+            ElementCallScreen(
+                state = anElementCallScreenState(
+                    participants = listOf(aLocalParticipant(), aRemoteParticipant(), aCrowdParticipant(1)),
+                    isStageChromeVisible = false,
+                ),
+            )
+        }
+
+        onNodeWithContentDescription(activity!!.getString(R.string.element_call_a11y_minimize_call)).assertIsDisplayed()
+    }
+
+    /** In a small call our own tile neither toggles the chrome nor goes fullscreen, and the tap is not the stage's (019 R14, R23). */
+    @Test
+    fun `in a small call a tap or a double tap on our tile does nothing`() = runAndroidComposeUiTest<ComponentActivity> {
+        val events = EventsRecorder<ElementCallScreenEvent>()
+        setContent {
+            CompositionLocalProvider(LocalInspectionMode provides true) {
+                ElementCallScreen(state = anElementCallScreenState(participants = listOf(aLocalParticipant(), aRemoteParticipant()), eventSink = events))
+            }
+        }
+        waitForIdle()
+        val own = onNodeWithTag(ElementCallTestTags.tile(A_LOCAL_MEMBER_ID))
+
+        events.clear()
+        own.performTouchInput { click() }
+        mainClock.advanceTimeBy(1_000)
+        own.performTouchInput { doubleClick() }
+        waitForIdle()
+        assertThat(events.recorded().filter { it is StageChromeEvent.TapStage || it is ElementCallScreenEvent.ToggleFullscreen }).isEmpty()
+    }
+
     /** A tap on a tile is the stage's tap, sent on its touch-up; a double tap is fullscreen and no second tap (014 R14, R16). */
     @Test
     fun `a tap on a tile taps the stage and a double tap goes fullscreen`() = runAndroidComposeUiTest<ComponentActivity> {
