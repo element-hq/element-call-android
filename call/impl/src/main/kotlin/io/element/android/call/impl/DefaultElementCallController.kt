@@ -217,6 +217,7 @@ internal class DefaultElementCallController(
                     // under the user's finger. From here on this is the camera's desired state, and
                     // the tap that changes it is the answer runCall joins on.
                     isCameraEnabled = !callData.isAudioCall,
+                    isCameraSwitchAvailable = platform.isCameraSwitchAvailable(),
                 )
                 // Reported as soon as the call is requested rather than once it connects, so a host's
                 // Join button hides while we are still joining rather than blinking through an

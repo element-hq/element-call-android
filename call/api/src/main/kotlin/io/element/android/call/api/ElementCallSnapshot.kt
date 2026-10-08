@@ -115,6 +115,8 @@ data class ElementCallSnapshot(
     val isCameraEnabled: Boolean = false,
     /** Whether the camera in use faces the user, which is what decides if the self view mirrors. */
     val isFrontCamera: Boolean = true,
+    /** Whether the device has a camera on each side; without, our tile offers no switch (019 R24). */
+    val isCameraSwitchAvailable: Boolean = true,
     /**
      * Whether the camera permission has been granted. False also covers "never asked" - the camera is
      * only requested when the user reaches for it, so the two are the same thing as far as the screen

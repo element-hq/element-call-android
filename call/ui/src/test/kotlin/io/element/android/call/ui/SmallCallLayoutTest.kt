@@ -41,7 +41,7 @@ class SmallCallLayoutTest {
             val layout = small(listOf(OWN), metrics)
 
             // R3, R18.
-            assertThat(layout.floating?.corner).isEqualTo(OwnTileCorner.BOTTOM_RIGHT)
+            assertThat(layout.floating?.corner).isEqualTo(ElementCallOwnTileCorner.BOTTOM_RIGHT)
             assertThat(layout.floating?.rect?.right).isEqualTo(metrics.width - MARGIN)
             assertThat(layout.floating?.rect?.bottom).isEqualTo(metrics.height - MARGIN)
             assertThat(layout.tiles.keys).containsExactly(OWN)
@@ -154,7 +154,7 @@ class SmallCallLayoutTest {
     @Test
     fun `our floating tile is upright, sideways or square by its picture, the stage's shape before the first frame`() {
         fun size(hasVideo: Boolean, aspect: Float?, metrics: CallStageMetrics) =
-            SmallCallLayout.floatingSize(OwnTileInput(OWN, hasVideo, aspect, OwnTileCorner.BOTTOM_RIGHT), metrics)
+            SmallCallLayout.floatingSize(OwnTileInput(OWN, hasVideo, aspect, ElementCallOwnTileCorner.BOTTOM_RIGHT), metrics)
 
         // R10, R17, R28.
         assertThat(size(hasVideo = true, aspect = 9f / 16f, LANDSCAPE)).isEqualTo(Size(100f, 150f))
@@ -172,10 +172,10 @@ class SmallCallLayoutTest {
         val size = Size(100f, 150f)
 
         // R19: clear of the visible bars, whichever corner.
-        assertThat(SmallCallLayout.floatingRect(OwnTileCorner.TOP_LEFT, size, area, MARGIN)).isEqualTo(Rect(Offset(MARGIN, 40f + MARGIN), size))
-        assertThat(SmallCallLayout.floatingRect(OwnTileCorner.BOTTOM_RIGHT, size, area, MARGIN))
+        assertThat(SmallCallLayout.floatingRect(ElementCallOwnTileCorner.TOP_LEFT, size, area, MARGIN)).isEqualTo(Rect(Offset(MARGIN, 40f + MARGIN), size))
+        assertThat(SmallCallLayout.floatingRect(ElementCallOwnTileCorner.BOTTOM_RIGHT, size, area, MARGIN))
             .isEqualTo(Rect(Offset(WIDTH - MARGIN - 100f, HEIGHT - CLEARANCE - MARGIN - 150f), size))
-        val layout = small(listOf(OWN, "b"), PORTRAIT, corner = OwnTileCorner.TOP_RIGHT, floatingArea = area)
+        val layout = small(listOf(OWN, "b"), PORTRAIT, corner = ElementCallOwnTileCorner.TOP_RIGHT, floatingArea = area)
         assertThat(layout.floating?.rect?.top).isEqualTo(40f + MARGIN)
         assertThat(layout.floating?.rect?.right).isEqualTo(WIDTH - MARGIN)
     }
@@ -184,10 +184,10 @@ class SmallCallLayoutTest {
     fun `a drop goes to the nearest corner`() {
         val bounds = Rect(0f, 0f, WIDTH, HEIGHT)
         // R21: at rest, the quadrant the tile was let go in.
-        assertThat(SmallCallLayout.releaseCorner(Offset(50f, 50f), Offset.Zero, bounds)).isEqualTo(OwnTileCorner.TOP_LEFT)
-        assertThat(SmallCallLayout.releaseCorner(Offset(300f, 50f), Offset.Zero, bounds)).isEqualTo(OwnTileCorner.TOP_RIGHT)
-        assertThat(SmallCallLayout.releaseCorner(Offset(50f, 600f), Offset.Zero, bounds)).isEqualTo(OwnTileCorner.BOTTOM_LEFT)
-        assertThat(SmallCallLayout.releaseCorner(Offset(300f, 600f), Offset.Zero, bounds)).isEqualTo(OwnTileCorner.BOTTOM_RIGHT)
+        assertThat(SmallCallLayout.releaseCorner(Offset(50f, 50f), Offset.Zero, bounds)).isEqualTo(ElementCallOwnTileCorner.TOP_LEFT)
+        assertThat(SmallCallLayout.releaseCorner(Offset(300f, 50f), Offset.Zero, bounds)).isEqualTo(ElementCallOwnTileCorner.TOP_RIGHT)
+        assertThat(SmallCallLayout.releaseCorner(Offset(50f, 600f), Offset.Zero, bounds)).isEqualTo(ElementCallOwnTileCorner.BOTTOM_LEFT)
+        assertThat(SmallCallLayout.releaseCorner(Offset(300f, 600f), Offset.Zero, bounds)).isEqualTo(ElementCallOwnTileCorner.BOTTOM_RIGHT)
     }
 
     @Test
@@ -195,9 +195,9 @@ class SmallCallLayoutTest {
         val bounds = Rect(0f, 0f, WIDTH, HEIGHT)
         val bottomRight = Offset(300f, 600f)
         // R21: a quick flick up from the bottom right ends top right.
-        assertThat(SmallCallLayout.releaseCorner(bottomRight, Offset(0f, -2_000f), bounds)).isEqualTo(OwnTileCorner.TOP_RIGHT)
-        assertThat(SmallCallLayout.releaseCorner(bottomRight, Offset(-2_000f, -2_000f), bounds)).isEqualTo(OwnTileCorner.TOP_LEFT)
-        assertThat(SmallCallLayout.releaseCorner(bottomRight, Offset(0f, -100f), bounds)).isEqualTo(OwnTileCorner.BOTTOM_RIGHT)
+        assertThat(SmallCallLayout.releaseCorner(bottomRight, Offset(0f, -2_000f), bounds)).isEqualTo(ElementCallOwnTileCorner.TOP_RIGHT)
+        assertThat(SmallCallLayout.releaseCorner(bottomRight, Offset(-2_000f, -2_000f), bounds)).isEqualTo(ElementCallOwnTileCorner.TOP_LEFT)
+        assertThat(SmallCallLayout.releaseCorner(bottomRight, Offset(0f, -100f), bounds)).isEqualTo(ElementCallOwnTileCorner.BOTTOM_RIGHT)
     }
 
     @Test
@@ -240,7 +240,7 @@ class SmallCallLayoutTest {
     private fun small(
         ids: List<String>,
         metrics: CallStageMetrics,
-        corner: OwnTileCorner = OwnTileCorner.Initial,
+        corner: ElementCallOwnTileCorner = ElementCallOwnTileCorner.Initial,
         topBleed: Float = 0f,
         floatingArea: Rect? = null,
     ) = CallStageArrangement.SmallCall.compute(

@@ -90,11 +90,11 @@ internal object CallStageDump {
         return slot to rect(tile.left, tile.top, tile.width, tile.height)
     }
 
-    private fun OwnTileCorner.dumpName() = when (this) {
-        OwnTileCorner.TOP_LEFT -> "tl"
-        OwnTileCorner.TOP_RIGHT -> "tr"
-        OwnTileCorner.BOTTOM_LEFT -> "bl"
-        OwnTileCorner.BOTTOM_RIGHT -> "br"
+    private fun ElementCallOwnTileCorner.dumpName() = when (this) {
+        ElementCallOwnTileCorner.TOP_LEFT -> "tl"
+        ElementCallOwnTileCorner.TOP_RIGHT -> "tr"
+        ElementCallOwnTileCorner.BOTTOM_LEFT -> "bl"
+        ElementCallOwnTileCorner.BOTTOM_RIGHT -> "br"
     }
 
     private fun visibility(id: String, hooks: CallStageTestHooks, isMounted: Boolean): String = when {

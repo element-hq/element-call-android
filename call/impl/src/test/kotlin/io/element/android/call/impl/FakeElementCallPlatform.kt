@@ -17,6 +17,7 @@ internal class FakeElementCallPlatform(
      * distinguish.
      */
     private val onStartForegroundService: (isProjecting: Boolean) -> Unit = {},
+    private val isCameraSwitchAvailable: Boolean = true,
 ) : ElementCallPlatform {
     /** Counted rather than flagged: the service is deliberately started twice, once per media permission. */
     var startForegroundServiceCount = 0
@@ -42,4 +43,6 @@ internal class FakeElementCallPlatform(
     override fun stopForegroundService() {
         stopForegroundServiceCount++
     }
+
+    override fun isCameraSwitchAvailable(): Boolean = isCameraSwitchAvailable
 }

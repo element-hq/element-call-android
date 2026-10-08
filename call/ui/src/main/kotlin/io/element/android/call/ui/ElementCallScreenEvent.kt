@@ -118,3 +118,9 @@ internal sealed interface StageChromeEvent : ElementCallScreenEvent {
     /** TalkBack started or stopped (014 R24). */
     data class ScreenReaderChanged(val isRunning: Boolean) : StageChromeEvent
 }
+
+/** What the small-call layout's own tile asks for (spec 019). */
+internal sealed interface SmallCallEvent : ElementCallScreenEvent {
+    /** Our floating tile was released, or moved by a screen reader, into [corner] (019 R21, R25). */
+    data class MoveOwnTile(val corner: ElementCallOwnTileCorner) : SmallCallEvent
+}

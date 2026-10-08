@@ -182,6 +182,7 @@ fun rememberElementCallScreenState(
                 }
             }
             is StageChromeEvent.ScreenReaderChanged -> applyStageChrome(ElementCallChromeVisibility.Event.ScreenReader(event.isRunning))
+            is SmallCallEvent.MoveOwnTile -> spotlightMemory.ownTileCorner = event.corner
             ElementCallScreenEvent.ToggleScreenShare -> {
                 if (current?.isScreenSharing == true) {
                     controller.setScreenShareEnabled(token = null)
@@ -206,6 +207,7 @@ fun rememberElementCallScreenState(
         fullscreenTileId = fullscreenTileId,
         isFullscreenChromeVisible = isFullscreenChromeVisible,
         isStageChromeVisible = tiles.isEmpty() || stageChrome.isVisible,
+        ownTileCorner = spotlightMemory.ownTileCorner,
         eventSink = ::handleEvent,
     )
 }
@@ -250,6 +252,7 @@ private fun ElementCallSnapshot?.toState(
     fullscreenTileId: String?,
     isFullscreenChromeVisible: Boolean,
     isStageChromeVisible: Boolean,
+    ownTileCorner: ElementCallOwnTileCorner,
     eventSink: (ElementCallScreenEvent) -> Unit,
 ) = ElementCallScreenState(
     connection = this?.connection ?: ElementCallConnection.RequestingPermission,
@@ -264,6 +267,7 @@ private fun ElementCallSnapshot?.toState(
     isMicrophonePermissionGranted = this?.isMicrophonePermissionGranted == true,
     isCameraEnabled = this?.isCameraEnabled == true,
     isFrontCamera = this?.isFrontCamera != false,
+    isCameraSwitchAvailable = this?.isCameraSwitchAvailable != false,
     isCameraPermissionGranted = this?.isCameraPermissionGranted == true,
     isScreenShareAvailable = this?.isScreenShareAvailable == true,
     isScreenSharing = this?.isScreenSharing == true,
@@ -277,6 +281,7 @@ private fun ElementCallSnapshot?.toState(
     fullscreenTileId = fullscreenTileId,
     isFullscreenChromeVisible = isFullscreenChromeVisible,
     isStageChromeVisible = isStageChromeVisible,
+    ownTileCorner = ownTileCorner,
     libraryVersion = ElementCallVersion.library,
     coreVersion = ElementCallVersion.core,
     eventSink = eventSink,

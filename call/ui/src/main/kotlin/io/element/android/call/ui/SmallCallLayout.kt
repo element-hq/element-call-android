@@ -13,41 +13,17 @@ import androidx.compose.ui.geometry.Size
 import kotlin.math.ceil
 import kotlin.math.min
 
-/** Where our floating tile sits. Physical: a right-to-left locale does not mirror it (019 R18). */
-internal enum class OwnTileCorner {
-    TOP_LEFT,
-    TOP_RIGHT,
-    BOTTOM_LEFT,
-    BOTTOM_RIGHT,
-    ;
-
-    val isLeft: Boolean get() = this == TOP_LEFT || this == BOTTOM_LEFT
-    val isTop: Boolean get() = this == TOP_LEFT || this == TOP_RIGHT
-
-    companion object {
-        /** Where every call starts (019 R18). */
-        val Initial = BOTTOM_RIGHT
-
-        fun of(isLeft: Boolean, isTop: Boolean) = when {
-            isTop && isLeft -> TOP_LEFT
-            isTop -> TOP_RIGHT
-            isLeft -> BOTTOM_LEFT
-            else -> BOTTOM_RIGHT
-        }
-    }
-}
-
 /** Our own tile as the small layout needs it: whether it floats, and what shape it takes. */
 internal data class OwnTileInput(
     val tileId: String,
     val hasVideo: Boolean,
     /** Width over height of our picture as last drawn, or null before the first frame. */
     val videoAspect: Float?,
-    val corner: OwnTileCorner,
+    val corner: ElementCallOwnTileCorner,
 )
 
 /** Our own tile while it floats (019 R2): its rect in viewport coordinates and the corner it is in. */
-internal data class FloatingOwnTile(val tileId: String, val rect: Rect, val corner: OwnTileCorner)
+internal data class FloatingOwnTile(val tileId: String, val rect: Rect, val corner: ElementCallOwnTileCorner)
 
 /**
  * The layout of a call of at most five tiles, ours included (spec 019): a layout of its own, not a
@@ -210,7 +186,7 @@ internal object SmallCallLayout {
     }
 
     /** The rect for [corner], [margin] in from [area], the part of the stage the visible chrome leaves (R19). */
-    fun floatingRect(corner: OwnTileCorner, size: Size, area: Rect, margin: Float): Rect {
+    fun floatingRect(corner: ElementCallOwnTileCorner, size: Size, area: Rect, margin: Float): Rect {
         val left = if (corner.isLeft) area.left + margin else area.right - margin - size.width
         val top = if (corner.isTop) area.top + margin else area.bottom - margin - size.height
         return Rect(Offset(left, top), size)
@@ -221,9 +197,9 @@ internal object SmallCallLayout {
      * the velocity in pixels a second projected at a scroll's deceleration. A release at rest has no
      * velocity, which makes it a drop on the nearest corner.
      */
-    fun releaseCorner(center: Offset, velocity: Offset, bounds: Rect): OwnTileCorner {
+    fun releaseCorner(center: Offset, velocity: Offset, bounds: Rect): ElementCallOwnTileCorner {
         val projected = center + velocity * (DECELERATION_RATE / (1 - DECELERATION_RATE) / 1000f)
-        return OwnTileCorner.of(isLeft = projected.x < bounds.center.x, isTop = projected.y < bounds.center.y)
+        return ElementCallOwnTileCorner.of(isLeft = projected.x < bounds.center.x, isTop = projected.y < bounds.center.y)
     }
 
     /** [offset] limited so that [rect] moved by it stays inside [bounds]: the tile cannot leave the stage (R21). */

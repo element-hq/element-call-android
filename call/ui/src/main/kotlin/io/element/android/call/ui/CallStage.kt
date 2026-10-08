@@ -8,6 +8,7 @@
 package io.element.android.call.ui
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector2D
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.VisibilityThreshold
@@ -207,8 +208,10 @@ internal fun CallStage(
         var ownVideoAspect by remember { mutableStateOf<Float?>(null) }
         val ownTile = state.tiles.firstOrNull { it.isLocal }
         val ownInput = ownTile?.let {
-            OwnTileInput(it.tileId, hasVideo = state.videoFrames[it.tileId] != null, videoAspect = ownVideoAspect, corner = OwnTileCorner.Initial)
+            OwnTileInput(it.tileId, hasVideo = state.videoFrames[it.tileId] != null, videoAspect = ownVideoAspect, corner = state.ownTileCorner)
         }
+        // Where the finger has taken our floating tile from its corner; zero at rest (019 R21).
+        val ownDrag = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
         val floatingArea = with(density) {
             Rect(floatingInsets.left.toPx(), floatingInsets.top.toPx(), width - floatingInsets.right.toPx(), height - floatingInsets.bottom.toPx())
         }
@@ -433,6 +436,7 @@ internal fun CallStage(
                 onTap = if (isOwnSmallCallTile) NoOp else onTap,
                 allowsFullscreen = !isOwnSmallCallTile,
                 isLandscapeStage = metrics.isLandscape,
+                drag = ownDrag.takeIf { slot.appearance == CallTileAppearance.Floating },
                 onVideoSizeChange = if (tile.isLocal) onOwnVideoSize else null,
                 // Our floating tile is read after the person it floats over (019 R27).
                 traversalIndex = when {
@@ -496,17 +500,43 @@ internal fun CallStage(
         // On our own tile, as the design frames draw it: it acts on the picture it sits on, and the
         // bar has one fewer button to fit. A sibling anchored to the slot rather than a child of
         // the tile, so its tap is its own (000 R16). Only with a picture to turn around.
-        val own = state.tiles.firstOrNull { it.isLocal && it.tileId in composedGridIds && state.videoFrames[it.tileId] != null }
+        // Floating, the same box carries the drag, so a drag that starts on the button moves the tile (019 R22).
+        val own = state.tiles.firstOrNull { it.isLocal && it.tileId in composedGridIds }
         val ownSlot = own?.let { lastSlots[it.tileId] }
-        if (ownSlot != null && fullscreenId == null) {
-            val overlayZIndex = if (ownSlot.appearance == CallTileAppearance.Floating) FLOATING_OVERLAY_Z_INDEX else OWN_TILE_OVERLAY_Z_INDEX
-            Box(modifier = Modifier.animatedSlot(ownSlot.rect, isSticky = ownSlot.isSticky, scrollOffset = scrollOffset).zIndex(overlayZIndex)) {
-                SwitchCameraButton(
-                    onClick = { state.eventSink(ElementCallScreenEvent.SwitchCamera) },
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(8.dp),
-                )
+        val isFloating = ownSlot?.appearance == CallTileAppearance.Floating
+        // Not with our video off, nor with only one camera to switch to (019 R24).
+        val showsSwitch = own != null && state.videoFrames[own.tileId] != null && state.isCameraSwitchAvailable
+        val currentOwnRect by rememberUpdatedState(ownSlot?.rect ?: Rect.Zero)
+        val currentStage by rememberUpdatedState(Rect(0f, -gridTop, width, height))
+        val currentArea by rememberUpdatedState(floatingArea)
+        val hasOverlay = isFloating || showsSwitch
+        if (ownSlot != null && fullscreenId == null && hasOverlay) {
+            Box(
+                modifier = Modifier
+                    .animatedSlot(ownSlot.rect, isSticky = ownSlot.isSticky, scrollOffset = scrollOffset, drag = ownDrag.takeIf { isFloating })
+                    .zIndex(if (isFloating) FLOATING_OVERLAY_Z_INDEX else OWN_TILE_OVERLAY_Z_INDEX)
+                    .then(
+                        if (isFloating) {
+                            Modifier.ownTileDragGesture(
+                                drag = ownDrag,
+                                slot = { currentOwnRect },
+                                stage = { currentStage },
+                                area = { currentArea },
+                                onRelease = { corner -> currentEventSink(SmallCallEvent.MoveOwnTile(corner)) },
+                            )
+                        } else {
+                            Modifier
+                        }
+                    ),
+            ) {
+                if (showsSwitch) {
+                    SwitchCameraButton(
+                        onClick = { state.eventSink(ElementCallScreenEvent.SwitchCamera) },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(8.dp),
+                    )
+                }
             }
         }
 
@@ -612,6 +642,8 @@ private fun PlacedTile(
     /** False for our own tile in a small call (019 R14): no double tap and no action to go fullscreen. */
     allowsFullscreen: Boolean,
     isLandscapeStage: Boolean,
+    /** Our floating tile's offset from its corner while dragged. */
+    drag: Animatable<Offset, AnimationVector2D>?,
     onVideoSizeChange: ((IntSize) -> Unit)?,
     traversalIndex: Float,
     eventSink: (ElementCallScreenEvent) -> Unit,
@@ -705,7 +737,7 @@ private fun PlacedTile(
                     })
                 }
             }
-            .animatedSlot(slot.rect, isSticky = slot.isSticky, scrollOffset = scrollOffset, onArrive = { isRaised = slot.isFullscreen })
+            .animatedSlot(slot.rect, isSticky = slot.isSticky, scrollOffset = scrollOffset, onArrive = { isRaised = slot.isFullscreen }, drag = drag)
             // The spotlight draws over the grid passing underneath it (R27); we draw over the rest
             // for the moment a move overlaps; a tile filling the stage is above everything for the
             // whole of its move, including the tiles on their way out (000 R7).
@@ -817,6 +849,8 @@ internal fun Modifier.animatedSlot(
     scrollOffset: FloatState,
     /** Told when the move to [slot] has finished; not told when a newer slot cancelled it. */
     onArrive: (() -> Unit)? = null,
+    /** Added to the slot at layout time: a finger's offset, which moves the content without recomposing it. */
+    drag: Animatable<Offset, AnimationVector2D>? = null,
 ): Modifier {
     val bounds = remember { Animatable(slot, Rect.VectorConverter) }
     val currentOnArrived by rememberUpdatedState(onArrive)
@@ -839,7 +873,8 @@ internal fun Modifier.animatedSlot(
             // rest does not read the offset at all, so a scroll does not re-place it.
             val factor = stickyFactor.value
             val shift = if (factor == 0f) 0f else scrollOffset.floatValue * factor
-            placeable.place(current.left.roundToInt(), (current.top + shift).roundToInt())
+            val dragged = drag?.value ?: Offset.Zero
+            placeable.place((current.left + dragged.x).roundToInt(), (current.top + shift + dragged.y).roundToInt())
         }
     }
 }

@@ -941,6 +941,16 @@ class DefaultElementCallControllerTest {
         assertThat(nextCall.rankingThresholds).containsExactly(4)
     }
 
+    /** A device with one camera says so from the start, so our tile never offers a switch (019 R24). */
+    @Test
+    fun `the snapshot says whether there is a camera to switch to`() = runTest {
+        val single = createController(platform = FakeElementCallPlatform(isCameraSwitchAvailable = false))
+        assertThat(single.state.value?.isCameraSwitchAvailable).isFalse()
+
+        val both = createController(platform = FakeElementCallPlatform(isCameraSwitchAvailable = true))
+        assertThat(both.state.value?.isCameraSwitchAvailable).isTrue()
+    }
+
     /** At or below the threshold the order is join order, heroes first, whoever speaks (019 R7). */
     @Test
     fun `at or below the ranking threshold the order is join order`() = runTest {
