@@ -12,6 +12,10 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 ## Unreleased
 
+_Nothing yet._
+
+## 0.1.0-rc.7 - 2026-10-09
+
 - Core: matrix-rust-rtc `0.5.0-rc.2` (backend, room-first API, ranking threshold). A host's Ivy repository over the core's release
   asset (README, "Consuming a release") must point at the `v0.5.0-rc.2` asset. `MatrixRtcEndReason` gains `SlotClosed`.
 - `MatrixRtcMediaSession` and `ElementCallController` gain `setRankingThreshold(tiles)`, for a host implementing
@@ -33,6 +37,22 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
   one included. New: `timelineEvents(types)`, `redactions()` and `relations(...)`.
   `ElementCallEventEncryptionInfo.isSenderCrossSigned` is nullable: null when the client cannot say.
 - `ElementCallStack.start()` is gone: the core subscribes on its own once a room opens. Drop the call.
+
+
+
+### What's Changed
+
+✨ Features
+* Double tap tiles to make them fullscreen, pinch to zoom by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/30
+* Show | Hide the call chrome on tap and scroll by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/47
+* New optimized layout for small calls, 1:1 and less than 5 by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/50
+* Control bar: buttons packed in a pill, audio output lit off the earpiece by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/51
+
+🐛 Bugfixes
+* Fix: Speaking tile border follows the design, and use the design's rounded corner radius and grid gap by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/48
+
+
+**Full Changelog**: https://github.com/element-hq/element-call-android/compare/v0.1.0-rc.6...v0.1.0-rc.7
 
 ## 0.1.0-rc.6 - 2026-09-29
 
