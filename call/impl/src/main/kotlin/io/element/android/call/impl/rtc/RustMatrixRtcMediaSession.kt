@@ -613,14 +613,16 @@ internal class RustMatrixRtcMediaSession(
         if (_isCameraEnabled.value == enabled) return@runCatchingExceptions
 
         if (enabled) {
+            val camera = videoCapture.prepare() ?: return@runCatchingExceptions
             val track = cameraTrack ?: withContext(ffiDispatcher) {
                 mediaSession.publish(
                     FfiPublishOptions(
                         kind = FfiStreamKind.CAMERA,
                         audio = null,
+                        // What LiveKit derives the layers from, so the frames are scaled to exactly this.
                         video = FfiVideoSourceConfig(
-                            width = VideoFormat.CAPTURE_WIDTH.toUInt(),
-                            height = VideoFormat.CAPTURE_HEIGHT.toUInt(),
+                            width = camera.format.output.width.toUInt(),
+                            height = camera.format.output.height.toUInt(),
                         ),
                         // Not optional, whatever it looks like. LiveKit's dynacast pauses any
                         // encoding the SFU reports nobody subscribed to, and a peer rendering us in
@@ -643,7 +645,7 @@ internal class RustMatrixRtcMediaSession(
                     )
                 )
             }.also { cameraTrack = it }
-            videoCapture.start(track)
+            videoCapture.start(track, camera)
             // Read back rather than assumed: a device with no front camera starts on the back one.
             _isFrontCamera.value = videoCapture.isFrontFacing
             // Both ends, for the same reason as the microphone: unmuting the transport is what tells
