@@ -7,19 +7,8 @@
 
 package io.element.android.call.impl.rtc.media
 
-/**
- * What we ask the camera for.
- *
- * A request, not a guarantee: the capturer picks the closest format the device actually supports,
- * so every consumer has to read the dimensions off each frame rather than assuming these. VGA at
- * 30 fps is the resolution every Android camera supports and is plenty for a spike - the point is
- * to see whether video flows at all, not to look good doing it.
- */
+/** What we ask the screen capture for. The camera's format is [CameraCaptureFormat]'s. */
 internal object VideoFormat {
-    const val CAPTURE_WIDTH = 640
-    const val CAPTURE_HEIGHT = 480
-    const val CAPTURE_FPS = 30
-
     /**
      * The longest edge of a screen share, which is scaled to fit inside it.
      *

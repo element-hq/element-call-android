@@ -96,7 +96,8 @@ internal class VideoFramePublisher(
                     height = height.toUInt(),
                     // Passed on rather than applied: the frame is stored the way it was read and the
                     // far end turns it upright, which is a rotation we would otherwise have to do in
-                    // software on every frame.
+                    // software on every frame. It also keeps the frame size, and so the declared
+                    // layers, the same when the phone turns.
                     rotation = rotationDegrees.toFfiRotation(),
                     timestampUs = timestampUs,
                     dataY = packedY,
