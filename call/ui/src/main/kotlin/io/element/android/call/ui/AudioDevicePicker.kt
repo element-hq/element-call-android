@@ -132,6 +132,7 @@ internal fun CallAudioDevice.label(): String {
 }
 
 private fun CallAudioDeviceType.labelRes(): Int = when (this) {
+    CallAudioDeviceType.HEARING_AID -> R.string.element_call_audio_device_hearing_aid
     CallAudioDeviceType.BLUETOOTH -> R.string.element_call_audio_device_bluetooth
     CallAudioDeviceType.USB_HEADSET,
     CallAudioDeviceType.USB_DEVICE,
@@ -147,11 +148,12 @@ private fun CallAudioDeviceType.labelRes(): Int = when (this) {
  * the toolbar button says at a glance whether the phone is on loudspeaker. A handset glyph for the
  * earpiece read as a second call button next to hang-up.
  *
- * Compound has no Bluetooth glyph, so that one comes from the Material set. Wired and USB headsets
- * share the headphones icon and are told apart by their label.
+ * Compound has no Bluetooth or hearing-aid glyph, so those come from the Material set. Wired and USB
+ * headsets share the headphones icon and are told apart by their label.
  */
 @Composable
 internal fun CallAudioDeviceType.icon() = when (this) {
+    CallAudioDeviceType.HEARING_AID -> ElementCallTheme.icons.hearingAid
     CallAudioDeviceType.BLUETOOTH -> ElementCallTheme.icons.bluetooth
     CallAudioDeviceType.USB_HEADSET,
     CallAudioDeviceType.USB_DEVICE,
@@ -178,5 +180,6 @@ open class CallAudioDevicePreviewParam : PreviewParameterProvider<CallAudioDevic
             // Named hardware: the type alone is useless when two headsets are paired.
             CallAudioDevice(id = 3, type = CallAudioDeviceType.BLUETOOTH, productName = "WH-1000XM4"),
             CallAudioDevice(id = 4, type = CallAudioDeviceType.WIRED_HEADSET, productName = "Wired headset"),
+            CallAudioDevice(id = 5, type = CallAudioDeviceType.HEARING_AID, productName = null),
         )
 }

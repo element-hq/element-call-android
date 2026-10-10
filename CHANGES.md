@@ -12,7 +12,8 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 ## Unreleased
 
-_Nothing yet._
+- `CallAudioDeviceType` gains `HEARING_AID`. A host with an exhaustive `when` over it must handle the new value.
+- `ElementCallIcons` gains `hearingAid`. A host building its own instance must supply one.
 
 ## 0.1.0-rc.7 - 2026-10-09
 

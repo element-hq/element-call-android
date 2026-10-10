@@ -236,14 +236,15 @@ class DefaultCallAudioDeviceController(
      * unconditionally, which is right for a meeting and wrong for a phone call.
      */
     private fun priorityOf(type: CallAudioDeviceType): Int = when (type) {
-        CallAudioDeviceType.BLUETOOTH -> 0
-        CallAudioDeviceType.USB_HEADSET -> 1
-        CallAudioDeviceType.USB_DEVICE -> 2
-        CallAudioDeviceType.USB_ACCESSORY -> 3
-        CallAudioDeviceType.WIRED_HEADSET -> 4
-        CallAudioDeviceType.WIRED_HEADPHONES -> 5
-        CallAudioDeviceType.EARPIECE -> if (preferLoudspeaker) 7 else 6
-        CallAudioDeviceType.SPEAKER -> if (preferLoudspeaker) 6 else 7
+        CallAudioDeviceType.HEARING_AID -> 0
+        CallAudioDeviceType.BLUETOOTH -> 1
+        CallAudioDeviceType.USB_HEADSET -> 2
+        CallAudioDeviceType.USB_DEVICE -> 3
+        CallAudioDeviceType.USB_ACCESSORY -> 4
+        CallAudioDeviceType.WIRED_HEADSET -> 5
+        CallAudioDeviceType.WIRED_HEADPHONES -> 6
+        CallAudioDeviceType.EARPIECE -> if (preferLoudspeaker) 8 else 7
+        CallAudioDeviceType.SPEAKER -> if (preferLoudspeaker) 7 else 8
     }
 
     override fun setProximityBlankingAllowed(allowed: Boolean) {
@@ -282,13 +283,21 @@ private fun AudioDeviceInfo.toCallAudioDevice(): CallAudioDevice? {
     )
 }
 
-/** Null for anything a call cannot sensibly come out of, which is what filters the raw device list. */
+/**
+ * Null for anything a call cannot sensibly come out of, which is what filters the raw device list.
+ *
+ * Hearing aids are not SCO even below Android 12, which is why they are not [CallAudioDeviceType.BLUETOOTH].
+ */
 private fun Int.toCallAudioDeviceType(): CallAudioDeviceType? = when (this) {
+    AudioDeviceInfo.TYPE_HEARING_AID -> CallAudioDeviceType.HEARING_AID
+    AudioDeviceInfo.TYPE_BLE_HEADSET,
+    AudioDeviceInfo.TYPE_BLE_SPEAKER,
     AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> CallAudioDeviceType.BLUETOOTH
     AudioDeviceInfo.TYPE_USB_HEADSET -> CallAudioDeviceType.USB_HEADSET
     AudioDeviceInfo.TYPE_USB_DEVICE -> CallAudioDeviceType.USB_DEVICE
     AudioDeviceInfo.TYPE_USB_ACCESSORY -> CallAudioDeviceType.USB_ACCESSORY
     AudioDeviceInfo.TYPE_WIRED_HEADSET -> CallAudioDeviceType.WIRED_HEADSET
+    AudioDeviceInfo.TYPE_LINE_ANALOG,
     AudioDeviceInfo.TYPE_WIRED_HEADPHONES -> CallAudioDeviceType.WIRED_HEADPHONES
     AudioDeviceInfo.TYPE_BUILTIN_EARPIECE -> CallAudioDeviceType.EARPIECE
     AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> CallAudioDeviceType.SPEAKER
