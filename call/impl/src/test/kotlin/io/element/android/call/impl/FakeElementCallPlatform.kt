@@ -7,8 +7,11 @@
 
 package io.element.android.call.impl
 
+import io.element.android.call.impl.audio.CallSoundEffectRenderer
+import io.element.android.call.impl.audio.FakeCallSoundEffectRenderer
+
 internal class FakeElementCallPlatform(
-    private var elapsedRealtimeMs: Long = 0L,
+    var elapsedRealtimeMs: Long = 0L,
     /**
      * Called as the service is started, before the caller carries on.
      *
@@ -45,4 +48,9 @@ internal class FakeElementCallPlatform(
     }
 
     override fun isCameraSwitchAvailable(): Boolean = isCameraSwitchAvailable
+
+    /** Every renderer handed out, one per call. */
+    val soundEffectRenderers = mutableListOf<FakeCallSoundEffectRenderer>()
+
+    override fun createCallSoundEffectRenderer(): CallSoundEffectRenderer = FakeCallSoundEffectRenderer().also { soundEffectRenderers += it }
 }
