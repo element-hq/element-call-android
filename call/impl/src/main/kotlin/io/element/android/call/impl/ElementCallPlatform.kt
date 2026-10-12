@@ -11,6 +11,8 @@ import android.content.Context
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.os.SystemClock
+import io.element.android.call.impl.audio.CallSoundEffectRenderer
+import io.element.android.call.impl.audio.DefaultCallSoundEffectRenderer
 import io.element.android.call.impl.services.ElementCallForegroundService
 import io.element.android.call.impl.util.runCatchingExceptions
 
@@ -51,6 +53,9 @@ internal interface ElementCallPlatform {
 
     /** Whether the device has a camera on each side, so there is anything to switch to (019 R24). */
     fun isCameraSwitchAvailable(): Boolean
+
+    /** A renderer for one call's sound effects, released when it ends. */
+    fun createCallSoundEffectRenderer(): CallSoundEffectRenderer
 }
 
 internal class DefaultElementCallPlatform(
@@ -69,4 +74,6 @@ internal class DefaultElementCallPlatform(
         }.getOrDefault(emptySet())
         return CameraCharacteristics.LENS_FACING_FRONT in facings && CameraCharacteristics.LENS_FACING_BACK in facings
     }
+
+    override fun createCallSoundEffectRenderer(): CallSoundEffectRenderer = DefaultCallSoundEffectRenderer(context)
 }

@@ -30,6 +30,8 @@ import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcTileKind
+import io.element.android.call.api.rtc.id.UserId
+import io.element.android.call.impl.audio.CallSoundEffect
 import io.element.android.call.test.A_ROOM_ID
 import io.element.android.call.test.FakeElementCallLifecycleListener
 import io.element.android.call.test.FakeElementCallRoomContextProvider
@@ -276,6 +278,73 @@ class DefaultElementCallControllerTest {
         assertThat(controller.state.value).isNull()
         assertThat(rtcClient.lastCall?.lastMediaSession?.disconnectCount).isEqualTo(1)
         assertThat(rtcClient.lastCall?.leaveCount).isEqualTo(0)
+    }
+
+    @Test
+    fun `a join and a leave play their sounds, a screen share plays nothing`() = runTest {
+        val rtcClient = FakeMatrixRtcClient()
+        val platform = FakeElementCallPlatform()
+        val controller = createController(rtcClient = rtcClient, platform = platform)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+        val session = rtcClient.lastCall?.lastMediaSession!!
+
+        session.emit(MatrixRtcCallEvent.ParticipantJoined(A_REMOTE_MEMBER_ID, UserId("@bob:example.org"), participantCount = 2))
+        session.emit(MatrixRtcCallEvent.StreamStarted(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.SCREEN_SHARE))
+        session.emit(MatrixRtcCallEvent.StreamStopped(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.SCREEN_SHARE))
+        platform.elapsedRealtimeMs = 200
+        session.emit(MatrixRtcCallEvent.ParticipantLeft(A_REMOTE_MEMBER_ID, participantCount = 1))
+        runCurrent()
+
+        assertThat(platform.soundEffectRenderers.single().played).containsExactly(CallSoundEffect.JOIN, CallSoundEffect.LEAVE).inOrder()
+    }
+
+    @Test
+    fun `the host's cap silences joins above it`() = runTest {
+        val rtcClient = FakeMatrixRtcClient()
+        val platform = FakeElementCallPlatform()
+        val controller = createController(rtcClient = rtcClient, platform = platform, participantCapForJoinLeaveSounds = 2)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+
+        rtcClient.lastCall?.lastMediaSession!!.emit(
+            MatrixRtcCallEvent.ParticipantJoined(ANOTHER_REMOTE_MEMBER_ID, UserId("@carol:example.org"), participantCount = 3),
+        )
+        runCurrent()
+
+        assertThat(platform.soundEffectRenderers.single().played).isEmpty()
+    }
+
+    @Test
+    fun `hanging up releases the sounds`() = runTest {
+        val rtcClient = FakeMatrixRtcClient()
+        val platform = FakeElementCallPlatform()
+        val controller = createController(rtcClient = rtcClient, platform = platform)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+
+        controller.hangUp()
+        runCurrent()
+
+        assertThat(platform.soundEffectRenderers.single().releaseCount).isEqualTo(1)
+    }
+
+    @Test
+    fun `nothing plays once the far end ended the call`() = runTest {
+        val rtcClient = FakeMatrixRtcClient()
+        val platform = FakeElementCallPlatform()
+        val controller = createController(rtcClient = rtcClient, platform = platform)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+        val session = rtcClient.lastCall?.lastMediaSession!!
+
+        session.emit(MatrixRtcCallEvent.Ended(MatrixRtcEndReason.SlotClosed))
+        session.emit(MatrixRtcCallEvent.ParticipantLeft(A_REMOTE_MEMBER_ID, participantCount = 1))
+        runCurrent()
+
+        val renderer = platform.soundEffectRenderers.single()
+        assertThat(renderer.played).isEmpty()
+        assertThat(renderer.releaseCount).isEqualTo(1)
     }
 
     @Test
@@ -1380,6 +1449,7 @@ class DefaultElementCallControllerTest {
             roomContext = roomIsDm?.let { ElementCallRoomContext(displayName = "A room", isDm = it, members = emptyMap()) },
         ),
         isScreenSharingEnabled: Boolean = false,
+        participantCapForJoinLeaveSounds: Int = ElementCallOptions.DEFAULT_PARTICIPANT_CAP_FOR_JOIN_LEAVE_SOUNDS,
     ): DefaultElementCallController {
         val controller = DefaultElementCallController(
             scope = backgroundScope,
@@ -1389,7 +1459,11 @@ class DefaultElementCallControllerTest {
             audioFocus = audioFocus,
             lifecycleListener = lifecycleListener,
             roomContextProvider = roomContextProvider,
-            options = ElementCallOptions(membershipFormat = membershipFormat, isScreenSharingEnabled = isScreenSharingEnabled),
+            options = ElementCallOptions(
+                membershipFormat = membershipFormat,
+                isScreenSharingEnabled = isScreenSharingEnabled,
+                participantCapForJoinLeaveSounds = participantCapForJoinLeaveSounds,
+            ),
         )
         controller.startCall(ElementCallData(roomId = A_ROOM_ID, isAudioCall = isAudioCall))
         runCurrent()

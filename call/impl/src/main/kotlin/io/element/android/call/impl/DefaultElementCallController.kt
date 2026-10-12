@@ -33,6 +33,9 @@ import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
+import io.element.android.call.impl.audio.CallSoundEffect
+import io.element.android.call.impl.audio.CallSoundEffectRenderer
+import io.element.android.call.impl.audio.JoinLeaveSoundPolicy
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.coroutines.CoroutineScope
@@ -185,6 +188,8 @@ internal class DefaultElementCallController(
     private var rtcRoom: MatrixRtcRoom? = null
     private var rtcCall: MatrixRtcCall? = null
     private var call: MatrixRtcMediaSession? = null
+    private var joinLeaveSoundPolicy: JoinLeaveSoundPolicy? = null
+    private var soundEffectRenderer: CallSoundEffectRenderer? = null
     private var composedTiles: Set<MatrixRtcTileId> = emptySet()
     private var detailWindow: MatrixRtcDetailWindow? = null
 
@@ -498,6 +503,8 @@ internal class DefaultElementCallController(
             return
         }
         call = connected
+        joinLeaveSoundPolicy = JoinLeaveSoundPolicy(options.participantCapForJoinLeaveSounds)
+        soundEffectRenderer = platform.createCallSoundEffectRenderer()
         connected.setComposedTiles(composedTiles)
         detailWindow?.let { connected.setDetailWindow(it) }
         rankingThreshold?.let { connected.setRankingThreshold(it) }
@@ -619,7 +626,10 @@ internal class DefaultElementCallController(
                     is MatrixRtcCallEvent.FrameEncryption -> updateState {
                         it.copy(frameEncryption = (it.frameEncryption + (event.memberId to event.state)).toImmutableMap())
                     }
+                    is MatrixRtcCallEvent.ParticipantJoined -> playJoinLeaveSound(CallSoundEffect.JOIN, event.memberId, event.participantCount)
+                    is MatrixRtcCallEvent.ParticipantLeft -> playJoinLeaveSound(CallSoundEffect.LEAVE, event.memberId, event.participantCount)
                     is MatrixRtcCallEvent.Ended -> {
+                        joinLeaveSoundPolicy?.silence()
                         updateState { it.copy(connection = ElementCallConnection.Ended) }
                         // Torn down from a coroutine of its own, not this one: endCall cancels the
                         // job this collector runs in, and a coroutine cannot wait for its own death.
@@ -630,6 +640,14 @@ internal class DefaultElementCallController(
                 }
             }
         }
+    }
+
+    /** One line per announced change, played or not, so a rageshake shows how often a membership lapses and returns. */
+    private fun playJoinLeaveSound(sound: CallSoundEffect, memberId: String, participantCount: Int) {
+        val plays = joinLeaveSoundPolicy?.shouldPlay(sound, participantCount, platform.elapsedRealtimeMs()) == true
+        val change = if (sound == CallSoundEffect.JOIN) "joined" else "left"
+        Timber.i("ElementCall: $memberId $change, $participantCount in the call: ${if (plays) "playing" else "silent"}")
+        if (plays) soundEffectRenderer?.play(sound)
     }
 
     private fun fail(message: String) {
@@ -653,6 +671,8 @@ internal class DefaultElementCallController(
         mutex.withLock {
             if (_state.value == null && callJob == null) return
             Timber.i("ElementCall: ending call (leave=$leave)")
+            // First: nothing below may sound like people leaving.
+            joinLeaveSoundPolicy?.silence()
             endedCallData = _state.value?.callData
             callJob?.cancel()
             callJob = null
@@ -669,6 +689,9 @@ internal class DefaultElementCallController(
             rtcRoom = null
             rtcCall = null
             call = null
+            joinLeaveSoundPolicy = null
+            soundEffectRenderer?.release()
+            soundEffectRenderer = null
             // The next call's screen declares afresh; a window from this one would be about tiles
             // that no longer exist.
             composedTiles = emptySet()

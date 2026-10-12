@@ -40,4 +40,13 @@ data class ElementCallOptions(
      * (README, host requirements). Enabling this without them is a `SecurityException` on Android 14+.
      */
     val isScreenSharingEnabled: Boolean = false,
-)
+    /**
+     * Above this many participants after a change, ourselves included, a join or a leave plays no sound.
+     * Not a user setting.
+     */
+    val participantCapForJoinLeaveSounds: Int = DEFAULT_PARTICIPANT_CAP_FOR_JOIN_LEAVE_SOUNDS,
+) {
+    companion object {
+        const val DEFAULT_PARTICIPANT_CAP_FOR_JOIN_LEAVE_SOUNDS = 8
+    }
+}

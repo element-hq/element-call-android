@@ -12,7 +12,9 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 ## Unreleased
 
-_Nothing yet._
+- Core: matrix-rust-rtc `0.5.0-rc.3`; a host's Ivy repository must point at the `v0.5.0-rc.3` asset.
+  `MatrixRtcCallEvent.ParticipantJoined` and `ParticipantLeft` gain `participantCount` and are raised only for
+  changes while we are in the call, for a host consuming or faking them.
 
 ## 0.1.0-rc.7 - 2026-10-09
 
