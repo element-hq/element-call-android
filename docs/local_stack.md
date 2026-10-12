@@ -78,8 +78,18 @@ cd element-x-android
 or put `elementCallAndroidDir=/abs/path/element-call-android` in `~/.gradle/gradle.properties`, which never reaches
 git. Gradle prints `Note: element-call-android from <path> (composite build)`.
 
-Layer 1 composes with layer 2 automatically: the included build carries its own `rtc/local`, so the core Element X
-runs is whatever file is there.
+Layer 1 does not compose with layer 2 on its own: Element X resolves the core from its own repositories, so it gets
+the release asset named by this repository's catalog version, not the file in `rtc/local`. To run a locally built
+core, add this ahead of the core's GitHub Ivy repository in Element X's `settings.gradle.kts`, without committing it:
+
+```kotlin
+ivy {
+    url = uri("/abs/path/element-call-android/rtc/local")
+    patternLayout { artifact("matrixrtc-release.[ext]") }
+    metadataSources { artifact() }
+    content { includeModule("io.element.android", "matrix-rtc-android") }
+}
+```
 
 **Switch back:** drop the property.
 

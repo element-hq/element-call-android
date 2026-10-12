@@ -47,8 +47,8 @@ import org.matrix.rtc.JoinedMembership
  * than crossing into `call/api`, so that the FFI surface can move without the public API moving with it.
  */
 internal fun FfiCallEvent.map(): MatrixRtcCallEvent? = when (this) {
-    is FfiCallEvent.ParticipantJoined -> MatrixRtcCallEvent.ParticipantJoined(memberId, UserId(userId))
-    is FfiCallEvent.ParticipantLeft -> MatrixRtcCallEvent.ParticipantLeft(memberId)
+    is FfiCallEvent.ParticipantJoined -> MatrixRtcCallEvent.ParticipantJoined(memberId, UserId(userId), participantCount.toInt())
+    is FfiCallEvent.ParticipantLeft -> MatrixRtcCallEvent.ParticipantLeft(memberId, participantCount.toInt())
     is FfiCallEvent.StreamStarted -> MatrixRtcCallEvent.StreamStarted(memberId, kind.map())
     is FfiCallEvent.StreamStopped -> MatrixRtcCallEvent.StreamStopped(memberId, kind.map())
     is FfiCallEvent.StreamMuted -> MatrixRtcCallEvent.StreamMuted(memberId, kind.map())

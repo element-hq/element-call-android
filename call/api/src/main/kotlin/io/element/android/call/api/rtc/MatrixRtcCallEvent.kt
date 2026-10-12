@@ -13,9 +13,14 @@ import io.element.android.call.api.rtc.id.UserId
  * Something that happened on the media transport of a connected call.
  */
 sealed interface MatrixRtcCallEvent {
-    data class ParticipantJoined(val memberId: String, val userId: UserId) : MatrixRtcCallEvent
+    /**
+     * Someone joined while we are in the call, one per device. Never raised for the members already
+     * there when we arrive. [participantCount] is the memberships after the change, ourselves included.
+     */
+    data class ParticipantJoined(val memberId: String, val userId: UserId, val participantCount: Int) : MatrixRtcCallEvent
 
-    data class ParticipantLeft(val memberId: String) : MatrixRtcCallEvent
+    /** Someone left while we are in the call; never raised as the call ends for us. See [ParticipantJoined]. */
+    data class ParticipantLeft(val memberId: String, val participantCount: Int) : MatrixRtcCallEvent
 
     data class StreamStarted(val memberId: String, val kind: MatrixRtcStreamKind) : MatrixRtcCallEvent
 
