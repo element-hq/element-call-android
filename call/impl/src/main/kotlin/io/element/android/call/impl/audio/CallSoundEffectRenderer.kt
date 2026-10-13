@@ -17,6 +17,7 @@ import timber.log.Timber
 internal enum class CallSoundEffect(@RawRes val resId: Int) {
     JOIN(R.raw.element_call_join_call),
     LEAVE(R.raw.element_call_left_call),
+    RAISE_HAND(R.raw.element_call_raise_hand),
 }
 
 /** Plays the call's sound effects over the call's own audio. One per call, released when it ends. */

@@ -57,6 +57,8 @@ data class MatrixRtcTile(
     val isSpeaking: Boolean,
     /** Server-clock milliseconds, null when the hand is down. */
     val handRaisedAtMs: Long?,
+    /** Place in the raised-hand queue over the whole call, 1 for the earliest; null when the hand is down. The core's order, never re-sorted. */
+    val handRaisedPosition: Int?,
     val isReachable: Boolean,
 )
 
@@ -130,5 +132,6 @@ fun MatrixRtcParticipant.personTile() = MatrixRtcTile(
     isMicrophoneMuted = streams.none { it.kind == MatrixRtcStreamKind.MICROPHONE && !it.isMuted },
     isSpeaking = false,
     handRaisedAtMs = null,
+    handRaisedPosition = null,
     isReachable = isReachable,
 )

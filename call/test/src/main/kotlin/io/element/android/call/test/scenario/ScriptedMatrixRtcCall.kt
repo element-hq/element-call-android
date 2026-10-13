@@ -23,10 +23,12 @@ import io.element.android.call.test.FakeMatrixRtcMediaSession
  * call records the window and the constraints the layout sends.
  *
  * Our own tile is published through the local state from the start, so the stage has us to draw
- * (spec 003 R1); `me` frames are the controller's to apply, since they are what the user did.
+ * (spec 003 R1); `me` frames are the controller's to apply, since they are what the user did, except our
+ * hand, which is the core's to publish once the homeserver has it: [setOwnHandRaised].
  */
 class ScriptedMatrixRtcCall(private val client: FakeMatrixRtcClient) {
     private var detailOnly: Set<MatrixRtcTileId>? = null
+    private var isOwnHandRaised = false
 
     /** The connected call, once the controller has connected media. */
     val call: FakeMatrixRtcMediaSession
@@ -38,7 +40,18 @@ class ScriptedMatrixRtcCall(private val client: FakeMatrixRtcClient) {
 
     /** Publish our own tile, which the core does once our membership reaches its roster. */
     fun start() {
-        call.localState.value = MatrixRtcLocalState(tile = ownTile(), isScreenSharing = false)
+        publishOwnTile()
+    }
+
+    /** Our hand, queued after every remote one: a scenario has no raise times, and ours is raised last. */
+    fun setOwnHandRaised(raised: Boolean) {
+        isOwnHandRaised = raised
+        publishOwnTile()
+    }
+
+    private fun publishOwnTile() {
+        val position = if (isOwnHandRaised) 1 + lastRoster.order.count { lastRoster.detail[it.id]?.handRaisedPosition != null } else null
+        call.localState.value = MatrixRtcLocalState(tile = ownTile(position), isScreenSharing = false)
     }
 
     /** Apply a roster or a `detail-only` frame; every other action is the screen's or the controller's. */
@@ -47,6 +60,7 @@ class ScriptedMatrixRtcCall(private val client: FakeMatrixRtcClient) {
             is ScenarioContent.Roster -> {
                 lastRoster = content.toRoster(detailOnly)
                 call.pushRoster(lastRoster)
+                if (isOwnHandRaised) publishOwnTile()
             }
             is ScenarioContent.Action -> if (content.action is ScenarioAction.DetailOnly) {
                 detailOnly = content.action.tiles.map { it.id }.toSet()
@@ -58,7 +72,7 @@ class ScriptedMatrixRtcCall(private val client: FakeMatrixRtcClient) {
         }
     }
 
-    private fun ownTile() = MatrixRtcTile(
+    private fun ownTile(handPosition: Int?) = MatrixRtcTile(
         id = MatrixRtcTileId(call.localMemberId, MatrixRtcTileKind.PERSON),
         userId = OWN_USER_ID,
         deviceId = MatrixRtcScenario.DEVICE,
@@ -66,7 +80,8 @@ class ScriptedMatrixRtcCall(private val client: FakeMatrixRtcClient) {
         hasVideo = false,
         isMicrophoneMuted = false,
         isSpeaking = false,
-        handRaisedAtMs = null,
+        handRaisedAtMs = handPosition?.let { 1_000L },
+        handRaisedPosition = handPosition,
         isReachable = true,
     )
 

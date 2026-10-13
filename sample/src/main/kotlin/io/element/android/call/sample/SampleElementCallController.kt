@@ -24,6 +24,7 @@ import io.element.android.call.test.ElementCallTestPattern
 import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -33,6 +34,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import timber.log.Timber
 
 /**
@@ -44,7 +46,7 @@ import timber.log.Timber
  * through the same `videoFrames` lambda the product passes.
  */
 class SampleElementCallController(
-    scope: CoroutineScope,
+    private val scope: CoroutineScope,
 ) : ElementCallController {
     private val _state = MutableStateFlow<ElementCallSnapshot?>(null)
     override val state: StateFlow<ElementCallSnapshot?> = _state.asStateFlow()
@@ -150,13 +152,18 @@ class SampleElementCallController(
                     avatarUrl = null,
                 )
             }
-            snapshot.copy(
+            val next = snapshot.copy(
                 roster = roster,
                 memberCount = roster.order.map { it.id.memberId }.distinct().size + 1,
                 roomMembers = (snapshot.roomMembers + members).toImmutableMap(),
             )
+            // Our hand stays last in the queue as the remote ones come and go.
+            if (next.ownTile?.handRaisedAtMs != null) next.withOwnHand(raised = true) else next
         }
     }
+
+    /** A scenario's `me ^`: what the core publishes, so no round trip. */
+    fun setOwnHandRaised(raised: Boolean) = update { it.withOwnHand(raised) }
 
     fun currentRoster(): MatrixRtcTileRoster = _state.value?.roster ?: MatrixRtcTileRoster.EMPTY
 
@@ -176,8 +183,44 @@ class SampleElementCallController(
         Timber.d("Sample: $memberId/$kind wants $constraints")
     }
 
+    /** Pending for a moment, as a homeserver round trip is, so the spinner can be seen; then our hand joins or leaves the queue. */
+    override fun setHandRaised(raised: Boolean) {
+        val snapshot = _state.value ?: return
+        val own = snapshot.ownTile ?: return
+        val isUp = own.handRaisedAtMs != null
+        if (snapshot.isHandPending || isUp == raised) return
+        update { it.copy(isHandPending = true) }
+        scope.launch {
+            delay(HAND_ROUND_TRIP_MS)
+            update { it.withOwnHand(raised).copy(isHandPending = false) }
+        }
+    }
+
+    override fun clearHandRequestFailure() = update { it.copy(handRequestFailure = null) }
+
     override fun hangUp() {
         _state.value = null
+    }
+
+    /** Ours goes to the back of the queue; when it comes down, the hands after it move up one (009 R6). */
+    private fun ElementCallSnapshot.withOwnHand(raised: Boolean): ElementCallSnapshot {
+        val own = ownTile ?: return this
+        val remotes = roster.detail.values
+        val ownPosition = own.handRaisedPosition
+        val newOwn = if (raised) {
+            own.copy(handRaisedAtMs = 1L, handRaisedPosition = 1 + remotes.count { it.handRaisedPosition != null })
+        } else {
+            own.copy(handRaisedAtMs = null, handRaisedPosition = null)
+        }
+        val detail = if (!raised && ownPosition != null) {
+            roster.detail.mapValues { (_, tile) ->
+                val position = tile.handRaisedPosition
+                if (position != null && position > ownPosition) tile.copy(handRaisedPosition = position - 1) else tile
+            }
+        } else {
+            roster.detail
+        }
+        return copy(ownTile = newOwn, roster = roster.copy(detail = detail))
     }
 
     private fun update(block: (ElementCallSnapshot) -> ElementCallSnapshot) {
@@ -187,5 +230,6 @@ class SampleElementCallController(
     private companion object {
         val PORTRAIT_MEMBERS = setOf(SampleFixture.memberIdOf("Bob"), SampleFixture.memberIdOf("Erin"))
         val OWN_MEMBER = SampleFixture.memberIdOf("Alice")
+        const val HAND_ROUND_TRIP_MS = 600L
     }
 }

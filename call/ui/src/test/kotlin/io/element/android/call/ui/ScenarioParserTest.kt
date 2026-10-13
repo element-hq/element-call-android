@@ -80,7 +80,7 @@ class ScenarioParserTest {
         assertThat(actions[4]).isEqualTo(ScenarioAction.SwipeHero(next = true))
         assertThat(actions[5]).isEqualTo(ScenarioAction.Minimize)
         assertThat(actions[6]).isEqualTo(ScenarioAction.Restore)
-        assertThat(actions[7]).isEqualTo(ScenarioAction.Me(hasVideo = true, isMuted = true))
+        assertThat(actions[7]).isEqualTo(ScenarioAction.Me(hasVideo = true, isMuted = true, isHandRaised = false))
         assertThat((actions[8] as ScenarioAction.DetailOnly).tiles.map { it.member }).containsExactly("A", "B").inOrder()
         assertThat(actions[9]).isEqualTo(ScenarioAction.Tick)
     }

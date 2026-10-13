@@ -44,5 +44,17 @@ fun List<MatrixRtcTile>.previewRoster() = MatrixRtcTileRoster(
     detail = associateBy { it.id },
 )
 
+/**
+ * These tiles with each raised hand numbered in the order given, as the core numbers them by raise time: a
+ * fixture has no raise times. A share carries no hand.
+ */
+fun List<MatrixRtcTile>.withHandQueue(): List<MatrixRtcTile> {
+    var position = 0
+    return map { tile ->
+        val isRaised = tile.handRaisedAtMs != null && tile.id.kind == MatrixRtcTileKind.PERSON
+        tile.copy(handRaisedPosition = if (isRaised) ++position else null)
+    }
+}
+
 /** Our own tile for these participants, as the core would publish it. */
 fun List<MatrixRtcParticipant>.previewOwnTile(): MatrixRtcTile? = firstOrNull { it.isLocal }?.personTile()

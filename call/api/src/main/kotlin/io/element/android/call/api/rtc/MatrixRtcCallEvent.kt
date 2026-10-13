@@ -22,6 +22,16 @@ sealed interface MatrixRtcCallEvent {
     /** Someone left while we are in the call; never raised as the call ends for us. See [ParticipantJoined]. */
     data class ParticipantLeft(val memberId: String, val participantCount: Int) : MatrixRtcCallEvent
 
+    /**
+     * A hand went up while we are in the call, ours included once the homeserver has it. Never for the hands
+     * up when we arrive, a member arriving with one, or a hand moving to its owner's refreshed membership.
+     * The state is [MatrixRtcTile.handRaisedAtMs].
+     */
+    data class HandRaised(val memberId: String) : MatrixRtcCallEvent
+
+    /** A hand came down, or left with its owner, while we are in the call. */
+    data class HandLowered(val memberId: String) : MatrixRtcCallEvent
+
     data class StreamStarted(val memberId: String, val kind: MatrixRtcStreamKind) : MatrixRtcCallEvent
 
     data class StreamStopped(val memberId: String, val kind: MatrixRtcStreamKind) : MatrixRtcCallEvent

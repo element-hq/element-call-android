@@ -92,6 +92,12 @@ sealed interface ElementCallScreenEvent {
      */
     data object Minimize : ElementCallScreenEvent
 
+    /** Raise our hand, or lower it if it is up. */
+    data object ToggleRaisedHand : ElementCallScreenEvent
+
+    /** The user has read the failure of a raise or a lower. */
+    data object DismissHandRequestFailure : ElementCallScreenEvent
+
     data object HangUp : ElementCallScreenEvent
 }
 

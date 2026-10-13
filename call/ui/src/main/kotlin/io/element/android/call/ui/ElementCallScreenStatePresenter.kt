@@ -20,6 +20,7 @@ import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.ElementCallVersion
+import io.element.android.call.api.rtc.MatrixRtcTileKind
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.ImmutableMap
@@ -199,6 +200,8 @@ fun rememberElementCallScreenState(
             ElementCallScreenEvent.ToggleAudioTestTone -> controller.setAudioTestToneEnabled(current?.isAudioTestToneEnabled != true)
             is ElementCallScreenEvent.SelectAudioDevice -> controller.selectAudioDevice(event.device)
             ElementCallScreenEvent.Minimize -> controller.setMaximized(false)
+            ElementCallScreenEvent.ToggleRaisedHand -> controller.setHandRaised(current?.ownTile?.handRaisedAtMs == null)
+            ElementCallScreenEvent.DismissHandRequestFailure -> controller.clearHandRequestFailure()
             ElementCallScreenEvent.HangUp -> controller.hangUp()
         }
     }
@@ -239,8 +242,19 @@ internal fun ElementCallSnapshot.callTiles(): ImmutableList<CallTileData> {
             .toCallTileData(roomMembers, isLocal = true, isFrontCamera = isFrontCamera)
     }
     val ranked = roster.order.map { ref -> ref.toCallTileData(roster.detail[ref.id], roomMembers, isFrontCamera = isFrontCamera) }
-    return (listOfNotNull(own) + ranked).toImmutableList()
+    return (listOfNotNull(own) + ranked).showingHands(!isOneToOne).toImmutableList()
 }
+
+/** One to one, no tile shows a hand, ours and a fullscreen one included; the hands stay up (009 R33). */
+internal fun List<CallTileData>.showingHands(isShown: Boolean): List<CallTileData> =
+    if (isShown) this else map { it.copy(handPosition = null) }
+
+/** From three people, ourselves included, or while our hand is up so it can come down (009 R2, R33). */
+private val ElementCallSnapshot.showsRaiseHandControl: Boolean
+    get() = ownTile != null &&
+        (ownTile?.handRaisedAtMs != null || 1 + roster.order.count { it.id.kind == MatrixRtcTileKind.PERSON } >= MIN_PEOPLE_FOR_RAISED_HAND)
+
+private const val MIN_PEOPLE_FOR_RAISED_HAND = 3
 
 /**
  * Screen state for a call, or for the moment before one exists.
@@ -285,6 +299,10 @@ private fun ElementCallSnapshot?.toState(
     isFullscreenChromeVisible = isFullscreenChromeVisible,
     isStageChromeVisible = isStageChromeVisible,
     ownTileCorner = ownTileCorner,
+    isHandRaised = this?.ownTile?.handRaisedAtMs != null,
+    isHandPending = this?.isHandPending == true,
+    showsRaiseHandControl = this?.showsRaiseHandControl == true,
+    handRequestFailure = this?.handRequestFailure,
     libraryVersion = ElementCallVersion.library,
     coreVersion = ElementCallVersion.core,
     eventSink = eventSink,

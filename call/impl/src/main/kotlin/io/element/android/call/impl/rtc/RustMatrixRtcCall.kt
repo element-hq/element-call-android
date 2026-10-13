@@ -76,6 +76,16 @@ internal class RustMatrixRtcCall(
         }
     }
 
+    override suspend fun raiseHand(): Result<Unit> = withContext(ffiDispatcher) {
+        runCatchingExceptions { rtcCall.raiseHand() }
+            .onFailure { Timber.w(it, "MatrixRTC: failed to raise our hand in $roomId/$slotId") }
+    }
+
+    override suspend fun lowerHand(): Result<Unit> = withContext(ffiDispatcher) {
+        runCatchingExceptions { rtcCall.lowerHand() }
+            .onFailure { Timber.w(it, "MatrixRTC: failed to lower our hand in $roomId/$slotId") }
+    }
+
     override suspend fun connectMedia(): Result<MatrixRtcMediaSession> = runCatchingExceptions {
         mediaSession?.let { return@runCatchingExceptions it }
         // The core takes the focus from the join and the account and tokens from the backend.

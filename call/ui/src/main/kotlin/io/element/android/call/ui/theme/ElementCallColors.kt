@@ -59,6 +59,12 @@ data class ElementCallColors(
     /** The per-tile debug readout. */
     val statsBackground: Color,
     val pageDotInactive: Color,
+    /** The ring around a tile whose member has a hand up. Defaulted, as the two below, so a host's instance keeps compiling. */
+    val borderRaisedHand: Brush = ElementCallBorderGradient.RAISED_HAND.brush,
+    /** The raised-hand badge's disc: Compound's `bg/action/primary/rest`. */
+    val bgActionPrimaryRest: Color = Color(0xFFEBEEF2),
+    /** The hand and its number on that disc: Compound's `icon/on-solid/primary`. */
+    val iconOnSolidPrimary: Color = Color(0xFF101317),
 ) {
     companion object {
         /** Compound's dark semantic tokens, as of compound-design-tokens 2026. */
@@ -73,7 +79,7 @@ data class ElementCallColors(
             bgCanvas = Color(0xFF101317),
             bgSubtlePrimary = Color(0xFF26282D),
             bgSubtleSecondary = Color(0xFF1D1F24),
-            borderActiveSpeaker = ActiveSpeakerBrush,
+            borderActiveSpeaker = ElementCallBorderGradient.ACTIVE_SPEAKER.brush,
             borderThumbnail = Color(0xFF3C3F44),
             borderControl = Color(0xFF3C3F44),
             hangUp = Color(0xFFE5484D),

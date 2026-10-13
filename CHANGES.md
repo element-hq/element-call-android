@@ -15,6 +15,13 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 - Core: matrix-rust-rtc `0.5.0-rc.3`; a host's Ivy repository must point at the `v0.5.0-rc.3` asset.
   `MatrixRtcCallEvent.ParticipantJoined` and `ParticipantLeft` gain `participantCount` and are raised only for
   changes while we are in the call, for a host consuming or faking them.
+- Core: needs the matrix-rust-rtc release carrying `hand_raised_position` (not tagged yet); the pin moves with it.
+- The raised hand (feature-hq 009). `ElementCallController` gains `setHandRaised` and `clearHandRequestFailure`,
+  `MatrixRtcCall` gains `raiseHand` and `lowerHand`, `MatrixRtcTile` gains `handRaisedPosition`, and
+  `MatrixRtcCallEvent` gains `HandRaised` and `HandLowered`, for a host implementing or faking them.
+  `ElementCallScreenState` gains `isHandRaised`, `isHandPending`, `showsRaiseHandControl` and `handRequestFailure`.
+- `ElementCallColors` gains `borderRaisedHand`, `bgActionPrimaryRest` and `iconOnSolidPrimary`, defaulted to Compound's
+  dark tokens; a host mapping its own palette maps these too.
 
 ## 0.1.0-rc.7 - 2026-10-09
 

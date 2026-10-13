@@ -11,6 +11,9 @@ package io.element.android.call.ui
 
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.semantics.SemanticsActions
@@ -29,6 +32,7 @@ import androidx.compose.ui.test.swipe
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.v2.runAndroidComposeUiTest
 import com.google.common.truth.Truth.assertThat
+import io.element.android.call.api.ElementCallHandRequestFailure
 import io.element.android.call.tests.testutils.EventsRecorder
 import io.element.android.call.tests.testutils.assertNodeWithTextIsDisplayed
 import io.element.android.call.tests.testutils.clickOn
@@ -65,6 +69,40 @@ class ElementCallScreenTest : RobolectricTest() {
                 ElementCallScreenEvent.HangUp,
             )
         )
+    }
+
+    /** Offered from three people: tapped down it offers to raise, tapped up to lower (009 R4, R21). */
+    @Test
+    fun `the hand control is labelled by what it will do`() = runAndroidComposeUiTest<ComponentActivity> {
+        val events = EventsRecorder<ElementCallScreenEvent>()
+        val participants = listOf(aLocalParticipant(), aRemoteParticipant(), aCrowdParticipant(1))
+        var handRaisedIds by mutableStateOf(emptySet<String>())
+        setContent { ElementCallScreen(state = anElementCallScreenState(participants = participants, handRaisedIds = handRaisedIds, eventSink = events)) }
+        waitForIdle()
+        events.clear()
+
+        clickOnContentDescription(R.string.element_call_a11y_raise_hand)
+        events.assertList(listOf(ElementCallScreenEvent.ToggleRaisedHand))
+        handRaisedIds = setOf(A_LOCAL_MEMBER_ID)
+        waitForIdle()
+        // A tile changing has the stage declare its tiles again; the hand is what is under test.
+        events.clear()
+        clickOnContentDescription(R.string.element_call_a11y_lower_hand)
+
+        events.assertList(listOf(ElementCallScreenEvent.ToggleRaisedHand))
+    }
+
+    @Test
+    fun `a failed raise is told, and OK dismisses it`() = runAndroidComposeUiTest<ComponentActivity> {
+        val events = EventsRecorder<ElementCallScreenEvent>()
+        setContent { ElementCallScreen(state = anElementCallScreenState(handRequestFailure = ElementCallHandRequestFailure.RAISE, eventSink = events)) }
+        waitForIdle()
+        events.clear()
+
+        assertNodeWithTextIsDisplayed(R.string.element_call_hand_raise_failed)
+        clickOn(R.string.element_call_ok)
+
+        events.assertList(listOf(ElementCallScreenEvent.DismissHandRequestFailure))
     }
 
     /** The buttons are labelled by what tapping them does, so a muted call offers to unmute. */

@@ -9,6 +9,7 @@ package io.element.android.call.ui
 
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import io.element.android.call.api.ElementCallConnection
+import io.element.android.call.api.ElementCallHandRequestFailure
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.audio.CallAudioDeviceType
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
@@ -288,6 +289,49 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
                 handRaisedIds = setOf(aCrowdMemberId(1)),
                 videoFrames = mapOf("$A_REMOTE_MEMBER_ID#SCREEN_SHARE" to emptyFlow()),
             ),
+            // Hands up in a small call, numbered in the queue: ours, a speaker's under the speaking ring, an avatar's (009 R6, R9).
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
+                memberCount = 4,
+                participants = listOf(aLocalParticipant(), aRemoteParticipant()) + (1..2).map { aCrowdParticipant(it) },
+                activeSpeakerIds = setOf(A_REMOTE_MEMBER_ID),
+                handRaisedIds = setOf(A_LOCAL_MEMBER_ID, A_REMOTE_MEMBER_ID, aCrowdMemberId(2)),
+                videoFrames = mapOf(A_REMOTE_MEMBER_ID to emptyFlow()),
+            ),
+            // Our raise on its way to the homeserver: the button spins and still shows the hand down (009 R5).
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
+                memberCount = 4,
+                participants = listOf(aLocalParticipant(), aRemoteParticipant()) + (1..2).map { aCrowdParticipant(it) },
+                isHandPending = true,
+            ),
+            // The speaker in the spotlight with a hand up carries it in the name pill (009 C4).
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
+                memberCount = 12,
+                participants = listOf(aLocalParticipant(), aRemoteParticipant()) + (1..10).map { aCrowdParticipant(it) },
+                activeSpeakerIds = setOf(A_REMOTE_MEMBER_ID),
+                handRaisedIds = setOf(A_REMOTE_MEMBER_ID),
+                videoFrames = mapOf(A_REMOTE_MEMBER_ID to emptyFlow()),
+            ),
+            // A fullscreen tile keeps its hand, under the HUD's top row (009 R30).
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
+                memberCount = 4,
+                participants = listOf(aLocalParticipant(), aRemoteParticipant()) + (1..2).map { aCrowdParticipant(it) },
+                handRaisedIds = setOf(A_REMOTE_MEMBER_ID),
+                videoFrames = mapOf(A_REMOTE_MEMBER_ID to emptyFlow()),
+                fullscreenTileId = A_REMOTE_MEMBER_ID,
+                isFullscreenChromeVisible = true,
+            ),
+            // One to one, the other person's hand is up and not shown, and no control is offered (009 R33).
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
+                memberCount = 2,
+                participants = listOf(aLocalParticipant(), aRemoteParticipant()),
+                handRaisedIds = setOf(A_REMOTE_MEMBER_ID),
+                videoFrames = mapOf(A_REMOTE_MEMBER_ID to emptyFlow()),
+            ),
             // Upright with the chrome away: the control bar is gone and the top bar stays (spec 014 R30).
             anElementCallScreenState(
                 connection = ElementCallConnection.Connected,
@@ -337,6 +381,8 @@ fun anElementCallScreenState(
     isStageChromeVisible: Boolean = true,
     isCameraSwitchAvailable: Boolean = true,
     ownTileCorner: ElementCallOwnTileCorner = ElementCallOwnTileCorner.Initial,
+    isHandPending: Boolean = false,
+    handRequestFailure: ElementCallHandRequestFailure? = null,
     eventSink: (ElementCallScreenEvent) -> Unit = {},
 ) = ElementCallScreenState(
     connection = connection,
@@ -369,6 +415,12 @@ fun anElementCallScreenState(
     isFullscreenChromeVisible = isFullscreenChromeVisible,
     isStageChromeVisible = isStageChromeVisible,
     ownTileCorner = ownTileCorner,
+    isHandRaised = participants.any { it.isLocal && it.memberId in handRaisedIds },
+    isHandPending = isHandPending,
+    // As the presenter decides it: three people, or our own hand up.
+    showsRaiseHandControl = participants.any { it.isLocal } &&
+        (participants.count() >= 3 || participants.any { it.isLocal && it.memberId in handRaisedIds }),
+    handRequestFailure = handRequestFailure,
     libraryVersion = libraryVersion,
     coreVersion = coreVersion,
     eventSink = eventSink,
@@ -471,12 +523,15 @@ private fun previewCallTiles(
     handRaisedIds: Set<String>,
     isFrontCamera: Boolean,
 ) = (listOfNotNull(participants.previewOwnTile()?.let { it.copy(isSpeaking = it.id.memberId in speakingIds) }) + participants.previewTiles(speakingIds))
+    .map { tile -> tile.copy(handRaisedAtMs = if (tile.id.memberId in handRaisedIds) 1L else null) }
+    .withHandQueue()
     .map { tile ->
         val participant = participants.first { it.memberId == tile.id.memberId }
-        tile.copy(handRaisedAtMs = if (tile.id.memberId in handRaisedIds) 1L else null).toCallTileData(
+        tile.toCallTileData(
             roomMembers = emptyMap(),
             isLocal = participant.isLocal,
             isFrontCamera = isFrontCamera,
         )
     }
+    .let { it.showingHands(!SmallCallLayout.isFullBleed(it)) }
     .toImmutableList()

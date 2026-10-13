@@ -62,6 +62,8 @@ fun aTile(
     isMicrophoneMuted: Boolean = false,
     isSpeaking: Boolean = false,
     isHero: Boolean = kind == MatrixRtcTileKind.SCREEN_SHARE,
+    /** The hand's place in the queue; null while it is down. */
+    handPosition: Int? = null,
 ) = MatrixRtcTile(
     id = MatrixRtcTileId(memberId, kind),
     userId = userId,
@@ -70,7 +72,8 @@ fun aTile(
     hasVideo = hasVideo,
     isMicrophoneMuted = isMicrophoneMuted,
     isSpeaking = isSpeaking,
-    handRaisedAtMs = null,
+    handRaisedAtMs = handPosition?.let { 1_000L + it },
+    handRaisedPosition = handPosition,
     isReachable = true,
 )
 

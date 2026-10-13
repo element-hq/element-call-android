@@ -8,6 +8,7 @@
 package io.element.android.call.ui
 
 import io.element.android.call.api.ElementCallConnection
+import io.element.android.call.api.ElementCallHandRequestFailure
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
@@ -116,6 +117,14 @@ data class ElementCallScreenState(
     val isStageChromeVisible: Boolean,
     /** The corner our floating tile is in (019 R18, R20). */
     val ownTileCorner: ElementCallOwnTileCorner,
+    /** Whether our hand is up, as the homeserver has it: never the tap just made (009 R5). */
+    val isHandRaised: Boolean,
+    /** A raise or lower is on its way: the control shows progress and takes no taps. */
+    val isHandPending: Boolean,
+    /** Whether the raise control is in the bar (009 R2, R33). */
+    val showsRaiseHandControl: Boolean,
+    /** A raise or lower that failed, to tell the user about (009 R22). */
+    val handRequestFailure: ElementCallHandRequestFailure?,
     /**
      * What the overflow menu shows: the library version and the core it was built against. Carried in
      * state rather than read from `ElementCallVersion` where they are drawn, so previews and screenshots

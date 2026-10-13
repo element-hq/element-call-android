@@ -54,11 +54,13 @@ class TileRosterMapperTest {
     }
 
     @Test
-    fun `the hand raise time survives the crossing`() {
-        val tile = anFfiTile("A", handRaisedAtMs = 1_700_000_000_123uL).map()
+    fun `the hand's raise time and place in the queue survive the crossing`() {
+        val tile = anFfiTile("A", handRaisedAtMs = 1_700_000_000_123uL, handRaisedPosition = 2u).map()
 
         assertThat(tile.handRaisedAtMs).isEqualTo(1_700_000_000_123L)
+        assertThat(tile.handRaisedPosition).isEqualTo(2)
         assertThat(anFfiTile("A").map().handRaisedAtMs).isNull()
+        assertThat(anFfiTile("A").map().handRaisedPosition).isNull()
     }
 
     private fun aRef(memberId: String, kind: FfiTileKind = FfiTileKind.PERSON, hero: Boolean = false, userId: String = "@someone:example.org") =
@@ -71,6 +73,7 @@ class TileRosterMapperTest {
         hero: Boolean = false,
         hasVideo: Boolean = true,
         handRaisedAtMs: ULong? = null,
+        handRaisedPosition: UInt? = null,
     ) = FfiCallTile(
         memberId = memberId,
         kind = kind,
@@ -81,6 +84,7 @@ class TileRosterMapperTest {
         microphoneMuted = false,
         speaking = false,
         handRaisedAtMs = handRaisedAtMs,
+        handRaisedPosition = handRaisedPosition,
         reachable = true,
     )
 }

@@ -10,6 +10,7 @@ package io.element.android.call.impl
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.ElementCallData
+import io.element.android.call.api.ElementCallHandRequestFailure
 import io.element.android.call.api.ElementCallLifecycleListener
 import io.element.android.call.api.ElementCallOptions
 import io.element.android.call.api.ElementCallRoomContextProvider
@@ -36,6 +37,7 @@ import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.impl.audio.CallSoundEffect
 import io.element.android.call.impl.audio.CallSoundEffectRenderer
 import io.element.android.call.impl.audio.JoinLeaveSoundPolicy
+import io.element.android.call.impl.audio.RaisedHandSoundPolicy
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.coroutines.CoroutineScope
@@ -189,6 +191,7 @@ internal class DefaultElementCallController(
     private var rtcCall: MatrixRtcCall? = null
     private var call: MatrixRtcMediaSession? = null
     private var joinLeaveSoundPolicy: JoinLeaveSoundPolicy? = null
+    private var raisedHandSoundPolicy: RaisedHandSoundPolicy? = null
     private var soundEffectRenderer: CallSoundEffectRenderer? = null
     private var composedTiles: Set<MatrixRtcTileId> = emptySet()
     private var detailWindow: MatrixRtcDetailWindow? = null
@@ -337,6 +340,32 @@ internal class DefaultElementCallController(
             updateState { it.copy(isMicrophoneMuted = muted) }
             call?.setMicrophoneMuted(muted)
         }
+    }
+
+    override fun setHandRaised(raised: Boolean) {
+        scope.launch {
+            val rtcCall = rtcCall ?: return@launch
+            var isSending = false
+            // Checked and set in one step, so two taps cannot both send.
+            updateState { snapshot ->
+                val isUp = snapshot.ownTile?.handRaisedAtMs != null
+                isSending = !snapshot.isHandPending && snapshot.ownTile != null && isUp != raised
+                if (isSending) snapshot.copy(isHandPending = true, handRequestFailure = null) else snapshot
+            }
+            if (!isSending) return@launch
+            val result = if (raised) rtcCall.raiseHand() else rtcCall.lowerHand()
+            val failure = when {
+                result.isSuccess -> null
+                raised -> ElementCallHandRequestFailure.RAISE
+                else -> ElementCallHandRequestFailure.LOWER
+            }
+            Timber.i("ElementCall: ${if (raised) "raising" else "lowering"} our hand ${if (failure == null) "done" else "failed"}")
+            updateState { it.copy(isHandPending = false, handRequestFailure = failure) }
+        }
+    }
+
+    override fun clearHandRequestFailure() {
+        updateState { it.copy(handRequestFailure = null) }
     }
 
     /**
@@ -504,6 +533,7 @@ internal class DefaultElementCallController(
         }
         call = connected
         joinLeaveSoundPolicy = JoinLeaveSoundPolicy(options.participantCapForJoinLeaveSounds)
+        raisedHandSoundPolicy = RaisedHandSoundPolicy()
         soundEffectRenderer = platform.createCallSoundEffectRenderer()
         connected.setComposedTiles(composedTiles)
         detailWindow?.let { connected.setDetailWindow(it) }
@@ -628,8 +658,10 @@ internal class DefaultElementCallController(
                     }
                     is MatrixRtcCallEvent.ParticipantJoined -> playJoinLeaveSound(CallSoundEffect.JOIN, event.memberId, event.participantCount)
                     is MatrixRtcCallEvent.ParticipantLeft -> playJoinLeaveSound(CallSoundEffect.LEAVE, event.memberId, event.participantCount)
+                    is MatrixRtcCallEvent.HandRaised -> playRaisedHandSound(event.memberId)
                     is MatrixRtcCallEvent.Ended -> {
                         joinLeaveSoundPolicy?.silence()
+                        raisedHandSoundPolicy?.silence()
                         updateState { it.copy(connection = ElementCallConnection.Ended) }
                         // Torn down from a coroutine of its own, not this one: endCall cancels the
                         // job this collector runs in, and a coroutine cannot wait for its own death.
@@ -648,6 +680,13 @@ internal class DefaultElementCallController(
         val change = if (sound == CallSoundEffect.JOIN) "joined" else "left"
         Timber.i("ElementCall: $memberId $change, $participantCount in the call: ${if (plays) "playing" else "silent"}")
         if (plays) soundEffectRenderer?.play(sound)
+    }
+
+    private fun playRaisedHandSound(memberId: String) {
+        val isOneToOne = _state.value?.isOneToOne == true
+        val plays = raisedHandSoundPolicy?.shouldPlay(isOneToOne, platform.elapsedRealtimeMs()) == true
+        Timber.i("ElementCall: $memberId raised a hand: ${if (plays) "playing" else "silent"}")
+        if (plays) soundEffectRenderer?.play(CallSoundEffect.RAISE_HAND)
     }
 
     private fun fail(message: String) {
@@ -673,6 +712,7 @@ internal class DefaultElementCallController(
             Timber.i("ElementCall: ending call (leave=$leave)")
             // First: nothing below may sound like people leaving.
             joinLeaveSoundPolicy?.silence()
+            raisedHandSoundPolicy?.silence()
             endedCallData = _state.value?.callData
             callJob?.cancel()
             callJob = null
@@ -690,6 +730,7 @@ internal class DefaultElementCallController(
             rtcCall = null
             call = null
             joinLeaveSoundPolicy = null
+            raisedHandSoundPolicy = null
             soundEffectRenderer?.release()
             soundEffectRenderer = null
             // The next call's screen declares afresh; a window from this one would be about tiles

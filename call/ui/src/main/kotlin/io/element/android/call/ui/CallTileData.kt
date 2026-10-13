@@ -58,8 +58,11 @@ data class CallTileData(
      * which is drawn from its reference: a name and an avatar, no badge, no ring, no video (R54).
      */
     val hasDetail: Boolean = true,
-    val isHandRaised: Boolean = false,
+    /** The hand's place in the call's queue, 1 for the earliest; null while it is down, on a share, and wherever hands are not shown (009 R33). */
+    val handPosition: Int? = null,
 ) {
+    val isHandRaised: Boolean get() = handPosition != null
+
     /**
      * [MatrixRtcTile.id] as one string, for a keyed list and a test tag.
      *
@@ -119,7 +122,7 @@ fun MatrixRtcTile.toCallTileData(
         streamKind = id.kind.videoStreamKind,
         isHero = isHero,
         hasDetail = true,
-        isHandRaised = !isScreenShare && handRaisedAtMs != null,
+        handPosition = handRaisedPosition.takeIf { !isScreenShare && handRaisedAtMs != null },
     )
 }
 

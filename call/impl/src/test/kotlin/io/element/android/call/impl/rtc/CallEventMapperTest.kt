@@ -27,4 +27,10 @@ class CallEventMapperTest {
 
         assertThat(mapped).isEqualTo(MatrixRtcCallEvent.ParticipantLeft("bob", participantCount = 2))
     }
+
+    @Test
+    fun `a hand going up or down crosses with its member`() {
+        assertThat(FfiCallEvent.HandRaised(memberId = "bob", raisedAtMs = 1_000uL).map()).isEqualTo(MatrixRtcCallEvent.HandRaised("bob"))
+        assertThat(FfiCallEvent.HandLowered(memberId = "bob").map()).isEqualTo(MatrixRtcCallEvent.HandLowered("bob"))
+    }
 }

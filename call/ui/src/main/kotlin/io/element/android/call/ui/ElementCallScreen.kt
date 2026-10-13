@@ -53,6 +53,8 @@ import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -79,6 +81,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.PreviewParameter
@@ -88,6 +93,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import io.element.android.call.api.ElementCallConnection
+import io.element.android.call.api.ElementCallHandRequestFailure
 import io.element.android.call.api.audio.CallAudioDeviceType
 import io.element.android.call.ui.preview.ElementCallPreview
 import io.element.android.call.ui.preview.PreviewsDayNight
@@ -289,6 +295,9 @@ fun ElementCallScreen(
                 }
             }
         }
+    }
+    state.handRequestFailure?.let { failure ->
+        HandRequestFailureDialog(failure = failure, onDismiss = { state.eventSink(ElementCallScreenEvent.DismissHandRequestFailure) })
     }
 }
 
@@ -583,6 +592,7 @@ private fun CallControlsBar(
             isActive = !state.isCameraEnabled,
         )
         AudioDeviceButton(state)
+        if (state.showsRaiseHandControl) RaiseHandButton(state)
         // Absent rather than disabled when the host has not opted in: there is nothing the user could
         // do to make it work, and a button that never does anything is a bug report.
         if (state.isScreenShareAvailable) {
@@ -604,6 +614,47 @@ private fun CallControlsBar(
             tint = ElementCallTheme.colors.onOverlay,
         )
     }
+}
+
+/**
+ * Shows the hand as the homeserver has it, never the tap (009 R5): while a request is out the button
+ * spins and takes no taps, and lands on whatever our tile then says.
+ */
+@Composable
+private fun RaiseHandButton(state: ElementCallScreenState) {
+    val raisedState = stringResource(R.string.element_call_a11y_hand_raised_state)
+    RoundCallButton(
+        onClick = { state.eventSink(ElementCallScreenEvent.ToggleRaisedHand) },
+        icon = ElementCallTheme.icons.handRaised,
+        contentDescription = stringResource(if (state.isHandRaised) R.string.element_call_a11y_lower_hand else R.string.element_call_a11y_raise_hand),
+        isActive = state.isHandRaised,
+        enabled = !state.isHandPending,
+        isBusy = state.isHandPending,
+        modifier = Modifier.semantics { if (state.isHandRaised) stateDescription = raisedState },
+    )
+}
+
+/** A raise or a lower that did not reach the homeserver (009 R22). The button already shows the hand as it is. */
+@Composable
+private fun HandRequestFailureDialog(failure: ElementCallHandRequestFailure, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.element_call_ok)) }
+        },
+        text = {
+            Text(
+                stringResource(
+                    when (failure) {
+                        ElementCallHandRequestFailure.RAISE -> R.string.element_call_hand_raise_failed
+                        ElementCallHandRequestFailure.LOWER -> R.string.element_call_hand_lower_failed
+                    }
+                )
+            )
+        },
+        containerColor = ElementCallTheme.colors.bgSubtlePrimary,
+        textContentColor = ElementCallTheme.colors.textPrimary,
+    )
 }
 
 @Composable
@@ -637,9 +688,12 @@ private fun RoundCallButton(
     icon: ImageVector,
     contentDescription: String,
     isActive: Boolean,
+    modifier: Modifier = Modifier,
     enabled: Boolean = true,
     background: Color? = null,
     tint: Color? = null,
+    /** A progress ring in place of the icon, while what the button asked for is on its way. */
+    isBusy: Boolean = false,
 ) {
     val resolvedBackground = background
         // Darker than the pill it sits in, which is bgSubtleSecondary.
@@ -652,26 +706,38 @@ private fun RoundCallButton(
     IconButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier
+        modifier = modifier
             .size(BUTTON_SIZE)
             .clip(CircleShape)
             .background(resolvedBackground)
             .then(if (hasRing) Modifier.border(1.dp, ElementCallTheme.colors.borderControl, CircleShape) else Modifier),
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = contentDescription,
-            tint = resolvedTint,
-        )
+        if (isBusy) {
+            CircularProgressIndicator(
+                modifier = Modifier
+                    .size(BUSY_INDICATOR_SIZE)
+                    .semantics { this.contentDescription = contentDescription },
+                color = resolvedTint,
+                strokeWidth = 2.dp,
+            )
+        } else {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = resolvedTint,
+            )
+        }
     }
 }
 
 /**
- * As the design has it. The bar holds at most five - microphone, camera, audio output, screen share,
- * hang up; switching camera is on our own tile - and five 48dp circles make a 288dp pill, which
- * fits a 360dp phone.
+ * As the design has it. The bar holds at most six - microphone, camera, audio output, raised hand,
+ * screen share, hang up; switching camera is on our own tile - and six 48dp circles make a 344dp
+ * pill, which with the bar's padding just fits a 360dp phone (009 R17).
  */
 private val BUTTON_SIZE = 48.dp
+
+private val BUSY_INDICATOR_SIZE = 20.dp
 
 /** Between the buttons in the pill. */
 private val BUTTON_GAP = 8.dp
