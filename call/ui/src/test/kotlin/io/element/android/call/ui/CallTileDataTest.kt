@@ -89,6 +89,20 @@ class CallTileDataTest {
         assertThat(speaking.isActiveSpeaker).isTrue()
     }
 
+    /** The hand is the person's, so it goes on their camera tile and never on their screen (009 R8). */
+    @Test
+    fun `a hand is numbered on the person and absent from the share`() {
+        val camera = aTile(A_REMOTE_MEMBER_ID, handPosition = 3).toCallTileData(emptyMap(), isLocal = false, isFrontCamera = false)
+        val share = aTile(
+            A_REMOTE_MEMBER_ID,
+            MatrixRtcTileKind.SCREEN_SHARE,
+            handPosition = 3
+        ).toCallTileData(emptyMap(), isLocal = false, isFrontCamera = false)
+
+        assertThat(camera.handPosition).isEqualTo(3)
+        assertThat(share.handPosition).isNull()
+    }
+
     private fun MatrixRtcParticipant.toTile() =
         personTile().toCallTileData(
             roomMembers = emptyMap(),

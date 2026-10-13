@@ -55,6 +55,7 @@ class MatrixRtcDetailWindowTest {
                 isMicrophoneMuted = false,
                 isSpeaking = false,
                 handRaisedAtMs = null,
+                handRaisedPosition = null,
                 isReachable = true,
             )
         }

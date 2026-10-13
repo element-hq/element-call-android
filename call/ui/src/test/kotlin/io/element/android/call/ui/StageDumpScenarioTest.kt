@@ -179,6 +179,7 @@ class StageDumpScenarioTest : RobolectricTest() {
                 is ScenarioAction.Me -> {
                     controller.setCameraEnabled(action.hasVideo)
                     controller.setMicrophoneMuted(action.isMuted)
+                    session.setOwnHandRaised(action.isHandRaised)
                 }
                 ScenarioAction.Minimize -> controller.setMaximized(false)
                 ScenarioAction.Restore -> controller.setMaximized(true)

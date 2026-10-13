@@ -108,6 +108,15 @@ interface ElementCallController {
      */
     fun setRankingThreshold(tiles: Int)
 
+    /**
+     * Raise or lower our hand. Ignored while a request is pending, before the call has joined, and when the hand
+     * is already that way. See [ElementCallSnapshot.isHandPending] and [ElementCallSnapshot.handRequestFailure].
+     */
+    fun setHandRaised(raised: Boolean)
+
+    /** The user has been told about [ElementCallSnapshot.handRequestFailure]. */
+    fun clearHandRequestFailure()
+
     /** End the call and publish a leave membership. */
     fun hangUp()
 }

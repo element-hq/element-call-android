@@ -58,6 +58,9 @@ class FakeElementCallController(
     val videoConstraints = mutableListOf<Pair<MatrixRtcStreamRef, MatrixRtcVideoConstraints>>()
     var hangUpCount = 0
         private set
+    val handRaisedCalls = mutableListOf<Boolean>()
+    var clearHandRequestFailureCount = 0
+        private set
 
     /**
      * One flow per stream, stable for the life of the fake, as the real controller's are: the tile
@@ -143,6 +146,14 @@ class FakeElementCallController(
 
     override fun setVideoConstraints(memberId: String, kind: MatrixRtcStreamKind, constraints: MatrixRtcVideoConstraints) {
         videoConstraints += MatrixRtcStreamRef(memberId, kind) to constraints
+    }
+
+    override fun setHandRaised(raised: Boolean) {
+        handRaisedCalls += raised
+    }
+
+    override fun clearHandRequestFailure() {
+        clearHandRequestFailureCount++
     }
 
     override fun hangUp() {

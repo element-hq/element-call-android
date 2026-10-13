@@ -14,8 +14,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -27,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
@@ -110,10 +113,13 @@ fun CallTile(
             // able to see. A decoration changes on the tile without moving it (R40). Grid and our
             // floating tile only: the spotlight's position already says who is talking, and the one
             // other person in a one-to-one call could be nobody else (019 R9).
+            // Speaking wins the ring over a raised hand; the hand keeps its badge (009 contract C4).
             .then(
                 when {
                     tile.isActiveSpeaker && (appearance == CallTileAppearance.Grid || appearance == CallTileAppearance.Floating) ->
                         Modifier.border(ACTIVE_SPEAKER_BORDER, ElementCallTheme.colors.borderActiveSpeaker, shape)
+                    tile.isHandRaised && (appearance == CallTileAppearance.Grid || appearance == CallTileAppearance.Floating) ->
+                        Modifier.border(ACTIVE_SPEAKER_BORDER, ElementCallTheme.colors.borderRaisedHand, shape)
                     // Over a tile it overlaps, ours needs an edge of its own (019 R2).
                     appearance == CallTileAppearance.Floating -> Modifier.border(FLOATING_BORDER, ElementCallTheme.colors.borderThumbnail, shape)
                     else -> Modifier
@@ -154,23 +160,29 @@ fun CallTile(
             }
         }
 
+        // The spotlight carries the hand in its name pill rather than on a disc (009 contract C4).
+        val isHandInPill = showName && appearance == CallTileAppearance.Spotlight
         if (showName) {
             NamePill(
                 tile = tile,
+                showsHand = isHandInPill,
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(6.dp),
             )
         }
-        if (tile.isHandRaised) {
-            HandRaisedBadge(
+        val handPosition = tile.handPosition
+        if (handPosition != null && !isHandInPill) {
+            ElementCallRaisedHandBadge(
+                position = handPosition,
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(6.dp),
+                    .align(Alignment.TopStart)
+                    // Below the fullscreen HUD's top row, which may be up over it (009 R30).
+                    .padding(start = 6.dp, end = 6.dp, bottom = 6.dp, top = if (appearance == CallTileAppearance.Fullscreen) FULLSCREEN_CHROME_ROW else 6.dp),
             )
         }
 
-        // Top-left, where the name pill and the badge are not. Only ever drawn for a tile with
+        // Top-right, where the name pill and the badge are not. Only ever drawn for a tile with
         // video: the numbers are all about a stream, and a member showing an avatar has none.
         if (stats != null && videoFrames != null) {
             CallTileStatsOverlay(
@@ -182,7 +194,7 @@ fun CallTile(
                 requestedHeight = stats.requestedHeight,
                 isReachable = tile.isReachable,
                 modifier = Modifier
-                    .align(Alignment.TopStart)
+                    .align(Alignment.TopEnd)
                     .padding(4.dp),
             )
         }
@@ -250,7 +262,12 @@ data class TileStats(
  * rather than a guess (R54).
  */
 @Composable
-internal fun NamePill(tile: CallTileData, modifier: Modifier = Modifier) {
+internal fun NamePill(
+    tile: CallTileData,
+    modifier: Modifier = Modifier,
+    /** The raised hand and its number in the microphone's place, as the spotlight shows it (009 contract C4). */
+    showsHand: Boolean = false,
+) {
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(percent = 50))
@@ -259,7 +276,9 @@ internal fun NamePill(tile: CallTileData, modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
+        val handPosition = tile.handPosition.takeIf { showsHand }
         val icon = when {
+            handPosition != null -> ElementCallTheme.icons.handRaised
             tile.isScreenShare -> ElementCallTheme.icons.shareScreenActive
             !tile.hasDetail -> null
             tile.isMuted -> ElementCallTheme.icons.microphoneOff
@@ -269,8 +288,20 @@ internal fun NamePill(tile: CallTileData, modifier: Modifier = Modifier) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                tint = if (tile.isMuted && !tile.isScreenShare) ElementCallTheme.colors.iconCritical else ElementCallTheme.colors.onOverlay,
+                tint = if (handPosition == null && tile.isMuted &&
+                    !tile.isScreenShare) {
+                        ElementCallTheme.colors.iconCritical
+                    } else {
+                        ElementCallTheme.colors.onOverlay
+                    },
                 modifier = Modifier.size(14.dp),
+            )
+        }
+        if (handPosition != null) {
+            Text(
+                text = handPosition.toString(),
+                style = ElementCallTheme.typography.bodySmMedium,
+                color = ElementCallTheme.colors.onOverlay,
             )
         }
         Text(
@@ -283,20 +314,30 @@ internal fun NamePill(tile: CallTileData, modifier: Modifier = Modifier) {
     }
 }
 
+/** A raised hand and its place in the queue (009 R6, contract C4, C9): a light disc that widens to a pill for the number. */
 @Composable
-private fun HandRaisedBadge(modifier: Modifier = Modifier) {
-    Box(
+internal fun ElementCallRaisedHandBadge(position: Int, modifier: Modifier = Modifier) {
+    Row(
         modifier = modifier
-            .size(28.dp)
-            .clip(CircleShape)
-            .background(ElementCallTheme.colors.overlayScrim),
-        contentAlignment = Alignment.Center,
+            .height(RAISED_HAND_BADGE_SIZE)
+            .widthIn(min = RAISED_HAND_BADGE_SIZE)
+            .shadow(elevation = 4.dp, shape = CircleShape)
+            .background(ElementCallTheme.colors.bgActionPrimaryRest, CircleShape)
+            .padding(horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterHorizontally),
     ) {
         Icon(
             imageVector = ElementCallTheme.icons.handRaised,
             contentDescription = null,
-            tint = ElementCallTheme.colors.onOverlay,
-            modifier = Modifier.size(16.dp),
+            tint = ElementCallTheme.colors.iconOnSolidPrimary,
+            modifier = Modifier.size(20.dp),
+        )
+        Text(
+            text = position.toString(),
+            style = ElementCallTheme.typography.bodySmMedium,
+            color = ElementCallTheme.colors.iconOnSolidPrimary,
+            modifier = Modifier.padding(end = 2.dp),
         )
     }
 }
@@ -310,7 +351,7 @@ private fun CallTileData.accessibilityDescription(hasPicture: Boolean, floatingC
         if (isScreenShare) add(stringResource(R.string.element_call_a11y_sharing_screen))
         if (hasDetail && !isScreenShare && isMuted) add(stringResource(R.string.element_call_a11y_muted))
         if (isActiveSpeaker) add(stringResource(R.string.element_call_a11y_speaking))
-        if (isHandRaised) add(stringResource(R.string.element_call_a11y_hand_raised))
+        handPosition?.let { add(stringResource(R.string.element_call_a11y_hand_raised_position, it)) }
         if (floatingCorner != null) add(stringResource(floatingCorner.label))
     }
     return (listOf(label()) + states).joinToString(", ")
@@ -346,6 +387,11 @@ private val FLOATING_CORNER = 12.dp
 private val FLOATING_BORDER = 1.5.dp
 
 private val ACTIVE_SPEAKER_BORDER = 4.dp
+
+private val RAISED_HAND_BADGE_SIZE = 28.dp
+
+/** The fullscreen HUD's top row: a 48dp button with 4dp around it. */
+private val FULLSCREEN_CHROME_ROW = 56.dp
 
 @PreviewsDayNight
 @Composable

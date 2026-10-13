@@ -98,6 +98,27 @@ class FakeMatrixRtcCall(
     var lastMediaSession: FakeMatrixRtcMediaSession? = null
         private set
 
+    /** What [raiseHand] answers; suspend in it to hold the request in flight. */
+    var raiseHandResult: suspend () -> Result<Unit> = { Result.success(Unit) }
+
+    /** What [lowerHand] answers. */
+    var lowerHandResult: suspend () -> Result<Unit> = { Result.success(Unit) }
+
+    var raiseHandCount = 0
+        private set
+    var lowerHandCount = 0
+        private set
+
+    override suspend fun raiseHand(): Result<Unit> {
+        raiseHandCount++
+        return raiseHandResult()
+    }
+
+    override suspend fun lowerHand(): Result<Unit> {
+        lowerHandCount++
+        return lowerHandResult()
+    }
+
     override suspend fun connectMedia(): Result<MatrixRtcMediaSession> {
         connectMediaCount++
         return Result.success(FakeMatrixRtcMediaSession().also { lastMediaSession = it })

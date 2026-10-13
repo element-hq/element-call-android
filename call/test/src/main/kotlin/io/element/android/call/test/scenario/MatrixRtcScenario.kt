@@ -82,7 +82,8 @@ data class ScenarioTile(
     val id: MatrixRtcTileId
         get() = MatrixRtcTileId(MatrixRtcScenario.memberIdOf(member), if (isShare) MatrixRtcTileKind.SCREEN_SHARE else MatrixRtcTileKind.PERSON)
 
-    fun toTile() = MatrixRtcTile(
+    /** [handPosition] is this tile's place in the queue, which only the whole roster knows. */
+    fun toTile(handPosition: Int? = null) = MatrixRtcTile(
         id = id,
         userId = MatrixRtcScenario.userIdOf(member),
         deviceId = MatrixRtcScenario.DEVICE,
@@ -91,6 +92,7 @@ data class ScenarioTile(
         isMicrophoneMuted = isMuted,
         isSpeaking = isSpeaking,
         handRaisedAtMs = if (isHandRaised) HAND_RAISED_AT_MS else null,
+        handRaisedPosition = handPosition.takeIf { isHandRaised },
         isReachable = true,
     )
 
@@ -101,7 +103,9 @@ data class ScenarioTile(
 
 /** A roster frame as the core would publish it, with detail for every tile unless [detailOnly] narrows it. */
 fun ScenarioContent.Roster.toRoster(detailOnly: Set<MatrixRtcTileId>? = null): MatrixRtcTileRoster {
-    val all = tiles.map { it.toTile() }
+    // The scenario has no raise times, so the queue is the order the hands are listed in.
+    val positions = tiles.filter { it.isHandRaised && !it.isShare }.withIndex().associate { (index, tile) -> tile.id to index + 1 }
+    val all = tiles.map { it.toTile(positions[it.id]) }
     return MatrixRtcTileRoster(
         order = all.map { MatrixRtcTileRef(it.id, it.userId, it.isHero) },
         detail = all.filter { detailOnly == null || it.id in detailOnly }.associateBy { it.id },
@@ -124,7 +128,7 @@ sealed interface ScenarioAction {
 
     data object Restore : ScenarioAction
 
-    data class Me(val hasVideo: Boolean, val isMuted: Boolean) : ScenarioAction
+    data class Me(val hasVideo: Boolean, val isMuted: Boolean, val isHandRaised: Boolean) : ScenarioAction
 
     data class DetailOnly(val tiles: List<ScenarioTile>) : ScenarioAction
 
@@ -209,7 +213,7 @@ private object ScenarioParser {
             "restore" -> ScenarioAction.Restore
             "me" -> {
                 val flags = args.joinToString("")
-                ScenarioAction.Me(hasVideo = 'v' in flags, isMuted = 'm' in flags)
+                ScenarioAction.Me(hasVideo = 'v' in flags, isMuted = 'm' in flags, isHandRaised = '^' in flags)
             }
             "detail-only" -> ScenarioAction.DetailOnly(args.map { parseTile(it, lineNumber) })
             "tick" -> ScenarioAction.Tick

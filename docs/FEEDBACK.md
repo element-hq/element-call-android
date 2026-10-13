@@ -1116,7 +1116,8 @@ stopgap is:
 - Querying the reactions already in the room, with raw content and encryption info. Live reactions arrive as
   timeline events; the ones sent before we joined cannot be fetched: `Room.loadOrFetchEventWithRelations` returns
   typed content with neither, and the widget API has no `read_relations`. `ElementCallMatrixRoom.relations` answers
-  `NotSupported`, so a hand raised before we joined is not seen until it changes.
+  `NotSupported`, so a hand raised before we joined is not seen until it changes, and until then our queue numbers
+  can differ from the other clients' (feature-hq 009 contract C8).
 - Timeline events with their encryption info. The widget driver forwards decrypted reactions without saying whether
   they were encrypted, so the bridge reports them without any; the core binds a reaction to its member by sender.
   Membership is unaffected. `Room.subscribeToMessageLikeEvents`, with raw content and encryption info, is

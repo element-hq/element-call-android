@@ -20,17 +20,25 @@ import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.sin
 
-/** The design's speaking ring: a vertical blue to teal gradient over a diagonal one, as CSS layers them. */
-internal object ActiveSpeakerBrush : ShaderBrush() {
-    private val blue = Color(0xFF0D5CBD)
-    private val teal = Color(0xFF0DBDA8)
-    private const val DIAGONAL_CSS_DEGREES = 119.36
+/** The design's rings: a vertical gradient between two colours over a diagonal one, as CSS layers them. */
+enum class ElementCallBorderGradient(internal val from: Color, internal val to: Color) {
+    /** Blue to teal: whoever is speaking. */
+    ACTIVE_SPEAKER(Color(0xFF0D5CBD), Color(0xFF0DBDA8)),
 
+    /** Orange to yellow: a raised hand. */
+    RAISED_HAND(Color(0xFFDC6700), Color(0xFFF1BD00)),
+    ;
+
+    /** The ring as a brush, sized to whatever it strokes. */
+    val brush: ShaderBrush = BorderGradientBrush(this)
+}
+
+private class BorderGradientBrush(private val gradient: ElementCallBorderGradient) : ShaderBrush() {
     override fun createShader(size: Size): Shader {
         val vertical = LinearGradientShader(
             from = Offset.Zero,
             to = Offset(0f, size.height),
-            colors = listOf(blue.copy(alpha = 0.9f), teal.copy(alpha = 0.9f)),
+            colors = listOf(gradient.from.copy(alpha = 0.9f), gradient.to.copy(alpha = 0.9f)),
         )
         // CSS gradient line: through the centre, long enough that the corners get the end colours.
         val angle = Math.toRadians(DIAGONAL_CSS_DEGREES)
@@ -41,8 +49,16 @@ internal object ActiveSpeakerBrush : ShaderBrush() {
         val diagonal = LinearGradientShader(
             from = Offset(centre.x - dx * half, centre.y - dy * half),
             to = Offset(centre.x + dx * half, centre.y + dy * half),
-            colors = listOf(blue.copy(alpha = 0.7f), teal.copy(alpha = 0.7f)),
+            colors = listOf(gradient.from.copy(alpha = 0.7f), gradient.to.copy(alpha = 0.7f)),
         )
         return ComposeShader(diagonal, vertical, PorterDuff.Mode.SRC_OVER)
+    }
+
+    override fun equals(other: Any?) = other is BorderGradientBrush && other.gradient == gradient
+
+    override fun hashCode() = gradient.hashCode()
+
+    private companion object {
+        const val DIAGONAL_CSS_DEGREES = 119.36
     }
 }

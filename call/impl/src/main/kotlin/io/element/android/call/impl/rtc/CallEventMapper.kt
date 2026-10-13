@@ -42,9 +42,8 @@ import org.matrix.rtc.FfiTileRoster
 import org.matrix.rtc.JoinedMembership
 
 /**
- * @return null for an event the library has no type for yet. Raised hands and reactions arrive with the
- * roster media model (plan 002); until then the core's events for them are read and dropped here rather
- * than crossing into `call/api`, so that the FFI surface can move without the public API moving with it.
+ * @return null for an event the library has no type for yet: reactions, which are read and dropped here until
+ * the library shows them.
  */
 internal fun FfiCallEvent.map(): MatrixRtcCallEvent? = when (this) {
     is FfiCallEvent.ParticipantJoined -> MatrixRtcCallEvent.ParticipantJoined(memberId, UserId(userId), participantCount.toInt())
@@ -65,8 +64,8 @@ internal fun FfiCallEvent.map(): MatrixRtcCallEvent? = when (this) {
     is FfiCallEvent.FrameEncryptionState -> MatrixRtcCallEvent.FrameEncryption(memberId, state.map(), diagnostic.map())
     is FfiCallEvent.UnknownParticipant -> MatrixRtcCallEvent.UnknownParticipant(identity)
     is FfiCallEvent.Ended -> MatrixRtcCallEvent.Ended(reason.map())
-    is FfiCallEvent.HandRaised,
-    is FfiCallEvent.HandLowered,
+    is FfiCallEvent.HandRaised -> MatrixRtcCallEvent.HandRaised(memberId)
+    is FfiCallEvent.HandLowered -> MatrixRtcCallEvent.HandLowered(memberId)
     is FfiCallEvent.Reaction -> null
 }
 
@@ -175,6 +174,7 @@ internal fun FfiCallTile.map() = MatrixRtcTile(
     isMicrophoneMuted = microphoneMuted,
     isSpeaking = speaking,
     handRaisedAtMs = handRaisedAtMs?.toLong(),
+    handRaisedPosition = handRaisedPosition?.toInt(),
     isReachable = reachable,
 )
 

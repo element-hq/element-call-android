@@ -9,7 +9,6 @@ package io.element.android.call.ui.theme
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bluetooth
-import androidx.compose.material.icons.rounded.FrontHand
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -72,7 +71,7 @@ data class ElementCallIcons(
             selected = ImageVector.vectorResource(R.drawable.ic_element_call_check),
             participants = ImageVector.vectorResource(R.drawable.ic_element_call_user_profile),
             overflow = ImageVector.vectorResource(R.drawable.ic_element_call_overflow_vertical),
-            handRaised = Icons.Rounded.FrontHand,
+            handRaised = ImageVector.vectorResource(R.drawable.ic_element_call_raised_hand_solid),
         )
     }
 }

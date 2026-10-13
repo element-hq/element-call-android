@@ -20,6 +20,7 @@ import io.element.android.call.ui.A_BLUETOOTH_HEADSET
 import io.element.android.call.ui.A_SPEAKER
 import io.element.android.call.ui.aCallSnapshot
 import io.element.android.call.ui.previewRoster
+import io.element.android.call.ui.withHandQueue
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableMap
 
@@ -85,9 +86,10 @@ enum class SampleFixture(val key: String, val category: Category, val title: Str
         key = "one_to_one",
         category = Category.CONNECTED,
         title = "One to one",
-        description = "A direct call, our camera on, so our tile draws its flip button; Bob's draws the colour bars.",
+        description = "A direct call, our camera on, so our tile draws its flip button; Bob's draws the colour bars. " +
+            "Bob's hand is up and not shown, and no raise control is offered.",
     ) {
-        override fun snapshot() = aConnected(me = "v", remotes = listOf(person("Bob", "v")), isDm = true)
+        override fun snapshot() = aConnected(me = "v", remotes = listOf(person("Bob", "v^")), isDm = true)
     },
     GROUP(
         key = "group",
@@ -101,9 +103,9 @@ enum class SampleFixture(val key: String, val category: Category, val title: Str
         key = "listen_mode",
         category = Category.CONNECTED,
         title = "Listen mode",
-        description = "Twenty-four people: listen mode spotlights the speaker over a grid that scrolls.",
+        description = "Twenty-four people: listen mode spotlights the speaker over a grid that scrolls. Carol's hand is up, in her name pill.",
     ) {
-        override fun snapshot() = aConnected(remotes = group() + crowd(LONG_GRID_CROWD))
+        override fun snapshot() = aConnected(remotes = listOf(person("Carol", "!^")) + group().drop(1) + crowd(LONG_GRID_CROWD))
     },
     SCREEN_SHARE(
         key = "screen_share",
@@ -216,9 +218,10 @@ enum class SampleFixture(val key: String, val category: Category, val title: Str
         key = "small_four",
         category = Category.CONNECTED,
         title = "Small call of four",
-        description = "Carol speaks, so she has the border and nobody moves; Dan's camera is off.",
+        description = "Carol speaks, so she has the border and nobody moves; Dan's camera is off. " +
+            "Three hands are up: ours, Carol's under her speaking border, Dan's.",
     ) {
-        override fun snapshot() = aConnected(me = "v", remotes = listOf(person("Carol", "!v"), person("Bob", "v"), person("Dan")))
+        override fun snapshot() = aConnected(me = "v^", remotes = listOf(person("Carol", "!v^"), person("Bob", "v"), person("Dan", "^")))
     },
     SMALL_FIVE(
         key = "small_five",
@@ -286,6 +289,7 @@ enum class SampleFixture(val key: String, val category: Category, val title: Str
             isMicrophoneMuted = 'm' in flags,
             isSpeaking = '!' in flags,
             handRaisedAtMs = if ('^' in flags) 1L else null,
+            handRaisedPosition = null,
             isReachable = true,
         )
 
@@ -300,21 +304,23 @@ enum class SampleFixture(val key: String, val category: Category, val title: Str
         private fun aConnecting(connection: ElementCallConnection) = aCallSnapshot(connection = connection, isMaximized = true)
             .copy(isMicrophonePermissionGranted = true, memberCount = 2, roomMembers = roomMembersOf(listOf(ownTile(), person("Bob"))))
 
-        /** [remotes] in rank order, as the core would publish them; [me] our own flags, from `v` and `m`. */
+        /** [remotes] in rank order, as the core would publish them; [me] our own flags, from `v`, `m` and `^`. */
         private fun aConnected(
             remotes: List<MatrixRtcTile>,
             me: String = "",
             isDm: Boolean = false,
             connection: ElementCallConnection = ElementCallConnection.Connected,
         ): ElementCallSnapshot {
-            val own = ownTile(me)
+            // The remote hands first, then ours.
+            val queued = (remotes + ownTile(me)).withHandQueue()
+            val own = queued.last()
             return aCallSnapshot(
                 connection = connection,
                 connectedAtElapsedMs = SystemClock.elapsedRealtime(),
                 isMaximized = true,
                 isMicrophoneMuted = own.isMicrophoneMuted,
             ).copy(
-                roster = remotes.previewRoster(),
+                roster = queued.dropLast(1).previewRoster(),
                 ownTile = own,
                 isDm = isDm,
                 isMicrophonePermissionGranted = true,

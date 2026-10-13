@@ -12,6 +12,7 @@ import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallData
+import io.element.android.call.api.ElementCallHandRequestFailure
 import io.element.android.call.api.ElementCallOptions
 import io.element.android.call.api.ElementCallRoomContext
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
@@ -46,6 +47,7 @@ import io.element.android.call.test.audio.aSpeaker
 import io.element.android.call.test.audio.anEarpiece
 import io.element.android.call.tests.testutils.WarmUpRule
 import io.element.android.call.tests.testutils.consumeItemsUntilPredicate
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
@@ -1436,6 +1438,103 @@ class DefaultElementCallControllerTest {
      * [roomIsDm] is what the host says about the room, or null for a host that never answers - which
      * is what the notification timeout is for.
      */
+    @Test
+    fun `a hand going up plays its sound, coming down plays nothing, and one to one stays silent`() = runTest {
+        val rtcClient = FakeMatrixRtcClient()
+        val platform = FakeElementCallPlatform()
+        val controller = createController(rtcClient = rtcClient, platform = platform)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+        val session = rtcClient.lastCall?.lastMediaSession!!
+        session.localState.value = MatrixRtcLocalState(tile = aTile(A_LOCAL_MEMBER_ID), isScreenSharing = false)
+        session.tiles.value = aRoster(aTile(A_REMOTE_MEMBER_ID), aTile(ANOTHER_REMOTE_MEMBER_ID))
+        runCurrent()
+
+        session.emit(MatrixRtcCallEvent.HandRaised(A_REMOTE_MEMBER_ID))
+        session.emit(MatrixRtcCallEvent.HandLowered(A_REMOTE_MEMBER_ID))
+        runCurrent()
+        session.tiles.value = aRoster(aTile(A_REMOTE_MEMBER_ID))
+        platform.elapsedRealtimeMs = 10_000
+        session.emit(MatrixRtcCallEvent.HandRaised(A_REMOTE_MEMBER_ID))
+        runCurrent()
+
+        assertThat(platform.soundEffectRenderers.single().played).containsExactly(CallSoundEffect.RAISE_HAND)
+    }
+
+    @Test
+    fun `raising waits for the homeserver, takes no second request meanwhile, and reads the hand from our tile`() = runTest {
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+        val rtcCall = rtcClient.lastCall!!
+        val session = rtcCall.lastMediaSession!!
+        session.localState.value = MatrixRtcLocalState(tile = aTile(A_LOCAL_MEMBER_ID), isScreenSharing = false)
+        val homeserver = CompletableDeferred<Result<Unit>>()
+        rtcCall.raiseHandResult = { homeserver.await() }
+
+        controller.setHandRaised(true)
+        runCurrent()
+        controller.setHandRaised(true)
+        controller.setHandRaised(false)
+        runCurrent()
+
+        assertThat(controller.state.value?.isHandPending).isTrue()
+        assertThat(rtcCall.raiseHandCount).isEqualTo(1)
+        assertThat(rtcCall.lowerHandCount).isEqualTo(0)
+        // Not up until the core says so, whatever was tapped.
+        assertThat(controller.state.value?.ownTile?.handRaisedAtMs).isNull()
+
+        session.localState.value = MatrixRtcLocalState(tile = aTile(A_LOCAL_MEMBER_ID, handPosition = 1), isScreenSharing = false)
+        homeserver.complete(Result.success(Unit))
+        runCurrent()
+
+        assertThat(controller.state.value?.isHandPending).isFalse()
+        assertThat(controller.state.value?.handRequestFailure).isNull()
+        assertThat(controller.state.value?.ownTile?.handRaisedPosition).isEqualTo(1)
+    }
+
+    @Test
+    fun `a failed request is reported until the user has seen it, and the hand stays as it was`() = runTest {
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+        val rtcCall = rtcClient.lastCall!!
+        rtcCall.lastMediaSession!!.localState.value = MatrixRtcLocalState(tile = aTile(A_LOCAL_MEMBER_ID, handPosition = 1), isScreenSharing = false)
+        rtcCall.lowerHandResult = { Result.failure(IllegalStateException("offline")) }
+
+        controller.setHandRaised(false)
+        runCurrent()
+
+        assertThat(controller.state.value?.isHandPending).isFalse()
+        assertThat(controller.state.value?.handRequestFailure).isEqualTo(ElementCallHandRequestFailure.LOWER)
+        assertThat(controller.state.value?.ownTile?.handRaisedPosition).isEqualTo(1)
+
+        controller.clearHandRequestFailure()
+        runCurrent()
+
+        assertThat(controller.state.value?.handRequestFailure).isNull()
+    }
+
+    @Test
+    fun `a hand already that way, or no own tile yet, sends nothing`() = runTest {
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+        val rtcCall = rtcClient.lastCall!!
+
+        controller.setHandRaised(true)
+        runCurrent()
+        rtcCall.lastMediaSession!!.localState.value = MatrixRtcLocalState(tile = aTile(A_LOCAL_MEMBER_ID, handPosition = 1), isScreenSharing = false)
+        controller.setHandRaised(true)
+        runCurrent()
+
+        assertThat(rtcCall.raiseHandCount).isEqualTo(0)
+        assertThat(controller.state.value?.isHandPending).isFalse()
+    }
+
     private fun TestScope.createController(
         rtcClient: FakeMatrixRtcClient = FakeMatrixRtcClient(),
         audioDeviceController: FakeCallAudioDeviceController = FakeCallAudioDeviceController(),

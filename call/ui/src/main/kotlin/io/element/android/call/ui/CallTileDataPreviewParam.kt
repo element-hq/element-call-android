@@ -26,6 +26,10 @@ open class CallTileDataPreviewParam : PreviewParameterProvider<CallTileData> {
             aRemoteParticipant(isReachable = false).toTile(roomMember = A_BOB),
             // A shared screen: video, no badges, drawn as a spotlight.
             aRemoteParticipant().toTile(roomMember = A_BOB).copy(streamKind = MatrixRtcStreamKind.SCREEN_SHARE, hasVideo = true),
+            // A hand up, second in the queue: the orange ring and the numbered badge.
+            aRemoteParticipant().toTile(roomMember = A_BOB).copy(handPosition = 2),
+            // Speaking with a hand up: the speaking ring wins, the badge stays.
+            aRemoteParticipant().toTile(roomMember = A_BOB).copy(hasVideo = true, isActiveSpeaker = true, handPosition = 12),
         )
 }
 

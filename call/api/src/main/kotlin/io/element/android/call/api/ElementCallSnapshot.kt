@@ -13,6 +13,7 @@ import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcTile
+import io.element.android.call.api.rtc.MatrixRtcTileKind
 import io.element.android.call.api.rtc.MatrixRtcTileRoster
 import io.element.android.call.api.rtc.id.UserId
 import kotlinx.collections.immutable.ImmutableList
@@ -154,6 +155,13 @@ data class ElementCallSnapshot(
      * a developer who left it on last week should not be handed a screen full of numbers today.
      */
     val isTileStatsVisible: Boolean = false,
+    /**
+     * Whether a raise or a lower of our hand is on its way to the homeserver. Whether the hand is up is
+     * [ownTile]'s, which changes only once the homeserver has it.
+     */
+    val isHandPending: Boolean = false,
+    /** The last raise or lower that failed, until the user has been told or asks again. */
+    val handRequestFailure: ElementCallHandRequestFailure? = null,
 ) {
     /**
      * Whether anybody in the call is sending a picture - a camera or a screen, ours or theirs.
@@ -171,6 +179,21 @@ data class ElementCallSnapshot(
      */
     val hasVideo: Boolean
         get() = isCameraEnabled || roster.detail.values.any { it.hasVideo }
+
+    /**
+     * Two people, the other filling the stage: our tile and one remote person, and no remote screen share. Such
+     * a call shows no raised hand and makes no sound for one (009 R33, R34).
+     */
+    val isOneToOne: Boolean
+        get() = ownTile != null &&
+            roster.order.none { it.id.kind == MatrixRtcTileKind.SCREEN_SHARE } &&
+            roster.order.count { it.id.kind == MatrixRtcTileKind.PERSON } == 1
+}
+
+/** Which request on our hand failed. */
+enum class ElementCallHandRequestFailure {
+    RAISE,
+    LOWER,
 }
 
 sealed interface ElementCallConnection {

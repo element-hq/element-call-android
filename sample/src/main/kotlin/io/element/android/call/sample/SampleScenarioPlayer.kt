@@ -101,6 +101,7 @@ class SampleScenarioPlayer(
                 is ScenarioAction.Me -> {
                     controller.setCameraEnabled(action.hasVideo)
                     controller.setMicrophoneMuted(action.isMuted)
+                    controller.setOwnHandRaised(action.isHandRaised)
                 }
                 is ScenarioAction.DetailOnly -> {
                     detailOnly = action.tiles.map { it.id }.toSet()

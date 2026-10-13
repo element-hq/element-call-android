@@ -37,6 +37,15 @@ interface MatrixRtcCall : AutoCloseable {
     /** How many memberships the core counts in this slot, ourselves included: the size of [members]. */
     val memberCount: StateFlow<Int>
 
+    /**
+     * Raise our hand on this membership. Succeeds once the homeserver has it, which is when our tile shows
+     * it; a no-op while it is up.
+     */
+    suspend fun raiseHand(): Result<Unit>
+
+    /** Lower our hand. A no-op while it is down. */
+    suspend fun lowerHand(): Result<Unit>
+
     /** Connect to the media transport the call was joined on. */
     suspend fun connectMedia(): Result<MatrixRtcMediaSession>
 
