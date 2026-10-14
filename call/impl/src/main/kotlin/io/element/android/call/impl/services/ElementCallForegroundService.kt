@@ -129,6 +129,8 @@ class ElementCallForegroundService : Service() {
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setStyle(NotificationCompat.CallStyle.forOngoingCall(caller, hangUpIntent))
             .addPerson(caller)
+            // Re-posted on every change it shows, which must not make it alert again.
+            .setOnlyAlertOnce(true)
             // Tapping it comes back to the call rather than doing nothing. The host says where the
             // call is drawn; by default its launch Activity, which is where a host that draws the call
             // in its main Activity wants to land.
