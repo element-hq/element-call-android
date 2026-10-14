@@ -24,9 +24,9 @@ class ElementCallForegroundServiceTest {
 
         state.notificationContentChanges().test {
             state.value = aCall(isMicrophoneMuted = true)
-            assertThat(awaitItem()).isEqualTo(NotificationContent(roomName = A_ROOM_NAME, isMuted = true))
+            assertThat(awaitItem()).isEqualTo(aNotificationContent(isMuted = true))
             state.value = aCall(isMicrophoneMuted = false)
-            assertThat(awaitItem()).isEqualTo(NotificationContent(roomName = A_ROOM_NAME, isMuted = false))
+            assertThat(awaitItem()).isEqualTo(aNotificationContent())
         }
     }
 
@@ -36,7 +36,17 @@ class ElementCallForegroundServiceTest {
 
         state.notificationContentChanges().test {
             state.value = aCall()
-            assertThat(awaitItem()).isEqualTo(NotificationContent(roomName = A_ROOM_NAME, isMuted = false))
+            assertThat(awaitItem()).isEqualTo(aNotificationContent())
+        }
+    }
+
+    @Test
+    fun `connecting re-posts the notification with the duration`() = runTest {
+        val state = MutableStateFlow<ElementCallSnapshot?>(aCall(connection = ElementCallConnection.ConnectingMedia, connectedAtElapsedMs = null))
+
+        state.notificationContentChanges().test {
+            state.value = aCall()
+            assertThat(awaitItem()).isEqualTo(aNotificationContent())
         }
     }
 
@@ -55,12 +65,23 @@ class ElementCallForegroundServiceTest {
         roomName: String? = A_ROOM_NAME,
         isMicrophoneMuted: Boolean = false,
         connection: ElementCallConnection = ElementCallConnection.Connected,
+        connectedAtElapsedMs: Long? = A_CONNECTED_AT_ELAPSED_MS,
     ) = ElementCallSnapshot(
         callData = ElementCallData(roomId = A_ROOM_ID, isAudioCall = false),
         connection = connection,
         roomName = roomName,
         isMicrophoneMuted = isMicrophoneMuted,
+        connectedAtElapsedMs = connectedAtElapsedMs,
+    )
+
+    private fun aNotificationContent(
+        isMuted: Boolean = false,
+    ) = NotificationContent(
+        roomName = A_ROOM_NAME,
+        isMuted = isMuted,
+        connectedAtElapsedMs = A_CONNECTED_AT_ELAPSED_MS,
     )
 }
 
 private const val A_ROOM_NAME = "Design"
+private const val A_CONNECTED_AT_ELAPSED_MS = 1_000L
