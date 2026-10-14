@@ -7,8 +7,6 @@
 
 package io.element.android.call.ui.theme
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Bluetooth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -18,9 +16,8 @@ import io.element.android.call.ui.R
 /**
  * The icons the call composables draw, named after what they mean rather than what they look like.
  *
- * The defaults are Compound's glyphs, bundled as vector drawables (compound-design-tokens, Apache-2.0),
- * except Bluetooth, which Compound has no glyph for and Material does. Element X provides its own
- * instance from `CompoundIcons` so the two never drift.
+ * The defaults are Compound's glyphs, bundled as vector drawables (compound-design-tokens, Apache-2.0).
+ * Element X provides its own instance from `CompoundIcons` so the two never drift.
  */
 @Immutable
 data class ElementCallIcons(
@@ -66,7 +63,7 @@ data class ElementCallIcons(
             speaker = ImageVector.vectorResource(R.drawable.ic_element_call_volume_on_solid),
             earpiece = ImageVector.vectorResource(R.drawable.ic_element_call_volume_off_solid),
             headphones = ImageVector.vectorResource(R.drawable.ic_element_call_headphones_solid),
-            bluetooth = Icons.Rounded.Bluetooth,
+            bluetooth = ImageVector.vectorResource(R.drawable.ic_element_call_bluetooth_output),
             minimize = ImageVector.vectorResource(R.drawable.ic_element_call_collapse),
             selected = ImageVector.vectorResource(R.drawable.ic_element_call_check),
             participants = ImageVector.vectorResource(R.drawable.ic_element_call_user_profile),
