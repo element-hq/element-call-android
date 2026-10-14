@@ -147,8 +147,7 @@ private fun CallAudioDeviceType.labelRes(): Int = when (this) {
  * the toolbar button says at a glance whether the phone is on loudspeaker. A handset glyph for the
  * earpiece read as a second call button next to hang-up.
  *
- * Compound has no Bluetooth glyph, so that one comes from the Material set. Wired and USB headsets
- * share the headphones icon and are told apart by their label.
+ * Wired and USB headsets share the headphones icon and are told apart by their label.
  */
 @Composable
 internal fun CallAudioDeviceType.icon() = when (this) {
