@@ -22,6 +22,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- The proximity wake lock that blanks the screen at the ear on the earpiece. -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!--
       ~ No Activity of its own, deliberately. The call is drawn inside the host's own Compose tree
