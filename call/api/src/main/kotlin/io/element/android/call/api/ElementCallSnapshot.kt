@@ -210,8 +210,8 @@ sealed interface ElementCallConnection {
      */
     data class Calling(val callee: UserId?, val isRinging: Boolean) : ElementCallConnection
 
-    /** The ring could not be sent, so nobody was called (030 R4). The call is over; the host dismisses it. */
-    data object RingNotSent : ElementCallConnection
+    /** The ring to [callee] could not be sent, so nobody was called (030 R4). The call is over; the host dismisses it. */
+    data class RingNotSent(val callee: UserId?) : ElementCallConnection
 
     data object Connected : ElementCallConnection
 

@@ -32,7 +32,9 @@ import androidx.compose.ui.test.swipe
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.v2.runAndroidComposeUiTest
 import com.google.common.truth.Truth.assertThat
+import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallHandRequestFailure
+import io.element.android.call.api.rtc.id.UserId
 import io.element.android.call.tests.testutils.EventsRecorder
 import io.element.android.call.tests.testutils.assertNodeWithTextIsDisplayed
 import io.element.android.call.tests.testutils.clickOn
@@ -143,6 +145,29 @@ class ElementCallScreenTest : RobolectricTest() {
                 ElementCallScreenEvent.SwitchCamera,
             )
         )
+    }
+
+    /** 030 R14, R22, R38: "Calling…" under the room name, the callee read as "Calling" and their name, and inert. */
+    @Test
+    fun `a ringing DM says who it is calling, and the callee takes no tap`() = runAndroidComposeUiTest<ComponentActivity> {
+        val events = EventsRecorder<ElementCallScreenEvent>()
+        val callee = UserId("@paulina:example.org")
+        setContent {
+            ElementCallScreen(
+                state = anElementCallScreenState(
+                    connection = ElementCallConnection.Calling(callee, isRinging = true),
+                    participants = listOf(aLocalParticipant()),
+                    isDm = true,
+                    eventSink = events,
+                )
+            )
+        }
+
+        assertNodeWithTextIsDisplayed(R.string.element_call_calling)
+        val calling = activity!!.getString(R.string.element_call_a11y_calling, callee.value)
+        onNodeWithContentDescription(calling).assertIsDisplayed()
+        onNodeWithContentDescription(calling).performTouchInput { doubleClick() }
+        assertThat(events.recorded().filterIsInstance<ElementCallScreenEvent.ToggleFullscreen>()).isEmpty()
     }
 
     /** Screen sharing is opt-in: a host that has not turned it on gets no button, not a dead one. */

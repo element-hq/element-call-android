@@ -13,6 +13,7 @@
     <string name="element_call_a11y_unmute_microphone">Unmute microphone</string>
     <string name="element_call_a11y_microphone_muted">Microphone muted</string>
     <string name="element_call_a11y_hang_up">Hang up</string>
+    <string name="element_call_a11y_calling">Calling %1$s</string>
     <string name="element_call_a11y_turn_camera_on">Turn the camera on</string>
     <string name="element_call_a11y_turn_camera_off">Turn the camera off</string>
     <string name="element_call_a11y_switch_camera">Switch camera</string>

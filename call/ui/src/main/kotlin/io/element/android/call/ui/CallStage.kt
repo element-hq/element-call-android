@@ -216,7 +216,18 @@ internal fun CallStage(
             Rect(floatingInsets.left.toPx(), floatingInsets.top.toPx(), width - floatingInsets.right.toPx(), height - floatingInsets.bottom.toPx())
         }
         val layout = remember(gridTileIds, spotlightTileId, heroIds, metrics, chosen, ownInput, gridTop, floatingArea) {
-            chosen.compute(CallStageLayout.Input(gridTileIds, spotlightTileId, heroIds, metrics, ownInput, topBleed = gridTop, floatingArea = floatingArea))
+            chosen.compute(
+                CallStageLayout.Input(
+                    gridTileIds,
+                    spotlightTileId,
+                    heroIds,
+                    metrics,
+                    ownInput,
+                    topBleed = gridTop,
+                    floatingArea = floatingArea,
+                    ringingTileId = state.tiles.firstOrNull { it.ring != null }?.tileId,
+                )
+            )
         }
         currentLayout.value = layout
         currentLayout.viewportHeight = height
@@ -314,12 +325,13 @@ internal fun CallStage(
         // order, never taken from grid positions: the grid has our tile first and the heroes
         // removed, so a grid index is off by one per hero.
         LaunchedEffect(composedGridIds, bandIds, spotlightTileId, fullscreenId, state.tiles) {
-            val composed = state.tiles.filter { it.tileId in composedGridIds || it.tileId == spotlightTileId || it.tileId == fullscreenId }
+            // A ringing callee is ours to draw, not a tile of the call's.
+            val composed = state.tiles.filter { it.ring == null && (it.tileId in composedGridIds || it.tileId == spotlightTileId || it.tileId == fullscreenId) }
             currentEventSink(ElementCallScreenEvent.SetComposedTiles(composed.map { it.id }.toSet()))
             // The range is the band's, not the linger's: a tile kept only for its stream to settle
             // needs no record, and a range spanning the old band and the new one after a long
             // scroll would declare most of the call (R52's named failure).
-            val remoteOrder = state.tiles.filterNot { it.isLocal }
+            val remoteOrder = state.tiles.filterNot { it.isLocal || it.ring != null }
             val ranks = remoteOrder.withIndex().filter { it.value.tileId in bandIds }.map { it.index }
             val range = if (ranks.isEmpty()) IntRange.EMPTY else ranks.min()..ranks.max()
             // WORKAROUND, spec 003 R6 with R52: `speaking` is on the tile record and not on the
@@ -420,6 +432,8 @@ internal fun CallStage(
             // In a small call our tile neither goes fullscreen nor toggles the chrome; its taps are
             // still its own, so they do not fall through to the stage (019 R14, R23).
             val isOwnSmallCallTile = tile.isLocal && layout.isStatic
+            // A tap or a double tap on a ringing callee does nothing: it is not a tile (030 R38).
+            val isRinging = tile.ring != null
             PlacedTile(
                 tile = tile,
                 videoFrames = state.videoFrames[tile.tileId],
@@ -432,15 +446,21 @@ internal fun CallStage(
                 onExit = { leavers.remove(tile.tileId) },
                 isArrival = tile.tileId !in knownIds,
                 stats = state.tileStats(tile, slot.rect),
-                onLongPress = { state.eventSink(ElementCallScreenEvent.ToggleTileStats) },
-                onTap = if (isOwnSmallCallTile) NoOp else onTap,
-                allowsFullscreen = !isOwnSmallCallTile,
+                onLongPress = if (isRinging) {
+                    NoOp
+                } else {
+                    { state.eventSink(ElementCallScreenEvent.ToggleTileStats) }
+                },
+                onTap = if (isOwnSmallCallTile || isRinging) NoOp else onTap,
+                allowsFullscreen = !isOwnSmallCallTile && !isRinging,
                 isLandscapeStage = metrics.isLandscape,
                 drag = ownDrag.takeIf { slot.appearance == CallTileAppearance.Floating },
                 floatingCorner = layout.floating?.corner?.takeIf { slot.appearance == CallTileAppearance.Floating },
                 onVideoSizeChange = if (tile.isLocal) onOwnVideoSize else null,
                 // Our floating tile is read after the person it floats over (019 R27).
                 traversalIndex = when {
+                    // Focused first (030 R22).
+                    isRinging -> -1f
                     slot.appearance == CallTileAppearance.Floating -> 1f + gridTileIds.size
                     slot.isSticky -> 0f
                     else -> 1f + (gridIndex[tile.tileId] ?: gridTileIds.size)

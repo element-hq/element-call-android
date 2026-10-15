@@ -642,7 +642,7 @@ internal class DefaultElementCallController(
                     raisedHandSoundPolicy?.silence()
                     // The caller is told, and dismisses it (030 R4); every other end closes the screen at once.
                     if (status.reason == MatrixRtcCallEnd.RingNotSent) {
-                        updateState { it.copy(connection = ElementCallConnection.RingNotSent) }
+                        updateState { it.copy(connection = ElementCallConnection.RingNotSent((it.connection as? ElementCallConnection.Calling)?.callee)) }
                         return@collect
                     }
                     updateState { it.copy(connection = ElementCallConnection.Ended) }

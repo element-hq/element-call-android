@@ -60,6 +60,8 @@ data class CallTileData(
     val hasDetail: Boolean = true,
     /** The hand's place in the call's queue, 1 for the earliest; null while it is down, on a share, and wherever hands are not shown (009 R33). */
     val handPosition: Int? = null,
+    /** Set on the callee a DM call is ringing: not a tile, but drawn in the slot their tile will take (030 R15, R21). */
+    val ring: CallRing? = null,
 ) {
     val isHandRaised: Boolean get() = handPosition != null
 
@@ -150,4 +152,13 @@ fun MatrixRtcTileRef.toCallTileData(
         isHero = isHero,
         hasDetail = false,
     )
+}
+
+/** Where a DM call's ring is, for the callee's ringing avatar (030). */
+enum class CallRing {
+    /** Being sent, or ringing. */
+    CALLING,
+
+    /** It could not be sent, so they were never called (R4). */
+    NOT_SENT,
 }

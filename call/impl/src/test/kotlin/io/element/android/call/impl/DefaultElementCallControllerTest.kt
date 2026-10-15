@@ -395,7 +395,7 @@ class DefaultElementCallControllerTest {
 
         rtcClient.lastCall!!.status.value = MatrixRtcCallStatus.Ended(MatrixRtcCallEnd.RingNotSent)
         runCurrent()
-        assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.RingNotSent)
+        assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.RingNotSent(callee = null))
 
         controller.hangUp()
         runCurrent()

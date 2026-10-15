@@ -78,7 +78,7 @@ internal object SmallCallLayout {
         when {
             inline.isEmpty() -> Unit
             // One other person, alone on the stage: edge to edge, behind both bars (R4).
-            inline.size == 1 && floats -> {
+            inline.size == 1 && (floats || inline.single() == input.ringingTileId) -> {
                 fullBleedTileId = inline.single()
                 tiles[inline.single()] = Rect(0f, -input.topBleed, metrics.width, metrics.height)
                 positions[inline.single()] = CallStageLayout.GridPosition(0, 0)

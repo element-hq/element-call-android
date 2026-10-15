@@ -106,6 +106,8 @@ internal data class CallStageLayout(
         val topBleed: Float = 0f,
         /** The part of the stage the visible chrome leaves, which our floating tile stays inside (019 R19). Null is the whole stage. */
         val floatingArea: Rect? = null,
+        /** The callee a DM call rings: alone, it fills the stage as their tile will, with our tile or before it (030 R15, R16). */
+        val ringingTileId: String? = null,
     )
 
     data class HeroStack(val count: Int, val shownIndex: Int)

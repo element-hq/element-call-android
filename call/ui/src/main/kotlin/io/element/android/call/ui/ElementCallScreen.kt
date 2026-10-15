@@ -429,18 +429,42 @@ private fun CallTopBar(state: ElementCallScreenState, modifier: Modifier = Modif
             )
         }
         CallOverflowMenu(state = state, modifier = Modifier.align(Alignment.CenterEnd))
-        Text(
-            text = state.roomName ?: state.spotlightTile?.displayName ?: "",
-            style = ElementCallTheme.typography.bodyLgMedium,
-            color = ElementCallTheme.colors.textPrimary,
-            textAlign = TextAlign.Center,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier
                 .align(Alignment.Center)
                 // Room for the buttons on both sides, so the title is centred on the screen rather
                 // than on what is left of it.
                 .padding(horizontal = TOP_BAR_BUTTON_ROOM),
+        ) {
+            Text(
+                text = state.roomName ?: state.spotlightTile?.displayName ?: "",
+                style = ElementCallTheme.typography.bodyLgMedium,
+                color = ElementCallTheme.colors.textPrimary,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            if (state.connection is ElementCallConnection.Calling) CallingLabel(isAudioCall = state.isAudioCall)
+        }
+    }
+}
+
+/** "Calling…" with the call's type, under the room's name while a DM call rings (030 R14). */
+@Composable
+private fun CallingLabel(isAudioCall: Boolean) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = if (isAudioCall) ElementCallTheme.icons.voiceCall else ElementCallTheme.icons.cameraOn,
+            contentDescription = null,
+            tint = ElementCallTheme.colors.iconSecondary,
+            modifier = Modifier.size(16.dp),
+        )
+        Text(
+            text = stringResource(R.string.element_call_calling),
+            style = ElementCallTheme.typography.bodySmRegular,
+            color = ElementCallTheme.colors.textSecondary,
+            modifier = Modifier.padding(start = 4.dp),
         )
     }
 }
@@ -755,7 +779,7 @@ private fun ElementCallConnection.label(): String = when (this) {
     ElementCallConnection.Joining,
     ElementCallConnection.ConnectingMedia -> stringResource(R.string.element_call_connecting)
     is ElementCallConnection.Calling -> stringResource(R.string.element_call_calling)
-    ElementCallConnection.RingNotSent -> stringResource(R.string.element_call_ring_not_sent)
+    is ElementCallConnection.RingNotSent -> stringResource(R.string.element_call_ring_not_sent)
     ElementCallConnection.Connected -> stringResource(R.string.element_call_call_in_progress)
     ElementCallConnection.Degraded -> stringResource(R.string.element_call_connection_unstable)
     is ElementCallConnection.Failed -> stringResource(R.string.element_call_call_failed)
