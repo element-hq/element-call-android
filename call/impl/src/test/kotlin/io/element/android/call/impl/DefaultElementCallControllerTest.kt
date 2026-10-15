@@ -431,6 +431,131 @@ class DefaultElementCallControllerTest {
         assertThat(lifecycleListener.endReasons).containsExactly(ElementCallEndReason.LEFT)
     }
 
+    /** 030 R23, R24: the ringback plays through the call's audio before media, so the route is up from the join. */
+    @Test
+    fun `the route and the sounds are up from the join, before media`() = runTest {
+        val joinedCall = FakeMatrixRtcCall(A_ROOM_ID, "m.call#room")
+        val audioDeviceController = FakeCallAudioDeviceController()
+        val platform = FakeElementCallPlatform()
+        var routedBeforeMedia: Boolean? = null
+        val rtcClient = FakeMatrixRtcClient(joinResult = { Result.success(joinedCall) })
+        val controller = createController(rtcClient = rtcClient, audioDeviceController = audioDeviceController, platform = platform, roomIsDm = true)
+        joinedCall.onConnectMedia = { routedBeforeMedia = audioDeviceController.startCount == 1 && platform.soundEffectRenderers.size == 1 }
+
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+
+        assertThat(routedBeforeMedia).isTrue()
+    }
+
+    @Test
+    fun `the ringback loops while it rings and stops at pickup`() = runTest {
+        val rtcClient = FakeMatrixRtcClient()
+        val platform = FakeElementCallPlatform()
+        val controller = createController(rtcClient = rtcClient, platform = platform, roomIsDm = true)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+        val call = rtcClient.lastCall!!
+        val renderer = platform.soundEffectRenderers.single()
+        val callee = UserId("@callee:example.org")
+
+        call.status.value = MatrixRtcCallStatus.Calling(callee, MatrixRtcRingPhase.Sending, MatrixRtcMediaPhase.Connecting)
+        runCurrent()
+        // Not before the ring has gone out (030 R4).
+        assertThat(renderer.looping).isNull()
+
+        call.status.value = MatrixRtcCallStatus.Calling(callee, MatrixRtcRingPhase.Ringing(0L, 90_000L), MatrixRtcMediaPhase.Connecting)
+        runCurrent()
+        assertThat(renderer.looping).isEqualTo(CallSoundEffect.RINGBACK)
+
+        call.status.value = MatrixRtcCallStatus.Connected(sinceMs = 0L, degraded = false)
+        runCurrent()
+        assertThat(renderer.looping).isNull()
+        assertThat(controller.state.value).isNotNull()
+    }
+
+    /** 030 R25: the screen closes at once, and the call's audio goes only once the sound has played. */
+    @Test
+    fun `a decline closes the screen, then plays its sound to the end before the audio is released`() = runTest {
+        val rtcClient = FakeMatrixRtcClient()
+        val platform = FakeElementCallPlatform()
+        val audioDeviceController = FakeCallAudioDeviceController()
+        val lifecycleListener = FakeElementCallLifecycleListener()
+        val controller = createController(
+            rtcClient = rtcClient,
+            platform = platform,
+            audioDeviceController = audioDeviceController,
+            lifecycleListener = lifecycleListener,
+            roomIsDm = true,
+        )
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+        val renderer = platform.soundEffectRenderers.single()
+        renderer.endSoundGate = CompletableDeferred()
+
+        rtcClient.lastCall!!.status.value = MatrixRtcCallStatus.Ended(MatrixRtcCallEnd.Declined)
+        runCurrent()
+
+        assertThat(controller.state.value).isNull()
+        assertThat(renderer.playedToEnd).containsExactly(CallSoundEffect.DECLINED)
+        assertThat(renderer.releaseCount).isEqualTo(0)
+        assertThat(audioDeviceController.stopCount).isEqualTo(0)
+        assertThat(platform.stopForegroundServiceCount).isEqualTo(0)
+
+        renderer.endSoundGate!!.complete(Unit)
+        runCurrent()
+
+        assertThat(renderer.releaseCount).isEqualTo(1)
+        assertThat(audioDeviceController.stopCount).isEqualTo(1)
+        assertThat(platform.stopForegroundServiceCount).isEqualTo(1)
+        assertThat(lifecycleListener.endReasons).containsExactly(ElementCallEndReason.DECLINED)
+    }
+
+    @Test
+    fun `a ring that runs out plays the timeout sound, a hang-up plays none`() = runTest {
+        val rtcClient = FakeMatrixRtcClient()
+        val platform = FakeElementCallPlatform()
+        val controller = createController(rtcClient = rtcClient, platform = platform, roomIsDm = true)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+
+        rtcClient.lastCall!!.status.value = MatrixRtcCallStatus.Ended(MatrixRtcCallEnd.Unanswered)
+        runCurrent()
+        assertThat(platform.soundEffectRenderers.single().playedToEnd).containsExactly(CallSoundEffect.TIMEOUT)
+
+        controller.startCall(ElementCallData(roomId = A_ROOM_ID, isAudioCall = true, isStartingCall = true))
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+        controller.hangUp()
+        runCurrent()
+        assertThat(platform.soundEffectRenderers.last().playedToEnd).isEmpty()
+    }
+
+    /** The end sound must not hand back the route, the focus and the service a new call has just taken. */
+    @Test
+    fun `a call started while the end sound plays keeps its audio`() = runTest {
+        val rtcClient = FakeMatrixRtcClient()
+        val platform = FakeElementCallPlatform()
+        val audioDeviceController = FakeCallAudioDeviceController()
+        val controller = createController(rtcClient = rtcClient, platform = platform, audioDeviceController = audioDeviceController, roomIsDm = true)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+        val renderer = platform.soundEffectRenderers.single()
+        renderer.endSoundGate = CompletableDeferred()
+        rtcClient.lastCall!!.status.value = MatrixRtcCallStatus.Ended(MatrixRtcCallEnd.Declined)
+        runCurrent()
+
+        controller.startCall(ElementCallData(roomId = A_ROOM_ID, isAudioCall = true, isStartingCall = true))
+        runCurrent()
+        renderer.endSoundGate!!.complete(Unit)
+        runCurrent()
+
+        assertThat(renderer.releaseCount).isEqualTo(1)
+        assertThat(audioDeviceController.stopCount).isEqualTo(0)
+        assertThat(platform.stopForegroundServiceCount).isEqualTo(0)
+        assertThat(controller.state.value).isNotNull()
+    }
+
     @Test
     fun `a join and a leave play their sounds, a screen share plays nothing`() = runTest {
         val rtcClient = FakeMatrixRtcClient()

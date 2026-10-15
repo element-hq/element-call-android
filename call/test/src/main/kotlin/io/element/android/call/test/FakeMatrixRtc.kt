@@ -135,8 +135,12 @@ class FakeMatrixRtcCall(
         return lowerHandResult()
     }
 
+    /** Called as media is asked for, before it connects: what a test checks has happened by then. */
+    var onConnectMedia: () -> Unit = {}
+
     override suspend fun connectMedia(): Result<MatrixRtcMediaSession> {
         connectMediaCount++
+        onConnectMedia()
         return Result.success(FakeMatrixRtcMediaSession().also { lastMediaSession = it }).also {
             if (status.value == MatrixRtcCallStatus.Connecting) status.value = MatrixRtcCallStatus.Connected(connectedSinceMs, degraded = false)
         }
