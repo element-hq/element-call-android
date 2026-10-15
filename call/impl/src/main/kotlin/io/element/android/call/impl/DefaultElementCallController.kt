@@ -504,10 +504,9 @@ internal class DefaultElementCallController(
         // it decides the member id, the SFU identity and the token endpoint as well as the wire
         // format - so changing it mid-call is not something the core could act on.
         //
-        // Temporary: pinned to the room-state format while the library builds against the released Rust SDK.
-        // The two sticky formats need MSC4354, which the widget-driver stopgap cannot carry - see
-        // `docs/FEEDBACK.md`, "Widget-driver stopgap". The option is still read so the pin is visible in
-        // the log, and so that lifting it is a one-line change here.
+        // Temporary: pinned to the room-state format until the sticky formats, whose events now go through the
+        // SDK, have been tried against other clients - see `docs/FEEDBACK.md`, "Widget-driver stopgap". The
+        // option is still read so the pin is visible in the log, and so that lifting it is a one-line change here.
         val preferredMembershipFormat = options.membershipFormat
         val membershipFormat = MatrixRtcMembershipFormat.ROOM_STATE
         if (preferredMembershipFormat != membershipFormat) {

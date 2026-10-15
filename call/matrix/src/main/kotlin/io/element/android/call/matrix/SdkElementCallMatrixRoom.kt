@@ -32,8 +32,8 @@ import uniffi.matrix_sdk_base.EncryptionState
 /**
  * One joined SDK [Room] as the call sees it.
  *
- * What the released bindings expose goes straight to them: the state event, the room info, the members.
- * What they do not - delayed events, sticky events, the room-state feed - goes through the widget-driver
+ * What the bindings expose goes straight to them: the state event, sticky events, the room info, the members.
+ * What they do not - delayed events, the room-state feed - goes through the widget-driver
  * [bridge], which is the temporary part; when the bindings catch up the bridge goes and the methods
  * below call the SDK instead, with nothing in `call/impl` learning about it. The bridge is for what the
  * SDK lacks and nothing else. A redaction goes to the SDK; the message-like room event goes through the
@@ -104,11 +104,11 @@ internal class SdkElementCallMatrixRoom(
         return bridge.updateDelayedEvent(delayId, action)
     }
 
-    override suspend fun sendStickyEvent(eventType: String, contentJson: String, durationMs: ULong): Result<String> {
-        return bridge.sendStickyEvent(eventType, contentJson, durationMs)
+    override suspend fun sendStickyEvent(eventType: String, contentJson: String, durationMs: ULong): Result<String> = withContext(dispatchers.io) {
+        runCatchingExceptions { room.sendStickyRaw(eventType, contentJson, durationMs) }.mapSdkFailure()
     }
 
-    override fun stickyEvents(): Flow<List<ElementCallRoomEvent>> = bridge.stickyEvents()
+    override fun stickyEvents(): Flow<List<ElementCallRoomEvent>> = room.stickyEventSets(dispatchers)
 
     override fun stateEvents(eventType: String): Flow<List<ElementCallRoomEvent>> = bridge.stateEvents(eventType)
 

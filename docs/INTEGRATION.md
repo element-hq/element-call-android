@@ -147,7 +147,7 @@ keeps exactly one copy of its own.
 | `rtcTransports` | MSC4143 transport discovery, as the raw `rtc_transports` JSON array | `[]` when there is none |
 
 **On the released SDK, most rows go through the widget-driver stopgap.** The Kotlin bindings do not yet expose
-delayed events, sticky events, raw room events or to-device sends, so `call/matrix` drives the SDK's widget machine
+delayed events, raw room events or to-device sends, so `call/matrix` drives the SDK's widget machine
 in-process behind the `ElementCallMatrixRoom` port; `FEEDBACK.md`, "Widget-driver stopgap", has what retires it.
 
 Things that are not obvious and cost real time:

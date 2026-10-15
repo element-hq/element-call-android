@@ -12,6 +12,9 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 ## Unreleased
 
+- `call/matrix` requires Matrix Rust SDK `org.matrix.rustcomponents:sdk-android` **26.10.12-nightly** (was 26.09.26),
+  for its sticky events. A nightly is not on Maven Central: a host resolves it from the bindings' GitHub releases
+  through the Ivy repository in README, "Consuming a release", which Element X already declares.
 - Core: matrix-rust-rtc `0.5.0-rc.4`; a host's Ivy repository must point at the `v0.5.0-rc.4` asset.
   `MatrixRtcCallEvent.ParticipantJoined` and `ParticipantLeft` gain `participantCount` and are raised only for
   changes while we are in the call, for a host consuming or faking them.

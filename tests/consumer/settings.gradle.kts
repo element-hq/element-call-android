@@ -62,6 +62,13 @@ dependencyResolutionManagement {
         }
         google()
         mavenCentral()
+        // Nightly builds of the SDK bindings, published as GitHub release assets; Element X resolves them the same way.
+        ivy {
+            url = uri("https://github.com/matrix-org/matrix-rust-components-kotlin/releases/download")
+            patternLayout { artifact("sdk-[revision]/[artifact]-[revision](-[classifier])(.[ext])") }
+            metadataSources { gradleMetadata() }
+            content { includeModule("org.matrix.rustcomponents", "sdk-android") }
+        }
     }
     versionCatalogs {
         // The library's own catalog, so the consumer builds with the same AGP, Kotlin and Compose.

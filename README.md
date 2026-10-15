@@ -48,8 +48,9 @@ with their module metadata, POMs and sources; `SHA256SUMS` lists their checksums
 depend on, `io.element.android:matrix-rtc-android`, is resolved the same way from
 [its own releases](https://github.com/element-hq/matrix-rust-rtc/releases), which carry the bare AAR.
 
-In `settings.gradle.kts`, next to the repositories the build already has (both blocks are content-filtered, so
-nothing else is looked up there, and both go the day the artifacts are on Central):
+In `settings.gradle.kts`, next to the repositories the build already has (every block is content-filtered, so
+nothing else is looked up there). The first two go the day the artifacts are on Central. The third serves the
+Rust SDK's nightly bindings, which `element-call-matrix` requires; Element X already declares it:
 
 ```kotlin
 dependencyResolutionManagement {
@@ -72,6 +73,12 @@ dependencyResolutionManagement {
             patternLayout { artifact("v[revision]/[artifact]-[revision].[ext]") }
             metadataSources { artifact() }
             content { includeModule("io.element.android", "matrix-rtc-android") }
+        }
+        ivy {
+            url = uri("https://github.com/matrix-org/matrix-rust-components-kotlin/releases/download")
+            patternLayout { artifact("sdk-[revision]/[artifact]-[revision](-[classifier])(.[ext])") }
+            metadataSources { gradleMetadata() }
+            content { includeModule("org.matrix.rustcomponents", "sdk-android") }
         }
         google()
         mavenCentral()

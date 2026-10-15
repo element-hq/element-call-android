@@ -38,7 +38,6 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onCompletion
 import kotlinx.coroutines.flow.update
@@ -255,19 +254,7 @@ internal class WidgetMatrixBridge(
         }
     }
 
-    // The signature mirrors the port's; the widget API has no sticky events to send them through.
-    @Suppress("UnusedParameter")
-    suspend fun sendStickyEvent(eventType: String, contentJson: String, durationMs: ULong): Result<String> {
-        return Result.failure(ElementCallMatrixException.NotSupported("MSC4354 sticky event $eventType"))
-    }
-
     // Feeds
-
-    /** The widget API carries no sticky events, so there are none to see; the sticky formats are pinned off. */
-    fun stickyEvents(): Flow<List<ElementCallRoomEvent>> {
-        Timber.w("WidgetBridge: sticky events are not available through the widget driver, $roomId reports none")
-        return flowOf(emptyList())
-    }
 
     fun stateEvents(eventType: String): Flow<List<ElementCallRoomEvent>> {
         return stateFlow(canonicalType(eventType))

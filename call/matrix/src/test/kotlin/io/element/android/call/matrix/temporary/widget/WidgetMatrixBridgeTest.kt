@@ -644,25 +644,6 @@ class WidgetMatrixBridgeTest {
         assertThat(driver.closeCalledCount).isEqualTo(1)
     }
 
-    // Sticky events
-
-    @Test
-    fun `sticky events are not bridged`() = runTest {
-        val driver = FakeWidgetDriver()
-        val bridge = negotiatedBridge(driver)
-        val sentBefore = driver.sentMessages.size
-
-        val result = bridge.sendStickyEvent(MatrixRtcEventTypes.MEMBER_UNSTABLE, A_CONTENT, 60_000uL)
-
-        assertThat(result.exceptionOrNull()).isInstanceOf(ElementCallMatrixException.NotSupported::class.java)
-        assertThat(driver.sentMessages.size).isEqualTo(sentBefore)
-        // The widget API has no sticky events, so there are none to report; empty, so the room still seeds.
-        bridge.stickyEvents().test {
-            assertThat(awaitItem()).isEmpty()
-            awaitComplete()
-        }
-    }
-
     // Helpers
 
     private fun TestScope.createBridge(driver: FakeWidgetDriver, requestTimeout: Duration = 30.seconds) = WidgetMatrixBridge(
