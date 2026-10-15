@@ -497,18 +497,17 @@ internal fun CallStage(
                 .background(ElementCallTheme.colors.bgCanvas),
         )
         state.tiles.forEach { tile ->
+            // Our own tile hidden by the layout fades out where it was, on its last frame, in the same place so it keeps
+            // its picture; shown again it is there at once (030 R17).
+            val isFadingOut = tile.isLocal && tile.tileId in hiddenIds && tile.tileId !in fadedOut
             val isComposed = tile.tileId == stickyTileId ||
                 tile.tileId == fullscreenId && tile.tileId !in heroIds ||
-                tile.tileId in composedGridIds && tile.tileId !in hiddenIds
+                tile.tileId in composedGridIds && tile.tileId !in hiddenIds ||
+                isFadingOut
             if (!isComposed) return@forEach
-            key(tile.tileId) { Placed(tile, isPresent = true) }
+            key(tile.tileId) { Placed(tile, isPresent = !isFadingOut, onExit = { fadedOut += tile.tileId }) }
         }
         leavers.values.forEach { tile -> key(tile.tileId) { Placed(tile, isPresent = false) } }
-        // Our own tile hidden by the layout fades out where it was; shown again it is there at once (030 R17).
-        state.tiles.forEach { tile ->
-            if (!tile.isLocal || tile.tileId !in hiddenIds || tile.tileId in fadedOut) return@forEach
-            key(tile.tileId) { Placed(tile, isPresent = false, onExit = { fadedOut += tile.tileId }) }
-        }
 
         val choice = state.spotlight
         if (choice is CallSpotlight.Choice.Hero && spotlightRect != null && heroIds.isNotEmpty()) {
