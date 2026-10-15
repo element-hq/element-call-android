@@ -56,7 +56,7 @@ class ElementCallForegroundServiceTest {
         isMicrophoneMuted: Boolean = false,
         connection: ElementCallConnection = ElementCallConnection.Connected,
     ) = ElementCallSnapshot(
-        callData = ElementCallData(roomId = A_ROOM_ID, isAudioCall = false),
+        callData = ElementCallData(roomId = A_ROOM_ID, isAudioCall = false, isStartingCall = true),
         connection = connection,
         roomName = roomName,
         isMicrophoneMuted = isMicrophoneMuted,

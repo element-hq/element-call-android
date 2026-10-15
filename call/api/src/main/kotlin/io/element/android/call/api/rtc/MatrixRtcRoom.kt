@@ -18,12 +18,11 @@ interface MatrixRtcRoom {
     /**
      * Join the call in this room.
      *
+     * @param kind a group call or a DM call, with what it sends. Required: a default of a quiet group call
+     * would let a caller that forgot to say DM place a call nobody notices.
      * @param applicationSlotId the MSC4143 application slot id; null is the room-wide call, `m.call#room`.
-     * @param notify an MSC4075 notification to send with the join, which is what makes the other
-     * devices in the room ring. Null joins quietly, which is what joining a call someone else started
-     * does; see [MatrixRtcNotify].
      */
-    suspend fun joinCall(applicationSlotId: String? = null, notify: MatrixRtcNotify? = null): Result<MatrixRtcCall>
+    suspend fun joinCall(kind: MatrixRtcCallKind, applicationSlotId: String? = null): Result<MatrixRtcCall>
 
     /** Leave any call still joined here, then stop following the room. */
     suspend fun shutdown()

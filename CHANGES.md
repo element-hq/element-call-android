@@ -12,6 +12,13 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 ## Unreleased
 
+- `ElementCallData.isStartingCall` is required: true when the user chose to call, false when they answer a ring or
+  join a call in progress. In a DM it decides whether the other person's phone rings, so it must come from what the
+  user did, never from whether the room already has a call (feature-hq 030). `ElementCallOptions.ringLifetime` sets
+  how long a DM call rings, 90 s by default.
+- For a host implementing or faking the RTC ports: `MatrixRtcRoom.joinCall(kind)` replaces `joinCall(notify)`
+  (`MatrixRtcCallKind.Group` or `Direct`), `MatrixRtcCall.status` reports where the call is and why it ended, and
+  `MatrixRtcCallEvent.Ended` and `MediaConnectionDegraded` are gone.
 - `call/matrix` requires Matrix Rust SDK `org.matrix.rustcomponents:sdk-android` **26.10.12-nightly** (was 26.09.26),
   for its sticky events. A nightly is not on Maven Central: a host resolves it from the bindings' GitHub releases
   through the Ivy repository in README, "Consuming a release", which Element X already declares.

@@ -9,7 +9,10 @@ package io.element.android.call.test
 
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
 import io.element.android.call.api.rtc.MatrixRtcCall
+import io.element.android.call.api.rtc.MatrixRtcCallEnd
 import io.element.android.call.api.rtc.MatrixRtcCallEvent
+import io.element.android.call.api.rtc.MatrixRtcCallKind
+import io.element.android.call.api.rtc.MatrixRtcCallStatus
 import io.element.android.call.api.rtc.MatrixRtcClient
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcLeaveReason
@@ -17,7 +20,6 @@ import io.element.android.call.api.rtc.MatrixRtcLocalState
 import io.element.android.call.api.rtc.MatrixRtcMediaSession
 import io.element.android.call.api.rtc.MatrixRtcMembership
 import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
-import io.element.android.call.api.rtc.MatrixRtcNotify
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcRoom
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
@@ -66,14 +68,14 @@ class FakeMatrixRtcRoom(
         private set
     var lastCall: FakeMatrixRtcCall? = null
         private set
-    var lastNotify: MatrixRtcNotify? = null
+    var lastKind: MatrixRtcCallKind? = null
         private set
     var shutdownCount = 0
         private set
 
-    override suspend fun joinCall(applicationSlotId: String?, notify: MatrixRtcNotify?): Result<MatrixRtcCall> {
+    override suspend fun joinCall(kind: MatrixRtcCallKind, applicationSlotId: String?): Result<MatrixRtcCall> {
         joinCallCount++
-        lastNotify = notify
+        lastKind = kind
         joinResult()?.let { return it }
         return Result.success(FakeMatrixRtcCall(roomId, "m.call#${applicationSlotId ?: "room"}").also { lastCall = it })
     }
@@ -90,6 +92,15 @@ class FakeMatrixRtcCall(
     override val memberId: String = "aLocalMemberId"
     override val members = MutableStateFlow(emptyList<MatrixRtcMembership>())
     override val memberCount = MutableStateFlow(0)
+
+    /**
+     * Pushed by a test, as the core would. On its own it follows a plain call: [MatrixRtcCallStatus.Connected] once
+     * media connects from [MatrixRtcCallStatus.Connecting], and [MatrixRtcCallEnd.Left] on a leave.
+     */
+    override val status = MutableStateFlow<MatrixRtcCallStatus>(MatrixRtcCallStatus.Connecting)
+
+    /** The `since` a plain call reports once media connects, in ms since the Unix epoch. */
+    var connectedSinceMs: Long = 0L
 
     var connectMediaCount = 0
         private set
@@ -121,11 +132,14 @@ class FakeMatrixRtcCall(
 
     override suspend fun connectMedia(): Result<MatrixRtcMediaSession> {
         connectMediaCount++
-        return Result.success(FakeMatrixRtcMediaSession().also { lastMediaSession = it })
+        return Result.success(FakeMatrixRtcMediaSession().also { lastMediaSession = it }).also {
+            if (status.value == MatrixRtcCallStatus.Connecting) status.value = MatrixRtcCallStatus.Connected(connectedSinceMs, degraded = false)
+        }
     }
 
     override suspend fun leave(reason: MatrixRtcLeaveReason?): Result<Unit> {
         leaveCount++
+        if (status.value !is MatrixRtcCallStatus.Ended) status.value = MatrixRtcCallStatus.Ended(MatrixRtcCallEnd.Left)
         return Result.success(Unit)
     }
 

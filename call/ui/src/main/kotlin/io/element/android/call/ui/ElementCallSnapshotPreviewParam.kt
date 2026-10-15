@@ -43,6 +43,7 @@ fun aCallSnapshot(
     callData = ElementCallData(
         roomId = RoomId("!aRoom:example.org"),
         isAudioCall = true,
+        isStartingCall = true,
     ),
     connection = connection,
     roomName = roomName,

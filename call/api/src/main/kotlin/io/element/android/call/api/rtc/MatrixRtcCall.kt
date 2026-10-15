@@ -37,6 +37,9 @@ interface MatrixRtcCall : AutoCloseable {
     /** How many memberships the core counts in this slot, ourselves included: the size of [members]. */
     val memberCount: StateFlow<Int>
 
+    /** Where the call is, from the join on, with or without media. Ends on [MatrixRtcCallStatus.Ended]. */
+    val status: StateFlow<MatrixRtcCallStatus>
+
     /**
      * Raise our hand on this membership. Succeeds once the homeserver has it, which is when our tile shows
      * it; a no-op while it is up.

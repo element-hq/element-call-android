@@ -117,7 +117,7 @@ class ElementCallPictureInPictureTest : RobolectricTest() {
     }
 
     private fun aCall() = ElementCallSnapshot(
-        callData = ElementCallData(roomId = A_ROOM_ID, isAudioCall = false),
+        callData = ElementCallData(roomId = A_ROOM_ID, isAudioCall = false, isStartingCall = true),
         connection = ElementCallConnection.Connected,
     )
 }

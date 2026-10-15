@@ -783,9 +783,10 @@ On the media side, release everything explicitly rather than leaving it to the G
 stop the projection (recording indicator), stop every playback track, then cancel the scope. And release in the
 reverse order you took things — media, then session, then audio focus, then the foreground service.
 
-A call can also end from the far end (`MatrixRtcCallEvent.Ended`). Tear down from a *different* coroutine than the
-event collector — teardown cancels the job the collector runs in, and a coroutine cannot wait for its own death. In
-that case there is nothing to leave; the session is already over.
+A call can also end without us: the call's status (`RtcCall.subscribeStatus`, `MatrixRtcCall.status`) becomes
+`Ended` with a reason, from the join on and with or without media. Tear down from a *different* coroutine than the
+status collector — teardown cancels the job the collector runs in, and a coroutine cannot wait for its own death.
+Never leave again on an end you did not ask for: the core has already left, or is leaving, under its own reason.
 
 ---
 

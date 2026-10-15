@@ -66,8 +66,10 @@ class WidgetMatrixBridgeTest {
             "org.matrix.msc2762.receive.state_event:m.rtc.slot",
             "org.matrix.msc2762.receive.event:m.reaction",
             "org.matrix.msc2762.receive.event:m.room.redaction",
+            "org.matrix.msc2762.receive.event:org.matrix.msc4310.rtc.decline",
+            "org.matrix.msc2762.receive.event:m.rtc.decline",
         )
-        assertThat(granted).hasSize(19)
+        assertThat(granted).hasSize(21)
         assertThat(start.isCompleted).isFalse()
 
         val notifyReply = driver.deliver(toWidget(NOTIFY_CAPABILITIES, "cap-2", approvedCapabilities()))

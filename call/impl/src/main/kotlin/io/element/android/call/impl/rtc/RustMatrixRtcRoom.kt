@@ -11,8 +11,9 @@ import android.content.Context
 import io.element.android.call.api.ElementCallDispatchers
 import io.element.android.call.api.rtc.MatrixRtcCall
 import io.element.android.call.api.rtc.MatrixRtcCallIntent
-import io.element.android.call.api.rtc.MatrixRtcNotificationType
-import io.element.android.call.api.rtc.MatrixRtcNotify
+import io.element.android.call.api.rtc.MatrixRtcCallKind
+import io.element.android.call.api.rtc.MatrixRtcGroupNotify
+import io.element.android.call.api.rtc.MatrixRtcRing
 import io.element.android.call.api.rtc.MatrixRtcRoom
 import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.call.impl.util.childScope
@@ -22,10 +23,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import org.matrix.rtc.FfiCallKind
+import org.matrix.rtc.FfiGroupNotify
 import org.matrix.rtc.FfiJoinSessionParams
 import org.matrix.rtc.FfiJoinTransport
-import org.matrix.rtc.FfiNotificationType
-import org.matrix.rtc.FfiNotifyConfig
+import org.matrix.rtc.FfiRingConfig
 import org.matrix.rtc.RtcRoom
 import timber.log.Timber
 
@@ -44,7 +46,7 @@ internal class RustMatrixRtcRoom(
     private var call: RustMatrixRtcCall? = null
     private var isShutdown = false
 
-    override suspend fun joinCall(applicationSlotId: String?, notify: MatrixRtcNotify?): Result<MatrixRtcCall> = runCatchingExceptions {
+    override suspend fun joinCall(kind: MatrixRtcCallKind, applicationSlotId: String?): Result<MatrixRtcCall> = runCatchingExceptions {
         mutex.withLock {
             check(!isShutdown) { "Room $roomId is shut down" }
             val rtcCall = withContext(ffiDispatcher) {
@@ -58,14 +60,14 @@ internal class RustMatrixRtcRoom(
                         stickyDurationMs = null,
                         degradedLifetimeMs = null,
                         encryptionConfig = null,
-                        notify = notify?.toFfi(),
+                        kind = kind.toFfi(),
                         reactions = null,
                     )
                 )
             }
             Timber.d(
                 "MatrixRTC: joined $roomId/${rtcCall.slotId()}, member id ${rtcCall.memberId()}" +
-                    ", notify ${notify?.let { "${it.type} (${it.intent})" } ?: "none"}"
+                    ", ${kind.describe()}"
             )
             RustMatrixRtcCall(
                 rtcCall = rtcCall,
@@ -95,18 +97,25 @@ internal class RustMatrixRtcRoom(
         Timber.i("MatrixRTC: $roomId shut down")
     }
 
-    private fun MatrixRtcNotify.toFfi(): FfiNotifyConfig = FfiNotifyConfig(
-        notificationType = when (type) {
-            MatrixRtcNotificationType.RING -> FfiNotificationType.RING
-            // The core spells the silent one NOTIFICATION where the receive side says NOTIFY.
-            MatrixRtcNotificationType.NOTIFY -> FfiNotificationType.NOTIFICATION
-        },
+    private fun MatrixRtcCallKind.toFfi(): FfiCallKind = when (this) {
+        is MatrixRtcCallKind.Group -> FfiCallKind.Group(notify?.toFfi())
+        is MatrixRtcCallKind.Direct -> FfiCallKind.Direct(ring?.toFfi())
+    }
+
+    private fun MatrixRtcGroupNotify.toFfi() = FfiGroupNotify(
         // Lowercase because it goes out verbatim as `m.call.intent`.
         intent = intent?.toWire(),
         lifetimeMs = lifetimeMs,
         mentionUserIds = mentionUserIds.map { it.value },
         mentionRoom = mentionRoom,
     )
+
+    private fun MatrixRtcRing.toFfi() = FfiRingConfig(lifetimeMs = lifetimeMs, intent = intent?.toWire())
+
+    private fun MatrixRtcCallKind.describe(): String = when (this) {
+        is MatrixRtcCallKind.Group -> "group, notify ${notify?.intent ?: "none"}"
+        is MatrixRtcCallKind.Direct -> "direct, ring ${ring?.let { "${it.intent} for ${it.lifetimeMs ?: "default"} ms" } ?: "none"}"
+    }
 
     private fun MatrixRtcCallIntent.toWire(): String = when (this) {
         MatrixRtcCallIntent.AUDIO -> "audio"
