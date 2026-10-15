@@ -688,7 +688,11 @@ private fun AudioDeviceButton(state: ElementCallScreenState) {
     RoundCallButton(
         // The icon is whatever audio is currently coming out of, so the route is readable without
         // opening anything - which is the question people actually have mid-call.
-        onClick = { isPickerVisible = true },
+        // Between the earpiece and the speaker alone, a toggle; anything else plugged in, the picker.
+        onClick = {
+            val other = state.audioDevices.builtInToggleTarget(state.selectedAudioDevice)
+            if (other != null) state.eventSink(ElementCallScreenEvent.SelectAudioDevice(other)) else isPickerVisible = true
+        },
         icon = selectedType.icon(),
         contentDescription = stringResource(R.string.element_call_audio_output_title),
         // Highlighted when audio goes anywhere but the earpiece - loudspeaker, headset, Bluetooth -

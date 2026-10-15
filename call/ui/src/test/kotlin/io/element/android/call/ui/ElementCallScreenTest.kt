@@ -19,10 +19,12 @@ import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -207,9 +209,13 @@ class ElementCallScreenTest : RobolectricTest() {
     }
 
     @Test
-    fun `the audio button opens the picker and choosing a device selects it`() = runAndroidComposeUiTest<ComponentActivity> {
+    fun `with a headset the audio button opens the picker and choosing a device selects it`() = runAndroidComposeUiTest<ComponentActivity> {
         val events = EventsRecorder<ElementCallScreenEvent>()
-        setContent { ElementCallScreen(state = anElementCallScreenState(eventSink = events)) }
+        setContent {
+            ElementCallScreen(
+            state = anElementCallScreenState(audioDevices = listOf(AN_EARPIECE, A_SPEAKER, A_BLUETOOTH_HEADSET), eventSink = events)
+        )
+        }
         waitForIdle()
         events.clear()
 
@@ -218,6 +224,23 @@ class ElementCallScreenTest : RobolectricTest() {
         clickOn(R.string.element_call_audio_device_speaker)
 
         events.assertSingle(ElementCallScreenEvent.SelectAudioDevice(A_SPEAKER))
+    }
+
+    @Test
+    fun `between the earpiece and the speaker alone the audio button toggles, with no picker`() = runAndroidComposeUiTest<ComponentActivity> {
+        val events = EventsRecorder<ElementCallScreenEvent>()
+        setContent {
+            ElementCallScreen(
+            state = anElementCallScreenState(audioDevices = listOf(AN_EARPIECE, A_SPEAKER), selectedAudioDevice = AN_EARPIECE, eventSink = events)
+        )
+        }
+        waitForIdle()
+        events.clear()
+
+        clickOnContentDescription(R.string.element_call_audio_output_title)
+
+        events.assertSingle(ElementCallScreenEvent.SelectAudioDevice(A_SPEAKER))
+        onAllNodesWithText(activity!!.getString(R.string.element_call_audio_device_speaker)).assertCountEquals(0)
     }
 
     /** Upright, hiding the chrome takes the control bar and leaves the top bar (spec 014 R30). */
