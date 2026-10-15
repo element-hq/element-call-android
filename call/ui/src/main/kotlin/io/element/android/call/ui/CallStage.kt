@@ -48,6 +48,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateSetOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -377,6 +378,10 @@ internal fun CallStage(
             lastTiles.value = state.tiles
         }
 
+        // Hidden tiles that have finished fading out, and the ones hidden before they were ever shown.
+        val fadedOut = remember { mutableStateSetOf<String>().apply { addAll(layout.hiddenTileIds) } }
+        LaunchedEffect(layout.hiddenTileIds) { fadedOut.retainAll(layout.hiddenTileIds) }
+
         val hooks = LocalCallStageTestHooks.current
         if (hooks != null) {
             SideEffect {
@@ -408,7 +413,7 @@ internal fun CallStage(
         val onOwnVideoSize: (IntSize) -> Unit = { size -> ownVideoAspect = size.aspect() }
         val gridIndex = remember(gridTileIds) { gridTileIds.withIndex().associate { it.value to it.index } }
         @Composable
-        fun Placed(tile: CallTileData, isPresent: Boolean) {
+        fun Placed(tile: CallTileData, isPresent: Boolean, onExit: () -> Unit = { leavers.remove(tile.tileId) }) {
             val slot = lastSlots[tile.tileId] ?: return
             // The sticky speaker is live unless something else fills the stage (000 R17); a grid
             // tile while its rect overlaps the viewport, and near while within half a viewport of it.
@@ -444,7 +449,7 @@ internal fun CallStage(
                 isVisible = isVisible,
                 isNear = isNear,
                 isPresent = isPresent,
-                onExit = { leavers.remove(tile.tileId) },
+                onExit = onExit,
                 isArrival = tile.tileId !in knownIds,
                 stats = state.tileStats(tile, slot.rect),
                 onLongPress = if (isRinging) {
@@ -499,6 +504,11 @@ internal fun CallStage(
             key(tile.tileId) { Placed(tile, isPresent = true) }
         }
         leavers.values.forEach { tile -> key(tile.tileId) { Placed(tile, isPresent = false) } }
+        // Our own tile hidden by the layout fades out where it was; shown again it is there at once (030 R17).
+        state.tiles.forEach { tile ->
+            if (!tile.isLocal || tile.tileId !in hiddenIds || tile.tileId in fadedOut) return@forEach
+            key(tile.tileId) { Placed(tile, isPresent = false, onExit = { fadedOut += tile.tileId }) }
+        }
 
         val choice = state.spotlight
         if (choice is CallSpotlight.Choice.Hero && spotlightRect != null && heroIds.isNotEmpty()) {
