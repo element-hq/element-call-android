@@ -138,10 +138,13 @@ class FakeMatrixRtcCall(
     /** Called as media is asked for, before it connects: what a test checks has happened by then. */
     var onConnectMedia: () -> Unit = {}
 
+    /** The session [connectMedia] connects: a harness gives it pictures and our own tile. */
+    var newMediaSession: () -> FakeMatrixRtcMediaSession = { FakeMatrixRtcMediaSession() }
+
     override suspend fun connectMedia(): Result<MatrixRtcMediaSession> {
         connectMediaCount++
         onConnectMedia()
-        return Result.success(FakeMatrixRtcMediaSession().also { lastMediaSession = it }).also {
+        return Result.success(newMediaSession().also { lastMediaSession = it }).also {
             if (status.value == MatrixRtcCallStatus.Connecting) status.value = MatrixRtcCallStatus.Connected(connectedSinceMs, degraded = false)
         }
     }
@@ -155,7 +158,10 @@ class FakeMatrixRtcCall(
     override fun close() = Unit
 }
 
-class FakeMatrixRtcMediaSession : MatrixRtcMediaSession {
+class FakeMatrixRtcMediaSession(
+    /** Pictures for a harness to draw; null opens streams that never send a frame, which is what a test counts. */
+    private val frames: ((memberId: String, kind: MatrixRtcStreamKind) -> Flow<MatrixRtcVideoFrame>)? = null,
+) : MatrixRtcMediaSession {
     override val localMemberId: String = "aLocalMemberId"
 
     private val _events = MutableSharedFlow<MatrixRtcCallEvent>(extraBufferCapacity = 8)
@@ -270,6 +276,7 @@ class FakeMatrixRtcMediaSession : MatrixRtcMediaSession {
     override fun videoFrames(memberId: String, kind: MatrixRtcStreamKind): Flow<MatrixRtcVideoFrame> {
         val ref = MatrixRtcStreamRef(memberId, kind)
         videoFramesRequests += ref
+        frames?.let { return it(memberId, kind) }
         return flow {
             openVideoStreams[ref] = (openVideoStreams[ref] ?: 0) + 1
             videoStreamOpenCounts[ref] = (videoStreamOpenCounts[ref] ?: 0) + 1

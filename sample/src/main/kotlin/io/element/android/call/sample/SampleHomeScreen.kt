@@ -39,6 +39,7 @@ fun SampleHomeScreen(
     isStyleOverridden: Boolean,
     onToggleStyle: () -> Unit,
     onOpen: (SampleFixture) -> Unit,
+    onOpenRinging: (SampleRingingFixture) -> Unit,
     onOpenScenario: (String) -> Unit,
     modifier: Modifier = Modifier,
     launchError: String? = null,
@@ -116,6 +117,32 @@ fun SampleHomeScreen(
                     }
                     HorizontalDivider()
                 }
+            }
+            item {
+                Text(
+                    text = "Ringing",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                )
+                Text(
+                    text = "A DM call to Bob on the real controller, with its sounds: the ring goes out at 0.5 s, the outcome comes at 6 s.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
+            items(SampleRingingFixture.entries, key = { it.key }) { fixture ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenRinging(fixture) }
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                ) {
+                    Text(text = fixture.title, style = MaterialTheme.typography.bodyLarge)
+                    Text(text = fixture.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(text = fixture.key, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                }
+                HorizontalDivider()
             }
             item {
                 Text(

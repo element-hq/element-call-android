@@ -27,6 +27,13 @@ internal fun launchSample(fixture: SampleFixture): ActivityScenario<SampleActivi
     return ActivityScenario.launch(intent)
 }
 
+/** Open the sample straight into a ringing [fixture], on the real controller. */
+internal fun launchSample(fixture: SampleRingingFixture): ActivityScenario<SampleActivity> {
+    val intent = Intent(ApplicationProvider.getApplicationContext(), SampleActivity::class.java)
+        .putExtra(SampleActivity.EXTRA_FIXTURE, fixture.key)
+    return ActivityScenario.launch(intent)
+}
+
 /**
  * How many distinct colours a sampled grid of [image] holds, quantised so that compression and
  * dithering do not count. A rendered colour-bar frame has eight; an avatar disc on a flat background

@@ -28,24 +28,27 @@ import java.util.zip.ZipFile
  * means to: `adb shell am start -n io.element.android.call.sample/.SampleActivity --es fixture group`.
  */
 class SampleActivity : ComponentActivity() {
-    internal lateinit var controller: SampleElementCallController
+    internal lateinit var controller: SampleCallController
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        controller = SampleElementCallController(scope = lifecycleScope)
+        controller = SampleCallController(context = this, scope = lifecycleScope)
         ElementCallPictureInPicture.attach(this, controller)
 
         val scenarios = listScenarios()
         val requested = intent.getStringExtra(EXTRA_FIXTURE)
         val fixture = requested?.let(SampleFixture::fromKey)
         fixture?.let { controller.start(it.snapshot()) }
+        val ringingFixture = requested?.let(SampleRingingFixture::fromKey)
+        ringingFixture?.let { controller.startRinging(it) }
         val requestedScenario = intent.getStringExtra(EXTRA_SCENARIO)
         val scenario = requestedScenario?.takeIf { it in scenarios }?.let(MatrixRtcScenario::load)
         // On the home screen rather than only in the log: a test that asked for a fixture that is not
         // there otherwise fails on a missing tile, which is true and about nothing.
         val launchError = when {
-            requested != null && fixture == null -> "Unknown fixture '$requested'. Known: ${SampleFixture.entries.joinToString { it.key }}"
+            requested != null && fixture == null && ringingFixture == null ->
+                "Unknown fixture '$requested'. Known: ${(SampleFixture.entries.map { it.key } + SampleRingingFixture.entries.map { it.key }).joinToString()}"
             requestedScenario != null && scenario == null -> "Unknown scenario '$requestedScenario'. Known: ${scenarios.joinToString()}"
             else -> null
         }
