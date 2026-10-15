@@ -1107,7 +1107,7 @@ stopgap is:
 - `Client.sendToDeviceMessage(eventType, messages, encrypt)` returning per-recipient failures.
 - `Client.subscribeToToDeviceMessages(eventTypes)` delivering the **encryption info**: attested sender, sender device
   id and cross-signing status. The widget path delivers `{type, content, sender, encrypted}` only.
-- Sticky events (MSC4354) come from the SDK since `sdk-android` 26.10.12-nightly: `Room.sendStickyRaw`,
+- Sticky events (MSC4354) come from the SDK (`sdk-android` 26.10.15): `Room.sendStickyRaw`,
   `stickyEvents` and `subscribeToStickyEvents`, with encryption info. Calls stay pinned to the state-event mode
   (`DefaultElementCallController`; `ElementCallOptions.membershipFormat` is read but not obeyed) until the sticky
   modes have been tried against other clients; their delayed leave still goes through the bridge, and item 5 applies.

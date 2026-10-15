@@ -176,7 +176,7 @@ object SdkSurface {
         SdkMember("$SDK.WidgetDriverHandle", "close", emptyList()),
         SdkMember("$SDK.WidgetCapabilitiesProvider", "acquireCapabilities", listOf("WidgetCapabilities", CONTINUATION)),
         // The exact arity matters: `copy` with a new field is a different descriptor and a different `copy$default`.
-        SdkMember("$SDK.WidgetCapabilities", "copy", listOf("List", "List", "boolean", "boolean", "boolean", "boolean", "boolean")),
+        SdkMember("$SDK.WidgetCapabilities", "copy", listOf("List", "List", "boolean", "boolean", "boolean", "boolean", "boolean", "boolean", "boolean")),
         SdkMember("$SDK.WidgetEventFilter\$StateWithType", SdkMember.CONSTRUCTOR, listOf("String")),
         SdkMember("$SDK.WidgetEventFilter\$ToDevice", SdkMember.CONSTRUCTOR, listOf("String")),
         SdkMember("$SDK.WidgetEventFilter\$MessageLikeWithType", SdkMember.CONSTRUCTOR, listOf("String")),

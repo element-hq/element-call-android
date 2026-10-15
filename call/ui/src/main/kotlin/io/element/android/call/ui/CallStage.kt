@@ -382,6 +382,15 @@ internal fun CallStage(
         val fadedOut = remember { mutableStateSetOf<String>().apply { addAll(layout.hiddenTileIds) } }
         LaunchedEffect(layout.hiddenTileIds) { fadedOut.retainAll(layout.hiddenTileIds) }
 
+        // Who left in this very frame, before the effect above records them: without them for one frame the stage
+        // shows neither the leaver nor what was under it.
+        val presentIds = state.tiles.mapTo(mutableSetOf()) { it.tileId }
+        val outgoing = LinkedHashMap(leavers).apply {
+            lastTiles.value.forEach { tile -> if (tile.tileId !in presentIds) putIfAbsent(tile.tileId, tile) }
+        }
+        // A ringing callee handing over to their tile: theirs is there at once, under the avatar fading out (030 R21).
+        val isRingHandover = outgoing.values.any { it.ring != null }
+
         val hooks = LocalCallStageTestHooks.current
         if (hooks != null) {
             SideEffect {
@@ -450,7 +459,7 @@ internal fun CallStage(
                 isNear = isNear,
                 isPresent = isPresent,
                 onExit = onExit,
-                isArrival = tile.tileId !in knownIds,
+                isArrival = tile.tileId !in knownIds && !isRingHandover,
                 stats = state.tileStats(tile, slot.rect),
                 onLongPress = if (isRinging) {
                     NoOp
@@ -507,7 +516,7 @@ internal fun CallStage(
             if (!isComposed) return@forEach
             key(tile.tileId) { Placed(tile, isPresent = !isFadingOut, onExit = { fadedOut += tile.tileId }) }
         }
-        leavers.values.forEach { tile -> key(tile.tileId) { Placed(tile, isPresent = false) } }
+        outgoing.values.forEach { tile -> key(tile.tileId) { Placed(tile, isPresent = false) } }
 
         val choice = state.spotlight
         if (choice is CallSpotlight.Choice.Hero && spotlightRect != null && heroIds.isNotEmpty()) {

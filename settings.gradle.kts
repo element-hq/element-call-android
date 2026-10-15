@@ -18,13 +18,6 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        // Nightly builds of the SDK bindings, published as GitHub release assets; Element X resolves them the same way.
-        ivy {
-            url = uri("https://github.com/matrix-org/matrix-rust-components-kotlin/releases/download")
-            patternLayout { artifact("sdk-[revision]/[artifact]-[revision](-[classifier])(.[ext])") }
-            metadataSources { gradleMetadata() }
-            content { includeModule("org.matrix.rustcomponents", "sdk-android") }
-        }
         // The matrix-rust-rtc core, io.element.android:matrix-rtc-android, as the file in rtc/local: the
         // release gradle.properties pins (./tools/rtc/fetch-rust-rtc) or a local build (./tools/rtc/build-rust-rtc).
         // The pattern names no version on purpose - whatever file is there is the core, and rtc/local
