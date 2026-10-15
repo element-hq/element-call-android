@@ -149,6 +149,8 @@ fun CallTile(
             )
         } else {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                // One to one, the picture fills the screen and has no edge for the speaking ring.
+                if (appearance == CallTileAppearance.FullBleed) SpeakingPulses(isSpeaking = tile.isActiveSpeaker, avatarSize = ElementCallAvatarSize.Spotlight)
                 // Falls back to an id-derived avatar when the member list has not loaded yet, rather
                 // than showing nothing: the initial and colour come out of the user id, so the
                 // placeholder is already stable and turns into the real avatar without the tile

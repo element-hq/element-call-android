@@ -399,7 +399,7 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
 
 /** Settings, Accessibility, Remove animations: Android's reduce motion (014 R25). */
 @Composable
-private fun rememberReduceMotion(): Boolean {
+internal fun rememberReduceMotion(): Boolean {
     val context = LocalContext.current
     return remember(context) { Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f }
 }
