@@ -197,7 +197,7 @@ private fun UnmountedStageWindow(
     spotlightMemory: CallSpotlightMemory,
     isStageMounted: Boolean,
 ) {
-    val shown = current.pictureInPictureCandidate(spotlightMemory.spotlightId)?.id
+    val shown = current.pictureInPictureCandidate(spotlightMemory.spotlightId)?.takeUnless { it.isRingingCallee }?.id
     LaunchedEffect(isStageMounted, shown) {
         if (isStageMounted) return@LaunchedEffect
         controller.setComposedTiles(setOfNotNull(shown))

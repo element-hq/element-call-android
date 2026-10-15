@@ -20,6 +20,8 @@ data class PictureInPictureCandidate(
     val roomMember: ElementCallRoomMember?,
     val hasVideo: Boolean,
     val isLocal: Boolean,
+    /** The callee a DM call rings: drawn, never a tile of the call's (030 R34). */
+    val isRingingCallee: Boolean,
 ) {
     val kind: MatrixRtcStreamKind get() = id.kind.videoStreamKind
 }
@@ -34,6 +36,10 @@ data class PictureInPictureCandidate(
  * video" scans.
  */
 fun ElementCallSnapshot.pictureInPictureCandidate(spotlightId: MatrixRtcTileId?): PictureInPictureCandidate? {
+    // While a DM call rings, the person it rings, not our own camera (030 R34).
+    connection.ringingCallee(roomMembers)?.let { callee ->
+        return PictureInPictureCandidate(callee.id, callee.userId, callee.roomMember, hasVideo = false, isLocal = false, isRingingCallee = true)
+    }
     // Named only by a small call with nobody else in it (019 R15).
     if (spotlightId != null && spotlightId == ownTile?.id) return ownCandidate()
     val order = roster.order
@@ -47,6 +53,7 @@ fun ElementCallSnapshot.pictureInPictureCandidate(spotlightId: MatrixRtcTileId?)
             roomMember = roomMembers[chosen.userId],
             hasVideo = roster.detail[chosen.id]?.hasVideo == true,
             isLocal = false,
+            isRingingCallee = false,
         )
     }
     return ownCandidate()
@@ -60,5 +67,6 @@ private fun ElementCallSnapshot.ownCandidate(): PictureInPictureCandidate? {
         roomMember = roomMembers[own.userId],
         hasVideo = isCameraEnabled,
         isLocal = true,
+        isRingingCallee = false,
     )
 }
