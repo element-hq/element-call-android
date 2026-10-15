@@ -14,6 +14,7 @@ import io.element.android.call.api.ElementCallOptions
 import io.element.android.call.api.ElementCallRoomContext
 import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.rtc.MatrixRtcCallEnd
+import io.element.android.call.api.rtc.MatrixRtcCallEvent
 import io.element.android.call.api.rtc.MatrixRtcCallStatus
 import io.element.android.call.api.rtc.MatrixRtcLocalState
 import io.element.android.call.api.rtc.MatrixRtcMediaPhase
@@ -121,7 +122,10 @@ class SampleRingingCall(context: Context, private val scope: CoroutineScope, pri
         if (call.status.value !is MatrixRtcCallStatus.Calling) return
         call.status.value = when (fixture.outcome) {
             SampleRingingFixture.Outcome.PICKUP -> {
-                call.lastMediaSession?.pushRoster(aRoster(tile(BOB_NAME, hasVideo = !fixture.isAudioCall)))
+                val session = call.lastMediaSession
+                session?.pushRoster(aRoster(tile(BOB_NAME, hasVideo = !fixture.isAudioCall)))
+                // As the core announces it: Bob joins after us, which plays the join sound (024 R1).
+                session?.emit(MatrixRtcCallEvent.ParticipantJoined(SampleFixture.memberIdOf(BOB_NAME), BOB, participantCount = 2))
                 MatrixRtcCallStatus.Connected(sinceMs = System.currentTimeMillis(), degraded = false)
             }
             SampleRingingFixture.Outcome.DECLINE -> MatrixRtcCallStatus.Ended(MatrixRtcCallEnd.Declined)
