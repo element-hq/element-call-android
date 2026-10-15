@@ -10,6 +10,7 @@ package io.element.android.call.impl
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.ElementCallData
+import io.element.android.call.api.ElementCallEndReason
 import io.element.android.call.api.ElementCallHandRequestFailure
 import io.element.android.call.api.ElementCallLifecycleListener
 import io.element.android.call.api.ElementCallOptions
@@ -19,6 +20,7 @@ import io.element.android.call.api.audio.AudioFocus
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.audio.CallAudioDeviceController
 import io.element.android.call.api.rtc.MatrixRtcCall
+import io.element.android.call.api.rtc.MatrixRtcCallEnd
 import io.element.android.call.api.rtc.MatrixRtcCallEvent
 import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.MatrixRtcCallKind
@@ -30,6 +32,7 @@ import io.element.android.call.api.rtc.MatrixRtcLeaveReason
 import io.element.android.call.api.rtc.MatrixRtcMediaSession
 import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 import io.element.android.call.api.rtc.MatrixRtcRing
+import io.element.android.call.api.rtc.MatrixRtcRingPhase
 import io.element.android.call.api.rtc.MatrixRtcRoom
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
@@ -517,13 +520,22 @@ internal class DefaultElementCallController(
             return
         }
         rtcRoom = room
-        val joined = room.joinCall(kind = callKindFor(callData)).getOrElse {
+        val kind = callKindFor(callData)
+        // A DM call we start shows that it is calling from here, before the join returns (030 C3).
+        if (kind is MatrixRtcCallKind.Direct && kind.ring != null) {
+            updateState { it.copy(connection = ElementCallConnection.Calling(callee = null, isRinging = false)) }
+        }
+        val joined = room.joinCall(kind = kind).getOrElse {
             fail("Join failed: ${it.message}")
             return
         }
         rtcCall = joined
+        // Whatever was ringing for this call has now been answered. Until this lands the host's
+        // ringtone keeps playing over the call, its incoming UI stays up, and its missed-call timeout
+        // still fires - so answering looks like it failed while actually having worked. A no-op for an
+        // outgoing call, which was never ringing.
+        lifecycleListener.onCallJoined(callData)
 
-        updateState { it.copy(connection = ElementCallConnection.ConnectingMedia) }
         // coroutineScope holds until the observers are cancelled, which is what teardown does.
         coroutineScope {
             // From the join, not from media: the call can end, a DM's ring included, before media is up.
@@ -574,12 +586,6 @@ internal class DefaultElementCallController(
 
         startObservers(joined, connected)
 
-        // Whatever was ringing for this call has now been answered. Until this lands the host's
-        // ringtone keeps playing over the connected call, its incoming UI stays up, and its
-        // missed-call timeout still fires - so answering looks like it failed while actually
-        // having worked. A no-op for an outgoing call, which was never ringing.
-        lifecycleListener.onCallJoined(callData)
-
         // A video call starts with the camera on. The caller asked for video and the callee
         // answered a notification that said video, so making them find the camera button is
         // asking a question they already answered - unless they answered it again by turning the
@@ -603,7 +609,10 @@ internal class DefaultElementCallController(
     private fun CoroutineScope.observeStatus(rtcCall: MatrixRtcCall): Job = launch(start = CoroutineStart.UNDISPATCHED) {
         rtcCall.status.collect { status ->
             when (status) {
-                MatrixRtcCallStatus.Connecting, is MatrixRtcCallStatus.Calling -> Unit
+                MatrixRtcCallStatus.Connecting -> updateState { it.copy(connection = ElementCallConnection.ConnectingMedia) }
+                is MatrixRtcCallStatus.Calling -> updateState {
+                    it.copy(connection = ElementCallConnection.Calling(status.callee, isRinging = status.ring is MatrixRtcRingPhase.Ringing))
+                }
                 is MatrixRtcCallStatus.Connected -> updateState {
                     it.copy(
                         connection = if (status.degraded) ElementCallConnection.Degraded else ElementCallConnection.Connected,
@@ -614,6 +623,11 @@ internal class DefaultElementCallController(
                     Timber.i("ElementCall: the call ended, ${status.reason}")
                     joinLeaveSoundPolicy?.silence()
                     raisedHandSoundPolicy?.silence()
+                    // The caller is told, and dismisses it (030 R4); every other end closes the screen at once.
+                    if (status.reason == MatrixRtcCallEnd.RingNotSent) {
+                        updateState { it.copy(connection = ElementCallConnection.RingNotSent) }
+                        return@collect
+                    }
                     updateState { it.copy(connection = ElementCallConnection.Ended) }
                     // Torn down from a coroutine of its own, not this one: endCall cancels the job this
                     // collector runs in, and a coroutine cannot wait for its own death. Never left again:
@@ -622,6 +636,17 @@ internal class DefaultElementCallController(
                 }
             }
         }
+    }
+
+    private fun MatrixRtcCallEnd.toEndReason(): ElementCallEndReason = when (this) {
+        MatrixRtcCallEnd.Left -> ElementCallEndReason.LEFT
+        MatrixRtcCallEnd.Declined -> ElementCallEndReason.DECLINED
+        MatrixRtcCallEnd.Unanswered -> ElementCallEndReason.UNANSWERED
+        MatrixRtcCallEnd.RingNotSent -> ElementCallEndReason.RING_NOT_SENT
+        MatrixRtcCallEnd.OthersLeft -> ElementCallEndReason.OTHERS_LEFT
+        MatrixRtcCallEnd.Empty -> ElementCallEndReason.EMPTY
+        MatrixRtcCallEnd.SlotClosed -> ElementCallEndReason.SLOT_CLOSED
+        is MatrixRtcCallEnd.ConnectionClosed -> ElementCallEndReason.CONNECTION_CLOSED
     }
 
     /** The core's wall-clock moment on the monotonic clock durations are counted on. */
@@ -761,8 +786,10 @@ internal class DefaultElementCallController(
         // block a start for the next call behind a network round trip.
         leavingCall?.disconnect()
         leavingCall?.close()
+        // Read before leaving, which ends it as Left: any other end is one the core has already left on.
+        val coreEnd = (leavingRtcCall?.status?.value as? MatrixRtcCallStatus.Ended)?.reason
         if (leavingRtcCall != null) {
-            if (leave) leavingRtcCall.leave(MatrixRtcLeaveReason(code = HANGUP_REASON))
+            if (leave && coreEnd == null) leavingRtcCall.leave(MatrixRtcLeaveReason(code = HANGUP_REASON))
             leavingRtcCall.close()
         }
         // Last: the leave goes through the room.
@@ -773,7 +800,7 @@ internal class DefaultElementCallController(
         platform.stopForegroundService()
         // Clears the host's active call, and stops a ring that never got answered - hanging up from
         // the call screen while the far end is still ringing us is a real sequence, not a hypothetical.
-        lifecycleListener.onCallEnded(endedCallData)
+        lifecycleListener.onCallEnded(endedCallData, coreEnd?.toEndReason() ?: ElementCallEndReason.LEFT)
     }
 
     internal companion object {

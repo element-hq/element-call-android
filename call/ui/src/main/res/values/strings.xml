@@ -58,6 +58,8 @@
     <string name="element_call_audio_device_earpiece">Phone</string>
     <string name="element_call_audio_device_speaker">Speaker</string>
     <string name="element_call_connecting">Connecting…</string>
+    <string name="element_call_calling">Calling…</string>
+    <string name="element_call_ring_not_sent">The other person could not be called</string>
     <string name="element_call_connection_unstable">Connection unstable</string>
     <string name="element_call_call_ended">Call ended</string>
     <string name="element_call_call_failed">Call failed</string>

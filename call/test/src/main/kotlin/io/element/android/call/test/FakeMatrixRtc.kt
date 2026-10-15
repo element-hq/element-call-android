@@ -31,6 +31,7 @@ import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.call.api.rtc.windowed
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -41,6 +42,8 @@ import kotlinx.coroutines.flow.flow
 class FakeMatrixRtcClient(
     private val roomResult: () -> Result<MatrixRtcRoom>? = { null },
     private val joinResult: () -> Result<MatrixRtcCall>? = { null },
+    /** Completed by a test to let a join return; a join waits on it while it is pending. */
+    private val joinGate: CompletableDeferred<Unit>? = null,
 ) : MatrixRtcClient {
     var roomCount = 0
         private set
@@ -56,13 +59,14 @@ class FakeMatrixRtcClient(
         roomCount++
         lastMembershipFormat = format
         roomResult()?.let { return it }
-        return Result.success(FakeMatrixRtcRoom(roomId, joinResult).also { lastRoom = it })
+        return Result.success(FakeMatrixRtcRoom(roomId, joinResult, joinGate).also { lastRoom = it })
     }
 }
 
 class FakeMatrixRtcRoom(
     override val roomId: RoomId,
     private val joinResult: () -> Result<MatrixRtcCall>? = { null },
+    private val joinGate: CompletableDeferred<Unit>? = null,
 ) : MatrixRtcRoom {
     var joinCallCount = 0
         private set
@@ -76,6 +80,7 @@ class FakeMatrixRtcRoom(
     override suspend fun joinCall(kind: MatrixRtcCallKind, applicationSlotId: String?): Result<MatrixRtcCall> {
         joinCallCount++
         lastKind = kind
+        joinGate?.await()
         joinResult()?.let { return it }
         return Result.success(FakeMatrixRtcCall(roomId, "m.call#${applicationSlotId ?: "room"}").also { lastCall = it })
     }

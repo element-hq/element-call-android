@@ -12,6 +12,7 @@ import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallData
+import io.element.android.call.api.ElementCallEndReason
 import io.element.android.call.api.ElementCallHandRequestFailure
 import io.element.android.call.api.ElementCallOptions
 import io.element.android.call.api.ElementCallRoomContext
@@ -311,7 +312,7 @@ class DefaultElementCallControllerTest {
     @Test
     fun `a call that ends before its media connects is torn down`() = runTest {
         val call = FakeMatrixRtcCall(A_ROOM_ID, "m.call#room")
-        call.status.value = MatrixRtcCallStatus.Ended(MatrixRtcCallEnd.RingNotSent)
+        call.status.value = MatrixRtcCallStatus.Ended(MatrixRtcCallEnd.Declined)
         val rtcClient = FakeMatrixRtcClient(joinResult = { Result.success(call) })
         val controller = createController(rtcClient = rtcClient, roomIsDm = true)
 
@@ -338,7 +339,7 @@ class DefaultElementCallControllerTest {
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
 
-        assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.ConnectingMedia)
+        assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.Calling(calling.callee, isRinging = true))
         assertThat(controller.state.value?.connectedAtElapsedMs).isNull()
 
         // Picked up three seconds ago, on the core's wall clock.
@@ -347,6 +348,87 @@ class DefaultElementCallControllerTest {
 
         assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.Connected)
         assertThat(controller.state.value?.connectedAtElapsedMs).isEqualTo(7_000L)
+    }
+
+    @Test
+    fun `a DM call we start shows that it is calling, then rings, then connects at pickup`() = runTest {
+        val call = FakeMatrixRtcCall(A_ROOM_ID, "m.call#room")
+        val callee = UserId("@callee:example.org")
+        val controller = createController(rtcClient = FakeMatrixRtcClient(joinResult = { Result.success(call) }), roomIsDm = true)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+
+        call.status.value = MatrixRtcCallStatus.Calling(callee, MatrixRtcRingPhase.Sending, MatrixRtcMediaPhase.Connecting)
+        runCurrent()
+        assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.Calling(callee, isRinging = false))
+
+        call.status.value = MatrixRtcCallStatus.Calling(callee, MatrixRtcRingPhase.Ringing(0L, 90_000L), MatrixRtcMediaPhase.Connecting)
+        runCurrent()
+        assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.Calling(callee, isRinging = true))
+
+        call.status.value = MatrixRtcCallStatus.Connected(sinceMs = 0L, degraded = false)
+        runCurrent()
+        assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.Connected)
+    }
+
+    @Test
+    fun `a DM call shows that it is calling while the join is in flight`() = runTest {
+        val joinGate = CompletableDeferred<Unit>()
+        val rtcClient = FakeMatrixRtcClient(joinGate = joinGate)
+        val controller = createController(rtcClient = rtcClient, roomIsDm = true)
+
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+
+        assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.Calling(callee = null, isRinging = false))
+        joinGate.complete(Unit)
+    }
+
+    /** 030 R4: the caller is told, and the call has already been left by the core. */
+    @Test
+    fun `a ring that could not be sent is shown until dismissed, and is not left again`() = runTest {
+        val rtcClient = FakeMatrixRtcClient()
+        val lifecycleListener = FakeElementCallLifecycleListener()
+        val controller = createController(rtcClient = rtcClient, roomIsDm = true, lifecycleListener = lifecycleListener)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+
+        rtcClient.lastCall!!.status.value = MatrixRtcCallStatus.Ended(MatrixRtcCallEnd.RingNotSent)
+        runCurrent()
+        assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.RingNotSent)
+
+        controller.hangUp()
+        runCurrent()
+        assertThat(controller.state.value).isNull()
+        assertThat(rtcClient.lastCall?.leaveCount).isEqualTo(0)
+        assertThat(lifecycleListener.endReasons).containsExactly(ElementCallEndReason.RING_NOT_SENT)
+    }
+
+    @Test
+    fun `the host is told why the call ended`() = runTest {
+        val rtcClient = FakeMatrixRtcClient()
+        val lifecycleListener = FakeElementCallLifecycleListener()
+        val controller = createController(rtcClient = rtcClient, roomIsDm = true, lifecycleListener = lifecycleListener)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+
+        rtcClient.lastCall!!.status.value = MatrixRtcCallStatus.Ended(MatrixRtcCallEnd.OthersLeft)
+        runCurrent()
+
+        assertThat(lifecycleListener.endReasons).containsExactly(ElementCallEndReason.OTHERS_LEFT)
+    }
+
+    @Test
+    fun `a hang-up is reported as ours`() = runTest {
+        val lifecycleListener = FakeElementCallLifecycleListener()
+        val controller = createController(lifecycleListener = lifecycleListener)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+
+        controller.hangUp()
+        runCurrent()
+
+        assertThat(lifecycleListener.endReasons).containsExactly(ElementCallEndReason.LEFT)
     }
 
     @Test

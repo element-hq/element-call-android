@@ -754,6 +754,8 @@ private fun ElementCallConnection.label(): String = when (this) {
     ElementCallConnection.RequestingPermission,
     ElementCallConnection.Joining,
     ElementCallConnection.ConnectingMedia -> stringResource(R.string.element_call_connecting)
+    is ElementCallConnection.Calling -> stringResource(R.string.element_call_calling)
+    ElementCallConnection.RingNotSent -> stringResource(R.string.element_call_ring_not_sent)
     ElementCallConnection.Connected -> stringResource(R.string.element_call_call_in_progress)
     ElementCallConnection.Degraded -> stringResource(R.string.element_call_connection_unstable)
     is ElementCallConnection.Failed -> stringResource(R.string.element_call_call_failed)
