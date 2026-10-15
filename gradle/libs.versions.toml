@@ -19,7 +19,7 @@ activity = "1.13.0"
 compose_bom = "2026.08.00"
 
 # The matrix-rust-rtc core. Must match MATRIX_RTC_VERSION and MATRIX_RTC_AAR_URL in gradle.properties.
-matrix_rtc = "0.5.0-rc.4"
+matrix_rtc = "0.5.0-rc.5"
 
 # Coroutines
 coroutines = "1.11.0"
@@ -106,8 +106,9 @@ test_composable_preview_scanner = "io.github.sergio-sastre.ComposablePreviewScan
 # Matrix SDK
 # Only call/matrix depends on it. The version here is the one the library is compiled against and is
 # declared as a plain `require` in the published POM; Element X pins its own SDK `strictly`. When
-# upgrading, run the SDK compatibility checks (see AGENTS.md).
-matrix_sdk = "org.matrix.rustcomponents:sdk-android:26.09.26"
+# upgrading, run the SDK compatibility checks (see AGENTS.md). A nightly, for the sticky events: it resolves from
+# the bindings' GitHub releases (settings.gradle.kts), as Element X's does.
+matrix_sdk = "org.matrix.rustcomponents:sdk-android:26.10.12-nightly"
 
 # Others
 serialization_json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization_json" }

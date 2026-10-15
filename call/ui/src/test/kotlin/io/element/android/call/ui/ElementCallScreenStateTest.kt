@@ -788,7 +788,7 @@ class ElementCallScreenStateTest {
         roster: MatrixRtcTileRoster = tiles.previewRoster(),
         isDm: Boolean = false,
     ) = ElementCallSnapshot(
-        callData = ElementCallData(roomId = A_ROOM_ID, isAudioCall = true),
+        callData = ElementCallData(roomId = A_ROOM_ID, isAudioCall = true, isStartingCall = true),
         connection = ElementCallConnection.Connected,
         isMicrophonePermissionGranted = true,
         roster = roster,

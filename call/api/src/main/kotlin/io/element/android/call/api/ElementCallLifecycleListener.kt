@@ -32,14 +32,14 @@ interface ElementCallLifecycleListener {
      */
     fun onCallStarted(callData: ElementCallData)
 
-    /** The call is joined and media is connected: whatever was ringing for it has been answered. */
+    /** The call is joined, before its media connects: whatever was ringing for it has been answered. */
     fun onCallJoined(callData: ElementCallData)
 
     /**
-     * The call is over, whichever side ended it. [callData] is what [onCallStarted] received, or null
+     * The call is over, whichever side ended it, and why. [callData] is what [onCallStarted] received, or null
      * in the one case a call is torn down before it had a snapshot.
      */
-    fun onCallEnded(callData: ElementCallData?)
+    fun onCallEnded(callData: ElementCallData?, reason: ElementCallEndReason)
 }
 
 /** The default: a host with nothing to track, always in the foreground. */
@@ -50,5 +50,5 @@ object NoOpElementCallLifecycleListener : ElementCallLifecycleListener {
 
     override fun onCallJoined(callData: ElementCallData) = Unit
 
-    override fun onCallEnded(callData: ElementCallData?) = Unit
+    override fun onCallEnded(callData: ElementCallData?, reason: ElementCallEndReason) = Unit
 }

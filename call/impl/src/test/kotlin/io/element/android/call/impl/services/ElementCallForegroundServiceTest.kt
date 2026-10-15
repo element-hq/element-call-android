@@ -24,9 +24,9 @@ class ElementCallForegroundServiceTest {
 
         state.notificationContentChanges().test {
             state.value = aCall(isMicrophoneMuted = true)
-            assertThat(awaitItem()).isEqualTo(NotificationContent(roomName = A_ROOM_NAME, isMuted = true))
+            assertThat(awaitItem()).isEqualTo(NotificationContent(roomName = A_ROOM_NAME, isMuted = true, isCalling = false, connectedAtElapsedMs = null))
             state.value = aCall(isMicrophoneMuted = false)
-            assertThat(awaitItem()).isEqualTo(NotificationContent(roomName = A_ROOM_NAME, isMuted = false))
+            assertThat(awaitItem()).isEqualTo(NotificationContent(roomName = A_ROOM_NAME, isMuted = false, isCalling = false, connectedAtElapsedMs = null))
         }
     }
 
@@ -36,7 +36,7 @@ class ElementCallForegroundServiceTest {
 
         state.notificationContentChanges().test {
             state.value = aCall()
-            assertThat(awaitItem()).isEqualTo(NotificationContent(roomName = A_ROOM_NAME, isMuted = false))
+            assertThat(awaitItem()).isEqualTo(NotificationContent(roomName = A_ROOM_NAME, isMuted = false, isCalling = false, connectedAtElapsedMs = null))
         }
     }
 
@@ -51,12 +51,25 @@ class ElementCallForegroundServiceTest {
         }
     }
 
+    /** 030 R31: "Calling…" until pickup, then a duration from it. */
+    @Test
+    fun `a ringing DM call says it is calling, then counts from pickup`() = runTest {
+        val state = MutableStateFlow<ElementCallSnapshot?>(aCall(connection = ElementCallConnection.Joining))
+
+        state.notificationContentChanges().test {
+            state.value = aCall(connection = ElementCallConnection.Calling(callee = null, isRinging = false))
+            assertThat(awaitItem().isCalling).isTrue()
+            state.value = aCall(connection = ElementCallConnection.Connected).copy(connectedAtElapsedMs = 1_234L)
+            assertThat(awaitItem()).isEqualTo(NotificationContent(roomName = A_ROOM_NAME, isMuted = false, isCalling = false, connectedAtElapsedMs = 1_234L))
+        }
+    }
+
     private fun aCall(
         roomName: String? = A_ROOM_NAME,
         isMicrophoneMuted: Boolean = false,
         connection: ElementCallConnection = ElementCallConnection.Connected,
     ) = ElementCallSnapshot(
-        callData = ElementCallData(roomId = A_ROOM_ID, isAudioCall = false),
+        callData = ElementCallData(roomId = A_ROOM_ID, isAudioCall = false, isStartingCall = true),
         connection = connection,
         roomName = roomName,
         isMicrophoneMuted = isMicrophoneMuted,

@@ -39,7 +39,7 @@ class ConsumerActivity : ComponentActivity() {
         // What is drawn: a fake call, so the overlay has something to show without joining anything.
         val controller = FakeElementCallController(
             initialState = ElementCallSnapshot(
-                callData = ElementCallData(roomId = RoomId("!consumer:example.org"), isAudioCall = true),
+                callData = ElementCallData(roomId = RoomId("!consumer:example.org"), isAudioCall = true, isStartingCall = true),
                 connection = ElementCallConnection.Connected,
                 roomName = "Consumer check",
                 isMaximized = false,

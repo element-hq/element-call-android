@@ -12,7 +12,21 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 ## Unreleased
 
-- Core: matrix-rust-rtc `0.5.0-rc.4`; a host's Ivy repository must point at the `v0.5.0-rc.4` asset.
+- `ElementCallData.isStartingCall` is required: true when the user chose to call, false when they answer a ring or
+  join a call in progress. In a DM it decides whether the other person's phone rings, so it must come from what the
+  user did, never from whether the room already has a call (feature-hq 030). `ElementCallOptions.ringLifetime` sets
+  how long a DM call rings, 90 s by default.
+- `ElementCallLifecycleListener.onCallEnded` gains the `ElementCallEndReason`; a host with a system call surface
+  reports `DECLINED`, `UNANSWERED` and `OTHERS_LEFT` as ended by the other side. `onCallJoined` now fires when the
+  call is joined, before its media connects. `ElementCallConnection` gains `Calling` and `RingNotSent`, for a host
+  that switches on it.
+- For a host implementing or faking the RTC ports: `MatrixRtcRoom.joinCall(kind)` replaces `joinCall(notify)`
+  (`MatrixRtcCallKind.Group` or `Direct`), `MatrixRtcCall.status` reports where the call is and why it ended, and
+  `MatrixRtcCallEvent.Ended` and `MediaConnectionDegraded` are gone.
+- `call/matrix` requires Matrix Rust SDK `org.matrix.rustcomponents:sdk-android` **26.10.12-nightly** (was 26.09.26),
+  for its sticky events. A nightly is not on Maven Central: a host resolves it from the bindings' GitHub releases
+  through the Ivy repository in README, "Consuming a release", which Element X already declares.
+- Core: matrix-rust-rtc `0.5.0-rc.5`; a host's Ivy repository must point at the `v0.5.0-rc.5` asset.
   `MatrixRtcCallEvent.ParticipantJoined` and `ParticipantLeft` gain `participantCount` and are raised only for
   changes while we are in the call, for a host consuming or faking them.
 - The raised hand (feature-hq 009). `ElementCallController` gains `setHandRaised` and `clearHandRequestFailure`,

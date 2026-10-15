@@ -12,6 +12,7 @@ import io.element.android.call.impl.audio.FakeCallSoundEffectRenderer
 
 internal class FakeElementCallPlatform(
     var elapsedRealtimeMs: Long = 0L,
+    var currentTimeMs: Long = 0L,
     /**
      * Called as the service is started, before the caller carries on.
      *
@@ -36,6 +37,8 @@ internal class FakeElementCallPlatform(
     val startForegroundServiceProjecting = mutableListOf<Boolean>()
 
     override fun elapsedRealtimeMs(): Long = elapsedRealtimeMs
+
+    override fun currentTimeMs(): Long = currentTimeMs
 
     override fun startForegroundService(isProjecting: Boolean) {
         startForegroundServiceCount++

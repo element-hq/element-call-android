@@ -8,8 +8,10 @@
 package io.element.android.call.ui
 
 import com.google.common.truth.Truth.assertThat
+import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcTileKind
+import io.element.android.call.api.rtc.id.UserId
 import io.element.android.call.test.aCameraParticipant
 import io.element.android.call.test.aTile
 import io.element.android.call.test.aWindowedRoster
@@ -81,5 +83,19 @@ class PictureInPictureCandidateTest {
 
         assertThat(chosen?.isLocal).isTrue()
         assertThat(chosen?.hasVideo).isTrue()
+    }
+
+    /** 030 R34: while it rings, the callee's avatar, not our own camera. */
+    @Test
+    fun `while a DM call rings, the callee without video`() {
+        val callee = UserId("@callee:example.org")
+        val snapshot = aCallSnapshot(participants = listOf(aCameraParticipant(A_LOCAL_MEMBER_ID, isLocal = true, isCameraMuted = false)))
+            .copy(isCameraEnabled = true, connection = ElementCallConnection.Calling(callee, isRinging = true))
+
+        val chosen = snapshot.pictureInPictureCandidate(checkNotNull(snapshot.ownTile).id)
+
+        assertThat(chosen?.userId).isEqualTo(callee)
+        assertThat(chosen?.hasVideo).isFalse()
+        assertThat(chosen?.isRingingCallee).isTrue()
     }
 }

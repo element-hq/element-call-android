@@ -82,6 +82,10 @@ fun CallTile(
     /** The corner our own tile floats in, which a screen reader says (019 R26); null when it does not float. */
     floatingCorner: ElementCallOwnTileCorner? = null,
 ) {
+    if (tile.ring != null) {
+        RingingCallee(tile = tile, modifier = modifier)
+        return
+    }
     // One per tile, for the life of the tile. Emphatically *not* keyed on [stats], which is rebuilt on
     // every recomposition: keying on it gave every recomposition a fresh counter, so the overlay read
     // a counter that had just been reset while the renderer went on feeding the original one it had
@@ -145,6 +149,8 @@ fun CallTile(
             )
         } else {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                // One to one, the picture fills the screen and has no edge for the speaking ring.
+                if (appearance == CallTileAppearance.FullBleed) SpeakingPulses(isSpeaking = tile.isActiveSpeaker, avatarSize = ElementCallAvatarSize.Spotlight)
                 // Falls back to an id-derived avatar when the member list has not loaded yet, rather
                 // than showing nothing: the initial and colour come out of the user id, so the
                 // placeholder is already stable and turns into the real avatar without the tile

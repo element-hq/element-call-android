@@ -10,6 +10,7 @@ package io.element.android.call.impl.rtc
 import android.content.Context
 import io.element.android.call.api.ElementCallDispatchers
 import io.element.android.call.api.rtc.MatrixRtcCall
+import io.element.android.call.api.rtc.MatrixRtcCallStatus
 import io.element.android.call.api.rtc.MatrixRtcLeaveReason
 import io.element.android.call.api.rtc.MatrixRtcMediaSession
 import io.element.android.call.api.rtc.MatrixRtcMembership
@@ -53,13 +54,29 @@ internal class RustMatrixRtcCall(
         .map { it.size }
         .stateIn(callScope, SharingStarted.Eagerly, 0)
 
+    private val _status = MutableStateFlow(rtcCall.status().map())
+    override val status: StateFlow<MatrixRtcCallStatus> = _status
+
     private var mediaSession: RustMatrixRtcMediaSession? = null
 
     /** Set by the leave or the close, whichever comes first: after either there is nothing left to leave. */
     private val hasEnded = AtomicBoolean(false)
 
-    /** Follow the slot's roster: the current one first, then each change, until the room shuts down. */
+    /** Follow the slot's roster and the call's status: the current value first, then each change, until the room shuts down. */
     fun start() {
+        callScope.launch {
+            rtcCall.subscribeStatus().use {
+                while (true) {
+                    val status = runCatchingExceptions { it.next() }
+                        .onFailure { error -> Timber.w(error, "MatrixRTC: status subscription for $roomId/$slotId failed") }
+                        .getOrNull()
+                        ?.map()
+                        ?: break
+                    Timber.i("MatrixRTC: $roomId/$slotId is $status")
+                    _status.value = status
+                }
+            }
+        }
         callScope.launch {
             val subscription = rtcCall.subscribeMembershipSnapshots()
             subscription.use {

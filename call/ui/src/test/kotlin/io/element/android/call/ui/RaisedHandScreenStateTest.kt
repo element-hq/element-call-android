@@ -127,7 +127,7 @@ class RaisedHandScreenStateTest {
     }
 
     private fun aHandSnapshot(own: MatrixRtcTile?, vararg remotes: MatrixRtcTile) = ElementCallSnapshot(
-        callData = ElementCallData(roomId = A_ROOM_ID, isAudioCall = true),
+        callData = ElementCallData(roomId = A_ROOM_ID, isAudioCall = true, isStartingCall = true),
         connection = ElementCallConnection.Connected,
         isMicrophonePermissionGranted = true,
         roster = remotes.toList().previewRoster(),

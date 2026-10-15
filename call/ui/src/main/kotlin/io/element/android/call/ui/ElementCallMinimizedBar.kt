@@ -173,8 +173,10 @@ private fun ElementCallSnapshot.subtitle(): String = when (val connection = conn
     ElementCallConnection.RequestingPermission,
     ElementCallConnection.Joining,
     ElementCallConnection.ConnectingMedia -> stringResource(R.string.element_call_connecting)
+    is ElementCallConnection.Calling -> stringResource(R.string.element_call_calling)
     ElementCallConnection.Degraded -> stringResource(R.string.element_call_connection_unstable)
     is ElementCallConnection.Failed -> connection.message
+    is ElementCallConnection.RingNotSent -> stringResource(R.string.element_call_ring_not_sent)
     ElementCallConnection.Ended -> stringResource(R.string.element_call_call_ended)
     ElementCallConnection.Connected -> rememberCallDuration(connectedAtElapsedMs)
 }

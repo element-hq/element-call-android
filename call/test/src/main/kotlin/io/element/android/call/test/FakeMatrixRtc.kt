@@ -9,7 +9,10 @@ package io.element.android.call.test
 
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
 import io.element.android.call.api.rtc.MatrixRtcCall
+import io.element.android.call.api.rtc.MatrixRtcCallEnd
 import io.element.android.call.api.rtc.MatrixRtcCallEvent
+import io.element.android.call.api.rtc.MatrixRtcCallKind
+import io.element.android.call.api.rtc.MatrixRtcCallStatus
 import io.element.android.call.api.rtc.MatrixRtcClient
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcLeaveReason
@@ -17,7 +20,6 @@ import io.element.android.call.api.rtc.MatrixRtcLocalState
 import io.element.android.call.api.rtc.MatrixRtcMediaSession
 import io.element.android.call.api.rtc.MatrixRtcMembership
 import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
-import io.element.android.call.api.rtc.MatrixRtcNotify
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcRoom
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
@@ -29,6 +31,7 @@ import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.call.api.rtc.windowed
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -39,6 +42,8 @@ import kotlinx.coroutines.flow.flow
 class FakeMatrixRtcClient(
     private val roomResult: () -> Result<MatrixRtcRoom>? = { null },
     private val joinResult: () -> Result<MatrixRtcCall>? = { null },
+    /** Completed by a test to let a join return; a join waits on it while it is pending. */
+    private val joinGate: CompletableDeferred<Unit>? = null,
 ) : MatrixRtcClient {
     var roomCount = 0
         private set
@@ -54,26 +59,28 @@ class FakeMatrixRtcClient(
         roomCount++
         lastMembershipFormat = format
         roomResult()?.let { return it }
-        return Result.success(FakeMatrixRtcRoom(roomId, joinResult).also { lastRoom = it })
+        return Result.success(FakeMatrixRtcRoom(roomId, joinResult, joinGate).also { lastRoom = it })
     }
 }
 
 class FakeMatrixRtcRoom(
     override val roomId: RoomId,
     private val joinResult: () -> Result<MatrixRtcCall>? = { null },
+    private val joinGate: CompletableDeferred<Unit>? = null,
 ) : MatrixRtcRoom {
     var joinCallCount = 0
         private set
     var lastCall: FakeMatrixRtcCall? = null
         private set
-    var lastNotify: MatrixRtcNotify? = null
+    var lastKind: MatrixRtcCallKind? = null
         private set
     var shutdownCount = 0
         private set
 
-    override suspend fun joinCall(applicationSlotId: String?, notify: MatrixRtcNotify?): Result<MatrixRtcCall> {
+    override suspend fun joinCall(kind: MatrixRtcCallKind, applicationSlotId: String?): Result<MatrixRtcCall> {
         joinCallCount++
-        lastNotify = notify
+        lastKind = kind
+        joinGate?.await()
         joinResult()?.let { return it }
         return Result.success(FakeMatrixRtcCall(roomId, "m.call#${applicationSlotId ?: "room"}").also { lastCall = it })
     }
@@ -90,6 +97,15 @@ class FakeMatrixRtcCall(
     override val memberId: String = "aLocalMemberId"
     override val members = MutableStateFlow(emptyList<MatrixRtcMembership>())
     override val memberCount = MutableStateFlow(0)
+
+    /**
+     * Pushed by a test, as the core would. On its own it follows a plain call: [MatrixRtcCallStatus.Connected] once
+     * media connects from [MatrixRtcCallStatus.Connecting], and [MatrixRtcCallEnd.Left] on a leave.
+     */
+    override val status = MutableStateFlow<MatrixRtcCallStatus>(MatrixRtcCallStatus.Connecting)
+
+    /** The `since` a plain call reports once media connects, in ms since the Unix epoch. */
+    var connectedSinceMs: Long = 0L
 
     var connectMediaCount = 0
         private set
@@ -119,20 +135,33 @@ class FakeMatrixRtcCall(
         return lowerHandResult()
     }
 
+    /** Called as media is asked for, before it connects: what a test checks has happened by then. */
+    var onConnectMedia: () -> Unit = {}
+
+    /** The session [connectMedia] connects: a harness gives it pictures and our own tile. */
+    var newMediaSession: () -> FakeMatrixRtcMediaSession = { FakeMatrixRtcMediaSession() }
+
     override suspend fun connectMedia(): Result<MatrixRtcMediaSession> {
         connectMediaCount++
-        return Result.success(FakeMatrixRtcMediaSession().also { lastMediaSession = it })
+        onConnectMedia()
+        return Result.success(newMediaSession().also { lastMediaSession = it }).also {
+            if (status.value == MatrixRtcCallStatus.Connecting) status.value = MatrixRtcCallStatus.Connected(connectedSinceMs, degraded = false)
+        }
     }
 
     override suspend fun leave(reason: MatrixRtcLeaveReason?): Result<Unit> {
         leaveCount++
+        if (status.value !is MatrixRtcCallStatus.Ended) status.value = MatrixRtcCallStatus.Ended(MatrixRtcCallEnd.Left)
         return Result.success(Unit)
     }
 
     override fun close() = Unit
 }
 
-class FakeMatrixRtcMediaSession : MatrixRtcMediaSession {
+class FakeMatrixRtcMediaSession(
+    /** Pictures for a harness to draw; null opens streams that never send a frame, which is what a test counts. */
+    private val frames: ((memberId: String, kind: MatrixRtcStreamKind) -> Flow<MatrixRtcVideoFrame>)? = null,
+) : MatrixRtcMediaSession {
     override val localMemberId: String = "aLocalMemberId"
 
     private val _events = MutableSharedFlow<MatrixRtcCallEvent>(extraBufferCapacity = 8)
@@ -247,6 +276,7 @@ class FakeMatrixRtcMediaSession : MatrixRtcMediaSession {
     override fun videoFrames(memberId: String, kind: MatrixRtcStreamKind): Flow<MatrixRtcVideoFrame> {
         val ref = MatrixRtcStreamRef(memberId, kind)
         videoFramesRequests += ref
+        frames?.let { return it(memberId, kind) }
         return flow {
             openVideoStreams[ref] = (openVideoStreams[ref] ?: 0) + 1
             videoStreamOpenCounts[ref] = (videoStreamOpenCounts[ref] ?: 0) + 1

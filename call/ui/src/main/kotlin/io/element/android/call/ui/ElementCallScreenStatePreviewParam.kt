@@ -34,6 +34,24 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
             anElementCallScreenState(connection = ElementCallConnection.Joining),
             // Joined and counting members, no media yet.
             anElementCallScreenState(connection = ElementCallConnection.ConnectingMedia, memberCount = 2),
+            // A DM video call ringing, our camera on; a voice call ringing; a ring that could not be sent (030).
+            anElementCallScreenState(
+                connection = ElementCallConnection.Calling(A_CALLEE, isRinging = true),
+                participants = listOf(aLocalParticipant()),
+                isCameraEnabled = true,
+                isDm = true,
+            ),
+            anElementCallScreenState(
+                connection = ElementCallConnection.Calling(A_CALLEE, isRinging = true),
+                isAudioCall = true,
+                participants = listOf(aLocalParticipant()),
+                isDm = true,
+            ),
+            anElementCallScreenState(
+                connection = ElementCallConnection.RingNotSent(A_CALLEE),
+                participants = listOf(aLocalParticipant()),
+                isDm = true,
+            ),
             anElementCallScreenState(
                 connection = ElementCallConnection.Connected,
                 memberCount = 2,
@@ -345,6 +363,7 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
 
 fun anElementCallScreenState(
     connection: ElementCallConnection = ElementCallConnection.Connected,
+    isAudioCall: Boolean = false,
     memberCount: Int = 0,
     participants: List<MatrixRtcParticipant> = emptyList(),
     audioLevels: Map<String, MatrixRtcAudioLevel> = emptyMap(),
@@ -386,6 +405,7 @@ fun anElementCallScreenState(
     eventSink: (ElementCallScreenEvent) -> Unit = {},
 ) = ElementCallScreenState(
     connection = connection,
+    isAudioCall = isAudioCall,
     memberCount = memberCount,
     audioLevels = audioLevels.toImmutableMap(),
     receiveStats = receiveStats.toImmutableMap(),
@@ -408,9 +428,13 @@ fun anElementCallScreenState(
     connectedAtElapsedMs = connectedAtElapsedMs,
     // Derived rather than passed, so a preview cannot describe a call whose tiles disagree with its
     // participants - which is exactly the sort of state the real presenter can never produce.
-    tiles = previewCallTiles(participants, activeSpeakerIds, handRaisedIds, isFrontCamera),
+    tiles = previewCallTiles(connection, participants, activeSpeakerIds, handRaisedIds, isFrontCamera),
     // As the presenter chooses it with nothing remembered: the first hero, the speaker past the threshold, else nothing.
-    spotlight = CallSpotlight.choose(previewCallTiles(participants, activeSpeakerIds, handRaisedIds, isFrontCamera), shownHeroId = null, lastSpeakerId = null),
+    spotlight = CallSpotlight.choose(
+        previewCallTiles(connection, participants, activeSpeakerIds, handRaisedIds, isFrontCamera),
+        shownHeroId = null,
+        lastSpeakerId = null
+    ),
     fullscreenTileId = fullscreenTileId,
     isFullscreenChromeVisible = isFullscreenChromeVisible,
     isStageChromeVisible = isStageChromeVisible,
@@ -518,6 +542,7 @@ fun aStaleParticipant() = MatrixRtcParticipant(
 
 /** Our own tile first, then the core's shape of the rest: what the presenter builds from a snapshot. */
 private fun previewCallTiles(
+    connection: ElementCallConnection,
     participants: List<MatrixRtcParticipant>,
     speakingIds: Set<String>,
     handRaisedIds: Set<String>,
@@ -533,5 +558,8 @@ private fun previewCallTiles(
             isFrontCamera = isFrontCamera,
         )
     }
+    .let { it + listOfNotNull(connection.ringingCallee(emptyMap())) }
     .let { it.showingHands(!SmallCallLayout.isFullBleed(it)) }
     .toImmutableList()
+
+private val A_CALLEE = UserId("@paulina:example.org")

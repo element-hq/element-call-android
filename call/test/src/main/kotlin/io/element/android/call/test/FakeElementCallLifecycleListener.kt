@@ -8,6 +8,7 @@
 package io.element.android.call.test
 
 import io.element.android.call.api.ElementCallData
+import io.element.android.call.api.ElementCallEndReason
 import io.element.android.call.api.ElementCallLifecycleListener
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -23,6 +24,7 @@ class FakeElementCallLifecycleListener(
     val startedCalls = mutableListOf<ElementCallData>()
     val joinedCalls = mutableListOf<ElementCallData>()
     val endedCalls = mutableListOf<ElementCallData?>()
+    val endReasons = mutableListOf<ElementCallEndReason>()
 
     override fun onCallStarted(callData: ElementCallData) {
         startedCalls += callData
@@ -32,7 +34,8 @@ class FakeElementCallLifecycleListener(
         joinedCalls += callData
     }
 
-    override fun onCallEnded(callData: ElementCallData?) {
+    override fun onCallEnded(callData: ElementCallData?, reason: ElementCallEndReason) {
         endedCalls += callData
+        endReasons += reason
     }
 }

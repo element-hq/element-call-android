@@ -56,7 +56,7 @@ import kotlinx.coroutines.flow.first
  */
 @Composable
 fun SampleApp(
-    controller: SampleElementCallController,
+    controller: SampleCallController,
     scenarios: ImmutableList<String>,
     modifier: Modifier = Modifier,
     initialScenario: MatrixRtcScenario? = null,
@@ -68,10 +68,10 @@ fun SampleApp(
     var isStyleOverridden by rememberSaveable { mutableStateOf(false) }
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
-    LaunchedEffect(isLandscape) { controller.setStageLandscape(isLandscape) }
+    LaunchedEffect(isLandscape) { controller.fixtures.setStageLandscape(isLandscape) }
     val fixtures = remember { SampleFixture.entries.toImmutableList() }
     val driver = remember { ElementCallStageDriver() }
-    var player by remember { mutableStateOf(initialScenario?.let { SampleScenarioPlayer(controller, it, driver, onRotate) }) }
+    var player by remember { mutableStateOf(initialScenario?.let { SampleScenarioPlayer(controller.fixtures, it, driver, onRotate) }) }
     // Hanging up ends the scenario with the call: once the call it started is gone, so is its bar.
     LaunchedEffect(player) {
         if (player == null) return@LaunchedEffect
@@ -96,7 +96,14 @@ fun SampleApp(
                             player = null
                             controller.start(it.snapshot())
                         },
-                        onOpenScenario = { name -> player = SampleScenarioPlayer(controller, MatrixRtcScenario.load(name), driver, onRotate) },
+                        onOpenRinging = {
+                            player = null
+                            controller.startRinging(it)
+                        },
+                        onOpenScenario = { name ->
+                            controller.endRinging()
+                            player = SampleScenarioPlayer(controller.fixtures, MatrixRtcScenario.load(name), driver, onRotate)
+                        },
                         modifier = contentModifier,
                     )
                 }

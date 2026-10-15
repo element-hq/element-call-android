@@ -9,6 +9,7 @@ package io.element.android.call.api
 
 import io.element.android.call.api.rtc.MatrixRtcLoggingConfiguration
 import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
+import kotlin.time.Duration
 
 /**
  * The knobs a host may turn. Everything has a default; the sample app passes none.
@@ -45,6 +46,11 @@ data class ElementCallOptions(
      * Not a user setting.
      */
     val participantCapForJoinLeaveSounds: Int = DEFAULT_PARTICIPANT_CAP_FOR_JOIN_LEAVE_SOUNDS,
+    /**
+     * How long a DM call rings the other person, and waits for them, before giving up. Null is the core's
+     * 90 s, Element Call web's; the core caps it at 120 s.
+     */
+    val ringLifetime: Duration? = null,
 ) {
     companion object {
         const val DEFAULT_PARTICIPANT_CAP_FOR_JOIN_LEAVE_SOUNDS = 8

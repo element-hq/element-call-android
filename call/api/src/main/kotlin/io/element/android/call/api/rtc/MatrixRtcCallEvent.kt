@@ -40,9 +40,6 @@ sealed interface MatrixRtcCallEvent {
 
     data class StreamUnmuted(val memberId: String, val kind: MatrixRtcStreamKind) : MatrixRtcCallEvent
 
-    /** The transport is still up but struggling. */
-    data class MediaConnectionDegraded(val degraded: Boolean) : MatrixRtcCallEvent
-
     data class KeyImported(val memberId: String, val keyIndex: Int) : MatrixRtcCallEvent
 
     /**
@@ -77,17 +74,6 @@ sealed interface MatrixRtcCallEvent {
 
     /** Someone is publishing to the transport that we cannot tie back to a MatrixRTC membership. */
     data class UnknownParticipant(val identity: String) : MatrixRtcCallEvent
-
-    data class Ended(val reason: MatrixRtcEndReason) : MatrixRtcCallEvent
-}
-
-sealed interface MatrixRtcEndReason {
-    data object Left : MatrixRtcEndReason
-
-    /** The call's slot was closed, which ended the call without us asking. */
-    data object SlotClosed : MatrixRtcEndReason
-
-    data class ConnectionClosed(val message: String) : MatrixRtcEndReason
 }
 
 /**

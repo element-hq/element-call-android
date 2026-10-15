@@ -1107,8 +1107,10 @@ stopgap is:
 - `Client.sendToDeviceMessage(eventType, messages, encrypt)` returning per-recipient failures.
 - `Client.subscribeToToDeviceMessages(eventTypes)` delivering the **encryption info**: attested sender, sender device
   id and cross-signing status. The widget path delivers `{type, content, sender, encrypted}` only.
-- `Room.sendStickyRaw` (MSC4354) for the sticky-event compat modes; until then calls are pinned to the state-event
-  mode (`DefaultElementCallController`; `ElementCallOptions.membershipFormat` is read but not obeyed).
+- Sticky events (MSC4354) come from the SDK since `sdk-android` 26.10.12-nightly: `Room.sendStickyRaw`,
+  `stickyEvents` and `subscribeToStickyEvents`, with encryption info. Calls stay pinned to the state-event mode
+  (`DefaultElementCallController`; `ElementCallOptions.membershipFormat` is read but not obeyed) until the sticky
+  modes have been tried against other clients; their delayed leave still goes through the bridge, and item 5 applies.
 - `Room.sendRaw` returning the event id (matrix-rust-sdk item 9). It exists and sends, but resolves to unit, and the
   core keeps the id of a raised hand's `m.reaction` to redact it later - so the message-like room event (the MSC4075
   notification of the state-event mode too, a plain room event since core v0.3.0-rc.1) goes through the widget
@@ -1123,8 +1125,6 @@ stopgap is:
   Membership is unaffected. `Room.subscribeToMessageLikeEvents`, with raw content and encryption info, is
   [matrix-rust-sdk#7163](https://github.com/matrix-org/matrix-rust-sdk/pull/7163); read reactions and redactions
   there once released.
-- `Room.stickyEvents` / `subscribeToStickyEvents` with encryption info: on SDK main since `516229640`, not in
-  26.09.26. Once released, `stickyEvents()` reads them from the SDK, not the bridge.
 
 **Trust relaxation while the stopgap is in place.** The core drops a media key whose sender is not cross-signed
 and the mapper drops one without a sender device. Through the widget driver neither is knowable, so the bridge

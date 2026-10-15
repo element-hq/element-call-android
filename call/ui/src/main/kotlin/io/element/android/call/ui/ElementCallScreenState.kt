@@ -22,6 +22,8 @@ import kotlinx.coroutines.flow.Flow
 
 data class ElementCallScreenState(
     val connection: ElementCallConnection,
+    /** A voice call rather than a video one, as the user asked for it: the icon beside "Calling…" (030 R14). */
+    val isAudioCall: Boolean,
     /**
      * Members the RTC core sees in the slot, including us. Known before media connects, and in every
      * compatibility mode - the core is fed a membership in all three.

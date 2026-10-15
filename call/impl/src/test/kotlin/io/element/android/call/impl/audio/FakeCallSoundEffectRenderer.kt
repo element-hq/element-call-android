@@ -15,6 +15,27 @@ internal class FakeCallSoundEffectRenderer : CallSoundEffectRenderer {
         played += sound
     }
 
+    /** The sound looping now, or null. */
+    var looping: CallSoundEffect? = null
+        private set
+
+    /** Every sound played to its end, in order; suspends on [endSoundGate] when one is set. */
+    val playedToEnd = mutableListOf<CallSoundEffect>()
+    var endSoundGate: kotlinx.coroutines.CompletableDeferred<Unit>? = null
+
+    override fun startLoop(sound: CallSoundEffect) {
+        looping = sound
+    }
+
+    override fun stopLoop() {
+        looping = null
+    }
+
+    override suspend fun playToEnd(sound: CallSoundEffect) {
+        playedToEnd += sound
+        endSoundGate?.await()
+    }
+
     override fun release() {
         releaseCount++
     }

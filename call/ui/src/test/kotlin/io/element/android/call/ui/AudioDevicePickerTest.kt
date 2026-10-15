@@ -15,6 +15,7 @@ import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.v2.runAndroidComposeUiTest
+import com.google.common.truth.Truth.assertThat
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.tests.testutils.EnsureCalledOnce
 import io.element.android.call.tests.testutils.EventsRecorder
@@ -59,5 +60,13 @@ class AudioDevicePickerTest : RobolectricTest() {
         onNode(hasText(A_BLUETOOTH_HEADSET.productName!!) and hasClickAction()).performClick()
 
         selections.assertSingle(A_BLUETOOTH_HEADSET)
+    }
+
+    @Test
+    fun `the earpiece and the speaker alone toggle, anything else plugged in needs the picker`() {
+        assertThat(listOf(AN_EARPIECE, A_SPEAKER).builtInToggleTarget(AN_EARPIECE)).isEqualTo(A_SPEAKER)
+        assertThat(listOf(AN_EARPIECE, A_SPEAKER).builtInToggleTarget(A_SPEAKER)).isEqualTo(AN_EARPIECE)
+        assertThat(listOf(AN_EARPIECE, A_SPEAKER, A_BLUETOOTH_HEADSET).builtInToggleTarget(AN_EARPIECE)).isNull()
+        assertThat(listOf(A_SPEAKER, A_BLUETOOTH_HEADSET).builtInToggleTarget(A_SPEAKER)).isNull()
     }
 }

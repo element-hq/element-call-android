@@ -33,6 +33,9 @@ internal interface ElementCallPlatform {
      */
     fun elapsedRealtimeMs(): Long
 
+    /** Milliseconds since the Unix epoch: the clock the core stamps a call's moments with. */
+    fun currentTimeMs(): Long
+
     /**
      * Start, or restart, the call foreground service.
      *
@@ -62,6 +65,8 @@ internal class DefaultElementCallPlatform(
     private val context: Context,
 ) : ElementCallPlatform {
     override fun elapsedRealtimeMs(): Long = SystemClock.elapsedRealtime()
+
+    override fun currentTimeMs(): Long = System.currentTimeMillis()
 
     override fun startForegroundService(isProjecting: Boolean) = ElementCallForegroundService.start(context, isProjecting)
 

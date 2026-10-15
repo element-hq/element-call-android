@@ -19,10 +19,12 @@ import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -32,7 +34,9 @@ import androidx.compose.ui.test.swipe
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.v2.runAndroidComposeUiTest
 import com.google.common.truth.Truth.assertThat
+import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallHandRequestFailure
+import io.element.android.call.api.rtc.id.UserId
 import io.element.android.call.tests.testutils.EventsRecorder
 import io.element.android.call.tests.testutils.assertNodeWithTextIsDisplayed
 import io.element.android.call.tests.testutils.clickOn
@@ -145,6 +149,29 @@ class ElementCallScreenTest : RobolectricTest() {
         )
     }
 
+    /** 030 R14, R22, R38: "Calling…" under the room name, the callee read as "Calling" and their name, and inert. */
+    @Test
+    fun `a ringing DM says who it is calling, and the callee takes no tap`() = runAndroidComposeUiTest<ComponentActivity> {
+        val events = EventsRecorder<ElementCallScreenEvent>()
+        val callee = UserId("@paulina:example.org")
+        setContent {
+            ElementCallScreen(
+                state = anElementCallScreenState(
+                    connection = ElementCallConnection.Calling(callee, isRinging = true),
+                    participants = listOf(aLocalParticipant()),
+                    isDm = true,
+                    eventSink = events,
+                )
+            )
+        }
+
+        assertNodeWithTextIsDisplayed(R.string.element_call_calling)
+        val calling = activity!!.getString(R.string.element_call_a11y_calling, callee.value)
+        onNodeWithContentDescription(calling).assertIsDisplayed()
+        onNodeWithContentDescription(calling).performTouchInput { doubleClick() }
+        assertThat(events.recorded().filterIsInstance<ElementCallScreenEvent.ToggleFullscreen>()).isEmpty()
+    }
+
     /** Screen sharing is opt-in: a host that has not turned it on gets no button, not a dead one. */
     @Test
     fun `the screen share button is absent unless the host enabled it`() = runAndroidComposeUiTest<ComponentActivity> {
@@ -182,9 +209,13 @@ class ElementCallScreenTest : RobolectricTest() {
     }
 
     @Test
-    fun `the audio button opens the picker and choosing a device selects it`() = runAndroidComposeUiTest<ComponentActivity> {
+    fun `with a headset the audio button opens the picker and choosing a device selects it`() = runAndroidComposeUiTest<ComponentActivity> {
         val events = EventsRecorder<ElementCallScreenEvent>()
-        setContent { ElementCallScreen(state = anElementCallScreenState(eventSink = events)) }
+        setContent {
+            ElementCallScreen(
+            state = anElementCallScreenState(audioDevices = listOf(AN_EARPIECE, A_SPEAKER, A_BLUETOOTH_HEADSET), eventSink = events)
+        )
+        }
         waitForIdle()
         events.clear()
 
@@ -193,6 +224,23 @@ class ElementCallScreenTest : RobolectricTest() {
         clickOn(R.string.element_call_audio_device_speaker)
 
         events.assertSingle(ElementCallScreenEvent.SelectAudioDevice(A_SPEAKER))
+    }
+
+    @Test
+    fun `between the earpiece and the speaker alone the audio button toggles, with no picker`() = runAndroidComposeUiTest<ComponentActivity> {
+        val events = EventsRecorder<ElementCallScreenEvent>()
+        setContent {
+            ElementCallScreen(
+            state = anElementCallScreenState(audioDevices = listOf(AN_EARPIECE, A_SPEAKER), selectedAudioDevice = AN_EARPIECE, eventSink = events)
+        )
+        }
+        waitForIdle()
+        events.clear()
+
+        clickOnContentDescription(R.string.element_call_audio_output_title)
+
+        events.assertSingle(ElementCallScreenEvent.SelectAudioDevice(A_SPEAKER))
+        onAllNodesWithText(activity!!.getString(R.string.element_call_audio_device_speaker)).assertCountEquals(0)
     }
 
     /** Upright, hiding the chrome takes the control bar and leaves the top bar (spec 014 R30). */
@@ -233,12 +281,8 @@ class ElementCallScreenTest : RobolectricTest() {
     /** In a small call our own tile neither toggles the chrome nor goes fullscreen, and the tap is not the stage's (019 R14, R23). */
     @Test
     fun `in a small call a tap or a double tap on our tile does nothing`() = runAndroidComposeUiTest<ComponentActivity> {
-        val events = EventsRecorder<ElementCallScreenEvent>()
-        setContent {
-            CompositionLocalProvider(LocalInspectionMode provides true) {
-                ElementCallScreen(state = anElementCallScreenState(participants = listOf(aLocalParticipant(), aRemoteParticipant()), eventSink = events))
-            }
-        }
+        // With our camera on: off, our floating tile is not on the stage (030 R17).
+        val events = setOneToOne()
         waitForIdle()
         val own = onNodeWithTag(ElementCallTestTags.tile(A_LOCAL_MEMBER_ID))
 

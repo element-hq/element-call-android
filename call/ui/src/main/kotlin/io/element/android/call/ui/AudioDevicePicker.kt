@@ -179,3 +179,7 @@ open class CallAudioDevicePreviewParam : PreviewParameterProvider<CallAudioDevic
             CallAudioDevice(id = 4, type = CallAudioDeviceType.WIRED_HEADSET, productName = "Wired headset"),
         )
 }
+
+/** The phone's other speaker when the earpiece and the speaker are the only choices, or null when the picker is needed. */
+internal fun List<CallAudioDevice>.builtInToggleTarget(selected: CallAudioDevice?): CallAudioDevice? =
+    takeIf { size == 2 && all { it.type.isBuiltIn } }?.firstOrNull { it != selected }

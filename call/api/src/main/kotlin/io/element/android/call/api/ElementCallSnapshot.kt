@@ -204,6 +204,15 @@ sealed interface ElementCallConnection {
 
     data object ConnectingMedia : ElementCallConnection
 
+    /**
+     * A DM call ringing the other person (feature-hq 030), until they pick up. [callee] is null until the
+     * core names them, [isRinging] false until the ring has gone out.
+     */
+    data class Calling(val callee: UserId?, val isRinging: Boolean) : ElementCallConnection
+
+    /** The ring to [callee] could not be sent, so nobody was called (030 R4). The call is over; the host dismisses it. */
+    data class RingNotSent(val callee: UserId?) : ElementCallConnection
+
     data object Connected : ElementCallConnection
 
     /** The transport is up but reporting trouble. */

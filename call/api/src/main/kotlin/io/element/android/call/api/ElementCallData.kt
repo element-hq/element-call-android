@@ -18,4 +18,10 @@ data class ElementCallData(
     val roomId: RoomId,
     /** True for a voice call, false when the user asked for video: decides the camera and the loudspeaker at start. */
     val isAudioCall: Boolean,
+    /**
+     * True when the user chose to call, false when they answer a ring or join a call in progress. In a DM it
+     * decides whether the other person's phone rings, so it must come from what the user did, never from
+     * whether the room has a call: a call that ended a moment ago would turn an answer into a call back.
+     */
+    val isStartingCall: Boolean,
 )

@@ -72,13 +72,14 @@ internal object SmallCallLayout {
         val ids = input.gridTileIds
         val floats = own != null && ids.size <= 2
         val inline = if (floats) ids - own.tileId else ids
+        val isOwnShown = own != null && isFloatingTileShown(own.hasVideo, isAlone = inline.isEmpty(), isDirect = input.isDirect)
         val tiles = LinkedHashMap<String, Rect>()
         val positions = LinkedHashMap<String, CallStageLayout.GridPosition>()
         var fullBleedTileId: String? = null
         when {
             inline.isEmpty() -> Unit
             // One other person, alone on the stage: edge to edge, behind both bars (R4).
-            inline.size == 1 && floats -> {
+            inline.size == 1 && (floats || inline.single() == input.ringingTileId) -> {
                 fullBleedTileId = inline.single()
                 tiles[inline.single()] = Rect(0f, -input.topBleed, metrics.width, metrics.height)
                 positions[inline.single()] = CallStageLayout.GridPosition(0, 0)
@@ -86,7 +87,7 @@ internal object SmallCallLayout {
             metrics.isLandscape -> placeLandscape(inline, metrics, tiles, positions)
             else -> placePortrait(inline, metrics, tiles, positions)
         }
-        val floating = own?.takeIf { floats }?.let {
+        val floating = own?.takeIf { floats && isOwnShown }?.let {
             val area = input.floatingArea ?: Rect(0f, 0f, metrics.width, metrics.height)
             val rect = floatingRect(it.corner, floatingSize(it, metrics), area, metrics.margin)
             tiles[it.tileId] = rect
@@ -98,13 +99,21 @@ internal object SmallCallLayout {
             spotlight = null,
             spotlightTileId = null,
             contentHeight = metrics.height,
-            hiddenTileIds = emptySet(),
+            // Named, or nothing would stop drawing what it no longer shows.
+            hiddenTileIds = if (floats && !isOwnShown) setOf(own.tileId) else emptySet(),
             heroStack = null,
             floating = floating,
             fullBleedTileId = fullBleedTileId,
             isStatic = true,
         )
     }
+
+    /**
+     * Our floating tile shows our camera, so with the camera off it is not on the stage (030 R17): except alone
+     * in a call that is not a DM, where it is the only sign the call is ours to be in. Alone in a DM, the person
+     * being called is on the stage instead.
+     */
+    fun isFloatingTileShown(hasVideo: Boolean, isAlone: Boolean, isDirect: Boolean): Boolean = hasVideo || isAlone && !isDirect
 
     /**
      * Portrait (R5, R6, R11): 4:3 from the top, one column up to three tiles and two from four, as wide

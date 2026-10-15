@@ -18,10 +18,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallController
+import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.ElementCallVersion
 import io.element.android.call.api.rtc.MatrixRtcTileKind
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
+import io.element.android.call.api.rtc.id.UserId
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.ImmutableMap
 import kotlinx.collections.immutable.persistentListOf
@@ -64,6 +66,8 @@ fun rememberElementCallScreenState(
     val current = snapshot
 
     val tiles = current?.callTiles() ?: persistentListOf()
+    // While a DM call rings, the chrome stays up and a tap on the stage leaves it there (030 R19).
+    val isRinging = current?.connection is ElementCallConnection.Calling || current?.connection is ElementCallConnection.RingNotSent
 
     // The spotlight is a way of looking, so it is chosen here rather than by the controller, which
     // runs with no UI; what it needs to remember lives above the screen (spec 003 R7, R20, R67).
@@ -82,6 +86,12 @@ fun rememberElementCallScreenState(
     val pendingReturn = remember { JobRef() }
     fun applyStageChrome(event: ElementCallChromeVisibility.Event) {
         stageChrome = stageChrome.apply(event)
+    }
+    // At pickup the chrome takes the call layout's starting state, as when the stage first appears (030 R19).
+    var wasRinging by remember { mutableStateOf(isRinging) }
+    LaunchedEffect(isRinging) {
+        if (wasRinging && !isRinging) stageChrome.isLandscape?.let { applyStageChrome(ElementCallChromeVisibility.Event.StageAppeared(it)) }
+        wasRinging = isRinging
     }
     LaunchedEffect(tiles) {
         if (fullscreenTileId != null && tiles.none { it.tileId == fullscreenTileId }) {
@@ -155,6 +165,7 @@ fun rememberElementCallScreenState(
                 applyStageChrome(ElementCallChromeVisibility.Event.FullscreenEnded(byDeparture = false))
             }
             StageChromeEvent.TapStage -> {
+                if (isRinging) return
                 pendingReturn.cancel()
                 // A second tap inside the wait is the other half of a double tap.
                 if (pendingTap.isActive) {
@@ -212,7 +223,7 @@ fun rememberElementCallScreenState(
         spotlight = spotlight,
         fullscreenTileId = fullscreenTileId,
         isFullscreenChromeVisible = isFullscreenChromeVisible,
-        isStageChromeVisible = tiles.isEmpty() || stageChrome.isVisible,
+        isStageChromeVisible = tiles.isEmpty() || isRinging || stageChrome.isVisible,
         ownTileCorner = spotlightMemory.ownTileCorner,
         eventSink = ::handleEvent,
     )
@@ -242,7 +253,28 @@ internal fun ElementCallSnapshot.callTiles(): ImmutableList<CallTileData> {
             .toCallTileData(roomMembers, isLocal = true, isFrontCamera = isFrontCamera)
     }
     val ranked = roster.order.map { ref -> ref.toCallTileData(roster.detail[ref.id], roomMembers, isFrontCamera = isFrontCamera) }
-    return (listOfNotNull(own) + ranked).showingHands(!isOneToOne).toImmutableList()
+    return (listOfNotNull(own, connection.ringingCallee(roomMembers)) + ranked).showingHands(!isOneToOne).toImmutableList()
+}
+
+/** The callee a DM call is ringing, in the slot their tile will take at pickup (030 R15, R21). */
+internal fun ElementCallConnection.ringingCallee(roomMembers: Map<UserId, ElementCallRoomMember>): CallTileData? {
+    val (callee, ring) = when (val connection = this) {
+        is ElementCallConnection.Calling -> connection.callee to CallRing.CALLING
+        is ElementCallConnection.RingNotSent -> connection.callee to CallRing.NOT_SENT
+        else -> return null
+    }
+    if (callee == null) return null
+    return CallTileData(
+        memberId = "$RINGING_TILE_PREFIX${callee.value}",
+        userId = callee,
+        roomMember = roomMembers[callee],
+        isLocal = false,
+        isMuted = false,
+        isActiveSpeaker = false,
+        hasVideo = false,
+        isVideoMirrored = false,
+        ring = ring,
+    )
 }
 
 /** One to one, no tile shows a hand, ours and a fullscreen one included; the hands stay up (009 R33). */
@@ -255,6 +287,9 @@ private val ElementCallSnapshot.showsRaiseHandControl: Boolean
         (ownTile?.handRaisedAtMs != null || 1 + roster.order.count { it.id.kind == MatrixRtcTileKind.PERSON } >= MIN_PEOPLE_FOR_RAISED_HAND)
 
 private const val MIN_PEOPLE_FOR_RAISED_HAND = 3
+
+/** Never a member id: the core mints those, and none starts this way. */
+private const val RINGING_TILE_PREFIX = "ringing:"
 
 /**
  * Screen state for a call, or for the moment before one exists.
@@ -273,6 +308,7 @@ private fun ElementCallSnapshot?.toState(
     eventSink: (ElementCallScreenEvent) -> Unit,
 ) = ElementCallScreenState(
     connection = this?.connection ?: ElementCallConnection.RequestingPermission,
+    isAudioCall = this?.callData?.isAudioCall == true,
     memberCount = this?.memberCount ?: 0,
     audioLevels = this?.audioLevels ?: persistentMapOf(),
     receiveStats = this?.receiveStats ?: persistentMapOf(),

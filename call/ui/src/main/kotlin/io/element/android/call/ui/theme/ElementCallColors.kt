@@ -65,6 +65,10 @@ data class ElementCallColors(
     val bgActionPrimaryRest: Color = Color(0xFFEBEEF2),
     /** The hand and its number on that disc: Compound's `icon/on-solid/primary`. */
     val iconOnSolidPrimary: Color = Color(0xFF101317),
+    /** The ring round the avatar of the other person speaking, one to one with their camera off: green to blue, top to bottom. */
+    val borderSpeakingAvatar: Brush = Brush.verticalGradient(listOf(Color(0xFF0BC491), Color(0xFF0467DD))),
+    /** The pulses from that avatar, faded as they grow. */
+    val speakingPulse: Color = Color.White,
 ) {
     companion object {
         /** Compound's dark semantic tokens, as of compound-design-tokens 2026. */

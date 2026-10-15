@@ -7,15 +7,18 @@
 
 package io.element.android.call.impl.rtc
 
+import io.element.android.call.api.rtc.MatrixRtcCallEnd
 import io.element.android.call.api.rtc.MatrixRtcCallEvent
+import io.element.android.call.api.rtc.MatrixRtcCallStatus
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
-import io.element.android.call.api.rtc.MatrixRtcEndReason
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionDiagnostic
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcKeyRejection
 import io.element.android.call.api.rtc.MatrixRtcLocalState
+import io.element.android.call.api.rtc.MatrixRtcMediaPhase
 import io.element.android.call.api.rtc.MatrixRtcMembership
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
+import io.element.android.call.api.rtc.MatrixRtcRingPhase
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcTile
@@ -24,14 +27,17 @@ import io.element.android.call.api.rtc.MatrixRtcTileKind
 import io.element.android.call.api.rtc.MatrixRtcTileRef
 import io.element.android.call.api.rtc.MatrixRtcTileRoster
 import io.element.android.call.api.rtc.id.UserId
+import org.matrix.rtc.FfiCallEnd
 import org.matrix.rtc.FfiCallEvent
+import org.matrix.rtc.FfiCallStatus
 import org.matrix.rtc.FfiCallTile
-import org.matrix.rtc.FfiEndedReason
 import org.matrix.rtc.FfiFrameEncryptionDiagnostic
 import org.matrix.rtc.FfiFrameEncryptionState
 import org.matrix.rtc.FfiKeyRejection
 import org.matrix.rtc.FfiLocalState
+import org.matrix.rtc.FfiMediaPhase
 import org.matrix.rtc.FfiReceiveStats
+import org.matrix.rtc.FfiRingPhase
 import org.matrix.rtc.FfiStreamKind
 import org.matrix.rtc.FfiStreamRef
 import org.matrix.rtc.FfiStreamStats
@@ -52,7 +58,6 @@ internal fun FfiCallEvent.map(): MatrixRtcCallEvent? = when (this) {
     is FfiCallEvent.StreamStopped -> MatrixRtcCallEvent.StreamStopped(memberId, kind.map())
     is FfiCallEvent.StreamMuted -> MatrixRtcCallEvent.StreamMuted(memberId, kind.map())
     is FfiCallEvent.StreamUnmuted -> MatrixRtcCallEvent.StreamUnmuted(memberId, kind.map())
-    is FfiCallEvent.MediaConnectionState -> MatrixRtcCallEvent.MediaConnectionDegraded(degraded)
     is FfiCallEvent.KeyImported -> MatrixRtcCallEvent.KeyImported(memberId, keyIndex.toInt())
     is FfiCallEvent.KeyDiscarded -> MatrixRtcCallEvent.KeyDiscarded(
         memberId = memberId,
@@ -63,7 +68,6 @@ internal fun FfiCallEvent.map(): MatrixRtcCallEvent? = when (this) {
     )
     is FfiCallEvent.FrameEncryptionState -> MatrixRtcCallEvent.FrameEncryption(memberId, state.map(), diagnostic.map())
     is FfiCallEvent.UnknownParticipant -> MatrixRtcCallEvent.UnknownParticipant(identity)
-    is FfiCallEvent.Ended -> MatrixRtcCallEvent.Ended(reason.map())
     is FfiCallEvent.HandRaised -> MatrixRtcCallEvent.HandRaised(memberId)
     is FfiCallEvent.HandLowered -> MatrixRtcCallEvent.HandLowered(memberId)
     is FfiCallEvent.Reaction -> null
@@ -96,12 +100,6 @@ internal fun JoinedMembership.map() = MatrixRtcMembership(
     deviceId = senderDeviceId,
     application = application,
 )
-
-internal fun FfiEndedReason.map(): MatrixRtcEndReason = when (this) {
-    is FfiEndedReason.Left -> MatrixRtcEndReason.Left
-    is FfiEndedReason.SlotClosed -> MatrixRtcEndReason.SlotClosed
-    is FfiEndedReason.ConnectionClosed -> MatrixRtcEndReason.ConnectionClosed(message)
-}
 
 internal fun FfiFrameEncryptionState.map(): MatrixRtcFrameEncryptionState = when (this) {
     FfiFrameEncryptionState.OK -> MatrixRtcFrameEncryptionState.OK
@@ -197,3 +195,31 @@ internal fun MatrixRtcStreamRef.map() = FfiStreamRef(memberId = memberId, kind =
 /** The stream asked about and its counters; null counters mean no RTCP report yet, not zero. */
 internal fun FfiStreamStats.map(): Pair<MatrixRtcStreamRef, MatrixRtcReceiveStats?> =
     MatrixRtcStreamRef(memberId, kind.map()) to stats?.map()
+
+internal fun FfiCallStatus.map(): MatrixRtcCallStatus = when (this) {
+    is FfiCallStatus.Connecting -> MatrixRtcCallStatus.Connecting
+    is FfiCallStatus.Calling -> MatrixRtcCallStatus.Calling(callee = UserId(callee), ring = ring.map(), media = media.map())
+    is FfiCallStatus.Connected -> MatrixRtcCallStatus.Connected(sinceMs = sinceMs.toLong(), degraded = degraded)
+    is FfiCallStatus.Ended -> MatrixRtcCallStatus.Ended(reason.map())
+}
+
+private fun FfiRingPhase.map(): MatrixRtcRingPhase = when (this) {
+    is FfiRingPhase.Sending -> MatrixRtcRingPhase.Sending
+    is FfiRingPhase.Ringing -> MatrixRtcRingPhase.Ringing(sentAtMs = sentAtMs.toLong(), lifetimeMs = lifetimeMs.toLong())
+}
+
+private fun FfiMediaPhase.map(): MatrixRtcMediaPhase = when (this) {
+    is FfiMediaPhase.Connecting -> MatrixRtcMediaPhase.Connecting
+    is FfiMediaPhase.Connected -> MatrixRtcMediaPhase.Connected(degraded)
+}
+
+private fun FfiCallEnd.map(): MatrixRtcCallEnd = when (this) {
+    is FfiCallEnd.Left -> MatrixRtcCallEnd.Left
+    is FfiCallEnd.Declined -> MatrixRtcCallEnd.Declined
+    is FfiCallEnd.Unanswered -> MatrixRtcCallEnd.Unanswered
+    is FfiCallEnd.RingNotSent -> MatrixRtcCallEnd.RingNotSent
+    is FfiCallEnd.OthersLeft -> MatrixRtcCallEnd.OthersLeft
+    is FfiCallEnd.Empty -> MatrixRtcCallEnd.Empty
+    is FfiCallEnd.SlotClosed -> MatrixRtcCallEnd.SlotClosed
+    is FfiCallEnd.ConnectionClosed -> MatrixRtcCallEnd.ConnectionClosed(message)
+}

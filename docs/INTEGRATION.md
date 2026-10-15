@@ -147,7 +147,7 @@ keeps exactly one copy of its own.
 | `rtcTransports` | MSC4143 transport discovery, as the raw `rtc_transports` JSON array | `[]` when there is none |
 
 **On the released SDK, most rows go through the widget-driver stopgap.** The Kotlin bindings do not yet expose
-delayed events, sticky events, raw room events or to-device sends, so `call/matrix` drives the SDK's widget machine
+delayed events, raw room events or to-device sends, so `call/matrix` drives the SDK's widget machine
 in-process behind the `ElementCallMatrixRoom` port; `FEEDBACK.md`, "Widget-driver stopgap", has what retires it.
 
 Things that are not obvious and cost real time:
@@ -783,9 +783,10 @@ On the media side, release everything explicitly rather than leaving it to the G
 stop the projection (recording indicator), stop every playback track, then cancel the scope. And release in the
 reverse order you took things — media, then session, then audio focus, then the foreground service.
 
-A call can also end from the far end (`MatrixRtcCallEvent.Ended`). Tear down from a *different* coroutine than the
-event collector — teardown cancels the job the collector runs in, and a coroutine cannot wait for its own death. In
-that case there is nothing to leave; the session is already over.
+A call can also end without us: the call's status (`RtcCall.subscribeStatus`, `MatrixRtcCall.status`) becomes
+`Ended` with a reason, from the join on and with or without media. Tear down from a *different* coroutine than the
+status collector — teardown cancels the job the collector runs in, and a coroutine cannot wait for its own death.
+Never leave again on an end you did not ask for: the core has already left, or is leaving, under its own reason.
 
 ---
 

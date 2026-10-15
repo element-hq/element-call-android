@@ -19,6 +19,7 @@ import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.PendingIntentCompat
@@ -26,6 +27,7 @@ import androidx.core.app.Person
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
+import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallNotificationConfig
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.impl.ElementCallStackRegistry
@@ -129,6 +131,15 @@ class ElementCallForegroundService : Service() {
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setStyle(NotificationCompat.CallStyle.forOngoingCall(caller, hangUpIntent))
             .addPerson(caller)
+            .apply {
+                if (content.isCalling) setContentText(getString(R.string.element_call_notification_calling))
+                // The duration from the moment the call connected, which in a DM is the pickup (030 R31).
+                content.connectedAtElapsedMs?.let { connectedAt ->
+                    setWhen(System.currentTimeMillis() - (SystemClock.elapsedRealtime() - connectedAt))
+                    setShowWhen(true)
+                    setUsesChronometer(true)
+                }
+            }
             // Tapping it comes back to the call rather than doing nothing. The host says where the
             // call is drawn; by default its launch Activity, which is where a host that draws the call
             // in its main Activity wants to land.
@@ -244,11 +255,17 @@ class ElementCallForegroundService : Service() {
 internal data class NotificationContent(
     val roomName: String?,
     val isMuted: Boolean,
+    /** A DM call still ringing the other person: "Calling…", and no duration yet (030 R31). */
+    val isCalling: Boolean,
+    /** When the call connected, on the elapsed-realtime clock: the duration counts from it. Null until then. */
+    val connectedAtElapsedMs: Long?,
 )
 
 internal fun ElementCallSnapshot?.notificationContent() = NotificationContent(
     roomName = this?.roomName,
     isMuted = this?.isMicrophoneMuted == true,
+    isCalling = this?.connection is ElementCallConnection.Calling,
+    connectedAtElapsedMs = this?.connectedAtElapsedMs,
 )
 
 /** What the notification shows, each time it changes after the one already posted. */

@@ -119,7 +119,7 @@ class StageDumpScenarioTest : RobolectricTest() {
                     }
                 }
             }
-            controller.startCall(ElementCallData(roomId = RoomId("!room:example.com"), isAudioCall = false))
+            controller.startCall(ElementCallData(roomId = RoomId("!room:example.com"), isAudioCall = false, isStartingCall = true))
             settle(scheduler)
             controller.setMicrophonePermissionGranted(true)
             controller.setCameraPermissionGranted(true)

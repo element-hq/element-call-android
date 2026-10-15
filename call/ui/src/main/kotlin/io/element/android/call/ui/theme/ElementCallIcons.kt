@@ -47,6 +47,8 @@ data class ElementCallIcons(
     val overflow: ImageVector,
     /** A raised hand, on a tile whose member has one up. */
     val handRaised: ImageVector,
+    /** Beside "Calling…" while a voice call rings; a video call shows [cameraOn]. */
+    val voiceCall: ImageVector,
 ) {
     companion object {
         /** The bundled defaults. Resolved in composition, as vector resources are. */
@@ -69,6 +71,7 @@ data class ElementCallIcons(
             participants = ImageVector.vectorResource(R.drawable.ic_element_call_user_profile),
             overflow = ImageVector.vectorResource(R.drawable.ic_element_call_overflow_vertical),
             handRaised = ImageVector.vectorResource(R.drawable.ic_element_call_raised_hand_solid),
+            voiceCall = ImageVector.vectorResource(R.drawable.ic_element_call_voice_call_solid),
         )
     }
 }

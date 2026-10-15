@@ -50,8 +50,17 @@ internal object WidgetCapabilityGrant : WidgetCapabilitiesProvider {
         "m.reaction",
     )
 
-    /** Message-like events the core reads: reactions and raised hands, and the redaction that lowers one. */
-    val receivedRoomEventTypes = listOf("io.element.call.reaction", "m.reaction", "m.room.redaction")
+    /**
+     * Message-like events the core reads: reactions and raised hands, the redaction that lowers one, and the
+     * callee's decline of a DM's ring (MSC4310, both spellings).
+     */
+    val receivedRoomEventTypes = listOf(
+        "io.element.call.reaction",
+        "m.reaction",
+        "m.room.redaction",
+        "org.matrix.msc4310.rtc.decline",
+        "m.rtc.decline",
+    )
 
     /** MSC2762 / MSC3819 / MSC4157 capability strings for the same set as the grant. */
     val capabilityStrings: List<String> =

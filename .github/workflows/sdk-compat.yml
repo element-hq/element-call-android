@@ -33,11 +33,14 @@ jobs:
         # The core is not on Maven Central yet: gradle.properties pins its release asset and sha256,
         # and the script fetches it into rtc/local (docs/local_stack.md, layer 1).
         run: ./tools/rtc/fetch-rust-rtc
-      - name: Find the newest SDK on Maven Central
+      - name: Find the newest SDK, released or nightly
         id: sdk
         run: |
           PINNED=$(sed -n 's/^matrix_sdk *= *"\(.*\)"/\1/p' gradle/libs.versions.toml | head -1)
-          LATEST=$(curl --fail --silent https://repo1.maven.org/maven2/org/matrix/rustcomponents/sdk-android/maven-metadata.xml | sed -n 's:.*<latest>\(.*\)</latest>.*:\1:p')
+          RELEASE=$(curl --fail --silent https://repo1.maven.org/maven2/org/matrix/rustcomponents/sdk-android/maven-metadata.xml | sed -n 's:.*<latest>\(.*\)</latest>.*:\1:p')
+          # Nightlies are GitHub release assets only, and Element X pins them: the newer of the two by date.
+          NIGHTLY=$(curl --fail --silent "https://api.github.com/repos/matrix-org/matrix-rust-components-kotlin/releases?per_page=30" | sed -n 's/.*"tag_name": *"sdk-\([0-9.]*-nightly\)".*/\1/p' | head -1)
+          LATEST=$(printf '%s\n' "$RELEASE" $NIGHTLY | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)
           echo "pinned=$PINNED" >> "$GITHUB_OUTPUT"
           echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
           echo "Pinned $PINNED, newest $LATEST"

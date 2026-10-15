@@ -488,10 +488,6 @@ internal class RustMatrixRtcMediaSession(
             // own member id here, which needs no network at all to go wrong.
             is MatrixRtcCallEvent.KeyImported ->
                 Timber.i("MatrixRTC: key index ${event.keyIndex} imported for ${event.memberId}")
-            is MatrixRtcCallEvent.Ended -> {
-                audioPlayback.stopAll()
-                playbackClaims.clear()
-            }
             else -> Unit
         }
     }
