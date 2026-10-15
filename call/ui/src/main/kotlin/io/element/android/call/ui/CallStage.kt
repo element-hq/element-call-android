@@ -226,6 +226,7 @@ internal fun CallStage(
                     topBleed = gridTop,
                     floatingArea = floatingArea,
                     ringingTileId = state.tiles.firstOrNull { it.ring != null }?.tileId,
+                    isDirect = state.isDm,
                 )
             )
         }

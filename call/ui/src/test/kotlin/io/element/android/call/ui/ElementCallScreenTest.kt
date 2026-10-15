@@ -258,12 +258,8 @@ class ElementCallScreenTest : RobolectricTest() {
     /** In a small call our own tile neither toggles the chrome nor goes fullscreen, and the tap is not the stage's (019 R14, R23). */
     @Test
     fun `in a small call a tap or a double tap on our tile does nothing`() = runAndroidComposeUiTest<ComponentActivity> {
-        val events = EventsRecorder<ElementCallScreenEvent>()
-        setContent {
-            CompositionLocalProvider(LocalInspectionMode provides true) {
-                ElementCallScreen(state = anElementCallScreenState(participants = listOf(aLocalParticipant(), aRemoteParticipant()), eventSink = events))
-            }
-        }
+        // With our camera on: off, our floating tile is not on the stage (030 R17).
+        val events = setOneToOne()
         waitForIdle()
         val own = onNodeWithTag(ElementCallTestTags.tile(A_LOCAL_MEMBER_ID))
 

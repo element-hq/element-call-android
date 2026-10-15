@@ -62,6 +62,19 @@ class SmallCallLayoutTest {
         }
     }
 
+    /** 030 R17: our camera-off tile is not on the stage, unless we are alone in a call that is not a DM. */
+    @Test
+    fun `with our camera off our floating tile is hidden, except alone in a group call`() {
+        val oneToOne = small(listOf(OWN, "b"), PORTRAIT, hasVideo = false, isDirect = true)
+        assertThat(oneToOne.floating).isNull()
+        assertThat(oneToOne.hiddenTileIds).containsExactly(OWN)
+        assertThat(oneToOne.fullBleedTileId).isEqualTo("b")
+
+        assertThat(small(listOf(OWN), PORTRAIT, hasVideo = false, isDirect = true).floating).isNull()
+        assertThat(small(listOf(OWN), PORTRAIT, hasVideo = false, isDirect = false).floating?.tileId).isEqualTo(OWN)
+        assertThat(small(listOf(OWN, "b"), PORTRAIT, hasVideo = true, isDirect = true).floating?.tileId).isEqualTo(OWN)
+    }
+
     @Test
     fun `three in portrait are one 4 by 3 column, ours first, as wide as three rows fit above the controls, centred`() {
         val layout = small(listOf(OWN, "b", "c"), PORTRAIT)
@@ -243,15 +256,18 @@ class SmallCallLayoutTest {
         corner: ElementCallOwnTileCorner = ElementCallOwnTileCorner.Initial,
         topBleed: Float = 0f,
         floatingArea: Rect? = null,
+        hasVideo: Boolean = true,
+        isDirect: Boolean = false,
     ) = CallStageArrangement.SmallCall.compute(
         CallStageLayout.Input(
             gridTileIds = ids,
             spotlightTileId = null,
             heroIds = emptyList(),
             metrics = metrics,
-            own = OwnTileInput(OWN, hasVideo = true, videoAspect = null, corner = corner),
+            own = OwnTileInput(OWN, hasVideo = hasVideo, videoAspect = null, corner = corner),
             topBleed = topBleed,
             floatingArea = floatingArea,
+            isDirect = isDirect,
         ),
     )
 

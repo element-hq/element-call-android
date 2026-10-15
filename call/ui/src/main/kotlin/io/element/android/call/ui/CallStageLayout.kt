@@ -108,6 +108,8 @@ internal data class CallStageLayout(
         val floatingArea: Rect? = null,
         /** The callee a DM call rings: alone, it fills the stage as their tile will, with our tile or before it (030 R15, R16). */
         val ringingTileId: String? = null,
+        /** A DM's call: alone in one, our camera-off tile is not shown (030 R17). */
+        val isDirect: Boolean = false,
     )
 
     data class HeroStack(val count: Int, val shownIndex: Int)
