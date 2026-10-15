@@ -7,6 +7,7 @@
 
 package extension
 
+import org.gradle.api.tasks.PathSensitivity
 import Versions
 import com.android.build.api.dsl.ApplicationDefaultConfig
 import com.android.build.api.dsl.ApplicationExtension
@@ -102,6 +103,11 @@ fun defaultComposeLintOptions(lint: Lint) = lint.apply {
 }
 
 fun Project.defaultLintOptions(lint: Lint) = lint.apply {
+    // AGP does not key lint's analysis on the version catalog, so a cached analysis replays its upgrade fixes at
+    // offsets into an older catalog and the report fails out of bounds.
+    project.tasks.matching { it.name.startsWith("lintAnalyze") || it.name.startsWith("lintVitalAnalyze") }.configureEach {
+        inputs.file(project.rootProject.file("gradle/libs.versions.toml")).withPathSensitivity(PathSensitivity.RELATIVE)
+    }
     lintConfig = File("${project.rootDir}/tools/lint/lint.xml")
     checkDependencies = false
     abortOnError = true
