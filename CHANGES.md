@@ -12,7 +12,15 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 ## Unreleased
 
-_Nothing yet._
+- The library no longer depends on the Matrix Rust SDK, and `element-call-matrix` is gone. `ElementCallStack.Builder`
+  takes the core's `org.matrix.rtc.MatrixBackend` over the host's own client; `sample/…/matrix/SdkMatrixBackend.kt`
+  (with `SdkElementCallRoomContext`) is the reference over the Rust SDK to copy. `ElementCallSdkTransport`,
+  `ElementCallMatrixTransport`, `ElementCallMatrixRoom` and the `call.api.matrix` types are gone; tests fake the
+  backend with `FakeMatrixBackend`. `element-call` exposes the core's AAR as an `api` dependency.
+- Media keys are received for the whole session, and a sender is confirmed as the host's client decides: the
+  reference backend confirms a sender unless its shield is red, after the SDK's own sender trust requirement.
+- No dead man's switch until the SDK bindings have delayed events: the reference backend refuses them, and the core
+  joins without one (docs/FEEDBACK.md, "SDK backend").
 
 ## 0.1.0-rc.8 - 2026-10-15
 

@@ -39,8 +39,6 @@ internal class RustMatrixRtcRoom(
     private val ffiDispatcher: CoroutineDispatcher,
     private val context: Context,
     private val sessionCoroutineScope: CoroutineScope,
-    /** Closes the room's bridge. Runs after the core's shutdown, which leaves through it. */
-    private val onShutdown: suspend () -> Unit,
 ) : MatrixRtcRoom {
     private val mutex = Mutex()
     private var call: RustMatrixRtcCall? = null
@@ -89,11 +87,10 @@ internal class RustMatrixRtcRoom(
             isShutdown = true
             call.also { call = null }
         }
-        // The core leaves whatever is still joined, through the bridge, before the bridge goes.
+        // The core leaves whatever is still joined.
         withContext(ffiDispatcher) { rtcRoom.shutdown() }
         joined?.close()
         rtcRoom.close()
-        onShutdown()
         Timber.i("MatrixRTC: $roomId shut down")
     }
 

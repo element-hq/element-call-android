@@ -212,9 +212,8 @@ class DefaultElementCallControllerTest {
     }
 
     /**
-     * Temporary, with the pin it tests: while the library builds against the released Rust SDK only the
-     * state-event generation of Element Call can be bridged, so the option is read but not obeyed.
-     * Restore per-mode tests when the pin goes (see `docs/FEEDBACK.md`, "Widget-driver stopgap").
+     * Temporary, with the pin it tests: until the sticky modes have been tried against other clients the
+     * option is read but not obeyed. Restore per-mode tests when the pin goes (see `docs/FEEDBACK.md`, "SDK backend").
      */
     @Test
     fun `a call opens its room in the room-state membership format whatever the option says`() = runTest {

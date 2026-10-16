@@ -39,11 +39,10 @@ enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 // Element X as a composite build (see docs/local_stack.md, layer 2).
 rootProject.name = "ElementCallAndroid"
 
-// The published library: five artifacts, one version.
+// The published library: four artifacts, one version.
 include(":call:api")
 include(":call:impl")
 include(":call:ui")
-include(":call:matrix")
 include(":call:test")
 
 // The matrix-rust-rtc AAR: checks the file above and publishes it to the local Maven repository for

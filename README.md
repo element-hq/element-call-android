@@ -27,14 +27,13 @@ comes later ([RELEASING.md](RELEASING.md)).
 
 ## Modules
 
-Five published artifacts under `io.element.android`, one version, plus `element-call-bom` to pin them together:
+Four published artifacts under `io.element.android`, one version, plus `element-call-bom` to pin them together:
 
 | Artifact | Project | What it is |
 | :--- | :--- | :--- |
 | `element-call-api` | `call/api` | the contract: controller, ports, state types, options |
 | `element-call` | `call/impl` | the stack, the controller, the foreground service, the Rust core wrapper; no Compose |
 | `element-call-ui` | `call/ui` | the composables: screen, minimized bar, floating tile, picture-in-picture, style port |
-| `element-call-matrix` | `call/matrix` | the turnkey Matrix transport over the Rust SDK |
 | `element-call-test` | `call/test` | fakes and fixtures for hosts' tests, and the colour-bar test pattern |
 | not published | `sample` | the harness: a Compose app over the fakes, with the only Activity and the instrumented tests |
 
@@ -63,7 +62,6 @@ dependencyResolutionManagement {
                 includeModule("io.element.android", "element-call-api")
                 includeModule("io.element.android", "element-call")
                 includeModule("io.element.android", "element-call-ui")
-                includeModule("io.element.android", "element-call-matrix")
                 includeModule("io.element.android", "element-call-test")
             }
         }
@@ -79,13 +77,12 @@ dependencyResolutionManagement {
 }
 ```
 
-Then the dependencies, through the BOM so one version pins the five:
+Then the dependencies, through the BOM so one version pins the four:
 
 ```kotlin
 implementation(platform("io.element.android:element-call-bom:0.1.0-rc.1"))
 implementation("io.element.android:element-call-ui")
 implementation("io.element.android:element-call")
-implementation("io.element.android:element-call-matrix")
 testImplementation("io.element.android:element-call-test")
 ```
 
@@ -127,8 +124,8 @@ code lands.
 1. `minSdk` 24 or higher.
 2. ABIs `armeabi-v7a`, `arm64-v8a`, `x86_64`. There is no `x86` build of the core; a host that ships `x86` must
    exclude it or accept that the call is unavailable there.
-3. The host's Rust SDK version must be at least the one this library was compiled against (see
-   `gradle/libs.versions.toml`, `matrix_sdk`).
+3. A `MatrixBackend` over the host's own Matrix client, handed to `ElementCallStack.Builder`. The sample's
+   `SdkMatrixBackend` is one over the Rust SDK ([docs/INTEGRATION.md](docs/INTEGRATION.md), §3).
 4. Picture-in-picture: `android:supportsPictureInPicture="true"` and `smallestScreenSize` in `configChanges` on
    the host Activity; `ElementCallPictureInPicture.attach(activity, controller)` from its `onCreate`, and
    `ElementCallPictureInPicture.onUserLeaveHint(activity, controller)` from its `onUserLeaveHint()` override.

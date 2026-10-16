@@ -17,20 +17,20 @@ import io.element.android.call.api.NoOpElementCallLifecycleListener
 import io.element.android.call.api.NoOpElementCallRoomContextProvider
 import io.element.android.call.api.audio.AudioFocus
 import io.element.android.call.api.audio.CallAudioDeviceController
-import io.element.android.call.api.matrix.ElementCallMatrixTransport
 import io.element.android.call.api.rtc.MatrixRtcClient
 import io.element.android.call.impl.audio.DefaultAudioFocus
 import io.element.android.call.impl.audio.DefaultCallAudioDeviceController
 import io.element.android.call.impl.rtc.MatrixRtcFfi
 import io.element.android.call.impl.rtc.RustMatrixRtcClient
 import kotlinx.coroutines.CoroutineScope
+import org.matrix.rtc.MatrixBackend
 
 /**
  * Everything the native call needs for one Matrix session, built by hand: no dependency-injection
  * framework, so the stack is constructible in a test, in the sample app and in any host alike.
  *
  * ```
- * val stack = ElementCallStack.Builder(context, transport)
+ * val stack = ElementCallStack.Builder(context, SdkMatrixBackend(client, sessionScope))
  *     .roomContext(roomContextProvider)      // host only
  *     .lifecycleListener(listener)           // host only
  *     .options(ElementCallOptions())
@@ -49,9 +49,10 @@ class ElementCallStack private constructor(
         ElementCallStackRegistry.unregister(this)
     }
 
+    /** Over the core's Matrix client: `SdkMatrixBackend` over a Rust SDK client, or the host's own [MatrixBackend]. */
     class Builder(
         context: Context,
-        private val transport: ElementCallMatrixTransport,
+        private val backend: MatrixBackend,
     ) {
         private val context: Context = context.applicationContext
         private var roomContextProvider: ElementCallRoomContextProvider = NoOpElementCallRoomContextProvider
@@ -79,7 +80,7 @@ class ElementCallStack private constructor(
         fun dispatchers(dispatchers: ElementCallDispatchers) = apply { this.dispatchers = dispatchers }
 
         /**
-         * The RTC client, in place of the Rust one over [transport]: for a harness that plays a
+         * The RTC client, in place of the Rust one over [backend]: for a harness that plays a
          * scripted call through the real controller and the real screen. The default is the Rust core.
          */
         fun rtcClient(client: MatrixRtcClient) = apply { rtcClient = client }
@@ -92,7 +93,7 @@ class ElementCallStack private constructor(
             // Recorded before the library loads; applied on the first native call.
             options.logging?.let { MatrixRtcFfi.setLoggingConfiguration(it) }
             val rtcClient = rtcClient ?: RustMatrixRtcClient(
-                transport = transport,
+                backend = backend,
                 dispatchers = dispatchers,
                 context = context,
                 sessionCoroutineScope = scope,

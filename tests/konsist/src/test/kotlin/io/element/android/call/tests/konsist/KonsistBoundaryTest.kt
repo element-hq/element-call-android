@@ -10,7 +10,6 @@ package io.element.android.call.tests.konsist
 import com.google.common.truth.Truth.assertWithMessage
 import com.lemonappdev.konsist.api.Konsist
 import com.lemonappdev.konsist.api.declaration.KoFileDeclaration
-import com.lemonappdev.konsist.api.provider.KoAnnotationProvider
 import com.lemonappdev.konsist.api.provider.KoNameProvider
 import com.lemonappdev.konsist.api.provider.modifier.KoVisibilityModifierProvider
 import org.junit.Test
@@ -30,19 +29,23 @@ class KonsistBoundaryTest {
     private val composeModules = setOf("call/ui", "call/test", "sample")
 
     @Test
-    fun `org_matrix_rtc is imported only by the core wrapper in call impl`() {
+    fun `org_matrix_rtc is imported only by the core wrapper, the stack, the fake backend and the sample's backend`() {
         files
             .filter { file -> file.imports.any { it.name.startsWith("org.matrix.rtc.") } }
             .filterNot { it.moduleName == "call/impl" && it.hasPackageStartingWith("io.element.android.call.impl.rtc") }
-            .assertNoOffender("Only io.element.android.call.impl.rtc may import the matrix-rust-rtc bindings")
+            // The stack is built over the core's MatrixBackend, which the host implements.
+            .filterNot { it.moduleName == "call/impl" && it.name == "ElementCallStack" }
+            .filterNot { it.moduleName == "call/test" || it.moduleName == "sample" || it.moduleName.startsWith("tests/") }
+            .assertNoOffender("Only …call.impl.rtc, ElementCallStack, call/test and the sample may import the matrix-rust-rtc bindings")
     }
 
     @Test
-    fun `the Rust SDK is imported only by call matrix`() {
+    fun `the Rust SDK is imported only by the sample`() {
+        // The library has no Matrix client: a host brings its own MatrixBackend.
         files
             .filter { file -> file.imports.any { it.name.startsWith("org.matrix.rustcomponents.sdk") } }
-            .filterNot { it.moduleName == "call/matrix" }
-            .assertNoOffender("Only call/matrix may import org.matrix.rustcomponents.sdk")
+            .filterNot { it.moduleName == "sample" }
+            .assertNoOffender("Only the sample may import org.matrix.rustcomponents.sdk")
     }
 
     @Test
@@ -81,30 +84,8 @@ class KonsistBoundaryTest {
     fun `the ui module is not imported by api, impl or matrix`() {
         files
             .filter { file -> file.imports.any { it.name.startsWith("io.element.android.call.ui") } }
-            .filter { it.moduleName in setOf("call/api", "call/impl", "call/matrix") }
-            .assertNoOffender("call/api, call/impl and call/matrix must not depend on call/ui")
-    }
-
-    @Test
-    fun `the temporary package of call matrix is confined to its folder and marked as such`() {
-        val temporaryPackage = "io.element.android.call.matrix.temporary"
-        // The turnkey transport in call/matrix is what wires the stopgap in, so the module itself may
-        // import it; nothing outside the module may, so deleting the folder touches one module.
-        files
-            .filter { file -> file.imports.any { it.name.startsWith("$temporaryPackage.") } }
-            .filterNot { it.moduleName == "call/matrix" }
-            .assertNoOffender("Nothing outside call/matrix may import from $temporaryPackage")
-        files
-            .filter { it.hasPackageStartingWith(temporaryPackage) }
-            .filterNot { it.path.contains("/temporary/") }
-            .assertNoOffender("Files in $temporaryPackage must live under a temporary/ folder")
-        productionFiles
-            .filter { it.hasPackageStartingWith(temporaryPackage) }
-            .flatMap { file -> file.declarations(includeNested = false, includeLocal = false).map { file to it } }
-            .filter { (_, declaration) -> declaration is KoNameProvider && declaration is KoAnnotationProvider }
-            .filterNot { (_, declaration) -> (declaration as KoAnnotationProvider).hasAnnotationWithName("ElementCallTemporaryApi") }
-            .map { (file, declaration) -> "${file.path}: ${(declaration as KoNameProvider).name}" }
-            .assertNoOffenderPaths("Every top-level declaration in $temporaryPackage must be annotated @ElementCallTemporaryApi")
+            .filter { it.moduleName in setOf("call/api", "call/impl") }
+            .assertNoOffender("call/api and call/impl must not depend on call/ui")
     }
 
     @Test
@@ -132,7 +113,7 @@ class KonsistBoundaryTest {
     }
 
     @Test
-    fun `top-level declarations in call impl and call matrix are internal unless allowlisted`() {
+    fun `top-level declarations in call impl are internal unless allowlisted`() {
         val allowlist = setOf(
             // call/impl
             "ElementCallStack",
@@ -142,18 +123,15 @@ class KonsistBoundaryTest {
             "ElementCallForegroundService",
             "ElementCallActionReceiver",
             "MatrixRtcNative",
-            // call/matrix
-            "ElementCallSdkTransport",
-            "SdkElementCallRoomContext",
         )
         productionFiles
-            .filter { it.moduleName == "call/impl" || it.moduleName == "call/matrix" }
+            .filter { it.moduleName == "call/impl" }
             .flatMap { file -> file.declarations(includeNested = false, includeLocal = false).map { file to it } }
             .filter { (_, declaration) -> declaration is KoVisibilityModifierProvider && declaration is KoNameProvider }
             .filter { (_, declaration) -> (declaration as KoVisibilityModifierProvider).hasPublicOrDefaultModifier }
             .filterNot { (_, declaration) -> (declaration as KoNameProvider).name in allowlist }
             .map { (file, declaration) -> "${file.path}: ${(declaration as KoNameProvider).name}" }
-            .assertNoOffenderPaths("call/impl and call/matrix expose nothing but the allowlist; make it internal or add it to the list")
+            .assertNoOffenderPaths("call/impl exposes nothing but the allowlist; make it internal or add it to the list")
     }
 
     @Test

@@ -27,8 +27,8 @@ import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.call.impl.ElementCallStack
 import io.element.android.call.test.ElementCallTestPattern
-import io.element.android.call.test.FakeElementCallMatrixTransport
 import io.element.android.call.test.FakeElementCallRoomContextProvider
+import io.element.android.call.test.FakeMatrixBackend
 import io.element.android.call.test.FakeMatrixRtcCall
 import io.element.android.call.test.FakeMatrixRtcClient
 import io.element.android.call.test.FakeMatrixRtcMediaSession
@@ -94,7 +94,7 @@ class SampleRingingCall(context: Context, private val scope: CoroutineScope, pri
             }
         }
     }
-    private val stack = ElementCallStack.Builder(context, FakeElementCallMatrixTransport())
+    private val stack = ElementCallStack.Builder(context, FakeMatrixBackend())
         .rtcClient(FakeMatrixRtcClient(joinResult = { Result.success(call).also { joined.complete(Unit) } }))
         .roomContext(FakeElementCallRoomContextProvider(ElementCallRoomContext(displayName = "Bob", isDm = true, members = MEMBERS)))
         .options(ElementCallOptions(ringLifetime = RING_LIFETIME))

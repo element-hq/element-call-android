@@ -18,9 +18,8 @@ import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.call.impl.ElementCallPictureInPicture
 import io.element.android.call.impl.ElementCallStack
-import io.element.android.call.matrix.ElementCallSdkTransport
 import io.element.android.call.test.FakeElementCallController
-import io.element.android.call.test.FakeElementCallMatrixTransport
+import io.element.android.call.test.FakeMatrixBackend
 import io.element.android.call.ui.ElementCallOverlay
 
 /**
@@ -33,7 +32,7 @@ class ConsumerActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         // The real stack, so every published module is reachable and the consumer rules are exercised.
-        val stack = ElementCallStack.Builder(this, FakeElementCallMatrixTransport()).build(lifecycleScope)
+        val stack = ElementCallStack.Builder(this, FakeMatrixBackend()).build(lifecycleScope)
         ElementCallPictureInPicture.attach(this, stack.controller)
 
         // What is drawn: a fake call, so the overlay has something to show without joining anything.
@@ -47,8 +46,7 @@ class ConsumerActivity : ComponentActivity() {
         )
         setContent {
             ElementCallOverlay(controller = controller) { modifier ->
-                // The turnkey transport is named so the matrix artifact is linked too.
-                Text(text = "Consumer of element-call, with ${ElementCallSdkTransport::class.java.simpleName}", modifier = modifier)
+                Text(text = "Consumer of element-call", modifier = modifier)
             }
         }
     }

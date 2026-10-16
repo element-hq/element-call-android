@@ -7,8 +7,8 @@ import extension.testCommonDependencies
  * Please see LICENSE files in the repository root for full details.
  */
 
-// element-call-api: the contract. RTC types and ids, the controller, the host ports (including the
-// Matrix transport port), state types and options. No Compose, no SDK, no Rust bindings.
+// element-call-api: the contract. RTC types and ids, the controller, the host ports, state types and
+// options. No Compose, no SDK, no Rust bindings.
 plugins {
     id("io.element.call.android-library")
     id("io.element.call.no-compose")

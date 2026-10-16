@@ -126,11 +126,12 @@ The core decides *what* to put on the Matrix wire and *what* it needs to read; y
 implement it once, over your own client, and hand it to the core:
 
 ```kotlin
-val rtcClient = RtcClient(DefaultMatrixBackend(transport, discovery, roomProvider = { openRooms[it] }, sessionScope, io))
+val rtcClient = RtcClient(SdkMatrixBackend(client, sessionScope))
 ```
 
-Reference implementation: `call/impl/…/rtc/DefaultMatrixBackend.kt`. The core depends on no Matrix SDK, so a host
-keeps exactly one copy of its own.
+Reference implementation over the Rust SDK's Kotlin bindings: `sample/…/matrix/SdkMatrixBackend.kt`; the core's
+own, over matrix-sdk in Rust, is `matrix-rtc-matrix-sdk`. The core depends on no Matrix SDK, so a host keeps exactly
+one copy of its own.
 
 | Method | Maps to | Returns |
 | :--- | :--- | :--- |
@@ -140,15 +141,15 @@ keeps exactly one copy of its own.
 | `sendStateEvent` | `room.sendRawStateEvent(type, stateKey, json)` | the event id |
 | `sendRoomEvent` | a message-like send, encrypted in an encrypted room | the event id |
 | `redactEvent` | `room.redact(eventId, reason)` | — |
-| `sendToDeviceMessage` | `client.sendToDeviceMessage(type, messages, encrypt = true)` | one delivery verdict per recipient |
+| `sendToDeviceMessage` | `client.sendEncryptedToDeviceMessage(type, devices, json)` | one delivery verdict per recipient |
 | `subscribeRoom` / `subscribeToDevice` | your client's listeners, delivering into the sink (§4) | a `BackendSubscription` |
 | `relations` | `GET /relations/{eventId}/{relType}/{eventType}`, decrypted | the related events |
 | `openidToken` | `client.getOpenIdToken()` | the token |
 | `rtcTransports` | MSC4143 transport discovery, as the raw `rtc_transports` JSON array | `[]` when there is none |
 
-**On the released SDK, most rows go through the widget-driver stopgap.** The Kotlin bindings do not yet expose
-delayed events, raw room events or to-device sends, so `call/matrix` drives the SDK's widget machine
-in-process behind the `ElementCallMatrixRoom` port; `FEEDBACK.md`, "Widget-driver stopgap", has what retires it.
+**On the released SDK, there are no delayed events.** The Kotlin bindings do not expose them yet, so
+`SdkMatrixBackend` refuses them with `M_UNRECOGNIZED` and the core joins without a dead man's switch; `FEEDBACK.md`,
+"SDK backend", has what brings it back.
 
 Things that are not obvious and cost real time:
 
@@ -184,7 +185,7 @@ only itself — an exception escaping into your session scope kills the session.
 | Subject | Sink call | Notes |
 | :--- | :--- | :--- |
 | sticky events | `onStickyEvents(events)` | the complete live set |
-| each `stateEventTypes` entry | `onStateEvents(type, events)` | under its own type: ruma's alias collapse (`m.call.member` / `org.matrix.msc3401.call.member`) means filtering a shared bucket by type |
+| each `stateEventTypes` entry | `onStateEvents(type, events)` | under the type asked for; ruma collapses `m.call.member` and `org.matrix.msc3401.call.member` into one, so either spelling reads both |
 | joined members | `onJoinedMembers(userIds)` | **must include your own user** |
 | encryption | `onEncryption(encrypted)` | only once known; never guess `false` |
 | `timelineEventTypes` | `onTimelineEvents(events)` | each batch as it arrives: reactions, raised hands |
@@ -195,8 +196,8 @@ only itself — an exception escaping into your session scope kills the session.
 - **Deliver the current set first, then the whole set on every change.**
 - **An empty set means none, and it must still be delivered.** Holding back an empty set ("it might mean not
   synced") is the one mistake that hangs: `room()` never returns. If your source cannot tell "none" from "not
-  loaded", fix that at the source: the widget stopgap waits for the machine's first `update_state`, which carries
-  every granted type, an empty one included.
+  loaded", fix that at the source: the SDK's `subscribeToStateEvents` answers at once from the store, an empty set
+  included.
 - **A joined-member set without your own user is ignored**, and the room never seeds.
 
 The core logs which delivery it is still waiting on; `RustMatrixRtcClient` also turns a seeding that never finishes
@@ -220,9 +221,8 @@ before your membership is visible.
 val rtcRoom = rtcClient.room(roomId, FfiRoomOptions(format = FfiMembershipFormat.ROOM_STATE))
 ```
 
-Make the room your client side needs (here, the widget bridge) routable **before** calling `room()`, because the
-core subscribes from inside it. `shutdown()` leaves every call of the room and ends its subscriptions; close your
-own room only after it, because that leave goes through it. (`shutdown`, not `close`: uniffi's `close()` frees the
+The core subscribes from inside `room()`, so your backend must be able to reach the room by then. `shutdown()`
+leaves every call of the room and ends its subscriptions. (`shutdown`, not `close`: uniffi's `close()` frees the
 object.)
 
 ### Membership format
@@ -257,7 +257,8 @@ val rtcCall = rtcRoom.joinCall(
 
 **No transport to discover or pass.** `Advertised` makes the core pick the first LiveKit transport from your
 `rtcTransports()`, and fail the join when there is none. Answer that method with the MSC4143 endpoint and the
-`.well-known` fallback (`rtc_foci`): matrix.org answers 404 on the endpoint. See `RtcTransportDiscovery.kt`.
+`.well-known` fallback (`rtc_foci`): matrix.org answers 404 on the endpoint. The Rust SDK's
+`Client.discoverRtcTransports` does both; see `SdkRtcTransports.kt`.
 
 **No slot id to compose.** The join takes the MSC4143 application slot id; `null` is `m.call#room`, the slot
 Element Call opens for a room-wide call.

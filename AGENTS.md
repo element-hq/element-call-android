@@ -26,7 +26,7 @@
 
 ## What this repository is
 
-A standalone Android library. A host app gives it a Matrix transport (the turnkey one over the Rust SDK, or its
+A standalone Android library. A host app gives it the RTC core's `MatrixBackend` (the one over the Rust SDK, or its
 own), a few ports (lifecycle, room context, audio routing, style) and gets back a call controller that works with
 no UI attached, plus composables for the call screen, the minimized bar, the floating tile and picture-in-picture.
 The host decides where those composables sit. The plan this repository follows is
@@ -36,21 +36,20 @@ The host decides where those composables sit. The plan this repository follows i
 
 | Gradle project | Artifact | Holds | May import |
 | :--- | :--- | :--- | :--- |
-| `call/api` | `element-call-api` | the contract: RTC types and ids, `ElementCallController`, the host ports (incl. `ElementCallMatrixTransport`), state types, options | coroutines only |
-| `call/impl` | `element-call` | `ElementCallStack`, the controller, foreground service, receiver, audio routing, and the Rust core wrapper in `…impl.rtc` | `call/api`, the RTC AAR (only in `…impl.rtc`), JNA. **No Compose.** |
+| `call/api` | `element-call-api` | the contract: RTC types and ids, `ElementCallController`, the host ports, state types, options | coroutines only |
+| `call/impl` | `element-call` | `ElementCallStack` (built over a `MatrixBackend`), the controller, foreground service, receiver, audio routing, and the Rust core wrapper in `…impl.rtc` | `call/api`, the RTC AAR (only in `…impl.rtc` and `ElementCallStack`), JNA. **No Compose.** |
 | `call/ui` | `element-call-ui` | the ONLY Compose module: screen, tiles, bar, floating tile, PiP content, `ElementCallStyle`, previews | `call/api`; libwebrtc only in `…ui.video` |
-| `call/matrix` | `element-call-matrix` | the ONLY module importing `org.matrix.rustcomponents.sdk`: `ElementCallSdkTransport` and the `temporary/` widget-driver stopgap | `call/api`, the SDK |
-| `call/test` | `element-call-test` | fakes for every port and for the RTC service, fixtures, test-pattern frames | `call/api` |
+| `call/test` | `element-call-test` | fakes for every port, the `MatrixBackend` and the RTC service, fixtures, test-pattern frames | `call/api`, the RTC AAR |
 | `rtc/local` | local Maven only | `matrixrtc-release.aar` (gitignored): the pinned core release, or a local build. An Ivy repository in `settings.gradle.kts` serves it as `io.element.android:matrix-rtc-android`, the core's own coordinate; this project publishes it to `~/.m2` under the same coordinate so the POMs resolve on layer 3 | |
-| `bom` | `element-call-bom` | one version for the five artifacts | |
+| `bom` | `element-call-bom` | one version for the four artifacts | |
 | `tests/consumer` | not published | a separate Gradle build: a minified app over the published artifacts from `mavenLocal()` | the artifacts |
-| `sample` | not published | the harness: a Compose app over the fakes, the only Activity, the instrumented tests | `call/ui`, `call/impl`, `call/test`; never `call/matrix` |
+| `sample` | not published | the harness: a Compose app over the fakes, the only Activity, the instrumented tests, and `SdkMatrixBackend`, the reference `MatrixBackend` over the Rust SDK (compiled and unit-tested, never run: the harness has no client) | `call/ui`, `call/impl`, `call/test`, the RTC AAR; the ONLY module importing `org.matrix.rustcomponents.sdk` |
 | `tests/konsist`, `tests/testutils`, `tests/uitests` | not published | the rules below, test helpers, the Paparazzi screenshot tests | |
 
-Everything in `call/impl` and `call/matrix` is `internal` unless it is on the allowlist in `KonsistBoundaryTest`.
+Everything in `call/impl` is `internal` unless it is on the allowlist in `KonsistBoundaryTest`.
 The rules are enforced by `tests/konsist` (`KonsistBoundaryTest`, one assertion per rule) and by Gradle:
 `verifyNoComposeDependencies` fails `check` if any `androidx.compose` artifact reaches the runtime classpath of
-`call/api`, `call/impl` or `call/matrix` (the annotation-only `runtime-annotation` excepted: `androidx.activity`
+`call/api` or `call/impl` (the annotation-only `runtime-annotation` excepted: `androidx.activity`
 drags it in and it carries no runtime).
 
 Package root: `io.element.android.call`. Distinct from Element X's packages so both can share a classpath.
@@ -150,21 +149,19 @@ until one does.
 
 ## What is temporary
 
-Anything that exists because the SDK or the core does not yet expose what the call needs lives in a folder named
-`temporary/`, is annotated `@ElementCallTemporaryApi`, and has its removal recipe in `docs/FEEDBACK.md`. Today:
+Anything that exists because the SDK or the core does not yet expose what the call needs has its removal recipe in
+`docs/FEEDBACK.md`. Today:
 
 - `rtc/local` and the Ivy repository over it: the core (`io.element.android:matrix-rtc-android`) is on GitHub Packages,
   which needs a token even to read, and not yet on Maven Central, so the AAR is fetched from its pinned release asset
   and resolved as a file; a host resolves the same asset the same way (README, "Consuming a release"). The asset is
   checked by sha256 only; the provenance recipe is `docs/FEEDBACK.md` item 28.
-- `call/matrix/…/temporary/widget/`: the widget-driver stopgap for membership, delayed events and to-device keys.
 
 ## The SDK edge
 
-`call/matrix` is compiled against one `org.matrix.rustcomponents:sdk-android` version (the catalog's `matrix_sdk`)
-and publishes it as a plain `require`. Element X pins its own SDK `strictly`, so a newer host SDK wins and the
-library runs on it; an older one fails at configuration time. When bumping the SDK here, run the tests and check
-`SdkSurfaceBinaryCompatibilityTest` (arrives with `call/matrix`'s code).
+The library does not depend on the Matrix Rust SDK: a host hands `ElementCallStack.Builder` its own `MatrixBackend`.
+Only the sample compiles against `org.matrix.rustcomponents:sdk-android` (the catalog's `matrix_sdk`), for
+`SdkMatrixBackend`; bump it with Element X, which keeps its own copy of that backend.
 
 ## Releasing
 

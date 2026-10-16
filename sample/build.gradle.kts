@@ -1,3 +1,5 @@
+import extension.testCommonDependencies
+
 /*
  * Copyright (c) 2026 Element Creations Ltd.
  *
@@ -36,13 +38,19 @@ dependencies {
     // ElementCallPictureInPicture, and MatrixRtcNative: the renderer touches libwebrtc natives, so the
     // library has to be loaded even though the sample never opens a call.
     implementation(projects.call.impl)
-    // The fixtures and the test pattern. Never call/matrix: the sample has no SDK client.
+    // The fixtures and the test pattern.
     implementation(projects.call.test)
+    // SdkMatrixBackend, the reference MatrixBackend over the Rust SDK. The harness itself runs on fakes.
+    implementation(libs.matrix.sdk)
+    implementation(variantOf(libs.jna) { artifactType("aar") })
+    implementation(libs.serialization.json)
     implementation(libs.androidx.activity.activity)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime)
     implementation(libs.kotlinx.collections.immutable)
     implementation(libs.coroutines.core)
+
+    testCommonDependencies(libs)
 
     // The instrumented tests (plan §7.2): the gestures and the pixels only a real device can answer for.
     androidTestImplementation(libs.androidx.compose.ui.test.junit)

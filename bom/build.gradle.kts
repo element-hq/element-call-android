@@ -18,7 +18,6 @@ dependencies {
         api(project(":call:api"))
         api(project(":call:impl"))
         api(project(":call:ui"))
-        api(project(":call:matrix"))
         api(project(":call:test"))
     }
 }

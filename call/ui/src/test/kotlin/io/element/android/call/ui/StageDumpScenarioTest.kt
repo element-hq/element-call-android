@@ -33,8 +33,8 @@ import io.element.android.call.api.rtc.MatrixRtcTileKind
 import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.call.impl.ElementCallStack
 import io.element.android.call.test.FakeElementCallLifecycleListener
-import io.element.android.call.test.FakeElementCallMatrixTransport
 import io.element.android.call.test.FakeElementCallRoomContextProvider
+import io.element.android.call.test.FakeMatrixBackend
 import io.element.android.call.test.FakeMatrixRtcClient
 import io.element.android.call.test.audio.FakeAudioFocus
 import io.element.android.call.test.audio.FakeCallAudioDeviceController
@@ -97,7 +97,7 @@ class StageDumpScenarioTest : RobolectricTest() {
             val application = ApplicationProvider.getApplicationContext<Application>()
             shadowOf(application).grantPermissions(Manifest.permission.RECORD_AUDIO, Manifest.permission.CAMERA)
             val client = FakeMatrixRtcClient()
-            val stack = ElementCallStack.Builder(application, FakeElementCallMatrixTransport())
+            val stack = ElementCallStack.Builder(application, FakeMatrixBackend())
                 .rtcClient(client)
                 .audioDeviceController(FakeCallAudioDeviceController())
                 .audioFocus(FakeAudioFocus(requestAudioFocusResult = {}, releaseAudioFocusResult = {}))
