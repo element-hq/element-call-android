@@ -989,6 +989,12 @@ where the core expects AES-256 — and appears identically in the two calls that
 still a warn-level line on a completely normal interop path, which makes it noise in exactly the logs where this
 kind of thing gets diagnosed.
 
+30. **`FfiEventEncryption.sender_cross_signed` is misnamed: it carries whether the client confirms the sender.** The
+    feeder gates keys on it (`sender_cross_signed.unwrap_or(false)`), and what decides it is the host's threat model
+    (whether insecure devices are excluded), not a cross-signing check the host can make. A host over the Kotlin
+    bindings has a shield state, not a device's signatures. Rename it `sender_confirmed` and document that it is the
+    client's verdict under its own trust settings.
+
 ## For `matrix-rust-sdk`
 
 1. **~~No way to read a raw room state event~~ — resolved, and the shape asked for is the shape that
@@ -1075,12 +1081,13 @@ asking for the session, and shortens the membership's lifetime, so a client that
 leaving at once. Once matrix-rust-sdk#6973 is released and the SDK pin follows Element X, call
 `Room.sendDelayedEvent` / `sendDelayedStateEvent` / `updateDelayedEvent`.
 
+**Vouching for a sender is the client's threat model.** The SDK applies the client's
+`DecryptionSettings.senderDeviceTrustRequirement` before anything is delivered, to-device messages included
+(Element X's `OnlySignedDeviceIsolationMode` excludes insecure devices). Of what it delivers, the backend reports
+the sender as confirmed (`senderCrossSigned`, item 30) unless the shield is red.
+
 **Still missing from the bindings:**
 
-- A sender's devices and a keys query (`Encryption.getDevice`, `requestUserIdentity`). The core's Rust backend
-  re-queries a sender whose trust is only pending, because a peer who just joined sends its media key before our
-  client has queried theirs. Without it a key whose sender reads `UNKNOWN_DEVICE` / `UNSIGNED_DEVICE` is reported as
-  not cross-signed and refused until the peer re-sends.
 - Relations with raw content and encryption info: `Room.loadOrFetchEventWithRelations` returns typed content.
   `relations` answers a failure, so a hand raised before we joined is not seen until it changes (feature-hq 009
   contract C8).

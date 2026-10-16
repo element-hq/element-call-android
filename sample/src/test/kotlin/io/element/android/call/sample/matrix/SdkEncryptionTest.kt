@@ -23,28 +23,26 @@ class SdkEncryptionTest {
     }
 
     @Test
-    fun `an encrypted event carries the sending device`() {
-        assertThat(anEncryptionInfo(ALICE, ShieldState.None).toFfi())
-            .isEqualTo(FfiEventEncryption(encrypted = true, senderDeviceId = A_SENDER_DEVICE, senderCrossSigned = true))
-    }
-
-    @Test
-    fun `an unsigned, unknown or unattributable device is not cross-signed`() {
+    fun `an encrypted event is confirmed under a none or grey shield`() {
         listOf(
-            ShieldState.Red(TimelineEventShieldStateCode.UNSIGNED_DEVICE),
+            ShieldState.None,
             ShieldState.Grey(TimelineEventShieldStateCode.UNKNOWN_DEVICE),
             ShieldState.Grey(TimelineEventShieldStateCode.AUTHENTICITY_NOT_GUARANTEED),
-            ShieldState.Red(TimelineEventShieldStateCode.MISMATCHED_SENDER),
         ).forEach { shield ->
-            assertThat(shield.isSenderCrossSigned()).isFalse()
+            assertThat(anEncryptionInfo(ALICE, shield).toFfi())
+                .isEqualTo(FfiEventEncryption(encrypted = true, senderDeviceId = A_SENDER_DEVICE, senderCrossSigned = true))
         }
     }
 
     @Test
-    fun `an unverified or violating identity still signs its own devices`() {
-        // MSC4153 asks about the device, not about trusting its owner.
-        assertThat(ShieldState.None.isSenderCrossSigned()).isTrue()
-        assertThat(ShieldState.Red(TimelineEventShieldStateCode.VERIFICATION_VIOLATION).isSenderCrossSigned()).isTrue()
+    fun `an encrypted event under a red shield is not confirmed`() {
+        listOf(
+            ShieldState.Red(TimelineEventShieldStateCode.UNSIGNED_DEVICE),
+            ShieldState.Red(TimelineEventShieldStateCode.VERIFICATION_VIOLATION),
+            ShieldState.Red(TimelineEventShieldStateCode.MISMATCHED_SENDER),
+        ).forEach { shield ->
+            assertThat(anEncryptionInfo(ALICE, shield).toFfi().senderCrossSigned).isFalse()
+        }
     }
 
     private companion object {

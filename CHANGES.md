@@ -17,6 +17,8 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
   (with `SdkElementCallRoomContext`) is the reference over the Rust SDK to copy. `ElementCallSdkTransport`,
   `ElementCallMatrixTransport`, `ElementCallMatrixRoom` and the `call.api.matrix` types are gone; tests fake the
   backend with `FakeMatrixBackend`. `element-call` exposes the core's AAR as an `api` dependency.
+- Media keys are received for the whole session, and a sender is confirmed as the host's client decides: the
+  reference backend confirms a sender unless its shield is red, after the SDK's own sender trust requirement.
 - No dead man's switch until the SDK bindings have delayed events: the reference backend refuses them, and the core
   joins without one (docs/FEEDBACK.md, "SDK backend").
 

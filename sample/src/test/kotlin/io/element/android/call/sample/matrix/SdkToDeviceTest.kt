@@ -12,7 +12,6 @@ import org.junit.Test
 import org.matrix.rtc.FfiToDeviceRecipient
 import org.matrix.rustcomponents.sdk.ShieldState
 import org.matrix.rustcomponents.sdk.ToDeviceMessage
-import uniffi.matrix_sdk_ui.TimelineEventShieldStateCode
 
 class SdkToDeviceTest {
     @Test
@@ -30,18 +29,6 @@ class SdkToDeviceTest {
         assertThat(message.encryption.encrypted).isTrue()
         assertThat(message.encryption.senderDeviceId).isEqualTo(A_SENDER_DEVICE)
         assertThat(message.encryption.senderCrossSigned).isTrue()
-    }
-
-    @Test
-    fun `a key from a device we cannot attribute is reported as not cross-signed`() {
-        val message = ToDeviceMessage(
-            eventType = A_KEY_TYPE,
-            senderId = ALICE,
-            content = A_CONTENT,
-            encryptionInfo = anEncryptionInfo(ALICE, ShieldState.Grey(TimelineEventShieldStateCode.UNKNOWN_DEVICE)),
-        ).toFfi()
-
-        assertThat(message.encryption.senderCrossSigned).isFalse()
     }
 
     @Test
