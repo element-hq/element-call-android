@@ -5,7 +5,7 @@ call implementation for android: media, session, user interface and the Matrix s
 [matrix-rust-rtc](https://github.com/element-hq/matrix-rust-rtc).
 
 <p align="center">
-  <img src="docs/call_screen.png" width="320" alt="A group call: one member spotlighted with a speaking outline, four more in a strip below, and the control bar.">
+  <img src="docs/call_screen.gif" width="320" alt="A group call: a shared screen spotlighted above a grid of members, scrolled, a hand raised, then the screen share opened full screen.">
 </p>
 
 
