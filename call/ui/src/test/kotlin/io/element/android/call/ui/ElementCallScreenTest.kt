@@ -278,7 +278,7 @@ class ElementCallScreenTest : RobolectricTest() {
         onNodeWithContentDescription(activity!!.getString(R.string.element_call_a11y_minimize_call)).assertIsDisplayed()
     }
 
-    /** In a small call our own tile neither toggles the chrome nor goes fullscreen, and the tap is not the stage's (019 R14, R23). */
+    /** Our floating tile neither toggles the chrome nor goes fullscreen, and the tap is not the stage's (019 R14, R23). */
     @Test
     fun `in a small call a tap or a double tap on our tile does nothing`() = runAndroidComposeUiTest<ComponentActivity> {
         // With our camera on: off, our floating tile is not on the stage (030 R17).
@@ -292,6 +292,29 @@ class ElementCallScreenTest : RobolectricTest() {
         own.performTouchInput { doubleClick() }
         waitForIdle()
         assertThat(events.recorded().filter { it is StageChromeEvent.TapStage || it is ElementCallScreenEvent.ToggleFullscreen }).isEmpty()
+    }
+
+    /** From three people our tile is an inline card cropped to 4:3, and fullscreen is where we see all of what we send (019 R14). */
+    @Test
+    fun `in a small call of three a double tap on our tile goes fullscreen`() = runAndroidComposeUiTest<ComponentActivity> {
+        val events = EventsRecorder<ElementCallScreenEvent>()
+        setContent {
+            CompositionLocalProvider(LocalInspectionMode provides true) {
+                ElementCallScreen(
+                    state = anElementCallScreenState(
+                        participants = listOf(aLocalParticipant(), aRemoteParticipant(), aCrowdParticipant(0)),
+                        eventSink = events,
+                    ),
+                )
+            }
+        }
+        waitForIdle()
+        val own = onNodeWithTag(ElementCallTestTags.tile(A_LOCAL_MEMBER_ID))
+
+        events.clear()
+        own.performTouchInput { doubleClick() }
+        waitForIdle()
+        events.assertList(listOf(StageChromeEvent.TapStage, ElementCallScreenEvent.ToggleFullscreen(A_LOCAL_MEMBER_ID)))
     }
 
     /** Dropped after a slow drag, our floating tile goes to the corner it was let go nearest (019 R21). */
