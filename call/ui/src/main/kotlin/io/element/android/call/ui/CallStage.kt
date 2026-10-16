@@ -444,9 +444,11 @@ internal fun CallStage(
                     }
                 }
             }
-            // In a small call our tile neither goes fullscreen nor toggles the chrome; its taps are
-            // still its own, so they do not fall through to the stage (019 R14, R23).
-            val isOwnSmallCallTile = tile.isLocal && layout.isStatic
+            // Our floating tile neither goes fullscreen nor toggles the chrome; its taps are still its
+            // own, so they do not fall through to the stage (019 R14, R23). Only floating, not any own
+            // tile in a small call: from three people ours is an inline card cropped to 4:3, and
+            // fullscreen is the one place that shows all of what we send.
+            val isOwnFloatingTile = tile.isLocal && slot.appearance == CallTileAppearance.Floating
             // A tap or a double tap on a ringing callee does nothing: it is not a tile (030 R38).
             val isRinging = tile.ring != null
             PlacedTile(
@@ -466,8 +468,8 @@ internal fun CallStage(
                 } else {
                     { state.eventSink(ElementCallScreenEvent.ToggleTileStats) }
                 },
-                onTap = if (isOwnSmallCallTile || isRinging) NoOp else onTap,
-                allowsFullscreen = !isOwnSmallCallTile && !isRinging,
+                onTap = if (isOwnFloatingTile || isRinging) NoOp else onTap,
+                allowsFullscreen = !isOwnFloatingTile && !isRinging,
                 isLandscapeStage = metrics.isLandscape,
                 drag = ownDrag.takeIf { slot.appearance == CallTileAppearance.Floating },
                 floatingCorner = layout.floating?.corner?.takeIf { slot.appearance == CallTileAppearance.Floating },
@@ -679,7 +681,7 @@ private fun PlacedTile(
     stats: TileStats?,
     onLongPress: () -> Unit,
     onTap: () -> Unit,
-    /** False for our own tile in a small call (019 R14): no double tap and no action to go fullscreen. */
+    /** False for our own floating tile (019 R14): no double tap and no action to go fullscreen. */
     allowsFullscreen: Boolean,
     isLandscapeStage: Boolean,
     /** Our floating tile's offset from its corner while dragged. */
