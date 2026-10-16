@@ -9,8 +9,6 @@ package io.element.android.call.impl.rtc
 
 import android.content.Context
 import io.element.android.call.api.ElementCallDispatchers
-import io.element.android.call.api.matrix.ElementCallMatrixRoom
-import io.element.android.call.api.matrix.ElementCallMatrixTransport
 import io.element.android.call.api.rtc.MatrixRtcClient
 import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 import io.element.android.call.api.rtc.MatrixRtcRoom
@@ -21,18 +19,17 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.matrix.rtc.FfiMembershipFormat
 import org.matrix.rtc.FfiRoomOptions
+import org.matrix.rtc.MatrixBackend
 import org.matrix.rtc.RtcClient
 import timber.log.Timber
-import java.util.concurrent.ConcurrentHashMap
 
 /**
- * The RTC core for one Matrix session, over a [DefaultMatrixBackend] on [transport].
+ * The RTC core for one Matrix session, over the host's [backend].
  *
- * [sessionCoroutineScope] lives as long as the Matrix session: the backend's subscriptions and the
- * rooms open for a call all hang off it.
+ * [sessionCoroutineScope] lives as long as the Matrix session: the rooms open for a call hang off it.
  */
 internal class RustMatrixRtcClient(
-    private val transport: ElementCallMatrixTransport,
+    private val backend: MatrixBackend,
     private val dispatchers: ElementCallDispatchers,
     /** Only reaches as far as the camera, via the room, the call and then the media session. */
     private val context: Context,
@@ -40,17 +37,6 @@ internal class RustMatrixRtcClient(
 ) : MatrixRtcClient {
     /** FFI calls are started on one thread, so they reach the core in the order we make them, never from main. */
     private val ffiDispatcher = dispatchers.io.limitedParallelism(1)
-
-    /** The bridges open for a room, by id: the backend routes the core's room-scoped calls through them. */
-    private val openRooms = ConcurrentHashMap<RoomId, ElementCallMatrixRoom>()
-
-    private val backend = DefaultMatrixBackend(
-        transport = transport,
-        transportDiscovery = RtcTransportDiscovery(transport),
-        roomProvider = { openRooms[it] },
-        scope = sessionCoroutineScope,
-        ioDispatcher = dispatchers.io,
-    )
 
     private var rtcClient: RtcClient? = null
 
@@ -62,19 +48,10 @@ internal class RustMatrixRtcClient(
     }
 
     override suspend fun room(roomId: RoomId, format: MatrixRtcMembershipFormat): Result<MatrixRtcRoom> = runCatchingExceptions {
-        // Registered before the core subscribes, which it does from inside `room`.
-        val matrixRoom = transport.openRoom(roomId).getOrThrow()
-        openRooms.put(roomId, matrixRoom)?.let { Timber.w("MatrixRTC: replacing the open room for $roomId") }
-        val onShutdown: suspend () -> Unit = {
-            openRooms.remove(roomId, matrixRoom)
-            matrixRoom.close()
-        }
-        val rtcRoom = runCatchingExceptions {
+        val rtcRoom = withTimeout(SEEDING_TIMEOUT_MS) {
             // The core resolves once every subject has delivered; one that never does would hang the join.
-            withTimeout(SEEDING_TIMEOUT_MS) {
-                withContext(ffiDispatcher) { rtcClient().room(roomId.value, FfiRoomOptions(format.toFfi())) }
-            }
-        }.onFailure { onShutdown() }.getOrThrow()
+            withContext(ffiDispatcher) { rtcClient().room(roomId.value, FfiRoomOptions(format.toFfi())) }
+        }
         Timber.i("MatrixRTC: $roomId open in $format")
         RustMatrixRtcRoom(
             rtcRoom = rtcRoom,
@@ -83,7 +60,6 @@ internal class RustMatrixRtcClient(
             ffiDispatcher = ffiDispatcher,
             context = context,
             sessionCoroutineScope = sessionCoroutineScope,
-            onShutdown = onShutdown,
         )
     }
 

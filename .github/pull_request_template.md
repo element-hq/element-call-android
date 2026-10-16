@@ -3,7 +3,7 @@
 Please read [CONTRIBUTING.md](https://github.com/element-hq/element-call-android/blob/main/CONTRIBUTING.md) before submitting your pull request.
 
 This library is consumed by Element X Android. A change to a public type in call/api, call/impl, call/ui or
-call/matrix is an API change for every host: say so in the description and label the PR `pr-api`.
+call/test is an API change for every host: say so in the description and label the PR `pr-api`.
 
 -->
 

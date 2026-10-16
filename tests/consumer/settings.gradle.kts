@@ -49,7 +49,6 @@ dependencyResolutionManagement {
                     includeModule("io.element.android", "element-call-api")
                     includeModule("io.element.android", "element-call")
                     includeModule("io.element.android", "element-call-ui")
-                    includeModule("io.element.android", "element-call-matrix")
                     includeModule("io.element.android", "element-call-test")
                 }
             }

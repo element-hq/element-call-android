@@ -296,9 +296,8 @@ between entries.
    host must make — would turn a silent mutual invisibility into an immediate error.
 12. **~~Transport discovery is not in the core~~ — resolved by the backend core:** a join picks from the backend's
     `rtcTransports()`, which the host answers verbatim; the host still fetches it. Every host reimplemented an authenticated
-    `GET /_matrix/client/v1/rtc/transports` (`RtcTransportDiscovery.kt`). A helper — even just the response
-    parsing — would remove duplicated work. In practice the endpoint answered `401` for us and we fell back to
-    well-known.
+    `GET /_matrix/client/v1/rtc/transports` until the SDK exposed `Client.discoverRtcTransports`, which does it with
+    the well-known fallback; the backend now only turns its typed list back into the JSON the core parses.
 
 ### Video
 
@@ -1060,94 +1059,42 @@ kind of thing gets diagnosed.
    Harmless in practice, but the two should agree.
 8. `matrix_sdk_crypto: Received an unexpected encrypted to-device event` warns on every RTC media key, even though
    the message is then forwarded correctly.
-9. **`Room.sendStickyRaw` returns nothing, so the event id the RTC FFI now asks for cannot be reported.** The RTC
-   `sendStickyEvent` callback returns `String` and its docs call the id "never optional" — "matrix-rust-sdk: the
-   `eventId` on the send response. Every Matrix send responds with one" — which is true of the response and not of
-   this binding: `sendStickyRaw` and `sendRaw` both resolve to unit, and only `sendStateEventRaw` hands the id
-   back. So the host has nothing truthful to return and answers with an empty string, and the core cannot relate
-   an MSC4075 notification to a sticky membership — which is no longer hypothetical, now that the core sends those
-   notifications itself and relates them to the membership event (RTC item 17). The value exists on the wire and `StickyEvent`
-   already carries an `eventId` when the same event comes *back* through `stickyEvents()`; it is only the send that
-   drops it. Returning the send response's `event_id` from `sendStickyRaw` would close it. The same for `sendRaw`:
-   the core keeps the id of a raised hand's `m.reaction` to redact it later, so `sendRoomEvent` cannot answer an
-   empty string and goes through the widget machine's `send_event` (which does return the id) until `sendRaw`
-   returns one; a matrix-rust-sdk change to that effect is in progress.
+9. **~~`Room.sendStickyRaw` and `Room.sendRaw` return nothing~~ — resolved in `sdk-android` 26.10.15:** both now
+   answer with the event id, so the core can relate an MSC4075 notification to a sticky membership and redact a
+   raised hand's `m.reaction`.
 
-## Widget-driver stopgap
+## SDK backend
 
-The library builds against the **released** Kotlin bindings (`org.matrix.rustcomponents:sdk-android`, the version
-Element X `develop` pins). Those lack the entry points the native call stack needs, so
-`call/matrix/…/temporary/widget/` drives the SDK's *widget driver* in-process (no web view) as the Matrix bridge
-for exactly them. The widget machine already implements delayed events, a room-state feed and encrypted to-device
-messaging for Element Call web; `WidgetMatrixBridge` speaks its JSON API through `WidgetDriver.send` /
-`incomingMessages`. Everything else - `sendStateEventRaw`, the OpenID token, members, encryption state - stays on
-the released SDK. Same design as Element X iOS (`ElementCallMatrix/Widget/`).
+`SdkMatrixBackend` (`sample/…/matrix/`, the reference a host copies) is the core's `MatrixBackend` over the **released** Kotlin bindings
+(`org.matrix.rustcomponents:sdk-android`, the version Element X pins), mirroring the core's own Rust backend over
+matrix-sdk (`matrix-rtc-matrix-sdk`). Everything goes through the SDK except what the bindings lack:
 
-**The shape that makes it disposable.** The Matrix port (`ElementCallMatrixTransport` and `ElementCallMatrixRoom`
-in `call/api/…/matrix/`) is the one place listing the gap; `MatrixRtcCommandSender`, `RoomStateFeeder` and
-`SessionStateFeeder` depend on it and never learn about widgets. Every declaration in `temporary/widget/` is
-annotated `@ElementCallTemporaryApi`, and a Konsist rule keeps the package inside `call/matrix`. Retiring the
-stopgap is:
+**No dead man's switch until the bindings have delayed events (MSC4140).** `sendDelayedEvent` answers
+`M_UNRECOGNIZED`, as a homeserver without MSC4140 does (matrix.org refuses them too): the core joins anyway, stops
+asking for the session, and shortens the membership's lifetime, so a client that dies lingers for minutes instead of
+leaving at once. Once matrix-rust-sdk#6973 is released and the SDK pin follows Element X, call
+`Room.sendDelayedEvent` / `sendDelayedStateEvent` / `updateDelayedEvent`.
 
-1. When the Kotlin bindings expose them, call the SDK directly from `SdkElementCallMatrixRoom` and
-   `ElementCallSdkTransport` (`sendDelayedEvent`, `updateDelayedEvent`, `stateEvents`, `stickyEvents`,
-   `sendStickyEvent`, `sendToDeviceMessage`, `toDeviceMessages`; the SDK-backed versions the spike once had are
-   in Element X commit `8a2e944437`, the last one before the bridge landed, in `JoinedRustRoom.kt` and
-   `RustMatrixClient.kt`).
-2. Delete `call/matrix/…/temporary/widget/` (driver, bridge, capability grant, relay, registry), drop
-   the bridge close from `RustMatrixRtcClient.room`'s `onShutdown`, and lift the format pin in
-   `DefaultElementCallController` so `ElementCallOptions.membershipFormat` is obeyed. The `RustWidgetDriver` recv-loop hardening the spike made in
-   Element X is a genuine bug fix for the WebView call too and can go to Element X on its own.
+**Still missing from the bindings:**
 
-**Missing from the released FFI** (each retires part of the bridge; all of them retire it):
+- A sender's devices and a keys query (`Encryption.getDevice`, `requestUserIdentity`). The core's Rust backend
+  re-queries a sender whose trust is only pending, because a peer who just joined sends its media key before our
+  client has queried theirs. Without it a key whose sender reads `UNKNOWN_DEVICE` / `UNSIGNED_DEVICE` is reported as
+  not cross-signed and refused until the peer re-sends.
+- Relations with raw content and encryption info: `Room.loadOrFetchEventWithRelations` returns typed content.
+  `relations` answers a failure, so a hand raised before we joined is not seen until it changes (feature-hq 009
+  contract C8).
+- The wire spelling of a state or message-like event: `RoomStateEvent` and `RoomMessageLikeEvent` carry ruma's
+  enum, so events are reported under the type subscribed to. Harmless while the core asks for one membership
+  spelling, but `m.call.member` and `org.matrix.msc3401.call.member` read the same set.
+- The top-level `redacts` of a pre-v11 redaction: `RoomMessageLikeEvent` carries the content only, so a hand lowered
+  in an older room version is not seen.
+- State outside sliding sync's `required_state`: `subscribeToStateEvents` reads the store. The call member type is
+  in the default set; `m.rtc.slot` is not, so the sticky modes would read every room as slotless.
 
-- `Room.sendDelayedEvent` / `sendDelayedStateEvent` (returning the delay id) and `updateDelayedEvent(cancel|restart)`.
-- A room-state feed: `Room.subscribeToStateEvents(eventType)` delivering the full list per change with `event_id`,
-  `sender`, `state_key`, `origin_server_ts` and content.
-- `Client.sendToDeviceMessage(eventType, messages, encrypt)` returning per-recipient failures.
-- `Client.subscribeToToDeviceMessages(eventTypes)` delivering the **encryption info**: attested sender, sender device
-  id and cross-signing status. The widget path delivers `{type, content, sender, encrypted}` only.
-- Sticky events (MSC4354) come from the SDK (`sdk-android` 26.10.15): `Room.sendStickyRaw`,
-  `stickyEvents` and `subscribeToStickyEvents`, with encryption info. Calls stay pinned to the state-event mode
-  (`DefaultElementCallController`; `ElementCallOptions.membershipFormat` is read but not obeyed) until the sticky
-  modes have been tried against other clients; their delayed leave still goes through the bridge, and item 5 applies.
-- `Room.sendRaw` returning the event id (matrix-rust-sdk item 9). It exists and sends, but resolves to unit, and the
-  core keeps the id of a raised hand's `m.reaction` to redact it later - so the message-like room event (the MSC4075
-  notification of the state-event mode too, a plain room event since core v0.3.0-rc.1) goes through the widget
-  machine's `send_event`, which answers with the id, until `sendRaw` does. `Room.redact` already lowers the hand.
-- Querying the reactions already in the room, with raw content and encryption info. Live reactions arrive as
-  timeline events; the ones sent before we joined cannot be fetched: `Room.loadOrFetchEventWithRelations` returns
-  typed content with neither, and the widget API has no `read_relations`. `ElementCallMatrixRoom.relations` answers
-  `NotSupported`, so a hand raised before we joined is not seen until it changes, and until then our queue numbers
-  can differ from the other clients' (feature-hq 009 contract C8).
-- Timeline events with their encryption info. The widget driver forwards decrypted reactions without saying whether
-  they were encrypted, so the bridge reports them without any; the core binds a reaction to its member by sender.
-  Membership is unaffected. `Room.subscribeToMessageLikeEvents`, with raw content and encryption info, is
-  [matrix-rust-sdk#7163](https://github.com/matrix-org/matrix-rust-sdk/pull/7163); read reactions and redactions
-  there once released.
-
-**Trust relaxation while the stopgap is in place.** The core drops a media key whose sender is not cross-signed
-and the mapper drops one without a sender device. Through the widget driver neither is knowable, so the bridge
-takes the device from the key message content (`device_id`, `member.claimed_device_id` or `member.device_id`) and
-treats an encrypted message as cross-signed. The driver already drops cleartext in an encrypted room and attests
-the sender of an encrypted message, so this is the trust level embedded Element Call web has today. It lives only
-in `WidgetMatrixBridge.deliverToDevice`; `EncryptionKeyMapper` and the core keep their strict checks. A key naming
-no device reaches the core without one and is rejected there: the core checks the device against the membership,
-so the bridge never reads it off the membership. Once the SDK reports the sending device, the bridge passes that.
-
-**Wire details worth knowing.** The machine's request enum is adjacently tagged (`action` tag, `data` content):
-a message whose `data` precedes `action` is buffered by serde and its raw JSON fields then fail with "invalid
-type: newtype struct". The bridge builds its envelopes with `action` before `data`. Live state arrives through
-two doors - the sync state block as `update_state`, timeline-borne state as a `toWidget` `send_event` with a
-`state_key` - and the same change can come through both, so the bridge dedupes on `event_id`. `send_to_device`
-omits `failures` entirely when everyone was served. The machine keeps at most 15 unanswered requests of its own
-with a 10 s timeout, so every `toWidget` request is answered inline. `WidgetDriver.run()` returns only once its
-handle is dropped and the machine next emits; on Android cancelling the bridge's scope drops the Rust future,
-and a `supported_api_versions` poke makes the pending `recv()` return so the handle is released.
-
-**Other limits.** To-device messages are only received while a driver runs for some room, so a key rotated by a
-peer between our calls is lost; peers re-send on join. Only state the sync asked for reaches the driver's initial
-`update_state`; the call member type is in sliding sync's default `required_state`, so it is there.
+**Membership format pin.** Calls stay pinned to `ROOM_STATE` (`DefaultElementCallController`;
+`ElementCallOptions.membershipFormat` is read but not obeyed) until the sticky modes have been tried against other
+clients and the slot state above is readable.
 
 ## Host-side log lines worth keeping
 

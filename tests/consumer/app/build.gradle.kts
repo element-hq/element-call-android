@@ -58,7 +58,6 @@ dependencies {
     implementation(platform("io.element.android:element-call-bom:$elementCallVersion"))
     implementation("io.element.android:element-call-ui")
     implementation("io.element.android:element-call")
-    implementation("io.element.android:element-call-matrix")
     implementation("io.element.android:element-call-test")
 
     implementation(platform(libs.androidx.compose.bom))

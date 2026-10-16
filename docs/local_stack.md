@@ -63,7 +63,7 @@ reaches Maven Central, `rtc/local` and the Ivy repository go away and the catalo
 
 ## Layer 2: the library from source in Element X
 
-Element X includes this repository as a composite build and substitutes the five published artifacts with the
+Element X includes this repository as a composite build and substitutes the four published artifacts with the
 projects here, so every change recompiles inside Element X and a breakpoint set in the library stops in
 Element X's debugger. This is the day-to-day mode while the ports settle.
 
@@ -102,7 +102,6 @@ includeBuild("/abs/path/element-call-android") {
         substitute(module("io.element.android:element-call-api")).using(project(":call:api"))
         substitute(module("io.element.android:element-call")).using(project(":call:impl"))
         substitute(module("io.element.android:element-call-ui")).using(project(":call:ui"))
-        substitute(module("io.element.android:element-call-matrix")).using(project(":call:matrix"))
         substitute(module("io.element.android:element-call-test")).using(project(":call:test"))
     }
 }
@@ -129,7 +128,7 @@ Element X's settings turn the property into a `mavenLocal()` repository filtered
 
 **Switch back:** drop the property.
 
-The library side exists: `publishToMavenLocal` publishes the five artifacts and the BOM through the
+The library side exists: `publishToMavenLocal` publishes the four artifacts and the BOM through the
 `io.element.call.publish` plugin, and, from `rtc/local`, the core file as
 `io.element.android:matrix-rtc-android:<MATRIX_RTC_VERSION>` (the coordinate the published POMs name; `RELEASING.md`
 says why it goes no further than `~/.m2`). `tests/consumer` is a minified app built this way on every change, and,

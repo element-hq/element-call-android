@@ -17,8 +17,8 @@ import kotlinx.coroutines.flow.emptyFlow
  * who its participants are.
  *
  * The RTC layer knows participants only as member ids and user ids. Names and avatars come from the
- * room, and a host that caches its members reads them from its cache here; the turnkey provider in
- * `element-call-matrix` reads them from the SDK without one.
+ * room, and a host that caches its members reads them from its cache here; the sample's
+ * `SdkElementCallRoomContext` reads them from the SDK without one.
  */
 interface ElementCallRoomContextProvider {
     /**

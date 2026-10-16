@@ -506,7 +506,7 @@ internal class DefaultElementCallController(
         // format - so changing it mid-call is not something the core could act on.
         //
         // Temporary: pinned to the room-state format until the sticky formats, whose events now go through the
-        // SDK, have been tried against other clients - see `docs/FEEDBACK.md`, "Widget-driver stopgap". The
+        // SDK, have been tried against other clients - see `docs/FEEDBACK.md`, "SDK backend". The
         // option is still read so the pin is visible in the log, and so that lifting it is a one-line change here.
         val preferredMembershipFormat = options.membershipFormat
         val membershipFormat = MatrixRtcMembershipFormat.ROOM_STATE

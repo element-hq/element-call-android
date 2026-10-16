@@ -8,7 +8,7 @@
 /**
  * This will generate the plugin "io.element.call.no-compose", applied on top of
  * "io.element.call.android-library" by the modules that must stay free of Compose (call/api,
- * call/impl, call/matrix). It registers `verifyNoComposeDependencies` and wires it into `check`.
+ * call/impl). It registers `verifyNoComposeDependencies` and wires it into `check`.
  */
 import extension.VerifyNoComposeDependenciesTask
 

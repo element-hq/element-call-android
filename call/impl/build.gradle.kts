@@ -8,8 +8,8 @@ import extension.testCommonDependencies
  */
 
 // element-call: the stack, the controller, the foreground service, the receiver, audio routing, and
-// the Rust core wrapper (package io.element.android.call.impl.rtc), which is the ONLY place that
-// imports org.matrix.rtc. No Compose.
+// the Rust core wrapper (package io.element.android.call.impl.rtc), which is the only package here
+// that imports org.matrix.rtc, ElementCallStack's MatrixBackend aside. No Compose.
 plugins {
     id("io.element.call.android-library")
     id("io.element.call.no-compose")
@@ -36,7 +36,8 @@ dependencies {
     api(projects.call.api)
 
     // The matrix-rust-rtc core: the file in rtc/local here, the release asset for a host (see docs/local_stack.md).
-    implementation(variantOf(libs.matrix.rtc.android) { artifactType("aar") })
+    // `api`: the stack is built over its MatrixBackend.
+    api(variantOf(libs.matrix.rtc.android) { artifactType("aar") })
     // uniffi bindings runtime.
     implementation(variantOf(libs.jna) { artifactType("aar") })
 

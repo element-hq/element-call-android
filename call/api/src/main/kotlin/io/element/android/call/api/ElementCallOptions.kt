@@ -18,10 +18,9 @@ data class ElementCallOptions(
     /**
      * Which generation of Element Call a call should be reachable by. See [MatrixRtcMembershipFormat].
      *
-     * Temporary: pinned to [MatrixRtcMembershipFormat.ROOM_STATE] while the library builds against the
-     * released Rust SDK, whatever is asked for. The two sticky modes need MSC4354, which the widget-driver
-     * stopgap cannot carry (`docs/FEEDBACK.md`, "Widget-driver stopgap"). A different value is logged so the
-     * pin is visible; lifting it is a one-line change in the controller.
+     * Temporary: pinned to [MatrixRtcMembershipFormat.ROOM_STATE], whatever is asked for, until the two
+     * sticky modes (MSC4354) have been tried against other clients (`docs/FEEDBACK.md`, "SDK backend"). A
+     * different value is logged so the pin is visible; lifting it is a one-line change in the controller.
      */
     val membershipFormat: MatrixRtcMembershipFormat = MatrixRtcMembershipFormat.ROOM_STATE,
     /**

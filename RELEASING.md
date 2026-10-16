@@ -26,14 +26,13 @@ What differs here is what a release *is*: this is a binary library, so the relea
 
 ## What a release is
 
-One version for the five artifacts and the BOM, under `io.element.android`:
+One version for the four artifacts and the BOM, under `io.element.android`:
 
 | Artifact | Project |
 | :--- | :--- |
 | `element-call-api` | `call/api` |
 | `element-call` | `call/impl` |
 | `element-call-ui` | `call/ui` |
-| `element-call-matrix` | `call/matrix` |
 | `element-call-test` | `call/test` |
 | `element-call-bom` | `bom` |
 
@@ -42,7 +41,7 @@ release variant with a sources jar, an empty javadoc jar, Gradle module metadata
 The published `element-call` POM depends on the core at `io.element.android:matrix-rtc-android`, its own
 coordinate, with an `aar` artifact selector; see [What must never be published](#what-must-never-be-published).
 
-Until Maven Central, **the GitHub release is the repository**. `scripts/release.sh` publishes the six modules to a
+Until Maven Central, **the GitHub release is the repository**. `scripts/release.sh` publishes the five modules to a
 Maven layout under `build/dist` and flattens it into `build/release-assets`: for each module the `.aar` or `.jar`,
 `.pom`, `.module`, `-sources.jar` and `-javadoc.jar`, named `<artifactId>-<version>…`, plus one `SHA256SUMS`. The
 workflow attaches them, with the sample APK, to the release on the tag `v<version>`. A host resolves them from
@@ -53,9 +52,7 @@ resolves it from the core's own release.
 ## Versioning
 
 Semantic versioning at `0.x`: the host pins each artifact exactly, so at `0.x` a renamed port method or a changed
-test tag is a breaking change and gets a **minor** bump. So does a change of the Matrix Rust SDK version
-`call/matrix` is compiled against, because the published POM declares it and the host's own pin must be at least
-that. Everything else is a **patch**. A prerelease, `0.2.0-rc.1`, is what a host tries before it becomes the
+test tag is a breaking change and gets a **minor** bump. Everything else is a **patch**. A prerelease, `0.2.0-rc.1`, is what a host tries before it becomes the
 version everyone gets: marked prerelease on GitHub, so it never becomes "latest".
 
 Tags are `v<version>`, as `matrix-rust-rtc`'s are and as the Ivy pattern a host declares expects. The workflow
