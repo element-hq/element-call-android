@@ -12,6 +12,10 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 ## Unreleased
 
+_Nothing yet._
+
+## 0.1.0-rc.8 - 2026-10-15
+
 - `ElementCallData.isStartingCall` is required: true when the user chose to call, false when they answer a ring or
   join a call in progress. In a DM it decides whether the other person's phone rings, so it must come from what the
   user did, never from whether the room already has a call (feature-hq 030). `ElementCallOptions.ringLifetime` sets
@@ -35,6 +39,23 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
   `ElementCallScreenState` gains `isHandRaised`, `isHandPending`, `showsRaiseHandControl` and `handRequestFailure`.
 - `ElementCallColors` gains `borderRaisedHand`, `bgActionPrimaryRest` and `iconOnSolidPrimary`, defaulted to Compound's
   dark tokens; a host mapping its own palette maps these too.
+
+
+
+### What's Changed
+
+✨ Features
+* Add a new high quality layer to upstream video (720p) by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/53
+* Add sound effects for leave and join in a call by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/54
+* Raise hand support by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/55
+* Use Compound's bluetooth-output icon for Bluetooth audio by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/56
+* Ring the other person when you start a call in a DM by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/57
+
+⚠️ API Changes
+* Bump the Rust SDK to 26.10.15 by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/58
+
+
+**Full Changelog**: https://github.com/element-hq/element-call-android/compare/v0.1.0-rc.7...v0.1.0-rc.8
 
 ## 0.1.0-rc.7 - 2026-10-09
 
