@@ -60,13 +60,11 @@ internal fun Room.encryptionUpdates(dispatchers: ElementCallDispatchers): Flow<B
     .distinctUntilChanged()
 
 /**
- * The joined members' user ids, ourselves included, re-read whenever the joined count moves, which is the
- * one signal the room info gives about the member list. `members()` fetches from the homeserver when the
- * store has not got them, which is what a room we are joined to but have never opened needs.
+ * The joined members' user ids, ourselves included, re-read on every `m.room.member` change: the joined count
+ * can stay put while the members change. The list comes from `members()`, not from those events, because the
+ * store only holds the member state sync has lazily loaded; `members()` fetches the rest from the homeserver.
  */
-internal fun Room.joinedMemberIds(dispatchers: ElementCallDispatchers): Flow<List<String>> = roomInfoUpdates(dispatchers)
-    .map { it.joinedMembersCount }
-    .distinctUntilChanged()
+internal fun Room.joinedMemberIds(dispatchers: ElementCallDispatchers): Flow<List<String>> = stateEventSets("m.room.member", dispatchers)
     .map { loadJoinedMemberIds(dispatchers) }
     .filter { it.isNotEmpty() }
     .distinctUntilChanged()
