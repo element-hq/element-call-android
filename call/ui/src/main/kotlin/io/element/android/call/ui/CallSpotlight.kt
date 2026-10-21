@@ -12,11 +12,14 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcTileKind
+import java.util.WeakHashMap
 
 /**
  * What is in the spotlight: a selection over the tiles, never the head of the ranking (spec 003
@@ -87,8 +90,8 @@ object CallSpotlight {
  * is shown, who spoke last, and what the spotlight showed, for Picture in Picture and the minimised
  * tile to follow (R7, R20, R21, R67, R68).
  *
- * Held above the screen, with `rememberSaveable`, because the screen goes away while minimised and
- * the choice has to survive both that and a rotation.
+ * Held per controller rather than per composition, because the call screen and the bar are drawn by
+ * two Activities, and the choice has to survive moving between them and a rotation.
  */
 @Stable
 class CallSpotlightMemory internal constructor(
@@ -142,4 +145,17 @@ class CallSpotlightMemory internal constructor(
 @Composable
 fun rememberCallSpotlightMemory(): CallSpotlightMemory = rememberSaveable(saver = CallSpotlightMemory.Saver) {
     CallSpotlightMemory(shownHeroId = null, lastSpeakerId = null, lastHeroes = emptyList(), spotlightId = null)
+}
+
+private val memories = WeakHashMap<ElementCallController, CallSpotlightMemory>()
+
+/** The one memory of [controller]'s call, shared by every window that draws it until [forgetCallSpotlightMemory]. */
+@Composable
+internal fun rememberCallSpotlightMemory(controller: ElementCallController): CallSpotlightMemory = remember(controller) {
+    memories.getOrPut(controller) { CallSpotlightMemory(shownHeroId = null, lastSpeakerId = null, lastHeroes = emptyList(), spotlightId = null) }
+}
+
+/** The call is over: the next one starts from nothing, our tile back in its first corner. */
+internal fun forgetCallSpotlightMemory(controller: ElementCallController) {
+    memories.remove(controller)
 }

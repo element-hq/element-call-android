@@ -10,6 +10,9 @@ package io.element.android.call.ui
 interface ElementCallNavigator {
     fun close()
 
+    /** Leave the full screen for the app, the call carrying on minimized or in picture-in-picture. */
+    fun minimize()
+
     /**
      * Ask for the camera permission, if it is not already held.
      *

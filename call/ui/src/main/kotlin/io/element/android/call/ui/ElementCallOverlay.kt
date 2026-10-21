@@ -7,81 +7,58 @@
 
 package io.element.android.call.ui
 
-import android.Manifest
-import android.app.Activity
-import android.content.Context
-import android.content.pm.PackageManager
-import android.media.projection.MediaProjectionManager
-import androidx.activity.compose.BackHandler
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
+import android.app.ActivityOptions
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.TransformOrigin
-import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
-import io.element.android.call.api.ElementCallConnection
+import androidx.compose.ui.unit.roundToIntRect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
 import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.ElementCallSnapshot
-import io.element.android.call.api.rtc.MatrixRtcDetailWindow
-import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
-import io.element.android.call.api.rtc.MatrixRtcStreamKind
-import io.element.android.call.api.rtc.MatrixRtcTileId
-import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.ui.theme.ElementCallStyle
 import io.element.android.call.ui.theme.ElementCallTheme
-import io.element.android.call.ui.util.KeepScreenOn
 import io.element.android.call.ui.util.scaffoldScrollableContentInsets
-import kotlinx.coroutines.flow.Flow
-import timber.log.Timber
 
 /**
- * Draws the running call around the host's content: docked as a bar, floating as a tile, or covering
- * everything, and as a single tile when the Activity is in picture-in-picture. This is the whole of
- * spec rule R9: the minimized UI is the component's, where it sits is the host's.
+ * Draws a minimized call above the host's content as a bar, and opens [ElementCallActivity] when the call
+ * is maximized. This is spec rule R9: the minimized UI is the component's, where it sits is the host's.
  *
- * Both minimized and maximized states render the same call, held by [controller], so moving between
- * them is a Compose transition rather than a task switch - nothing reconnects, no media is
- * renegotiated, and the audio does not gap. That is the difference this whole component is meant to
- * show: the Element Call WebView lives in its own Activity and its own task, so it can only ever be
- * all of the screen or none of it.
- *
- * Permissions are asked here rather than in the controller, because only an Activity can ask, and
- * this is composed inside one. The controller keeps the `RequestingPermission` state and the
- * idempotent answers.
+ * The full screen is never drawn here. It is its own Activity, in its own task, so that it alone can show
+ * over the lock screen and shrink into picture-in-picture while the host's Activity stays usable.
  *
  * @param controller the call to draw, from `ElementCallStack.controller`, or null before there is one. Compose
  * the overlay even then: switching between the overlay and bare content would rebuild the host's content.
- * @param modifier applied at the root, around the host's content and the call over it.
- * @param style the host's design system, or null for the defaults. Read at draw time, so a host that
- * re-brands per session reaches the call.
+ * @param modifier applied at the root, around the host's content and the bar over it.
+ * @param style the host's design system, or null for the defaults.
  * @param content the host's own content, composed underneath with the bar's height consumed from its
  * top window inset, so a scaffold below slides down rather than jumping when the bar appears.
  */
@@ -94,22 +71,17 @@ fun ElementCallOverlay(
 ) {
     val current = controller?.state?.collectAsState()?.value
     val isInPictureInPicture = controller?.isInPictureInPicture?.collectAsState()?.value == true
-    // How a minimized call shows itself depends on whether it has a picture. A voice call docks as
-    // a bar above the content, per the design; a video call floats as a draggable tile, because a
-    // 56dp strip is no way to show video and because the whole reason to minimize a video call is
-    // to keep watching it. Android's own picture-in-picture cannot do this job - it is an
-    // out-of-app mode and only starts once the user has left the app - so the in-app case has to
-    // be drawn by us, and native PiP takes over at the door. See `ElementCallFloatingTile`.
-    val isBarVisible = current != null && !current.isMaximized && !current.hasVideo
+    val isBarVisible = current != null && !current.isMaximized
+    var barBounds by remember { mutableStateOf<IntRect?>(null) }
+    var isOpeningFromBar by remember { mutableStateOf(false) }
     Column(modifier = modifier) {
         val statusBarTopPadding = if (LocalInspectionMode.current) {
             24.dp
         } else {
             scaffoldScrollableContentInsets.asPaddingValues().calculateTopPadding()
         }
-        // Animated in step with the bar so the content below slides rather than jumping the
-        // moment the bar is asked for: the same problem a connectivity banner above every screen
-        // has, and the same answer. Keyed on the call so a call starting docked does not slide.
+        // Animated in step with the bar so the content below slides rather than jumping. Keyed on the
+        // call so a call starting docked does not slide.
         val topWindowInset by key(current != null) {
             animateDpAsState(
                 targetValue = if (isBarVisible) statusBarTopPadding + MINIMIZED_CALL_BAR_HEIGHT else 0.dp,
@@ -118,7 +90,7 @@ fun ElementCallOverlay(
             )
         }
 
-        if (controller != null && current != null && !isInPictureInPicture) {
+        if (controller != null && current != null) {
             ElementCallTheme(style = style) {
                 AnimatedVisibility(
                     visible = isBarVisible,
@@ -129,282 +101,67 @@ fun ElementCallOverlay(
                         call = current,
                         onToggleMicrophone = { controller.setMicrophoneMuted(!current.isMicrophoneMuted) },
                         onHangUp = controller::hangUp,
-                        onClick = { controller.setMaximized(true) },
+                        onClick = {
+                            isOpeningFromBar = true
+                            controller.setMaximized(true)
+                        },
+                        modifier = Modifier.onGloballyPositioned { barBounds = it.boundsInWindow().roundToIntRect() },
                     )
                 }
             }
         }
 
-        Box {
-            // Always in this one place, and only hidden in PiP: this is the host's whole navigation
-            // tree, and composing it anywhere else would lose every screen's state and re-run every
-            // presenter.
-            Box(modifier = if (current != null && isInPictureInPicture) NotPlaced else Modifier, propagateMinConstraints = true) {
-                content(Modifier.consumeWindowInsets(PaddingValues(top = topWindowInset)))
-            }
-            if (controller != null && current != null) {
-                ElementCallTheme(style = style) {
-                    CallOverContent(controller = controller, current = current, isInPictureInPicture = isInPictureInPicture)
-                }
-            }
+        // Always in this one place: this is the host's whole navigation tree, and composing it anywhere
+        // else would lose every screen's state and re-run every presenter.
+        Box(propagateMinConstraints = true) {
+            content(Modifier.consumeWindowInsets(PaddingValues(top = topWindowInset)))
         }
     }
-}
-
-@Composable
-private fun CallOverContent(
-    controller: ElementCallController,
-    current: ElementCallSnapshot,
-    isInPictureInPicture: Boolean,
-) {
-    // A floating window is a couple of centimetres of screen. Everything that makes the call
-    // screen usable - controls, the top bar, the strip of other people, the app behind it - is
-    // either unreadable or untappable at that size, so PiP draws the one thing worth seeing and
-    // nothing else. This is also the whole of the PiP implementation, because the call is ours:
-    // the WebView path has to ask Element Call over the widget API whether it may enter PiP, and
-    // hangs the call up if the answer is no.
-    // What the spotlight shows is remembered here, above every window that draws the call, so
-    // the hero shown and the speaker held survive rotation and minimising, and Picture in
-    // Picture and the floating tile show what the spotlight showed (spec 003 R67, R68).
-    val spotlightMemory = rememberCallSpotlightMemory()
-    LaunchedEffect(controller) { controller.setRankingThreshold(SmallCallLayout.RANKING_THRESHOLD) }
-    // Here rather than in the screen, which is gone while minimised: the window keeps following the speaker (019 R15).
-    val tiles = remember(current) { current.callTiles() }
-    LaunchedEffect(tiles) {
-        if (!SmallCallLayout.applies(tiles)) return@LaunchedEffect
-        val speaker = SmallCallLayout.speaker(tiles, spotlightMemory.smallCallSpeakerId)
-        spotlightMemory.smallCallSpeakerId = speaker
-        spotlightMemory.spotlightId = SmallCallLayout.pictureInPictureTile(tiles, speaker)?.id
-    }
-    if (isInPictureInPicture) {
-        UnmountedStageWindow(controller = controller, current = current, spotlightMemory = spotlightMemory, isStageMounted = false)
-        ElementCallPictureInPictureContent(call = current, videoFrames = controller::videoFrames, spotlightId = spotlightMemory.spotlightId)
-    } else {
-        CallInApp(controller = controller, current = current, spotlightMemory = spotlightMemory)
-    }
-}
-
-/**
- * The detail window while the stage is unmounted - minimised, or in Picture in Picture: the head of
- * the order plus the tile shown, and nothing else composed (contract B8). The stage declares its own
- * while it is mounted, and this must not compete with it: [isStageMounted] is false only once the
- * stage is gone, exit animation included, or the two would take turns for as long as it runs.
- */
-@Composable
-private fun UnmountedStageWindow(
-    controller: ElementCallController,
-    current: ElementCallSnapshot,
-    spotlightMemory: CallSpotlightMemory,
-    isStageMounted: Boolean,
-) {
-    val shown = current.pictureInPictureCandidate(spotlightMemory.spotlightId)?.takeUnless { it.isRingingCallee }?.id
-    LaunchedEffect(isStageMounted, shown) {
-        if (isStageMounted) return@LaunchedEffect
-        controller.setComposedTiles(setOfNotNull(shown))
-        controller.setDetailWindow(MatrixRtcDetailWindow(ranks = HEAD_RANGE, also = setOfNotNull(shown)))
-    }
-}
-
-@Composable
-private fun CallInApp(
-    controller: ElementCallController,
-    current: ElementCallSnapshot,
-    spotlightMemory: CallSpotlightMemory,
-) {
-    val context = LocalContext.current
-    val microphoneLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        controller.setMicrophonePermissionGranted(granted)
-    }
-    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        controller.setCameraPermissionGranted(granted)
-    }
-    // Not a permission request: the screen-capture dialog returns an Intent that *is* the grant,
-    // single-use, so there is nothing to remember and nothing to check before asking. A refusal
-    // comes back as a non-OK result code and simply means no share.
-    val screenCaptureLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val resultData = result.data
-        if (result.resultCode == Activity.RESULT_OK && resultData != null) {
-            controller.setScreenShareEnabled(MatrixRtcScreenCaptureToken(resultData))
-        } else {
-            Timber.i("ElementCall: screen capture was refused")
+    if (controller != null) {
+        LaunchedEffect(controller, current == null) {
+            if (current == null) forgetCallSpotlightMemory(controller)
         }
     }
-
-    // Keyed on the state that needs answering rather than on the call, so it asks once and does
-    // not ask again on every recomposition of a call that is already connected.
-    LaunchedEffect(current.connection) {
-        if (current.connection != ElementCallConnection.RequestingPermission) return@LaunchedEffect
-        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-        if (granted) {
-            controller.setMicrophonePermissionGranted(true)
-        } else {
-            microphoneLauncher.launch(Manifest.permission.RECORD_AUDIO)
-        }
-    }
-
-    // A video call needs the camera from the moment it connects, so it is asked for up front
-    // rather than when the user reaches for the button - which is right for an audio call, where
-    // the camera may never be wanted at all, and wrong here.
-    //
-    // Sequenced after the microphone rather than alongside it, so the user answers one dialog at
-    // a time and each is asked in context. A denial is final: the keys do not change, so this
-    // does not ask again for the rest of the call.
-    LaunchedEffect(current.callData.isAudioCall, current.isMicrophonePermissionGranted) {
-        if (current.callData.isAudioCall || !current.isMicrophonePermissionGranted) return@LaunchedEffect
-        if (current.isCameraPermissionGranted) return@LaunchedEffect
-        val granted = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
-        if (granted) {
-            controller.setCameraPermissionGranted(true)
-        } else {
-            cameraLauncher.launch(Manifest.permission.CAMERA)
-        }
-    }
-
-    val navigator = remember {
-        object : ElementCallNavigator {
-            // The call disappearing is what removes this from the composition, so there is
-            // nothing to close - unlike an Activity host, which would have a window to finish.
-            override fun close() = Unit
-
-            override fun requestCameraPermission() {
-                if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
-                    controller.setCameraPermissionGranted(true)
-                } else {
-                    cameraLauncher.launch(Manifest.permission.CAMERA)
-                }
-            }
-
-            override fun requestScreenCapture() {
-                val projectionManager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as? MediaProjectionManager
-                if (projectionManager == null) {
-                    Timber.w("ElementCall: no MediaProjectionManager, cannot share the screen")
-                    return
-                }
-                screenCaptureLauncher.launch(projectionManager.createScreenCaptureIntent())
-            }
-        }
-    }
-
-    // The call screen is something you look at without touching - a video tile, someone else's
-    // shared screen - so the display timing out mid-call is a bug rather than a saving. A WebView
-    // call gets this from its own Activity adding FLAG_KEEP_SCREEN_ON to its own window; this has
-    // no window of its own to add it to.
-    //
-    // Only while maximized. Minimized, the user has said they want to use the app, and their
-    // scrolling keeps the screen alive on its own - holding it on through a long audio call
-    // spent in someone's pocket would be the opposite of helpful. Audio held to the ear is a
-    // third case and already handled: the proximity wake lock in the audio device controller
-    // blanks the screen deliberately, and this does not fight it.
-    KeepScreenOn(keepScreenOn = current.isMaximized)
-
-    FloatingCall(
-        isVisible = !current.isMaximized && current.hasVideo,
-        call = current,
-        videoFrames = controller::videoFrames,
-        spotlightId = spotlightMemory.spotlightId,
-        onClick = { controller.setMaximized(true) },
-    )
-
-    // The stage counts as mounted until its exit animation has finished, see UnmountedStageWindow.
-    val maximizedState = remember { MutableTransitionState(current.isMaximized) }
-    maximizedState.targetState = current.isMaximized
-    UnmountedStageWindow(
-        controller = controller,
-        current = current,
-        spotlightMemory = spotlightMemory,
-        isStageMounted = maximizedState.currentState || maximizedState.targetState,
-    )
-    MaximizedCall(
-        visibleState = maximizedState,
-        controller = controller,
-        navigator = navigator,
-        spotlightMemory = spotlightMemory,
-    )
-
-    // After the host's content and only while maximized, so it registers last and wins over the host's handlers.
-    if (current.isMaximized) {
-        BackHandler { controller.setMaximized(false) }
-    }
-}
-
-/**
- * A minimized video call, floating over the app.
- *
- * Its own composable for the same reason [MaximizedCall] is: inside the overlay's `Column` an
- * `AnimatedVisibility` resolves to the `ColumnScope` overload, which is not what a tile drawn over
- * the content wants. It takes none of the content's space, unlike the bar, so nothing below reflows
- * when it appears.
- */
-@Composable
-private fun FloatingCall(
-    isVisible: Boolean,
-    call: ElementCallSnapshot,
-    videoFrames: (memberId: String, kind: MatrixRtcStreamKind) -> Flow<MatrixRtcVideoFrame>,
-    spotlightId: MatrixRtcTileId?,
-    onClick: () -> Unit,
-) {
-    AnimatedVisibility(
-        visible = isVisible,
-        enter = fadeIn() + scaleIn(initialScale = 0.8f),
-        exit = fadeOut() + scaleOut(targetScale = 0.8f),
-    ) {
-        ElementCallFloatingTile(
-            call = call,
-            videoFrames = videoFrames,
-            onClick = onClick,
-            modifier = Modifier.systemBarsPadding(),
-            spotlightId = spotlightId,
+    if (controller != null && current != null) {
+        MinimizedCall(controller = controller, current = current)
+        OpenCallScreen(
+            shouldOpen = current.isMaximized && !isInPictureInPicture,
+            fromBounds = barBounds?.takeIf { isOpeningFromBar },
+            onOpen = { isOpeningFromBar = false },
         )
     }
 }
 
-/**
- * The call, covering the app.
- *
- * Its own composable rather than inline, because inside the overlay's `Column` an `AnimatedVisibility`
- * resolves to the `ColumnScope` overload, which is not what a layer stacked over the content wants.
- *
- * It grows out of the top rather than sliding up from the bottom, because the top is where the bar
- * it came from is: the screen scales up from the bar's own edge as the bar collapses into it, so the
- * two read as one thing changing size. Sliding in from off-screen reads as a second screen arriving,
- * which is exactly the impression the Activity-per-call architecture gives and the one worth losing.
- */
+/** What the call still needs from this window while the call screen is closed. */
 @Composable
-private fun MaximizedCall(
-    visibleState: MutableTransitionState<Boolean>,
-    controller: ElementCallController,
-    navigator: ElementCallNavigator,
-    spotlightMemory: CallSpotlightMemory,
-) {
-    AnimatedVisibility(
-        visibleState = visibleState,
-        enter = fadeIn(MAXIMIZE_FADE_SPEC) + scaleIn(MAXIMIZE_SCALE_SPEC, initialScale = MAXIMIZE_SCALE, transformOrigin = FROM_THE_BAR),
-        exit = fadeOut(MAXIMIZE_FADE_SPEC) + scaleOut(MAXIMIZE_SCALE_SPEC, targetScale = MAXIMIZE_SCALE, transformOrigin = FROM_THE_BAR),
-    ) {
-        val state = rememberElementCallScreenState(controller = controller, navigator = navigator, spotlightMemory = spotlightMemory)
-        ElementCallScreen(state = state, modifier = Modifier.fillMaxSize())
+private fun MinimizedCall(controller: ElementCallController, current: ElementCallSnapshot) {
+    val spotlightMemory = rememberCallSpotlightMemory(controller)
+    CallLayoutEffects(controller = controller, current = current, spotlightMemory = spotlightMemory)
+    if (!current.isMaximized) {
+        UnmountedStageWindow(controller = controller, current = current, spotlightMemory = spotlightMemory, isStageMounted = false)
+        rememberCallPermissions(controller = controller, current = current)
     }
 }
 
-/** Measured, so the call over it keeps its size, but never drawn. */
-private val NotPlaced = Modifier.layout { measurable, constraints ->
-    val placeable = measurable.measure(constraints)
-    layout(placeable.width, placeable.height) {}
-}
-
-/** The top edge, where the minimized bar is docked. */
-private val FROM_THE_BAR = TransformOrigin(pivotFractionX = 0.5f, pivotFractionY = 0f)
-
 /**
- * Barely a shrink. The call screen is nearly the whole window, so anything more than a hint of scale
- * turns "this got bigger" into "this flew in from somewhere", and reveals the app behind it.
+ * Opens the call screen whenever the call is maximized while this window is in front: from the bar, and
+ * for a call started from the host. Only while resumed, so a call maximized from the lock screen or the
+ * notification, which opens the screen itself, is not opened a second time from behind it.
  */
-private const val MAXIMIZE_SCALE = 0.93f
-
-private val MAXIMIZE_SCALE_SPEC = spring<Float>(
-    dampingRatio = Spring.DampingRatioNoBouncy,
-    stiffness = Spring.StiffnessMediumLow,
-)
-
-/** Faster than the scale, so the app underneath is covered before the screen finishes settling. */
-private val MAXIMIZE_FADE_SPEC = tween<Float>(durationMillis = 140)
+@Composable
+private fun OpenCallScreen(shouldOpen: Boolean, fromBounds: IntRect?, onOpen: () -> Unit) {
+    if (LocalInspectionMode.current) return
+    val context = LocalContext.current
+    val view = LocalView.current
+    val currentOnOpen by rememberUpdatedState(onOpen)
+    val currentFromBounds by rememberUpdatedState(fromBounds)
+    val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    val isResumed = lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
+    LaunchedEffect(shouldOpen && isResumed) {
+        if (!shouldOpen || !isResumed) return@LaunchedEffect
+        // The call screen grows out of the bar that was tapped.
+        val options = currentFromBounds?.let { ActivityOptions.makeScaleUpAnimation(view, it.left, it.top, it.width, it.height) }
+        ElementCallActivity.start(context, options?.toBundle())
+        currentOnOpen()
+    }
+}

@@ -7,47 +7,40 @@
 
 package io.element.android.call.sample
 
-import android.app.PictureInPictureParams
-import android.os.SystemClock
-import androidx.lifecycle.Lifecycle
-import androidx.test.core.app.ActivityScenario
+import android.accessibilityservice.AccessibilityService
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+import androidx.test.runner.lifecycle.Stage
+import io.element.android.call.ui.ElementCallActivity
 import org.junit.Test
 import org.junit.runner.RunWith
 
-/** Hangs up through the controller: nothing in a picture-in-picture window can be tapped. */
+/** Picture-in-picture is the call screen's own task shrinking, the host's Activity usable underneath. */
 @RunWith(AndroidJUnit4::class)
 class PictureInPictureTest {
+    /** Out through Home, which shrinks a maximized call on its own; hangs up through the controller. */
     @Test
     fun aCallThatEndsInPictureInPictureClosesTheWindow() {
-        launchSample(SampleFixture.GROUP).use { scenario ->
-            scenario.onActivity { it.enterPictureInPictureMode(PictureInPictureParams.Builder().build()) }
-            // Not isInPictureInPictureMode: it flips on the request, before the window has opened.
-            waitUntil("the window opens") { scenario.isInPictureInPicture() }
+        launchSample(SampleFixture.ONE_TO_ONE).use { scenario ->
+            awaitActivity<ElementCallActivity>(Stage.RESUMED)
+            InstrumentationRegistry.getInstrumentation().uiAutomation.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME)
+            waitUntil("the window opens") { scenario.controller().isInPictureInPicture.value }
 
-            scenario.onActivity { it.controller.hangUp() }
+            scenario.controller().hangUp()
 
-            waitUntil("the window closes") { !scenario.isInPictureInPicture() }
-            waitUntil("the activity is stopped, not destroyed") { scenario.state == Lifecycle.State.CREATED }
+            waitUntil("the call screen is gone") { isCallScreenGone() }
         }
     }
 
-    private fun ActivityScenario<SampleActivity>.isInPictureInPicture(): Boolean {
-        var isInPictureInPicture = false
-        onActivity { isInPictureInPicture = it.controller.isInPictureInPicture.value }
-        return isInPictureInPicture
-    }
+    /** Minimizing a video call shrinks it, and the app comes up under the window. */
+    @Test
+    fun minimizingAVideoCallEntersPictureInPictureOverTheApp() {
+        launchSample(SampleFixture.ONE_TO_ONE).use { scenario ->
+            onCallScreen { it.onBackPressedDispatcher.onBackPressed() }
 
-    private fun waitUntil(what: String, condition: () -> Boolean) {
-        val deadline = SystemClock.elapsedRealtime() + TIMEOUT_MS
-        while (!condition()) {
-            check(SystemClock.elapsedRealtime() < deadline) { "Timed out waiting until $what" }
-            SystemClock.sleep(POLL_MS)
+            waitUntil("the window opens") { scenario.controller().isInPictureInPicture.value }
+            awaitActivity<SampleActivity>(Stage.RESUMED)
+            scenario.controller().hangUp()
         }
-    }
-
-    private companion object {
-        const val TIMEOUT_MS = 10_000L
-        const val POLL_MS = 100L
     }
 }

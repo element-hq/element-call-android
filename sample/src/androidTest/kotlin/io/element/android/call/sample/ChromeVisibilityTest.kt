@@ -38,7 +38,7 @@ class ChromeVisibilityTest {
 
     @Test
     fun aTapUprightHidesTheControlBarAndKeepsTheTopBar() {
-        launchSample(SampleFixture.LISTEN_MODE).use {
+        launchSample(SampleFixture.LISTEN_MODE, composeRule).use {
             composeRule.waitForChrome { isShown(hangUp) }
 
             composeRule.onRoot().performTouchInput { click(center) }
@@ -53,7 +53,7 @@ class ChromeVisibilityTest {
 
     @Test
     fun swipingUpHidesTheControlBarAndItComesBackAfterRelease() {
-        launchSample(SampleFixture.LISTEN_MODE).use {
+        launchSample(SampleFixture.LISTEN_MODE, composeRule).use {
             composeRule.waitForChrome { isShown(hangUp) }
 
             composeRule.onRoot().performTouchInput { swipe(center, center.copy(y = center.y - height / 4), durationMillis = 300) }
@@ -66,9 +66,9 @@ class ChromeVisibilityTest {
 
     @Test
     fun sidewaysTheChromeStartsHiddenATapShowsItAndUprightItIsBack() {
-        launchSample(SampleFixture.LISTEN_MODE).use { scenario ->
+        launchSample(SampleFixture.LISTEN_MODE, composeRule).use {
             composeRule.waitForChrome { isShown(hangUp) }
-            scenario.onActivity { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
+            onCallScreen { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
             composeRule.waitForChrome { !isShown(hangUp) && !isShown(minimize) }
 
             composeRule.showStageChrome()
@@ -76,7 +76,7 @@ class ChromeVisibilityTest {
 
             composeRule.onRoot().performTouchInput { click(center) }
             composeRule.waitForChrome { !isShown(hangUp) }
-            scenario.onActivity { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT }
+            onCallScreen { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT }
             composeRule.waitForChrome { isShown(hangUp) }
         }
     }

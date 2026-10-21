@@ -115,7 +115,9 @@ class StageDumpScenarioTest : RobolectricTest() {
                     // height; in landscape everything floats and the stage is the box.
                     val isLandscape = viewport.width > viewport.height
                     Box(modifier = Modifier.requiredSize(viewport.width.dp, (viewport.height + if (isLandscape) 0 else chromeHeight).dp)) {
+                        // The two Activities' worth of call, stacked: the host's bar and the call screen.
                         ElementCallOverlay(controller = controller) { modifier -> Box(modifier) }
+                        ElementCallWindow(controller = controller, onMinimize = { controller.setMaximized(false) }, onClose = {})
                     }
                 }
             }

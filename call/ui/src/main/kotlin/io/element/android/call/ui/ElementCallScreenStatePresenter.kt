@@ -210,7 +210,7 @@ fun rememberElementCallScreenState(
             ElementCallScreenEvent.ToggleMicrophoneMuted -> controller.setMicrophoneMuted(current?.isMicrophoneMuted != true)
             ElementCallScreenEvent.ToggleAudioTestTone -> controller.setAudioTestToneEnabled(current?.isAudioTestToneEnabled != true)
             is ElementCallScreenEvent.SelectAudioDevice -> controller.selectAudioDevice(event.device)
-            ElementCallScreenEvent.Minimize -> controller.setMaximized(false)
+            ElementCallScreenEvent.Minimize -> navigator.minimize()
             ElementCallScreenEvent.ToggleRaisedHand -> controller.setHandRaised(current?.ownTile?.handRaisedAtMs == null)
             ElementCallScreenEvent.DismissHandRequestFailure -> controller.clearHandRequestFailure()
             ElementCallScreenEvent.HangUp -> controller.hangUp()

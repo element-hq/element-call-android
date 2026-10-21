@@ -31,7 +31,7 @@ class VideoPixelsTest {
 
     @Test
     fun aVideoTileDrawsTheColourBars() {
-        launchSample(SampleFixture.ONE_TO_ONE).use {
+        launchSample(SampleFixture.ONE_TO_ONE, composeRule).use {
             val tile = composeRule.onNodeWithTag(ElementCallTestTags.tile(SampleFixture.memberIdOf("Bob")))
 
             // The first frame takes a moment: the GL thread has to come up and the pattern runs at 15fps.

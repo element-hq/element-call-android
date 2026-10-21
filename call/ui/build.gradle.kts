@@ -7,7 +7,7 @@ import extension.testCommonDependencies
  * Please see LICENSE files in the repository root for full details.
  */
 
-// element-call-ui: the ONLY Compose module. Screen, tiles, layout, minimized bar, floating tile,
+// element-call-ui: the ONLY Compose module. The call Activity, screen, tiles, layout, minimized bar,
 // picture-in-picture content, the style port and the previews.
 plugins {
     id("io.element.call.android-compose-library")
@@ -34,6 +34,7 @@ dependencies {
     // the RTC core.
     implementation(variantOf(libs.matrix.rtc.android) { artifactType("aar") })
     implementation(libs.androidx.corektx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
 
     testCommonDependencies(libs, includeTestComposeView = true)
     testImplementation(projects.call.test)

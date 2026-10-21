@@ -31,26 +31,18 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 
 /**
- * Follows a full-screen call out of the app as a floating window, from the host's Activity.
+ * Follows a full-screen call out of the app as a floating window, from `ElementCallActivity`. The host
+ * calls [attach] from `ElementCallActivity.Host.onCallActivityCreated`.
  *
- * The library has no Activity of its own (plan decision 1): the call is drawn inside the host's, so the
- * host's is what shrinks. These are the lines every host would otherwise write itself. The manifest half
- * stays with the host - `android:supportsPictureInPicture="true"` and `smallestScreenSize` in
- * `configChanges` on the Activity - because a library cannot change a host Activity's manifest entry.
- *
- * Two mechanisms, because auto-enter only arrived in Android 12. From S the system is *told* the Activity
- * would like to shrink and does it itself on any way out - the home gesture included, which is the one
- * people actually use and the one `onUserLeaveHint` never sees. Below S the hint is all there is, so it
- * covers Home and Recents and not gestures.
+ * From S the system is *told* the Activity would like to shrink and does it itself on any way out, the
+ * home gesture included. Below S, `ElementCallActivity` enters on `onUserLeaveHint` itself.
  *
  * Kept in step with the call rather than set once: the params are re-applied whenever the call appears, is
- * maximized, is minimized or ends, so backgrounding the app with no call - or with a call docked in the
- * bar - behaves exactly as it did before any of this existed. See
- * [ElementCallController.shouldEnterPictureInPicture] for the rule.
+ * maximized, is minimized or ends. See [ElementCallController.shouldEnterPictureInPicture] for the rule.
  *
  * The window carries mute and hang up as system actions, sent to the same receiver as the notification's.
  *
- * A call ending while floating closes the window by moving the task back, not by finishing the host's Activity.
+ * A call ending while floating closes the window by moving the task back.
  */
 object ElementCallPictureInPicture {
     /**
@@ -94,21 +86,6 @@ object ElementCallPictureInPicture {
             Timber.d("ElementCall: in picture-in-picture: ${info.isInPictureInPictureMode}")
             controller.setInPictureInPicture(info.isInPictureInPictureMode)
         }
-    }
-
-    /**
-     * The pre-S path into picture-in-picture. Call from the Activity's `onUserLeaveHint()` override.
-     *
-     * Deliberately a no-op on S and above: `setAutoEnterEnabled` already covers every way out of the app
-     * there, and entering here as well would do it twice.
-     */
-    fun onUserLeaveHint(activity: Activity, controller: ElementCallController) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) return
-        if (!controller.shouldEnterPictureInPicture.value) return
-        if (!activity.supportsPictureInPicture()) return
-        val params = pictureInPictureParams(activity, shouldEnter = true, isMuted = controller.state.value?.isMicrophoneMuted)
-        runCatchingExceptions { activity.enterPictureInPictureMode(params) }
-            .onFailure { Timber.w(it, "ElementCall: cannot enter picture-in-picture") }
     }
 
     /** [isMuted] is null without a call, and then the window carries no actions. */

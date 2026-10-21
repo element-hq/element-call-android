@@ -233,8 +233,9 @@ class ElementCallScreenStateTest {
     fun `the remaining controls are forwarded as they are`() = runTest {
         val controller = FakeElementCallController(initialState = aConnectedSnapshot())
         val constraints = MatrixRtcVideoConstraints.live(widthPx = 320, heightPx = 240)
+        var minimizeCount = 0
 
-        moleculeFlow(RecompositionMode.Immediate) { rememberElementCallScreenState(controller, aNavigator()) }.test {
+        moleculeFlow(RecompositionMode.Immediate) { rememberElementCallScreenState(controller, aNavigator(onMinimize = { minimizeCount++ })) }.test {
             val state = awaitItem()
             state.eventSink(ElementCallScreenEvent.SwitchCamera)
             state.eventSink(ElementCallScreenEvent.SelectAudioDevice(aSpeaker()))
@@ -246,7 +247,7 @@ class ElementCallScreenStateTest {
 
             assertThat(controller.switchCameraCount).isEqualTo(1)
             assertThat(controller.selectedAudioDevices).containsExactly(aSpeaker())
-            assertThat(controller.maximizedCalls).containsExactly(false)
+            assertThat(minimizeCount).isEqualTo(1)
             assertThat(controller.toggleTileStatsCount).isEqualTo(1)
             assertThat(controller.videoConstraints).containsExactly(
                 MatrixRtcStreamRef(A_REMOTE_MEMBER_ID, MatrixRtcStreamKind.CAMERA) to constraints,
@@ -799,10 +800,12 @@ class ElementCallScreenStateTest {
 
     private fun aNavigator(
         onClose: () -> Unit = {},
+        onMinimize: () -> Unit = {},
         onRequestCameraPermission: () -> Unit = {},
         onRequestScreenCapture: () -> Unit = {},
     ) = object : ElementCallNavigator {
         override fun close() = onClose()
+        override fun minimize() = onMinimize()
         override fun requestCameraPermission() = onRequestCameraPermission()
         override fun requestScreenCapture() = onRequestScreenCapture()
     }

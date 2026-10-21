@@ -186,7 +186,7 @@ enum class SampleFixture(val key: String, val category: Category, val title: Str
         key = "minimized_video",
         category = Category.CONNECTED,
         title = "Minimized video call",
-        description = "Floating as a draggable tile over the host's content. Drag it, then tap it.",
+        description = "Docked as the bar, as a video call is when picture-in-picture is off. Tap it to come back.",
     ) {
         override fun snapshot() = aConnected(remotes = listOf(person("Bob", "v")), isDm = true).copy(isMaximized = false)
     },

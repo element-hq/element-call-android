@@ -9,6 +9,8 @@
 
     <!-- The host's half of screen sharing (README, host requirement 5). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <!-- The host's ringing: a call answered on the lock screen opens the call screen through a full-screen intent. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
     <application
         android:name=".SampleApplication"
@@ -22,16 +24,12 @@
         <!-- So `perfetto` can sample the release build, which is the one worth measuring. -->
         <profileable android:shell="true" />
 
-        <!--
-          ~ What a host Activity needs for picture-in-picture (README, host requirement 4): the attribute,
-          ~ and the config changes that keep the Activity alive while the window shrinks and grows.
-          -->
+        <!-- The orientation changes handled in place, so a scenario's rotation keeps its state. -->
         <activity
             android:name=".SampleActivity"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
             android:exported="true"
-            android:launchMode="singleTask"
-            android:supportsPictureInPicture="true">
+            android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
