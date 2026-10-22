@@ -38,6 +38,7 @@ fun SampleHomeScreen(
     scenarios: ImmutableList<String>,
     isStyleOverridden: Boolean,
     onToggleStyle: () -> Unit,
+    onAnswerOnLockScreen: () -> Unit,
     onOpen: (SampleFixture) -> Unit,
     onOpenRinging: (SampleRingingFixture) -> Unit,
     onOpenScenario: (String) -> Unit,
@@ -75,6 +76,19 @@ fun SampleHomeScreen(
                         )
                     }
                     Switch(checked = isStyleOverridden, onCheckedChange = { onToggleStyle() })
+                }
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onAnswerOnLockScreen)
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                ) {
+                    Text(text = "Answer on the lock screen", style = MaterialTheme.typography.bodyLarge)
+                    Text(
+                        text = "Lock the phone within 5 s: a group call then opens over the keyguard, without this screen.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
                 HorizontalDivider()
             }

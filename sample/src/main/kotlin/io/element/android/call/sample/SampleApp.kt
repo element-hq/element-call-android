@@ -7,9 +7,14 @@
 
 package io.element.android.call.sample
 
+import android.Manifest
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,100 +28,74 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.element.android.call.test.scenario.MatrixRtcScenario
 import io.element.android.call.ui.ElementCallOverlay
-import io.element.android.call.ui.ElementCallStageDriver
-import io.element.android.call.ui.ElementCallStageDriverProvider
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.toImmutableList
-import kotlinx.coroutines.flow.dropWhile
-import kotlinx.coroutines.flow.first
 
 /**
  * The host, reduced to what a host does: wrap its content in [ElementCallOverlay] and decide the style.
  * Everything below the overlay is the sample's own screen, which the call minimizes over.
  *
- * With a scenario playing, a scrubber floats over everything: the one piece of chrome that is the
- * harness's rather than the call's or the host's.
+ * With a scenario playing, a scrubber floats over everything, here and over the call screen: the one
+ * piece of chrome that is the harness's rather than the call's or the host's.
  */
 @Composable
 fun SampleApp(
-    controller: SampleCallController,
+    harness: SampleHarness,
     scenarios: ImmutableList<String>,
     modifier: Modifier = Modifier,
-    initialScenario: MatrixRtcScenario? = null,
     /** What the launch intent asked for and the sample does not have, shown over the picker. */
     launchError: String? = null,
-    /** A scenario's `rotate` frame, which only the Activity can perform. */
-    onRotate: (isLandscape: Boolean) -> Unit = {},
 ) {
-    var isStyleOverridden by rememberSaveable { mutableStateOf(false) }
-    val configuration = LocalConfiguration.current
-    val isLandscape = configuration.screenWidthDp > configuration.screenHeightDp
-    LaunchedEffect(isLandscape) { controller.fixtures.setStageLandscape(isLandscape) }
+    val controller = harness.controller
     val fixtures = remember { SampleFixture.entries.toImmutableList() }
-    val driver = remember { ElementCallStageDriver() }
-    var player by remember { mutableStateOf(initialScenario?.let { SampleScenarioPlayer(controller.fixtures, it, driver, onRotate) }) }
-    // Hanging up ends the scenario with the call: once the call it started is gone, so is its bar.
-    LaunchedEffect(player) {
-        if (player == null) return@LaunchedEffect
-        controller.state.dropWhile { it == null }.first { it == null }
-        player = null
+    val context = LocalContext.current
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        SampleLockScreenCall.schedule(context, harness)
     }
     MaterialTheme(colorScheme = darkColorScheme()) {
         Box(modifier = modifier) {
-            ElementCallStageDriverProvider(driver) {
-                ElementCallOverlay(
-                    controller = controller,
-                    // Null is the library's defaults; the override is the proof that the port reaches every colour.
-                    style = if (isStyleOverridden) rememberLoudElementCallStyle() else null,
-                ) { contentModifier ->
-                    SampleHomeScreen(
-                        fixtures = fixtures,
-                        scenarios = scenarios,
-                        launchError = launchError,
-                        isStyleOverridden = isStyleOverridden,
-                        onToggleStyle = { isStyleOverridden = !isStyleOverridden },
-                        onOpen = {
-                            player = null
-                            controller.start(it.snapshot())
-                        },
-                        onOpenRinging = {
-                            player = null
-                            controller.startRinging(it)
-                        },
-                        onOpenScenario = { name ->
-                            controller.endRinging()
-                            player = SampleScenarioPlayer(controller.fixtures, MatrixRtcScenario.load(name), driver, onRotate)
-                        },
-                        modifier = contentModifier,
-                    )
-                }
-            }
-            player?.let { current ->
-                ScenarioBar(
-                    player = current,
-                    modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .statusBarsPadding()
-                        .padding(top = 60.dp, start = 12.dp, end = 12.dp),
+            ElementCallOverlay(
+                controller = controller,
+                style = if (harness.isStyleOverridden) rememberLoudElementCallStyle() else null,
+            ) { contentModifier ->
+                SampleHomeScreen(
+                    fixtures = fixtures,
+                    scenarios = scenarios,
+                    launchError = launchError,
+                    isStyleOverridden = harness.isStyleOverridden,
+                    onToggleStyle = { harness.isStyleOverridden = !harness.isStyleOverridden },
+                    onAnswerOnLockScreen = {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        } else {
+                            SampleLockScreenCall.schedule(context, harness)
+                        }
+                    },
+                    onOpen = {
+                        harness.stopScenario()
+                        controller.start(it.snapshot())
+                    },
+                    onOpenRinging = {
+                        harness.stopScenario()
+                        controller.startRinging(it)
+                    },
+                    onOpenScenario = { name -> harness.play(MatrixRtcScenario.load(name)) },
+                    modifier = contentModifier,
                 )
             }
+            harness.player?.let { ScenarioBar(player = it) }
         }
     }
 }
@@ -127,11 +106,12 @@ fun SampleApp(
  * through, so the tiles under it stay readable.
  */
 @Composable
-private fun ScenarioBar(player: SampleScenarioPlayer, modifier: Modifier = Modifier) {
-    LaunchedEffect(player) { player.start() }
-    LaunchedEffect(player, player.isPlaying) { if (player.isPlaying) player.play() }
+internal fun BoxScope.ScenarioBar(player: SampleScenarioPlayer) {
     Row(
-        modifier = modifier
+        modifier = Modifier
+            .align(Alignment.TopCenter)
+            .statusBarsPadding()
+            .padding(top = 60.dp, start = 12.dp, end = 12.dp)
             .fillMaxWidth()
             .height(BAR_HEIGHT)
             .clip(RoundedCornerShape(percent = 50))

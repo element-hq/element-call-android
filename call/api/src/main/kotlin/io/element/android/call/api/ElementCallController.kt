@@ -32,9 +32,8 @@ interface ElementCallController {
     val state: StateFlow<ElementCallSnapshot?>
 
     /**
-     * Whether leaving the app should shrink the call into a floating window: a maximized call, or a
-     * minimized one with a picture in it. A minimized audio call is excluded, the ongoing-call
-     * notification is the right affordance for it.
+     * Whether leaving the call screen should shrink it into a floating window: while it is maximized.
+     * A minimized call is in the host's bar, and the ongoing-call notification is the affordance for it.
      */
     val shouldEnterPictureInPicture: StateFlow<Boolean>
 

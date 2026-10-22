@@ -7,34 +7,30 @@
 
 package io.element.android.call.sample
 
-import android.content.pm.ActivityInfo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.lifecycle.lifecycleScope
-import io.element.android.call.impl.ElementCallPictureInPicture
 import io.element.android.call.test.scenario.MatrixRtcScenario
 import kotlinx.collections.immutable.toImmutableList
 import timber.log.Timber
 import java.util.zip.ZipFile
 
 /**
- * The one Activity in this repository, and everything a host Activity has to do: bind
- * picture-in-picture both ways, and put [io.element.android.call.ui.ElementCallOverlay] around its
- * content. The manifest carries the other half (`supportsPictureInPicture`, `configChanges`).
+ * The host's Activity, and everything a host Activity has to do: put
+ * [io.element.android.call.ui.ElementCallOverlay] around its content. The call screen is the library's
+ * own Activity; [SampleApplication] is its host.
  *
  * Which fixture opens first can come from the launch intent, so an instrumented test starts where it
  * means to: `adb shell am start -n io.element.android.call.sample/.SampleActivity --es fixture group`.
  */
 class SampleActivity : ComponentActivity() {
-    internal lateinit var controller: SampleCallController
+    private val harness: SampleHarness get() = (application as SampleApplication).harness
+    internal val controller: SampleCallController get() = harness.controller
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        controller = SampleCallController(context = this, scope = lifecycleScope)
-        ElementCallPictureInPicture.attach(this, controller)
 
         val scenarios = listScenarios()
         val requested = intent.getStringExtra(EXTRA_FIXTURE)
@@ -53,17 +49,13 @@ class SampleActivity : ComponentActivity() {
             else -> null
         }
         launchError?.let { Timber.w("Sample: $it") }
+        scenario?.let(harness::play)
 
         setContent {
             SampleApp(
-                controller = controller,
+                harness = harness,
                 scenarios = scenarios.toImmutableList(),
-                initialScenario = scenario,
                 launchError = launchError,
-                // The manifest handles orientation changes itself, so the call and the player survive the turn.
-                onRotate = { isLandscape ->
-                    requestedOrientation = if (isLandscape) ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-                },
             )
         }
     }
@@ -79,11 +71,6 @@ class SampleActivity : ComponentActivity() {
             .map { it.removePrefix("scenarios/").removeSuffix(".txt") }
             .sorted()
             .toList()
-    }
-
-    override fun onUserLeaveHint() {
-        super.onUserLeaveHint()
-        ElementCallPictureInPicture.onUserLeaveHint(this, controller)
     }
 
     companion object {

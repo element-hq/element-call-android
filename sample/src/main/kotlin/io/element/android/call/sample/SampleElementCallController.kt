@@ -53,7 +53,7 @@ class SampleElementCallController(
 
     // The same rule as the real controller, so picture-in-picture behaves the same way from the sample.
     override val shouldEnterPictureInPicture: StateFlow<Boolean> = _state
-        .map { it != null && (it.isMaximized || it.hasVideo) }
+        .map { it != null && it.isMaximized }
         .stateIn(scope, SharingStarted.Eagerly, false)
 
     private val _isInPictureInPicture = MutableStateFlow(false)

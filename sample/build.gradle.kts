@@ -35,8 +35,8 @@ android {
 
 dependencies {
     implementation(projects.call.ui)
-    // ElementCallPictureInPicture, and MatrixRtcNative: the renderer touches libwebrtc natives, so the
-    // library has to be loaded even though the sample never opens a call.
+    // ElementCallPictureInPicture, attached to the call screen, and MatrixRtcNative: the renderer touches
+    // libwebrtc natives, so the library has to be loaded even though the sample never opens a call.
     implementation(projects.call.impl)
     // The fixtures and the test pattern.
     implementation(projects.call.test)
@@ -45,6 +45,7 @@ dependencies {
     implementation(variantOf(libs.jna) { artifactType("aar") })
     implementation(libs.serialization.json)
     implementation(libs.androidx.activity.activity)
+    implementation(libs.androidx.corektx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime)
     implementation(libs.kotlinx.collections.immutable)

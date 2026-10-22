@@ -114,7 +114,7 @@ internal class DefaultElementCallController(
      * affordance for it.
      */
     override val shouldEnterPictureInPicture: StateFlow<Boolean> = _state
-        .map { it != null && (it.isMaximized || it.hasVideo) }
+        .map { it != null && it.isMaximized }
         .stateIn(scope, SharingStarted.Eagerly, false)
 
     private val _isInPictureInPicture = MutableStateFlow(false)

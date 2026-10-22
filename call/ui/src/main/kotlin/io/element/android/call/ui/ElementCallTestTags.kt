@@ -12,9 +12,6 @@ package io.element.android.call.ui
  * things with no text and no content description, because they are pictures.
  */
 object ElementCallTestTags {
-    /** The draggable tile of a minimized video call. */
-    const val FLOATING_TILE = "element_call_floating_tile"
-
     /** One tile in the call screen's layout, by its [CallTileData.tileId]. */
     fun tile(tileId: String): String = "element_call_tile_$tileId"
 

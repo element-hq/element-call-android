@@ -37,7 +37,7 @@ class SmallCallTest {
 
     @Test
     fun ourTileStartsBottomRightAndADropTakesItToTheNearestCorner() {
-        launchSample(SampleFixture.ONE_TO_ONE).use {
+        launchSample(SampleFixture.ONE_TO_ONE, composeRule).use {
             val before = ownTile()
             assertThat(before.isRight()).isTrue()
             assertThat(before.isBottom()).isTrue()
@@ -52,7 +52,7 @@ class SmallCallTest {
 
     @Test
     fun aTapOnTheCameraButtonDoesNotMoveOurTile() {
-        launchSample(SampleFixture.ONE_TO_ONE).use {
+        launchSample(SampleFixture.ONE_TO_ONE, composeRule).use {
             val before = ownTile()
 
             composeRule.onNodeWithContentDescription(switchCamera()).performClick()
@@ -64,7 +64,7 @@ class SmallCallTest {
 
     @Test
     fun aDragThatStartsOnTheCameraButtonMovesOurTile() {
-        launchSample(SampleFixture.ONE_TO_ONE).use {
+        launchSample(SampleFixture.ONE_TO_ONE, composeRule).use {
             val button = composeRule.onNodeWithContentDescription(switchCamera()).getBoundsInRoot()
             val start = with(composeRule.density) { Offset(((button.left + button.right) / 2).toPx(), ((button.top + button.bottom) / 2).toPx()) }
 
@@ -76,7 +76,7 @@ class SmallCallTest {
 
     @Test
     fun fromThreeTilesOurTileIsInlineAndTheSameSizeAsTheOthers() {
-        launchSample(SampleFixture.SMALL_THREE).use {
+        launchSample(SampleFixture.SMALL_THREE, composeRule).use {
             val own = ownTile()
             val carol = composeRule.onNodeWithTag(ElementCallTestTags.tile(SampleFixture.memberIdOf("Carol"))).getBoundsInRoot()
 

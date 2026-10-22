@@ -136,6 +136,7 @@ class RaisedHandScreenStateTest {
 
     private fun aNavigator() = object : ElementCallNavigator {
         override fun close() = Unit
+        override fun minimize() = Unit
         override fun requestCameraPermission() = Unit
         override fun requestScreenCapture() = Unit
     }

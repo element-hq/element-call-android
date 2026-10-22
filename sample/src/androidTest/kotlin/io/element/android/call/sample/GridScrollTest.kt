@@ -42,7 +42,7 @@ class GridScrollTest {
 
     @Test
     fun swipingAGridTileScrollsTheGrid() {
-        launchSample(SampleFixture.LISTEN_MODE).use {
+        launchSample(SampleFixture.LISTEN_MODE, composeRule).use {
             // Near the top of the grid, so it is composed before the swipe.
             val tag = ElementCallTestTags.tile(SampleFixture.memberIdOf("Dan"))
             val before = composeRule.onNodeWithTag(tag).getBoundsInRoot()
@@ -62,8 +62,8 @@ class GridScrollTest {
 
     @Test
     fun swipingTheLandscapeStripBesideTheControlsScrollsIt() {
-        launchSample(SampleFixture.TWO_SHARES).use { scenario ->
-            scenario.onActivity { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
+        launchSample(SampleFixture.TWO_SHARES, composeRule).use {
+            onCallScreen { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
             composeRule.waitForIdle()
             composeRule.showStageChrome()
             val root = composeRule.onRoot().getBoundsInRoot()
@@ -89,8 +89,8 @@ class GridScrollTest {
 
     @Test
     fun swipingAControlButtonInLandscapeDoesNotScroll() {
-        launchSample(SampleFixture.TWO_SHARES).use { scenario ->
-            scenario.onActivity { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
+        launchSample(SampleFixture.TWO_SHARES, composeRule).use {
+            onCallScreen { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
             composeRule.waitForIdle()
             composeRule.showStageChrome()
             val tiles = { composeRule.onAllNodes(isTile).fetchSemanticsNodes().associate { it.config[SemanticsProperties.TestTag] to it.boundsInRoot } }

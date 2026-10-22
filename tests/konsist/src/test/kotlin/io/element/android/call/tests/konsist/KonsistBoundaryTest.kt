@@ -103,13 +103,14 @@ class KonsistBoundaryTest {
     }
 
     @Test
-    fun `no Activity outside the sample`() {
+    fun `the only library Activity is the call screen`() {
         val activityParents = setOf("Activity", "ComponentActivity", "AppCompatActivity", "FragmentActivity")
         productionFiles
-            // The sample owns the library's only Activity; tests/consumer is a host, and a host has one.
+            // The sample and tests/consumer are hosts, and a host has its own.
             .filterNot { it.moduleName == "sample" || it.moduleName.startsWith("tests/") }
             .filter { file -> file.classes(includeNested = true).any { klass -> klass.parents().any { it.name in activityParents } } }
-            .assertNoOffender("The library ships composables and a PiP binder, not an Activity (plan decision 1)")
+            .filterNot { it.moduleName == "call/ui" && it.name == "ElementCallActivity" }
+            .assertNoOffender("The library's one Activity is ElementCallActivity, in call/ui; the rest are composables")
     }
 
     @Test

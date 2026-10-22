@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+  ~ Copyright (c) 2026 Element Creations Ltd.
+  ~
+  ~ SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
+  ~ Please see LICENSE files in the repository root for full details.
+  -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <!--
+          ~ Its own task, so it alone shows over the lock screen and shrinks into picture-in-picture while
+          ~ the host's Activity stays usable. Out of Recents: the call is reached from the bar, the
+          ~ notification or the picture-in-picture window.
+          -->
+        <activity
+            android:name=".ElementCallActivity"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:resizeableActivity="true"
+            android:supportsPictureInPicture="true"
+            android:taskAffinity="${applicationId}.call"
+            android:theme="@style/Theme.ElementCall.CallScreen" />
+    </application>
+
+</manifest>

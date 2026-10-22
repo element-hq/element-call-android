@@ -45,8 +45,10 @@ class SampleCallController(private val context: Context, private val scope: Coro
     override val state: StateFlow<ElementCallSnapshot?> = current.flatMapLatest { it.state }.stateIn(scope, SharingStarted.Eagerly, null)
     override val shouldEnterPictureInPicture: StateFlow<Boolean> =
         current.flatMapLatest { it.shouldEnterPictureInPicture }.stateIn(scope, SharingStarted.Eagerly, false)
-    override val isInPictureInPicture: StateFlow<Boolean> =
-        current.flatMapLatest { it.isInPictureInPicture }.stateIn(scope, SharingStarted.Eagerly, false)
+
+    // Its own rather than the target's through stateIn, so it changes when it is set, as the real controller's does.
+    private val pictureInPicture = MutableStateFlow(false)
+    override val isInPictureInPicture: StateFlow<Boolean> = pictureInPicture
 
     /** Open a fixture, ending a ringing call first. */
     fun start(snapshot: ElementCallSnapshot) {
@@ -76,7 +78,10 @@ class SampleCallController(private val context: Context, private val scope: Coro
         call.close()
     }
 
-    override fun setInPictureInPicture(isInPictureInPicture: Boolean) = target.setInPictureInPicture(isInPictureInPicture)
+    override fun setInPictureInPicture(isInPictureInPicture: Boolean) {
+        pictureInPicture.value = isInPictureInPicture
+        target.setInPictureInPicture(isInPictureInPicture)
+    }
     override fun startCall(callData: ElementCallData) = target.startCall(callData)
     override fun setMicrophonePermissionGranted(granted: Boolean) = target.setMicrophonePermissionGranted(granted)
     override fun setCameraPermissionGranted(granted: Boolean) = target.setCameraPermissionGranted(granted)

@@ -42,7 +42,7 @@ dependencies {
     implementation(variantOf(libs.jna) { artifactType("aar") })
 
     implementation(libs.androidx.corektx)
-    // For ElementCallPictureInPicture, which binds to the host's Activity. `activity`, never `activity-compose`.
+    // For ElementCallPictureInPicture, which binds to the call Activity. `activity`, never `activity-compose`.
     implementation(libs.androidx.activity.activity)
     implementation(libs.androidx.lifecycle.runtime)
     implementation(libs.kotlinx.collections.immutable)

@@ -15,7 +15,7 @@
   * [Strings](#strings)
   * [Previews and screenshots](#previews-and-screenshots)
   * [Tests](#tests)
-  * [No DI framework, no Appyx, no Activity](#no-di-framework-no-appyx-no-activity)
+  * [No DI framework, no Appyx, one Activity](#no-di-framework-no-appyx-one-activity)
 * [What is temporary](#what-is-temporary)
 * [The SDK edge](#the-sdk-edge)
 * [Releasing](#releasing)
@@ -28,8 +28,9 @@
 
 A standalone Android library. A host app gives it the RTC core's `MatrixBackend` (the one over the Rust SDK, or its
 own), a few ports (lifecycle, room context, audio routing, style) and gets back a call controller that works with
-no UI attached, plus composables for the call screen, the minimized bar, the floating tile and picture-in-picture.
-The host decides where those composables sit. The plan this repository follows is
+no UI attached, plus the call screen as an Activity of its own (`ElementCallActivity`, shown over the lock screen and
+shrinking into picture-in-picture) and the minimized bar as a composable around the host's content.
+The host decides where the bar sits. The plan this repository follows is
 `element-call-feature-hq/plans/001.element_call_native_repo/android.md`; the spec is `specs/001.element_call_native_repo.md`.
 
 ## Modules and boundaries
@@ -38,12 +39,12 @@ The host decides where those composables sit. The plan this repository follows i
 | :--- | :--- | :--- | :--- |
 | `call/api` | `element-call-api` | the contract: RTC types and ids, `ElementCallController`, the host ports, state types, options | coroutines only |
 | `call/impl` | `element-call` | `ElementCallStack` (built over a `MatrixBackend`), the controller, foreground service, receiver, audio routing, and the Rust core wrapper in `…impl.rtc` | `call/api`, the RTC AAR (only in `…impl.rtc` and `ElementCallStack`), JNA. **No Compose.** |
-| `call/ui` | `element-call-ui` | the ONLY Compose module: screen, tiles, bar, floating tile, PiP content, `ElementCallStyle`, previews | `call/api`; libwebrtc only in `…ui.video` |
+| `call/ui` | `element-call-ui` | the ONLY Compose module: `ElementCallActivity`, screen, tiles, bar, PiP content, `ElementCallStyle`, previews | `call/api`; libwebrtc only in `…ui.video` |
 | `call/test` | `element-call-test` | fakes for every port, the `MatrixBackend` and the RTC service, fixtures, test-pattern frames | `call/api`, the RTC AAR |
 | `rtc/local` | local Maven only | `matrixrtc-release.aar` (gitignored): the pinned core release, or a local build. An Ivy repository in `settings.gradle.kts` serves it as `io.element.android:matrix-rtc-android`, the core's own coordinate; this project publishes it to `~/.m2` under the same coordinate so the POMs resolve on layer 3 | |
 | `bom` | `element-call-bom` | one version for the four artifacts | |
 | `tests/consumer` | not published | a separate Gradle build: a minified app over the published artifacts from `mavenLocal()` | the artifacts |
-| `sample` | not published | the harness: a Compose app over the fakes, the only Activity, the instrumented tests, and `SdkMatrixBackend`, the reference `MatrixBackend` over the Rust SDK (compiled and unit-tested, never run: the harness has no client) | `call/ui`, `call/impl`, `call/test`, the RTC AAR; the ONLY module importing `org.matrix.rustcomponents.sdk` |
+| `sample` | not published | the harness: a Compose app over the fakes, the host Activity and `ElementCallActivity.Host`, the instrumented tests, and `SdkMatrixBackend`, the reference `MatrixBackend` over the Rust SDK (compiled and unit-tested, never run: the harness has no client) | `call/ui`, `call/impl`, `call/test`, the RTC AAR; the ONLY module importing `org.matrix.rustcomponents.sdk` |
 | `tests/konsist`, `tests/testutils`, `tests/uitests` | not published | the rules below, test helpers, the Paparazzi screenshot tests | |
 
 Everything in `call/impl` is `internal` unless it is on the allowlist in `KonsistBoundaryTest`.
@@ -142,10 +143,12 @@ until one does.
   through `FakeMatrixRtcMediaSession.pushRoster` gets the window applied as the core would; `tiles.value = aRoster(...)`
   is the core's default window, detail for everything.
 
-### No DI framework, no Appyx, no Activity
+### No DI framework, no Appyx, one Activity
 
 - Plain constructors and one builder, `ElementCallStack.Builder`. Metro stays in the host.
-- The library ships composables and a PiP binder. The sample app owns the only Activity.
+- The library ships one Activity, `ElementCallActivity` in `call/ui`: the full-screen call in its own task, so that it
+  alone shows over the lock screen. The host's `Application` implements its `Host`. Everything else is composables
+  and a PiP binder; the sample app owns the host Activity.
 
 ## What is temporary
 

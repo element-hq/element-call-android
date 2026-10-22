@@ -46,8 +46,8 @@ class RingingTest {
     /** 030 R19: held sideways, where any other stage starts with its chrome away, hang up stays while it rings. */
     @Test
     fun theChromeStaysUpWhileItRingsInLandscape() {
-        launchSample(SampleRingingFixture.PICKUP).use { scenario ->
-            scenario.onActivity { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
+        launchSample(SampleRingingFixture.PICKUP, composeRule).use {
+            onCallScreen { it.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
             composeRule.waitUntil(RING_TIMEOUT_MS) { isShown(calling) }
 
             composeRule.onRoot().performTouchInput { click(center) }
@@ -60,7 +60,7 @@ class RingingTest {
     /** 030 R9, R20: Bob picks up, and the call's own screen takes over from "Calling…". */
     @Test
     fun aPickupTurnsTheRingingScreenIntoTheCall() {
-        launchSample(SampleRingingFixture.PICKUP).use {
+        launchSample(SampleRingingFixture.PICKUP, composeRule).use {
             composeRule.waitUntil(RING_TIMEOUT_MS) { isShown(calling) }
             composeRule.waitUntil(OUTCOME_TIMEOUT_MS) { !isShown(calling) }
             check(composeRule.onAllNodesWithContentDescription("Bob", substring = true).fetchSemanticsNodes().isNotEmpty()) { "Bob's tile is missing" }
@@ -70,7 +70,7 @@ class RingingTest {
     /** 030 R13: a decline closes the call screen at once. */
     @Test
     fun aDeclineClosesTheScreen() {
-        launchSample(SampleRingingFixture.DECLINED).use {
+        launchSample(SampleRingingFixture.DECLINED, composeRule).use {
             composeRule.waitUntil(RING_TIMEOUT_MS) { isShown(calling) }
             composeRule.waitUntil(OUTCOME_TIMEOUT_MS) { !isShown(hangUp) }
         }

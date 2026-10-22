@@ -12,6 +12,12 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 ## Unreleased
 
+- The full-screen call is `ElementCallActivity`, the library's own Activity in its own task, so a call answered on a
+  locked phone shows over the keyguard without the host's Activity. The host's `Application` implements
+  `ElementCallActivity.Host` (README, host requirement 4), and `ElementCallPictureInPicture.attach` moves into its
+  `onCallActivityCreated`; `ElementCallPictureInPicture.onUserLeaveHint` and the host Activity's
+  `supportsPictureInPicture` go. `ElementCallOverlay` draws only the bar; a minimized video call is the call screen
+  in picture-in-picture, and `ElementCallFloatingTile` is gone. `ElementCallNavigator` gains `minimize()`.
 - The library no longer depends on the Matrix Rust SDK, and `element-call-matrix` is gone. `ElementCallStack.Builder`
   takes the core's `org.matrix.rtc.MatrixBackend` over the host's own client; `sample/…/matrix/SdkMatrixBackend.kt`
   (with `SdkElementCallRoomContext`) is the reference over the Rust SDK to copy. `ElementCallSdkTransport`,

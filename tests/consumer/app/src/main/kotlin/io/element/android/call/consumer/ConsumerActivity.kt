@@ -11,29 +11,21 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.material3.Text
-import androidx.lifecycle.lifecycleScope
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.rtc.id.RoomId
-import io.element.android.call.impl.ElementCallPictureInPicture
-import io.element.android.call.impl.ElementCallStack
 import io.element.android.call.test.FakeElementCallController
-import io.element.android.call.test.FakeMatrixBackend
 import io.element.android.call.ui.ElementCallOverlay
 
 /**
- * The public API, called the way a host calls it: build the stack (over the test transport, so no SDK
- * client is needed), bind picture-in-picture, and draw the overlay over the host's content. Nothing
- * here is asserted; the assertion is that R8 links it all and the app starts.
+ * The public API, called the way a host calls it: the stack and the call screen's host in
+ * [ConsumerApplication], and the overlay over the host's content. Nothing here is asserted; the
+ * assertion is that R8 links it all and the app starts.
  */
 class ConsumerActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // The real stack, so every published module is reachable and the consumer rules are exercised.
-        val stack = ElementCallStack.Builder(this, FakeMatrixBackend()).build(lifecycleScope)
-        ElementCallPictureInPicture.attach(this, stack.controller)
 
         // What is drawn: a fake call, so the overlay has something to show without joining anything.
         val controller = FakeElementCallController(

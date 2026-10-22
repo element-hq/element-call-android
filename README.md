@@ -33,9 +33,9 @@ Four published artifacts under `io.element.android`, one version, plus `element-
 | :--- | :--- | :--- |
 | `element-call-api` | `call/api` | the contract: controller, ports, state types, options |
 | `element-call` | `call/impl` | the stack, the controller, the foreground service, the Rust core wrapper; no Compose |
-| `element-call-ui` | `call/ui` | the composables: screen, minimized bar, floating tile, picture-in-picture, style port |
+| `element-call-ui` | `call/ui` | the call screen (`ElementCallActivity`), the minimized bar, picture-in-picture, style port |
 | `element-call-test` | `call/test` | fakes and fixtures for hosts' tests, and the colour-bar test pattern |
-| not published | `sample` | the harness: a Compose app over the fakes, with the only Activity and the instrumented tests |
+| not published | `sample` | the harness: a Compose app over the fakes, a host Activity and the instrumented tests |
 
 See [AGENTS.md](AGENTS.md) for the boundaries between them.
 
@@ -104,11 +104,11 @@ The build needs the `matrix-rust-rtc` core as an Android AAR at `rtc/local/matri
 ## The sample app
 
 `sample/` is how the UI is developed without Element X: a Compose app over the fakes, with no server, no login and
-no camera. Every row of its picker opens a call over the sample's own screen - one to one, a group with a spotlight,
-nine people with a paging strip, a shared screen, the minimized bar, the floating tile, and the connecting, failed
-and permission states - with colour bars where a camera would be, drawn through the real renderer. Its controls do
-what they say (mute mutes, minimize minimizes), a switch overrides the style with a deliberately loud one, and
-leaving the app enters picture-in-picture.
+no camera. Every row of its picker opens a call - one to one, a group with a spotlight, nine people with a paging
+strip, a shared screen, the minimized bar, and the connecting, failed and permission states - with colour bars where
+a camera would be, drawn through the real renderer. Its controls do what they say (mute mutes, minimize minimizes,
+into picture-in-picture for a video call), a switch overrides the style with a deliberately loud one, and "Answer on
+the lock screen" opens a call over the keyguard five seconds later, through a full-screen notification.
 
 ```
 ./gradlew :sample:installDebug
@@ -126,10 +126,21 @@ code lands.
    exclude it or accept that the call is unavailable there.
 3. A `MatrixBackend` over the host's own Matrix client, handed to `ElementCallStack.Builder`. The sample's
    `SdkMatrixBackend` is one over the Rust SDK ([docs/INTEGRATION.md](docs/INTEGRATION.md), §3).
-4. Picture-in-picture: `android:supportsPictureInPicture="true"` and `smallestScreenSize` in `configChanges` on
-   the host Activity; `ElementCallPictureInPicture.attach(activity, controller)` from its `onCreate`, and
-   `ElementCallPictureInPicture.onUserLeaveHint(activity, controller)` from its `onUserLeaveHint()` override.
-   A call ending while floating closes the window (`moveTaskToBack`).
+4. The call screen is the library's `ElementCallActivity`, in its own task. It is shown over the lock screen while a
+   call is live, so a call answered on a locked phone never shows the host's Activity. The host:
+   - implements `ElementCallActivity.Host` on its `Application`: the controller; `leaveCallScreenIntent`, the
+     Activity the call screen leaves for; `onCallActivityCreated`, which calls
+     `ElementCallPictureInPicture.attach(activity, controller)` and applies anything every Activity of the host
+     gets, such as `FLAG_SECURE`; and `CallScreenContent`, for the style;
+   - wraps its content in `ElementCallOverlay`, which draws the minimized bar and opens the call screen whenever the
+     call is maximized while the host is in front;
+   - calls `ElementCallActivity.start(context)` where nothing of the host is in front (answering from a ringing
+     screen), and sets `ElementCallNotificationConfig.contentIntent` to `ElementCallActivity::pendingIntent`.
+
+   Minimizing asks the keyguard first. A video call then shrinks into picture-in-picture over the host's Activity;
+   an audio call, or one refused picture-in-picture, leaves for the host's Activity with the bar. The host's own
+   app lock applies at that Activity, never to a live call. The host Activity needs no picture-in-picture
+   attribute.
 5. Screen sharing is off by default. A host turns it on with `ElementCallOptions(isScreenSharingEnabled = true)`
    and, in the same change, adds `FOREGROUND_SERVICE_MEDIA_PROJECTION` and the `mediaProjection` type to
    `ElementCallForegroundService` in its own manifest, with `tools:node="merge"`; the library's service declares
