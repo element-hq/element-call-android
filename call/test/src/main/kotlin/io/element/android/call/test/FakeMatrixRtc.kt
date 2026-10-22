@@ -15,6 +15,7 @@ import io.element.android.call.api.rtc.MatrixRtcCallKind
 import io.element.android.call.api.rtc.MatrixRtcCallStatus
 import io.element.android.call.api.rtc.MatrixRtcClient
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
+import io.element.android.call.api.rtc.MatrixRtcInterruptions
 import io.element.android.call.api.rtc.MatrixRtcLeaveReason
 import io.element.android.call.api.rtc.MatrixRtcLocalState
 import io.element.android.call.api.rtc.MatrixRtcMediaSession
@@ -185,6 +186,8 @@ class FakeMatrixRtcMediaSession(
      * [pushRoster] for one the declared window narrows, as the core would.
      */
     override val tiles = MutableStateFlow(MatrixRtcTileRoster.EMPTY)
+
+    override val interruptions = MutableStateFlow(MatrixRtcInterruptions.NONE)
 
     /** Every window [setDetailWindow] was given, in order. */
     val detailWindows = mutableListOf<MatrixRtcDetailWindow>()

@@ -46,6 +46,9 @@ interface MatrixRtcMediaSession : AutoCloseable {
      */
     val localState: StateFlow<MatrixRtcLocalState?>
 
+    /** What is interrupting the call, cause by cause (feature-hq 034 C5). For any one change it trails [tiles] and [localState]. */
+    val interruptions: StateFlow<MatrixRtcInterruptions>
+
     /**
      * How loud each member is, keyed by member id, ours included.
      *

@@ -490,7 +490,7 @@ private fun CallingLabel(isAudioCall: Boolean) {
  */
 @Composable
 private fun CallDurationLabel(state: ElementCallScreenState, modifier: Modifier = Modifier) {
-    val isConnected = state.connection is ElementCallConnection.Connected || state.connection is ElementCallConnection.Degraded
+    val isConnected = state.connection is ElementCallConnection.Connected
     if (!state.isDm || !isConnected) return
     Text(
         text = rememberCallDuration(state.connectedAtElapsedMs),
@@ -770,7 +770,6 @@ private fun ElementCallConnection.label(): String = when (this) {
     is ElementCallConnection.Calling -> stringResource(R.string.element_call_calling)
     is ElementCallConnection.RingNotSent -> stringResource(R.string.element_call_ring_not_sent)
     ElementCallConnection.Connected -> stringResource(R.string.element_call_call_in_progress)
-    ElementCallConnection.Degraded -> stringResource(R.string.element_call_connection_unstable)
     is ElementCallConnection.Failed -> failure.title()
     ElementCallConnection.Ended -> stringResource(R.string.element_call_call_ended)
 }

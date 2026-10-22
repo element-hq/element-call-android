@@ -13,6 +13,7 @@ import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallEndReason
 import io.element.android.call.api.ElementCallFailure
 import io.element.android.call.api.ElementCallHandRequestFailure
+import io.element.android.call.api.ElementCallInterruption
 import io.element.android.call.api.ElementCallLifecycleListener
 import io.element.android.call.api.ElementCallOptions
 import io.element.android.call.api.ElementCallRoomContextProvider
@@ -30,6 +31,7 @@ import io.element.android.call.api.rtc.MatrixRtcCallStatus
 import io.element.android.call.api.rtc.MatrixRtcClient
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcGroupNotify
+import io.element.android.call.api.rtc.MatrixRtcInterruptions
 import io.element.android.call.api.rtc.MatrixRtcJoinException
 import io.element.android.call.api.rtc.MatrixRtcLeaveReason
 import io.element.android.call.api.rtc.MatrixRtcMediaSession
@@ -38,6 +40,7 @@ import io.element.android.call.api.rtc.MatrixRtcRing
 import io.element.android.call.api.rtc.MatrixRtcRingPhase
 import io.element.android.call.api.rtc.MatrixRtcRoom
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
+import io.element.android.call.api.rtc.MatrixRtcSignallingHealth
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
@@ -46,6 +49,7 @@ import io.element.android.call.impl.audio.CallSoundEffect
 import io.element.android.call.impl.audio.CallSoundEffectRenderer
 import io.element.android.call.impl.audio.JoinLeaveSoundPolicy
 import io.element.android.call.impl.audio.RaisedHandSoundPolicy
+import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.coroutines.CoroutineScope
@@ -55,6 +59,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -195,6 +200,53 @@ internal class DefaultElementCallController(
         _state.update { it?.let(block) }
     }
 
+    /** The running call's interruptions record, from its media session; null before media. */
+    private val interruptionRecord = MutableStateFlow<MatrixRtcInterruptions?>(null)
+
+    /** Publishes the held entries once it has waited out [INTERRUPTION_HOLD]. */
+    private var interruptionHoldJob: Job? = null
+
+    /**
+     * Signalling, and the list's entries, for the life of the call. Signalling is unreachable if either source says so: the
+     * client's, the only one before media, or the record's copy; the two agree a hop apart, and taking the worse keeps that
+     * hop from re-enabling the hand.
+     */
+    private suspend fun followInterruptions() = coroutineScope {
+        interruptionRecord.value = null
+        interruptionHoldJob = null
+        combine(rtcClient.signallingHealth(), interruptionRecord) { client, record ->
+            val signalling = if (client is MatrixRtcSignallingHealth.Unreachable) client else record?.signalling ?: MatrixRtcSignallingHealth.Reachable
+            signalling to ElementCallInterruption.entries(signalling, record)
+        }
+            .collect { (signalling, entries) ->
+                updateState { it.copy(signalling = signalling) }
+                holdInterruptions(entries)
+            }
+    }
+
+    /**
+     * The list shows nothing until some cause has lasted [INTERRUPTION_HOLD]: a blip shorter than that is nothing the user can
+     * act on, and an indicator that comes up at every one is soon ignored (034 R35, R40). Once up it follows the causes at
+     * once, and empties the moment none is left. The tiles never wait: what a tile shows is about that tile.
+     */
+    private fun CoroutineScope.holdInterruptions(entries: List<ElementCallInterruption>) {
+        val shown = _state.value?.interruptions.orEmpty()
+        when {
+            entries.isEmpty() -> {
+                interruptionHoldJob?.cancel()
+                interruptionHoldJob = null
+                if (shown.isNotEmpty()) updateState { it.copy(interruptions = persistentListOf()) }
+            }
+            shown.isNotEmpty() -> if (entries != shown) updateState { it.copy(interruptions = entries.toImmutableList()) }
+            interruptionHoldJob == null -> interruptionHoldJob = launch {
+                delay(INTERRUPTION_HOLD)
+                interruptionHoldJob = null
+                val signalling = _state.value?.signalling ?: MatrixRtcSignallingHealth.Reachable
+                updateState { it.copy(interruptions = ElementCallInterruption.entries(signalling, interruptionRecord.value).toImmutableList()) }
+            }
+        }
+    }
+
     /** The join-and-observe coroutine for the running call. Cancelled as the first step of teardown. */
     private var callJob: Job? = null
 
@@ -330,7 +382,7 @@ internal class DefaultElementCallController(
 
                 callJob = scope.launch {
                     // From the start, not the join: a join made during an outage is when the user first needs it (034 C4).
-                    launch { rtcClient.signallingHealth().collect { value -> updateState { it.copy(signalling = value) } } }
+                    launch { followInterruptions() }
                     runCall(current.callData)
                 }
             }
@@ -656,7 +708,7 @@ internal class DefaultElementCallController(
                 }
                 is MatrixRtcCallStatus.Connected -> updateState {
                     it.copy(
-                        connection = if (status.degraded) ElementCallConnection.Degraded else ElementCallConnection.Connected,
+                        connection = ElementCallConnection.Connected,
                         connectedAtElapsedMs = it.connectedAtElapsedMs ?: elapsedRealtimeAt(status.sinceMs),
                     )
                 }
@@ -722,6 +774,7 @@ internal class DefaultElementCallController(
 
         observe { rtcCall.memberCount.collect { value -> updateState { it.copy(memberCount = value) } } }
         observe { call.tiles.collect { value -> updateState { it.copy(roster = value) } } }
+        observe { call.interruptions.collect { interruptionRecord.value = it } }
         observe {
             call.localState
                 .map { it?.tile }
@@ -867,6 +920,9 @@ internal class DefaultElementCallController(
 
     internal companion object {
         const val HANGUP_REASON = "m.hangup"
+
+        /** How long a cause has to last before the interruptions list shows it, as on iOS. */
+        val INTERRUPTION_HOLD = 2500.milliseconds
 
         /**
          * How long a member's video stream stays open after the last tile drawing it goes away.

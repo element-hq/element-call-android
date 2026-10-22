@@ -161,6 +161,11 @@ data class ElementCallSnapshot(
     val handRequestFailure: ElementCallHandRequestFailure? = null,
     /** Whether our homeserver answers, from the join on (feature-hq 034 C4): the controls are live before media is. */
     val signalling: MatrixRtcSignallingHealth = MatrixRtcSignallingHealth.Reachable,
+    /**
+     * The service interruptions list, for the stage's indicator and the minimized bar (feature-hq 034 R13, R35, R37). Empty
+     * until some cause has lasted a moment, and emptied the moment none is left.
+     */
+    val interruptions: ImmutableList<ElementCallInterruption> = persistentListOf(),
 ) {
     /**
      * Whether anybody in the call is sending a picture - a camera or a screen, ours or theirs.
@@ -213,9 +218,6 @@ sealed interface ElementCallConnection {
     data class RingNotSent(val callee: UserId?) : ElementCallConnection
 
     data object Connected : ElementCallConnection
-
-    /** The transport is up but reporting trouble. */
-    data object Degraded : ElementCallConnection
 
     /** The call could not start or could not be kept. Final; the screen says why until the user closes it with a hang-up (034 R27). */
     data class Failed(val failure: ElementCallFailure) : ElementCallConnection

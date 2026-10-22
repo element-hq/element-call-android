@@ -10,6 +10,7 @@ package io.element.android.call.sample
 import android.os.SystemClock
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallFailure
+import io.element.android.call.api.ElementCallInterruption
 import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.rtc.MatrixRtcConnectionLossReason
@@ -85,13 +86,13 @@ enum class SampleFixture(val key: String, val category: Category, val title: Str
     ) {
         override fun snapshot() = aConnecting(ElementCallConnection.Ended)
     },
-    DEGRADED(
-        key = "degraded",
+    INTERRUPTED(
+        key = "interrupted",
         category = Category.CONNECTING,
-        title = "Unstable connection",
-        description = "Media is up but the transport reports trouble. Android only: iOS has no such state.",
+        title = "Service interruptions",
+        description = "Our media server reconnecting: the indicator, and the bar's line (034 R35, R37).",
     ) {
-        override fun snapshot() = aConnected(remotes = listOf(person("Bob", "v")), connection = ElementCallConnection.Degraded)
+        override fun snapshot() = aConnected(remotes = listOf(person("Bob", "v"))).copy(interruptions = persistentListOf(ElementCallInterruption.OwnMedia))
     },
     ONE_TO_ONE(
         key = "one_to_one",

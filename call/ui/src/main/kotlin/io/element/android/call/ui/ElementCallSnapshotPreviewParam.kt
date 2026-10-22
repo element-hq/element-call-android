@@ -11,10 +11,12 @@ import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallFailure
+import io.element.android.call.api.ElementCallInterruption
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.rtc.MatrixRtcConnectionLossReason
 import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.id.RoomId
+import kotlinx.collections.immutable.toImmutableList
 
 open class ElementCallSnapshotPreviewParam : PreviewParameterProvider<ElementCallSnapshot> {
     override val values: Sequence<ElementCallSnapshot>
@@ -22,7 +24,7 @@ open class ElementCallSnapshotPreviewParam : PreviewParameterProvider<ElementCal
             aCallSnapshot(connection = ElementCallConnection.Joining),
             aCallSnapshot(connection = ElementCallConnection.Connected, connectedAtElapsedMs = 0L),
             aCallSnapshot(connection = ElementCallConnection.Connected, connectedAtElapsedMs = 0L, isMicrophoneMuted = true),
-            aCallSnapshot(connection = ElementCallConnection.Degraded, connectedAtElapsedMs = 0L),
+            aCallSnapshot(connection = ElementCallConnection.Connected, connectedAtElapsedMs = 0L, interruptions = listOf(ElementCallInterruption.OwnMedia)),
             aCallSnapshot(connection = ElementCallConnection.Failed(ElementCallFailure.ConnectionLost(MatrixRtcConnectionLossReason.BUDGET))),
             // The room name arrives asynchronously, so the bar has to survive not having one.
             aCallSnapshot(connection = ElementCallConnection.Connected, connectedAtElapsedMs = 0L, roomName = null),
@@ -42,6 +44,7 @@ fun aCallSnapshot(
     isMaximized: Boolean = false,
     participants: List<MatrixRtcParticipant> = emptyList(),
     speakingIds: Set<String> = emptySet(),
+    interruptions: List<ElementCallInterruption> = emptyList(),
 ) = ElementCallSnapshot(
     callData = ElementCallData(
         roomId = RoomId("!aRoom:example.org"),
@@ -55,4 +58,5 @@ fun aCallSnapshot(
     isMaximized = isMaximized,
     roster = participants.previewTiles(speakingIds).previewRoster(),
     ownTile = participants.previewOwnTile(),
+    interruptions = interruptions.toImmutableList(),
 )

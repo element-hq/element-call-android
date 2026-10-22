@@ -25,7 +25,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.matrix.rtc.FfiMembershipFormat
 import org.matrix.rtc.FfiRoomOptions
-import org.matrix.rtc.FfiSignallingHealth
 import org.matrix.rtc.MatrixBackend
 import org.matrix.rtc.RtcClient
 import timber.log.Timber
@@ -90,11 +89,6 @@ internal class RustMatrixRtcClient(
     override fun reportConnectivity(isOnline: Boolean) {
         Timber.i("MatrixRTC: the host reports the homeserver ${if (isOnline) "online" else "offline"}")
         sessionCoroutineScope.launch(ffiDispatcher) { rtcClient().reportConnectivity(isOnline) }
-    }
-
-    private fun FfiSignallingHealth.map(): MatrixRtcSignallingHealth = when (this) {
-        is FfiSignallingHealth.Reachable -> MatrixRtcSignallingHealth.Reachable
-        is FfiSignallingHealth.Unreachable -> MatrixRtcSignallingHealth.Unreachable(sinceMs.toLong())
     }
 
     private fun MatrixRtcMembershipFormat.toFfi(): FfiMembershipFormat = when (this) {

@@ -37,6 +37,8 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
   closing at once. `ElementCallIcons` gains `error`.
 - `ElementCallController.reportConnectivity(isOnline)` is new and optional (README, host requirement 6); a host
   implementing `ElementCallController` or `MatrixRtcClient` itself adds it, and `signallingHealth()` on the latter.
+- `ElementCallConnection.Degraded` is gone: what is interrupted is `ElementCallSnapshot.interruptions`, grouped into
+  our server, our media and others' media, and `ElementCallIcons` gains `interruptions`.
 - No dead man's switch until the SDK bindings have delayed events: the reference backend refuses them, and the core
   joins without one (docs/FEEDBACK.md, "SDK backend").
 

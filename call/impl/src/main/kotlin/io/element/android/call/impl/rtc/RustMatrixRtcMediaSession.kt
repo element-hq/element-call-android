@@ -14,6 +14,7 @@ import io.element.android.call.api.rtc.MatrixRtcCallEvent
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionDiagnostic
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
+import io.element.android.call.api.rtc.MatrixRtcInterruptions
 import io.element.android.call.api.rtc.MatrixRtcLocalState
 import io.element.android.call.api.rtc.MatrixRtcMediaSession
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
@@ -99,6 +100,9 @@ internal class RustMatrixRtcMediaSession(
 
     private val _localState = MutableStateFlow<MatrixRtcLocalState?>(null)
     override val localState: StateFlow<MatrixRtcLocalState?> = _localState
+
+    private val _interruptions = MutableStateFlow(MatrixRtcInterruptions.NONE)
+    override val interruptions: StateFlow<MatrixRtcInterruptions> = _interruptions
 
     // From the publication rather than from what we asked for, so a share that ends any other way
     // still reads false. Keeping it true is on us: an OS-level stop has to become an unpublish.
@@ -320,6 +324,13 @@ internal class RustMatrixRtcMediaSession(
         callScope.launch {
             pump("local state", seed = { mediaSession.localState() }, next = { mediaSession.nextLocalState() }) {
                 _localState.value = it.map()
+            }
+        }
+        callScope.launch {
+            pump("interruptions", seed = { mediaSession.interruptions() }, next = { mediaSession.nextInterruptions() }) {
+                val mapped = it.map()
+                if (mapped != _interruptions.value) Timber.i("MatrixRTC: interruptions $mapped")
+                _interruptions.value = mapped
             }
         }
     }

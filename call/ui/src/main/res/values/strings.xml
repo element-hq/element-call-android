@@ -61,7 +61,14 @@
     <string name="element_call_connecting">Connecting…</string>
     <string name="element_call_calling">Calling…</string>
     <string name="element_call_ring_not_sent">The other person could not be called</string>
-    <string name="element_call_connection_unstable">Connection unstable</string>
+    <!-- The service interruptions indicator, and its list's entries (feature-hq 034 R13, R35). -->
+    <string name="element_call_interruptions">Service interruptions</string>
+    <string name="element_call_interruptions_resolved">Connection restored</string>
+    <string name="element_call_interruption_own_server">Your server is unreachable. Some services are temporarily unavailable.</string>
+    <!-- The same as the unreachable server until feature-hq 034's Q5 settles whether a lapse stops our media at all. -->
+    <string name="element_call_interruption_own_server_lapsed">Your server is unreachable. Some services are temporarily unavailable.</string>
+    <string name="element_call_interruption_own_media">Reconnecting your audio and video</string>
+    <string name="element_call_interruption_others_media">Some participants’ audio or video isn’t reaching you</string>
     <string name="element_call_call_ended">Call ended</string>
     <string name="element_call_call_failed">Call failed</string>
     <!-- A failed call's screen (feature-hq 034 R27): a title per kind of failure, a sentence per cause. -->

@@ -186,7 +186,7 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
                 selectedAudioDevice = A_BLUETOOTH_HEADSET,
             ),
             anElementCallScreenState(
-                connection = ElementCallConnection.Degraded,
+                connection = ElementCallConnection.Connected,
                 memberCount = 2,
                 participants = listOf(aLocalParticipant(), aRemoteParticipant(connection = MatrixRtcConnectionState.RECONNECTING)),
             ),

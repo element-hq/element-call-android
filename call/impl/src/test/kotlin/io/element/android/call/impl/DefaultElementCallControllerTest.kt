@@ -15,6 +15,7 @@ import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallEndReason
 import io.element.android.call.api.ElementCallFailure
 import io.element.android.call.api.ElementCallHandRequestFailure
+import io.element.android.call.api.ElementCallInterruption
 import io.element.android.call.api.ElementCallOptions
 import io.element.android.call.api.ElementCallRoomContext
 import io.element.android.call.api.ElementCallWindowRect
@@ -25,10 +26,12 @@ import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.MatrixRtcCallKind
 import io.element.android.call.api.rtc.MatrixRtcCallStatus
 import io.element.android.call.api.rtc.MatrixRtcConnectionLossReason
+import io.element.android.call.api.rtc.MatrixRtcConnectionState
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionDiagnostic
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcGroupNotify
+import io.element.android.call.api.rtc.MatrixRtcInterruptions
 import io.element.android.call.api.rtc.MatrixRtcJoinException
 import io.element.android.call.api.rtc.MatrixRtcLocalState
 import io.element.android.call.api.rtc.MatrixRtcMediaPhase
@@ -70,6 +73,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 private const val A_LOCAL_MEMBER_ID = "6ffd927ac275815176463d6fee57ed62"
@@ -763,21 +767,52 @@ class DefaultElementCallControllerTest {
         }
     }
 
+    /** 034 R35: a blip shorter than the hold never shows; once up, the list follows the causes at once. */
     @Test
-    fun `a degraded media connection is reported and clears again`() = runTest {
+    fun `interruptions show once a cause has lasted the hold, then follow the causes`() = runTest {
         val rtcClient = FakeMatrixRtcClient()
         val controller = createController(rtcClient = rtcClient)
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
-        val call = rtcClient.lastCall!!
+        val session = rtcClient.lastCall!!.lastMediaSession!!
 
-        call.status.value = MatrixRtcCallStatus.Connected(sinceMs = 0L, degraded = true)
+        session.interruptions.value = MatrixRtcInterruptions.NONE.copy(ownMedia = MatrixRtcConnectionState.RECONNECTING)
+        advanceTimeBy(DefaultElementCallController.INTERRUPTION_HOLD - 1.milliseconds)
+        session.interruptions.value = MatrixRtcInterruptions.NONE
         runCurrent()
-        assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.Degraded)
+        advanceTimeBy(DefaultElementCallController.INTERRUPTION_HOLD)
+        assertThat(controller.state.value?.interruptions).isEmpty()
 
-        call.status.value = MatrixRtcCallStatus.Connected(sinceMs = 0L, degraded = false)
+        session.interruptions.value = MatrixRtcInterruptions.NONE.copy(ownMedia = MatrixRtcConnectionState.RECONNECTING)
+        advanceTimeBy(DefaultElementCallController.INTERRUPTION_HOLD + 1.milliseconds)
+        assertThat(controller.state.value?.interruptions).containsExactly(ElementCallInterruption.OwnMedia)
+
+        session.interruptions.value = MatrixRtcInterruptions.NONE.copy(
+            ownMedia = MatrixRtcConnectionState.RECONNECTING,
+            membersUnreachable = listOf(A_REMOTE_MEMBER_ID),
+        )
         runCurrent()
-        assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.Connected)
+        assertThat(controller.state.value?.interruptions).containsExactly(ElementCallInterruption.OwnMedia, ElementCallInterruption.OthersMedia).inOrder()
+
+        session.interruptions.value = MatrixRtcInterruptions.NONE
+        runCurrent()
+        assertThat(controller.state.value?.interruptions).isEmpty()
+    }
+
+    /** 034 C4: the worse of the client's health and the record's copy, so a hop between the two never reads reachable. */
+    @Test
+    fun `an unreachable homeserver is the server entry, from either source`() = runTest {
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+        val session = rtcClient.lastCall!!.lastMediaSession!!
+
+        session.interruptions.value = MatrixRtcInterruptions.NONE.copy(signalling = MatrixRtcSignallingHealth.Unreachable(sinceMs = 3))
+        advanceTimeBy(DefaultElementCallController.INTERRUPTION_HOLD + 1.milliseconds)
+
+        assertThat(controller.state.value?.signalling).isEqualTo(MatrixRtcSignallingHealth.Unreachable(sinceMs = 3))
+        assertThat(controller.state.value?.interruptions).containsExactly(ElementCallInterruption.OwnServer(isMembershipLapsed = false))
     }
 
     @Test

@@ -15,12 +15,14 @@ import io.element.android.call.api.rtc.MatrixRtcConnectionState
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionDiagnostic
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
+import io.element.android.call.api.rtc.MatrixRtcInterruptions
 import io.element.android.call.api.rtc.MatrixRtcKeyRejection
 import io.element.android.call.api.rtc.MatrixRtcLocalState
 import io.element.android.call.api.rtc.MatrixRtcMediaPhase
 import io.element.android.call.api.rtc.MatrixRtcMembership
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcRingPhase
+import io.element.android.call.api.rtc.MatrixRtcSignallingHealth
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcTile
@@ -38,11 +40,13 @@ import org.matrix.rtc.FfiConnectionLossReason
 import org.matrix.rtc.FfiConnectionState
 import org.matrix.rtc.FfiFrameEncryptionDiagnostic
 import org.matrix.rtc.FfiFrameEncryptionState
+import org.matrix.rtc.FfiInterruptions
 import org.matrix.rtc.FfiKeyRejection
 import org.matrix.rtc.FfiLocalState
 import org.matrix.rtc.FfiMediaPhase
 import org.matrix.rtc.FfiReceiveStats
 import org.matrix.rtc.FfiRingPhase
+import org.matrix.rtc.FfiSignallingHealth
 import org.matrix.rtc.FfiStreamKind
 import org.matrix.rtc.FfiStreamRef
 import org.matrix.rtc.FfiStreamStats
@@ -182,6 +186,21 @@ internal fun FfiCallTile.map() = MatrixRtcTile(
     connection = connection.map(),
     unableToDecrypt = unableToDecrypt?.map(),
 )
+
+internal fun FfiInterruptions.map() = MatrixRtcInterruptions(
+    signalling = signalling.map(),
+    isOwnMembershipLapsed = ownMembershipLapsed,
+    ownMedia = ownMedia.map(),
+    membersReconnecting = membersReconnecting,
+    membersUnreachable = membersUnreachable,
+    unableToDecrypt = unableToDecrypt,
+    unmappable = unmappable,
+)
+
+internal fun FfiSignallingHealth.map(): MatrixRtcSignallingHealth = when (this) {
+    is FfiSignallingHealth.Reachable -> MatrixRtcSignallingHealth.Reachable
+    is FfiSignallingHealth.Unreachable -> MatrixRtcSignallingHealth.Unreachable(sinceMs.toLong())
+}
 
 internal fun FfiConnectionState.map(): MatrixRtcConnectionState = when (this) {
     FfiConnectionState.CONNECTED -> MatrixRtcConnectionState.CONNECTED
