@@ -7,29 +7,31 @@
 
 package io.element.android.call.sample
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material3.ListItemColors
+import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.ListItemShapes
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import kotlinx.collections.immutable.ImmutableList
 
 /**
- * The picker: the style switch, then the fixtures by category and the scenarios, the sections the iOS
- * catalogue has. Deliberately plain, so that whatever the call
+ * The picker: the host switches, then the fixtures by category and the scenarios, the sections the iOS
+ * catalogue has, each a Material segmented list. Deliberately plain, so that whatever the call
  * draws over it is unmistakably the call's.
  */
 @Composable
@@ -47,7 +49,10 @@ fun SampleHomeScreen(
     launchError: String? = null,
 ) {
     Surface(modifier = modifier.fillMaxSize()) {
-        LazyColumn(modifier = Modifier.safeDrawingPadding()) {
+        LazyColumn(
+            modifier = Modifier.safeDrawingPadding(),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
+        ) {
             item {
                 Text(
                     text = "Element Call sample",
@@ -61,37 +66,6 @@ fun SampleHomeScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp),
                 )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(onClick = onToggleStyle)
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(text = "Host style override", style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            text = "Draws the call with a deliberately loud ElementCallStyle instead of the defaults.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(checked = isStyleOverridden, onCheckedChange = { onToggleStyle() })
-                }
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(onClick = onAnswerOnLockScreen)
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                ) {
-                    Text(text = "Answer on the lock screen", style = MaterialTheme.typography.bodyLarge)
-                    Text(
-                        text = "Lock the phone within 5 s: a group call then opens over the keyguard, without this screen.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                HorizontalDivider()
             }
             if (launchError != null) {
                 item {
@@ -103,113 +77,122 @@ fun SampleHomeScreen(
                     )
                 }
             }
-            SampleFixture.Category.entries.forEach { category ->
-                item(key = category.name) {
-                    Text(
-                        text = category.title,
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            section(key = "host", title = "Host", rows = listOf(0, 1)) { row, shapes ->
+                if (row == 0) {
+                    SegmentedListItem(
+                        checked = isStyleOverridden,
+                        onCheckedChange = { onToggleStyle() },
+                        shapes = shapes,
+                        colors = sectionColors(),
+                        supportingContent = { Text("Draws the call with a deliberately loud ElementCallStyle instead of the defaults.") },
+                        trailingContent = { Switch(checked = isStyleOverridden, onCheckedChange = null) },
+                        content = { Text("Host style override") },
+                    )
+                } else {
+                    SegmentedListItem(
+                        onClick = onAnswerOnLockScreen,
+                        shapes = shapes,
+                        colors = sectionColors(),
+                        supportingContent = { Text("Lock the phone within 5 s: a group call then opens over the keyguard, without this screen.") },
+                        content = { Text("Answer on the lock screen") },
                     )
                 }
-                items(fixtures.filter { it.category == category }, key = { it.key }) { fixture ->
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onOpen(fixture) }
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                    ) {
-                        Text(text = fixture.title, style = MaterialTheme.typography.bodyLarge)
-                        Text(
-                            text = fixture.description,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Text(
-                            text = fixture.key,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.outline,
-                        )
-                    }
-                    HorizontalDivider()
+            }
+            SampleFixture.Category.entries.forEach { category ->
+                section(key = category.name, title = category.title, rows = fixtures.filter { it.category == category }) { fixture, shapes ->
+                    FixtureRow(title = fixture.title, description = fixture.description, launchKey = fixture.key, shapes = shapes) { onOpen(fixture) }
                 }
             }
-            item {
-                Text(
-                    text = "Ringing",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                )
-                Text(
-                    text = "A DM call to Bob on the real controller, with its sounds: the ring goes out at 0.5 s, the outcome comes at 6 s.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
+            section(
+                key = "ringing",
+                title = "Ringing",
+                description = "A DM call to Bob on the real controller, with its sounds: the ring goes out at 0.5 s, the outcome comes at 6 s.",
+                rows = SampleRingingFixture.entries,
+            ) { fixture, shapes ->
+                FixtureRow(title = fixture.title, description = fixture.description, launchKey = fixture.key, shapes = shapes) { onOpenRinging(fixture) }
             }
-            items(SampleRingingFixture.entries, key = { it.key }) { fixture ->
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onOpenRinging(fixture) }
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                ) {
-                    Text(text = fixture.title, style = MaterialTheme.typography.bodyLarge)
-                    Text(text = fixture.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(text = fixture.key, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                }
-                HorizontalDivider()
+            section(
+                key = "outages",
+                title = "Outages",
+                description = "A group call on the real controller whose interruptions record changes on a timeline, as the core's would (034).",
+                rows = SampleOutageFixture.entries,
+            ) { fixture, shapes ->
+                FixtureRow(title = fixture.title, description = fixture.description, launchKey = fixture.key, shapes = shapes) { onOpenOutage(fixture) }
             }
-            item {
-                Text(
-                    text = "Outages",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                )
-                Text(
-                    text = "A group call on the real controller whose interruptions record changes on a timeline, as the core's would (034).",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
-            }
-            items(SampleOutageFixture.entries, key = { it.key }) { fixture ->
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onOpenOutage(fixture) }
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                ) {
-                    Text(text = fixture.title, style = MaterialTheme.typography.bodyLarge)
-                    Text(text = fixture.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(text = fixture.key, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-                }
-                HorizontalDivider()
-            }
-            item {
-                Text(
-                    text = "Scenarios",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                )
-                Text(
-                    text = "The layout timelines from feature-hq, played under a scrubber. Roster frames apply themselves; " +
-                        "scroll, rotate and swipe are cues for you. `--es scenario <name>` launches one.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
-            }
-            items(scenarios, key = { it }) { name ->
-                Text(
-                    text = name,
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onOpenScenario(name) }
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                )
-                HorizontalDivider()
+            section(
+                key = "scenarios",
+                title = "Scenarios",
+                description = "The layout timelines from feature-hq, played under a scrubber. Roster frames apply themselves; " +
+                    "scroll, rotate and swipe are cues for you. `--es scenario <name>` launches one.",
+                rows = scenarios,
+            ) { name, shapes ->
+                FixtureRow(title = name, shapes = shapes) { onOpenScenario(name) }
             }
         }
     }
 }
+
+/** A titled group of rows, rounded as one card and split by thin gaps, the Material counterpart of an iOS inset grouped list. */
+private fun <T> LazyListScope.section(
+    key: String,
+    title: String,
+    rows: List<T>,
+    description: String? = null,
+    row: @Composable (T, ListItemShapes) -> Unit,
+) {
+    item(key = "section:$key") {
+        Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 8.dp)) {
+            Text(text = title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
+            if (description != null) {
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+        }
+    }
+    itemsIndexed(rows, key = { index, _ -> "$key:$index" }) { index, entry ->
+        Column(modifier = Modifier.padding(top = if (index == 0) 0.dp else ListItemDefaults.SegmentedGap)) {
+            row(entry, ListItemDefaults.segmentedShapes(index = index, count = rows.size))
+        }
+    }
+}
+
+@Composable
+private fun FixtureRow(
+    title: String,
+    shapes: ListItemShapes,
+    description: String? = null,
+    launchKey: String? = null,
+    onClick: () -> Unit,
+) {
+    SegmentedListItem(
+        onClick = onClick,
+        shapes = shapes,
+        colors = sectionColors(),
+        supportingContent = if (description == null && launchKey == null) {
+            null
+        } else {
+            {
+                Column {
+                    description?.let { Text(it) }
+                    launchKey?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                    }
+                }
+            }
+        },
+        content = { Text(title) },
+    )
+}
+
+@Composable
+private fun sectionColors(): ListItemColors = ListItemDefaults.segmentedColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
