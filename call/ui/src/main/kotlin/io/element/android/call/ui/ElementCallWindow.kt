@@ -24,18 +24,33 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.round
 import androidx.core.content.ContextCompat
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.ElementCallSnapshot
+import io.element.android.call.api.ElementCallWindowRect
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.ui.util.KeepScreenOn
@@ -50,18 +65,75 @@ import timber.log.Timber
 @Composable
 internal fun ElementCallWindow(
     controller: ElementCallController,
+    isInPictureInPicture: Boolean,
     onMinimize: () -> Unit,
     onClose: () -> Unit,
+    /** The system is about to shrink the screen without waiting for us: Home, from Android 12. */
+    isLeavingForPictureInPicture: Boolean = false,
+    /** The window's content is on screen, so the system can take its picture to shrink. */
+    onPictureInPictureShow: () -> Unit = {},
 ) {
     val current = controller.state.collectAsState().value ?: return
-    val isInPictureInPicture = controller.isInPictureInPicture.collectAsState().value
     val spotlightMemory = rememberCallSpotlightMemory(controller)
     CallLayoutEffects(controller = controller, current = current, spotlightMemory = spotlightMemory)
+    val entry = controller.pictureInPictureEntry.collectAsState().value
     if (isInPictureInPicture) {
         UnmountedStageWindow(controller = controller, current = current, spotlightMemory = spotlightMemory, isStageMounted = false)
-        ElementCallPictureInPictureContent(call = current, videoFrames = controller::videoFrames, spotlightId = spotlightMemory.spotlightId)
     } else {
-        CallScreenWindow(controller = controller, current = current, spotlightMemory = spotlightMemory, onMinimize = onMinimize, onClose = onClose)
+        CallScreenWindow(
+            controller = controller,
+            current = current,
+            spotlightMemory = spotlightMemory,
+            isLeavingForPictureInPicture = isLeavingForPictureInPicture,
+            onMinimize = onMinimize,
+            onClose = onClose,
+        )
+    }
+    // One call site for the way in and the window, so the renderer that drew the way in carries on in the
+    // window: a new one would be black until its first frame, which is what the system would shrink.
+    if (isInPictureInPicture || entry != null) {
+        // Unseen until it shows something, so the call stays on screen rather than a black renderer.
+        var isShown by remember { mutableStateOf(false) }
+        // Over black on the way in: the system crops the whole screen down onto the rectangle as it shrinks it,
+        // so what is around it shows for the first frames, and that should not be the grid or its chrome.
+        AtWindowRect(
+            rect = entry.takeUnless { isInPictureInPicture },
+            modifier = Modifier
+                .graphicsLayer { alpha = if (isShown || isInPictureInPicture) 1f else 0f }
+                .background(Color.Black),
+        ) {
+            ElementCallPictureInPictureContent(
+                call = current,
+                videoFrames = controller::videoFrames,
+                spotlightId = spotlightMemory.spotlightId,
+                onShow = {
+                    isShown = true
+                    onPictureInPictureShow()
+                },
+            )
+        }
+    }
+}
+
+/** [content] at exactly [rect] of the window wherever this is composed, or over all of it with no [rect]; [modifier] is the whole window's. */
+@Composable
+private fun AtWindowRect(rect: ElementCallWindowRect?, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    var origin by remember { mutableStateOf(IntOffset.Zero) }
+    Box(modifier = modifier.fillMaxSize().onGloballyPositioned { origin = it.positionInWindow().round() }) {
+        Box(
+            modifier = if (rect == null) {
+                Modifier.fillMaxSize()
+            } else {
+                Modifier
+                    .offset { IntOffset(rect.left - origin.x, rect.top - origin.y) }
+                    .layout { measurable, _ ->
+                        val placeable = measurable.measure(Constraints.fixed(rect.width, rect.height))
+                        layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+                    }
+            },
+        ) {
+            content()
+        }
     }
 }
 
@@ -111,6 +183,7 @@ private fun CallScreenWindow(
     controller: ElementCallController,
     current: ElementCallSnapshot,
     spotlightMemory: CallSpotlightMemory,
+    isLeavingForPictureInPicture: Boolean,
     onMinimize: () -> Unit,
     onClose: () -> Unit,
 ) {
@@ -146,6 +219,7 @@ private fun CallScreenWindow(
         controller = controller,
         navigator = navigator,
         spotlightMemory = spotlightMemory,
+        isLeavingForPictureInPicture = isLeavingForPictureInPicture,
     )
 
     if (current.isMaximized) {
@@ -241,6 +315,7 @@ private fun MaximizedCall(
     controller: ElementCallController,
     navigator: ElementCallNavigator,
     spotlightMemory: CallSpotlightMemory,
+    isLeavingForPictureInPicture: Boolean,
 ) {
     AnimatedVisibility(
         visibleState = visibleState,
@@ -248,7 +323,7 @@ private fun MaximizedCall(
         exit = fadeOut(MAXIMIZE_FADE_SPEC) + scaleOut(MAXIMIZE_SCALE_SPEC, targetScale = MAXIMIZE_SCALE, transformOrigin = FROM_THE_BAR),
     ) {
         val state = rememberElementCallScreenState(controller = controller, navigator = navigator, spotlightMemory = spotlightMemory)
-        ElementCallScreen(state = state, modifier = Modifier.fillMaxSize())
+        ElementCallScreen(state = state.copy(isLeavingForPictureInPicture = isLeavingForPictureInPicture), modifier = Modifier.fillMaxSize())
     }
 }
 

@@ -57,6 +57,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
@@ -482,6 +483,8 @@ internal fun CallStage(
                     slot.isSticky -> 0f
                     else -> 1f + (gridIndex[tile.tileId] ?: gridTileIds.size)
                 },
+                isPictureInPictureSource = tile.tileId == state.pictureInPictureTileId,
+                isLeavingForPictureInPicture = state.isLeavingForPictureInPicture,
                 eventSink = state.eventSink,
             )
         }
@@ -690,8 +693,14 @@ private fun PlacedTile(
     floatingCorner: ElementCallOwnTileCorner?,
     onVideoSizeChange: ((IntSize) -> Unit)?,
     traversalIndex: Float,
+    /** Whether this is the tile picture-in-picture would show, which reports where it is. */
+    isPictureInPictureSource: Boolean,
+    isLeavingForPictureInPicture: Boolean,
     eventSink: (ElementCallScreenEvent) -> Unit,
 ) {
+    val pictureInPictureSource = pictureInPictureSourceModifier(isPictureInPictureSource) {
+        eventSink(ElementCallScreenEvent.SetPictureInPictureSource(it))
+    }
     // Zero on the first composition of a member who has just joined, so they grow into place rather
     // than being there abruptly. Not under inspection, where the animation never runs.
     val isInspecting = LocalInspectionMode.current
@@ -824,7 +833,10 @@ private fun PlacedTile(
                 onTap = onTap,
                 onDoubleTap = { if (allowsFullscreen) eventSink(ElementCallScreenEvent.ToggleFullscreen(tile.tileId)) },
                 onLongPress = onLongPress,
-            ),
+            )
+            .then(pictureInPictureSource)
+            // Our own floating tile is not in the floating window, so it is not in what shrinks into it either.
+            .then(if (isLeavingForPictureInPicture && tile.isLocal && appearance == CallTileAppearance.Floating) Modifier.alpha(0f) else Modifier),
     )
 }
 

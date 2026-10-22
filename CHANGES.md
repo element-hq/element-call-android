@@ -18,6 +18,9 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
   `onCallActivityCreated`; `ElementCallPictureInPicture.onUserLeaveHint` and the host Activity's
   `supportsPictureInPicture` go. `ElementCallOverlay` draws only the bar; a minimized video call is the call screen
   in picture-in-picture, and `ElementCallFloatingTile` is gone. `ElementCallNavigator` gains `minimize()`.
+- `ElementCallController` gains `pictureInPictureSource` and `pictureInPictureEntry`, with their setters: where the
+  tile the floating window shows is drawn, and where its content is drawn on the way in. A controller of the host's
+  own implements all four.
 - The library no longer depends on the Matrix Rust SDK, and `element-call-matrix` is gone. `ElementCallStack.Builder`
   takes the core's `org.matrix.rtc.MatrixBackend` over the host's own client; `sample/…/matrix/SdkMatrixBackend.kt`
   (with `SdkElementCallRoomContext`) is the reference over the Rust SDK to copy. `ElementCallSdkTransport`,

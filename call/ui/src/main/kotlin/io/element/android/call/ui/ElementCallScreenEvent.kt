@@ -7,6 +7,7 @@
 
 package io.element.android.call.ui
 
+import io.element.android.call.api.ElementCallWindowRect
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
@@ -61,6 +62,12 @@ sealed interface ElementCallScreenEvent {
      * tiles it draws out of rank. Sent by the layout with [SetComposedTiles], from the same set.
      */
     data class SetDetailWindow(val window: MatrixRtcDetailWindow) : ElementCallScreenEvent
+
+    /**
+     * Where the tile picture-in-picture would show is drawn, or null once it is not. Sent by that tile.
+     * See `ElementCallController.pictureInPictureSource`.
+     */
+    data class SetPictureInPictureSource(val source: ElementCallWindowRect?) : ElementCallScreenEvent
 
     /** Show this hero in the spotlight: a settled swipe on the stack, an arrow, or a screen reader's action. */
     data class ShowHero(val tileId: String) : ElementCallScreenEvent

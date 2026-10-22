@@ -73,6 +73,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
@@ -187,110 +188,115 @@ fun ElementCallScreen(
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
-                if (!isTopBarHideable) {
-                    // Faded rather than removed when a tile goes fullscreen, in step with the stage's scrim: removed
-                    // at once, the rows scrolled under it showed until the growing tile covered them (000 R7).
-                    AnimatedVisibility(
-                        visible = fullscreen == null,
-                        enter = fadeIn(tween(FULLSCREEN_SCRIM_OUT_MS)),
-                        exit = fadeOut(tween(FULLSCREEN_SCRIM_IN_MS)),
-                    ) {
-                        // Opaque, so a row scrolled up passes under it; a drag on it is its own, as on the controls (003 B10).
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(ElementCallTheme.colors.bgCanvas)
-                                .scrollable(rememberScrollableState { it }, Orientation.Vertical)
-                                .statusBarsPadding(),
+                // All the chrome, gone at once rather than slid away when the system is about to shrink the
+                // screen into the floating window: what it shrinks should be the call, not its controls.
+                val chromeAlpha = if (state.isLeavingForPictureInPicture) 0f else 1f
+                Box(modifier = Modifier.fillMaxSize().graphicsLayer { alpha = chromeAlpha }) {
+                    if (!isTopBarHideable) {
+                        // Faded rather than removed when a tile goes fullscreen, in step with the stage's scrim: removed
+                        // at once, the rows scrolled under it showed until the growing tile covered them (000 R7).
+                        AnimatedVisibility(
+                            visible = fullscreen == null,
+                            enter = fadeIn(tween(FULLSCREEN_SCRIM_OUT_MS)),
+                            exit = fadeOut(tween(FULLSCREEN_SCRIM_IN_MS)),
                         ) {
-                            CallTopBar(state, modifier = Modifier.height(TOP_BAR_HEIGHT))
-                            ScreenShareBanner(
-                                state = state,
-                                modifier = Modifier
-                                    .align(Alignment.CenterHorizontally)
-                                    .onSizeChanged { bannerHeight = with(density) { it.height.toDp() } },
-                            )
-                        }
-                    }
-                }
-                if (fullscreen != null) {
-                    // A tile filling the stage, with no chrome but the HUD when asked for (spec 000 R1, R8).
-                    // The status bar keeps the canvas behind it rather than the grid rows under the bar.
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .windowInsetsTopHeight(WindowInsets.statusBarsIgnoringVisibility)
-                            .background(ElementCallTheme.colors.bgCanvas),
-                    )
-                    if (state.isFullscreenChromeVisible) {
-                        Box(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility)) {
-                            CallFullscreenChrome(
-                                tile = fullscreen,
-                                onExitFullscreen = { state.eventSink(ElementCallScreenEvent.ExitFullscreen) },
-                                controls = controls,
-                            )
-                        }
-                    }
-                } else if (isTopBarHideable) {
-                    // Both bars over the picture, shown and hidden as one (014 R1, R2; 019 R30).
-                    StageChrome(isVisible = state.isStageChromeVisible, edge = Alignment.Top, reduceMotion = reduceMotion) {
-                        Box {
-                            Box(
+                            // Opaque, so a row scrolled up passes under it; a drag on it is its own, as on the controls (003 B10).
+                            Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(statusBarTop + TOP_BAR_HEIGHT + TOP_SCRIM_EXTENT)
-                                    .background(Brush.verticalGradient(listOf(ElementCallTheme.colors.controlsScrim, Color.Transparent))),
-                            )
-                            CallTopBar(state, modifier = Modifier.windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility))
+                                    .background(ElementCallTheme.colors.bgCanvas)
+                                    .scrollable(rememberScrollableState { it }, Orientation.Vertical)
+                                    .statusBarsPadding(),
+                            ) {
+                                CallTopBar(state, modifier = Modifier.height(TOP_BAR_HEIGHT))
+                                ScreenShareBanner(
+                                    state = state,
+                                    modifier = Modifier
+                                        .align(Alignment.CenterHorizontally)
+                                        .onSizeChanged { bannerHeight = with(density) { it.height.toDp() } },
+                                )
+                            }
                         }
                     }
-                    // The banner is not chrome: it stays, and takes the top bar's place while that is away (R3).
-                    val bannerTop by animateDpAsState(
-                        targetValue = if (state.isStageChromeVisible) TOP_BAR_HEIGHT else 0.dp,
-                        animationSpec = tween(CHROME_SLIDE_MS),
-                        label = "bannerTop",
-                    )
-                    // Stacked so a share that is still running when the call becomes one-to-one does
-                    // not draw its banner through the duration.
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility)
-                            .padding(top = bannerTop),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        ScreenShareBanner(state = state)
-                        AnimatedVisibility(
-                            visible = state.isStageChromeVisible,
-                            enter = fadeIn(tween(CHROME_SLIDE_MS)),
-                            exit = fadeOut(tween(CHROME_SLIDE_MS))
+                    if (fullscreen != null) {
+                        // A tile filling the stage, with no chrome but the HUD when asked for (spec 000 R1, R8).
+                        // The status bar keeps the canvas behind it rather than the grid rows under the bar.
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .windowInsetsTopHeight(WindowInsets.statusBarsIgnoringVisibility)
+                                .background(ElementCallTheme.colors.bgCanvas),
+                        )
+                        if (state.isFullscreenChromeVisible) {
+                            Box(modifier = Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBarsIgnoringVisibility)) {
+                                CallFullscreenChrome(
+                                    tile = fullscreen,
+                                    onExitFullscreen = { state.eventSink(ElementCallScreenEvent.ExitFullscreen) },
+                                    controls = controls,
+                                )
+                            }
+                        }
+                    } else if (isTopBarHideable) {
+                        // Both bars over the picture, shown and hidden as one (014 R1, R2; 019 R30).
+                        StageChrome(isVisible = state.isStageChromeVisible, edge = Alignment.Top, reduceMotion = reduceMotion) {
+                            Box {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(statusBarTop + TOP_BAR_HEIGHT + TOP_SCRIM_EXTENT)
+                                        .background(Brush.verticalGradient(listOf(ElementCallTheme.colors.controlsScrim, Color.Transparent))),
+                                )
+                                CallTopBar(state, modifier = Modifier.windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility))
+                            }
+                        }
+                        // The banner is not chrome: it stays, and takes the top bar's place while that is away (R3).
+                        val bannerTop by animateDpAsState(
+                            targetValue = if (state.isStageChromeVisible) TOP_BAR_HEIGHT else 0.dp,
+                            animationSpec = tween(CHROME_SLIDE_MS),
+                            label = "bannerTop",
+                        )
+                        // Stacked so a share that is still running when the call becomes one-to-one does
+                        // not draw its banner through the duration.
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility)
+                                .padding(top = bannerTop),
+                            horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            CallDurationLabel(state = state)
+                            ScreenShareBanner(state = state)
+                            AnimatedVisibility(
+                                visible = state.isStageChromeVisible,
+                                enter = fadeIn(tween(CHROME_SLIDE_MS)),
+                                exit = fadeOut(tween(CHROME_SLIDE_MS))
+                            ) {
+                                CallDurationLabel(state = state)
+                            }
                         }
-                    }
-                    StageChrome(
-                        isVisible = state.isStageChromeVisible,
-                        edge = Alignment.Bottom,
-                        reduceMotion = reduceMotion,
-                        modifier = Modifier.align(Alignment.BottomCenter),
-                    ) {
-                        controls(Modifier)
-                    }
-                } else {
-                    CallDurationLabel(
-                        state = state,
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .padding(top = topClearance + 12.dp),
-                    )
-                    // Upright only the control bar goes; the top bar stays (014 R30).
-                    StageChrome(
-                        isVisible = state.isStageChromeVisible,
-                        edge = Alignment.Bottom,
-                        reduceMotion = reduceMotion,
-                        modifier = Modifier.align(Alignment.BottomCenter),
-                    ) {
-                        controls(Modifier)
+                        StageChrome(
+                            isVisible = state.isStageChromeVisible,
+                            edge = Alignment.Bottom,
+                            reduceMotion = reduceMotion,
+                            modifier = Modifier.align(Alignment.BottomCenter),
+                        ) {
+                            controls(Modifier)
+                        }
+                    } else {
+                        CallDurationLabel(
+                            state = state,
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(top = topClearance + 12.dp),
+                        )
+                        // Upright only the control bar goes; the top bar stays (014 R30).
+                        StageChrome(
+                            isVisible = state.isStageChromeVisible,
+                            edge = Alignment.Bottom,
+                            reduceMotion = reduceMotion,
+                            modifier = Modifier.align(Alignment.BottomCenter),
+                        ) {
+                            controls(Modifier)
+                        }
                     }
                 }
             }
