@@ -445,6 +445,9 @@ fun anElementCallScreenState(
     showsRaiseHandControl = participants.any { it.isLocal } &&
         (participants.count() >= 3 || participants.any { it.isLocal && it.memberId in handRaisedIds }),
     handRequestFailure = handRequestFailure,
+    // Nothing to report where a tile is drawn to: a preview has no window to grow out of.
+    pictureInPictureTileId = null,
+    isLeavingForPictureInPicture = false,
     libraryVersion = libraryVersion,
     coreVersion = coreVersion,
     eventSink = eventSink,
