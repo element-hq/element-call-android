@@ -11,7 +11,9 @@ import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallEndReason
+import io.element.android.call.api.ElementCallFailure
 import io.element.android.call.api.ElementCallHandRequestFailure
+import io.element.android.call.api.ElementCallInterruption
 import io.element.android.call.api.ElementCallLifecycleListener
 import io.element.android.call.api.ElementCallOptions
 import io.element.android.call.api.ElementCallRoomContextProvider
@@ -29,6 +31,8 @@ import io.element.android.call.api.rtc.MatrixRtcCallStatus
 import io.element.android.call.api.rtc.MatrixRtcClient
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcGroupNotify
+import io.element.android.call.api.rtc.MatrixRtcInterruptions
+import io.element.android.call.api.rtc.MatrixRtcJoinException
 import io.element.android.call.api.rtc.MatrixRtcLeaveReason
 import io.element.android.call.api.rtc.MatrixRtcMediaSession
 import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
@@ -36,6 +40,7 @@ import io.element.android.call.api.rtc.MatrixRtcRing
 import io.element.android.call.api.rtc.MatrixRtcRingPhase
 import io.element.android.call.api.rtc.MatrixRtcRoom
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
+import io.element.android.call.api.rtc.MatrixRtcSignallingHealth
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
@@ -44,8 +49,10 @@ import io.element.android.call.impl.audio.CallSoundEffect
 import io.element.android.call.impl.audio.CallSoundEffectRenderer
 import io.element.android.call.impl.audio.JoinLeaveSoundPolicy
 import io.element.android.call.impl.audio.RaisedHandSoundPolicy
+import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableMap
+import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.FlowPreview
@@ -53,6 +60,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -73,6 +81,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Owns the one native call that can be running, for as long as it runs.
@@ -191,6 +200,70 @@ internal class DefaultElementCallController(
      */
     private fun updateState(block: (ElementCallSnapshot) -> ElementCallSnapshot) {
         _state.update { it?.let(block) }
+    }
+
+    /** The running call's interruptions record, from its media session; null before media. */
+    private val interruptionRecord = MutableStateFlow<MatrixRtcInterruptions?>(null)
+
+    /** Publishes the held entries once it has waited out [INTERRUPTION_HOLD]. */
+    private var interruptionHoldJob: Job? = null
+
+    /**
+     * Signalling, and the list's entries, for the life of the call. Signalling is unreachable if either source says so: the
+     * client's, the only one before media, or the record's copy; the two agree a hop apart, and taking the worse keeps that
+     * hop from re-enabling the hand.
+     */
+    private suspend fun followInterruptions() = coroutineScope {
+        interruptionRecord.value = null
+        interruptionHoldJob = null
+        combine(rtcClient.signallingHealth(), interruptionRecord) { client, record ->
+            val signalling = if (client is MatrixRtcSignallingHealth.Unreachable) client else record?.signalling ?: MatrixRtcSignallingHealth.Reachable
+            signalling to ElementCallInterruption.entries(signalling, record)
+        }
+            .collect { (signalling, entries) ->
+                updateState { it.copy(signalling = signalling) }
+                holdInterruptions(entries)
+            }
+    }
+
+    /**
+     * The list shows nothing until some cause has lasted [INTERRUPTION_HOLD]: a blip shorter than that is nothing the user can
+     * act on, and an indicator that comes up at every one is soon ignored (034 R35, R40). Once up it follows the causes at
+     * once, and empties the moment none is left. The tiles never wait: what a tile shows is about that tile.
+     */
+    private fun CoroutineScope.holdInterruptions(entries: List<ElementCallInterruption>) {
+        val shown = _state.value?.interruptions.orEmpty()
+        when {
+            entries.isEmpty() -> {
+                interruptionHoldJob?.cancel()
+                interruptionHoldJob = null
+                if (shown.isNotEmpty()) updateState { it.copy(interruptions = persistentListOf()) }
+            }
+            shown.isNotEmpty() -> if (entries != shown) updateState { it.copy(interruptions = entries.toImmutableList()) }
+            interruptionHoldJob == null -> interruptionHoldJob = launch {
+                delay(INTERRUPTION_HOLD)
+                interruptionHoldJob = null
+                val signalling = _state.value?.signalling ?: MatrixRtcSignallingHealth.Reachable
+                updateState { it.copy(interruptions = ElementCallInterruption.entries(signalling, interruptionRecord.value).toImmutableList()) }
+            }
+        }
+    }
+
+    /** When each member's current spell of being unable to decrypt reaches [KEYS_MISSING_AFTER]. */
+    private val keySpells = mutableMapOf<String, Job>()
+
+    /** Kept once it has fired, so a spell that outlasts the wait is not granted a second one. */
+    private fun CoroutineScope.reconcileKeySpells(unableToDecrypt: Set<String>) {
+        val ended = keySpells.keys - unableToDecrypt
+        ended.forEach { keySpells.remove(it)?.cancel() }
+        if (ended.isNotEmpty()) updateState { it.copy(membersMissingKeys = (it.membersMissingKeys - ended).toImmutableSet()) }
+        for (memberId in unableToDecrypt - keySpells.keys) {
+            keySpells[memberId] = launch {
+                delay(KEYS_MISSING_AFTER)
+                Timber.w("ElementCall: $memberId's keys have stayed away for $KEYS_MISSING_AFTER")
+                updateState { it.copy(membersMissingKeys = (it.membersMissingKeys + memberId).toImmutableSet()) }
+            }
+        }
     }
 
     /** The join-and-observe coroutine for the running call. Cancelled as the first step of teardown. */
@@ -313,7 +386,7 @@ internal class DefaultElementCallController(
                 val current = _state.value ?: return@withLock
                 if (!granted) {
                     Timber.i("ElementCall: microphone permission denied")
-                    updateState { it.copy(connection = ElementCallConnection.Failed("Microphone permission denied")) }
+                    updateState { it.copy(connection = ElementCallConnection.Failed(ElementCallFailure.Other("Microphone permission denied"))) }
                     return@withLock
                 }
                 // The host re-reports a permission it already has whenever it is recreated, so this
@@ -326,7 +399,11 @@ internal class DefaultElementCallController(
                 platform.startForegroundService()
                 audioFocus.requestAudioFocus {}
 
-                callJob = scope.launch { runCall(current.callData) }
+                callJob = scope.launch {
+                    // From the start, not the join: a join made during an outage is when the user first needs it (034 C4).
+                    launch { followInterruptions() }
+                    runCall(current.callData)
+                }
             }
         }
     }
@@ -364,26 +441,20 @@ internal class DefaultElementCallController(
     }
 
     override fun setHandRaised(raised: Boolean) {
+        val rtcCall = rtcCall ?: return
+        updateState { it.copy(handRequestFailure = null) }
+        // Not gated on a request in flight: the core holds the hand as a desired state, so a second tap is the
+        // reversal, and the first then resolves quietly (034 C12). It fails only on a refusal.
         scope.launch {
-            val rtcCall = rtcCall ?: return@launch
-            var isSending = false
-            // Checked and set in one step, so two taps cannot both send.
-            updateState { snapshot ->
-                val isUp = snapshot.ownTile?.handRaisedAtMs != null
-                isSending = !snapshot.isHandPending && snapshot.ownTile != null && isUp != raised
-                if (isSending) snapshot.copy(isHandPending = true, handRequestFailure = null) else snapshot
-            }
-            if (!isSending) return@launch
             val result = if (raised) rtcCall.raiseHand() else rtcCall.lowerHand()
-            val failure = when {
-                result.isSuccess -> null
-                raised -> ElementCallHandRequestFailure.RAISE
-                else -> ElementCallHandRequestFailure.LOWER
+            Timber.i("ElementCall: ${if (raised) "raising" else "lowering"} our hand ${if (result.isSuccess) "done" else "refused"}")
+            if (result.isFailure) {
+                updateState { it.copy(handRequestFailure = if (raised) ElementCallHandRequestFailure.RAISE else ElementCallHandRequestFailure.LOWER) }
             }
-            Timber.i("ElementCall: ${if (raised) "raising" else "lowering"} our hand ${if (failure == null) "done" else "failed"}")
-            updateState { it.copy(isHandPending = false, handRequestFailure = failure) }
         }
     }
+
+    override fun reportConnectivity(isOnline: Boolean) = rtcClient.reportConnectivity(isOnline)
 
     override fun clearHandRequestFailure() {
         updateState { it.copy(handRequestFailure = null) }
@@ -546,7 +617,11 @@ internal class DefaultElementCallController(
             updateState { it.copy(connection = ElementCallConnection.Calling(callee = null, isRinging = false)) }
         }
         val joined = room.joinCall(kind = kind).getOrElse {
-            fail("Join failed: ${it.message}")
+            when (it) {
+                is MatrixRtcJoinException.TimedOut -> fail(ElementCallFailure.JoinTimedOut, "Join failed: ${it.message}")
+                is MatrixRtcJoinException.Refused -> fail(ElementCallFailure.JoinRefused, "Join failed: ${it.message}")
+                else -> fail("Join failed: ${it.message}")
+            }
             return
         }
         rtcCall = joined
@@ -594,7 +669,7 @@ internal class DefaultElementCallController(
 
     /** Media, the microphone, the routing and the observers. @return what failed, or null. */
     private suspend fun CoroutineScope.connectMediaAndObserve(joined: MatrixRtcCall): String? {
-        val connected = joined.connectMedia().getOrElse {
+        val connected = joined.connectMedia(isSfuFallbackEnabled = options.isSfuFallbackEnabled).getOrElse {
             return "Media failed: ${it.message}"
         }
         call = connected
@@ -652,7 +727,7 @@ internal class DefaultElementCallController(
                 }
                 is MatrixRtcCallStatus.Connected -> updateState {
                     it.copy(
-                        connection = if (status.degraded) ElementCallConnection.Degraded else ElementCallConnection.Connected,
+                        connection = ElementCallConnection.Connected,
                         connectedAtElapsedMs = it.connectedAtElapsedMs ?: elapsedRealtimeAt(status.sinceMs),
                     )
                 }
@@ -663,6 +738,12 @@ internal class DefaultElementCallController(
                     // The caller is told, and dismisses it (030 R4); every other end closes the screen at once.
                     if (status.reason == MatrixRtcCallEnd.RingNotSent) {
                         updateState { it.copy(connection = ElementCallConnection.RingNotSent((it.connection as? ElementCallConnection.Calling)?.callee)) }
+                        return@collect
+                    }
+                    // Likewise said until the user closes it (034 R27); the core has already left.
+                    val lost = status.reason as? MatrixRtcCallEnd.ConnectionClosed
+                    if (lost != null) {
+                        fail(ElementCallFailure.ConnectionLost(lost.reason), "Connection lost: ${lost.message}")
                         return@collect
                     }
                     updateState { it.copy(connection = ElementCallConnection.Ended) }
@@ -712,6 +793,17 @@ internal class DefaultElementCallController(
 
         observe { rtcCall.memberCount.collect { value -> updateState { it.copy(memberCount = value) } } }
         observe { call.tiles.collect { value -> updateState { it.copy(roster = value) } } }
+        observe { call.interruptions.collect { interruptionRecord.value = it } }
+        keySpells.clear()
+        observe {
+            // From both the tiles and the record: a change reaches the tiles first (C5), and a spell has to have begun by
+            // then or the tile would draw its spinner for the moment in between.
+            combine(call.tiles, call.interruptions) { roster, record ->
+                record.unableToDecrypt.toSet() + roster.detail.values.filter { it.unableToDecrypt != null }.map { it.id.memberId }
+            }
+                .distinctUntilChanged()
+                .collect { reconcileKeySpells(it) }
+        }
         observe {
             call.localState
                 .map { it?.tile }
@@ -770,9 +862,11 @@ internal class DefaultElementCallController(
         if (plays) soundEffectRenderer?.play(CallSoundEffect.RAISE_HAND)
     }
 
-    private fun fail(message: String) {
+    private fun fail(message: String) = fail(ElementCallFailure.Other(message), message)
+
+    private fun fail(failure: ElementCallFailure, message: String) {
         Timber.w("ElementCall: $message")
-        _state.update { it?.copy(connection = ElementCallConnection.Failed(message)) }
+        _state.update { it?.copy(connection = ElementCallConnection.Failed(failure)) }
         // Not torn down here: the message is the whole point of the failed state, and clearing the
         // snapshot would take it off screen before it could be read. The host dismisses the call.
     }
@@ -855,6 +949,16 @@ internal class DefaultElementCallController(
 
     internal companion object {
         const val HANGUP_REASON = "m.hangup"
+
+        /** How long a cause has to last before the interruptions list shows it, as on iOS. */
+        val INTERRUPTION_HOLD = 2500.milliseconds
+
+        /**
+         * How long a tile shows it is waiting for a member's key before saying the key is missing. Counted from the core's
+         * report, which already waited out a key rotation (its key grace, C6). Nothing here can tell why a key does not come,
+         * so past this a tile says only that it is missing, for that one member (034 Q8).
+         */
+        val KEYS_MISSING_AFTER = 10.seconds
 
         /**
          * How long a member's video stream stays open after the last tile drawing it goes away.

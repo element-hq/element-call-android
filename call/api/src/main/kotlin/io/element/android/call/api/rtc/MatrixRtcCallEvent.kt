@@ -47,7 +47,7 @@ sealed interface MatrixRtcCallEvent {
      *
      * Distinct from a key that never arrived, which is the whole point of reporting it: both leave
      * the member at [MatrixRtcFrameEncryptionState.MISSING_KEY], but only one of them is a delivery
-     * problem. [MatrixRtcKeyRejection.NotCrossSigned] in particular is a "verify this device"
+     * problem. [MatrixRtcKeyRejection.SenderNotConfirmed] in particular is a "verify this device"
      * prompt rather than a fault.
      */
     data class KeyDiscarded(
@@ -80,14 +80,14 @@ sealed interface MatrixRtcCallEvent {
  * Why a media key we received was thrown away.
  *
  * Typed rather than a message because the cases need different responses: a mismatch is someone
- * else's bug, [NotCrossSigned] and [UnverifiableDevice] are things the user can act on.
+ * else's bug, [SenderNotConfirmed] and [UnverifiableDevice] are things the user can act on.
  */
 sealed interface MatrixRtcKeyRejection {
     /** The key arrived unencrypted, so nothing vouches for who sent it. */
     data object Cleartext : MatrixRtcKeyRejection
 
-    /** The sending device is not cross-signed by its owner. */
-    data object NotCrossSigned : MatrixRtcKeyRejection
+    /** The client does not confirm the sender under its own trust settings. */
+    data object SenderNotConfirmed : MatrixRtcKeyRejection
 
     /** The sending device's identity could not be established at all. */
     data object UnverifiableDevice : MatrixRtcKeyRejection

@@ -13,6 +13,7 @@ import io.element.android.call.api.rtc.MatrixRtcTileKind
 import io.element.android.call.api.rtc.id.UserId
 import org.junit.Test
 import org.matrix.rtc.FfiCallTile
+import org.matrix.rtc.FfiConnectionState
 import org.matrix.rtc.FfiTileId
 import org.matrix.rtc.FfiTileKind
 import org.matrix.rtc.FfiTileRef
@@ -85,6 +86,7 @@ class TileRosterMapperTest {
         speaking = false,
         handRaisedAtMs = handRaisedAtMs,
         handRaisedPosition = handRaisedPosition,
-        reachable = true,
+        connection = FfiConnectionState.CONNECTED,
+        unableToDecrypt = null,
     )
 }

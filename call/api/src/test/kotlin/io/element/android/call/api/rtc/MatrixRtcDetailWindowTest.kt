@@ -56,7 +56,8 @@ class MatrixRtcDetailWindowTest {
                 isSpeaking = false,
                 handRaisedAtMs = null,
                 handRaisedPosition = null,
-                isReachable = true,
+                connection = MatrixRtcConnectionState.CONNECTED,
+                unableToDecrypt = null,
             )
         }
         return MatrixRtcTileRoster(

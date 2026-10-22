@@ -7,6 +7,7 @@
 
 package io.element.android.call.test
 
+import io.element.android.call.api.rtc.MatrixRtcConnectionState
 import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamState
@@ -15,6 +16,7 @@ import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcTileKind
 import io.element.android.call.api.rtc.MatrixRtcTileRef
 import io.element.android.call.api.rtc.MatrixRtcTileRoster
+import io.element.android.call.api.rtc.MatrixRtcUnableToDecrypt
 import io.element.android.call.api.rtc.id.UserId
 
 /** A member on a microphone and a camera, which may be muted. */
@@ -28,7 +30,8 @@ fun aCameraParticipant(
     userId = userId,
     deviceId = "ADEVICEID",
     isLocal = isLocal,
-    isReachable = true,
+    connection = MatrixRtcConnectionState.CONNECTED,
+    unableToDecrypt = null,
     streams = listOf(
         MatrixRtcStreamState(MatrixRtcStreamKind.MICROPHONE, isMuted = false),
         MatrixRtcStreamState(MatrixRtcStreamKind.CAMERA, isMuted = isCameraMuted),
@@ -45,7 +48,8 @@ fun aSharingParticipant(
     userId = userId,
     deviceId = "ADEVICEID",
     isLocal = isLocal,
-    isReachable = true,
+    connection = MatrixRtcConnectionState.CONNECTED,
+    unableToDecrypt = null,
     streams = listOf(
         MatrixRtcStreamState(MatrixRtcStreamKind.MICROPHONE, isMuted = false),
         MatrixRtcStreamState(MatrixRtcStreamKind.CAMERA, isMuted = false),
@@ -64,6 +68,8 @@ fun aTile(
     isHero: Boolean = kind == MatrixRtcTileKind.SCREEN_SHARE,
     /** The hand's place in the queue; null while it is down. */
     handPosition: Int? = null,
+    connection: MatrixRtcConnectionState = MatrixRtcConnectionState.CONNECTED,
+    unableToDecrypt: MatrixRtcUnableToDecrypt? = null,
 ) = MatrixRtcTile(
     id = MatrixRtcTileId(memberId, kind),
     userId = userId,
@@ -74,7 +80,8 @@ fun aTile(
     isSpeaking = isSpeaking,
     handRaisedAtMs = handPosition?.let { 1_000L + it },
     handRaisedPosition = handPosition,
-    isReachable = true,
+    connection = connection,
+    unableToDecrypt = unableToDecrypt,
 )
 
 /** A roster ranked in the order given, with detail for every tile: the core's default window. */

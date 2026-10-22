@@ -21,6 +21,8 @@ import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.ElementCallVersion
+import io.element.android.call.api.rtc.MatrixRtcConnectionState
+import io.element.android.call.api.rtc.MatrixRtcSignallingHealth
 import io.element.android.call.api.rtc.MatrixRtcTileKind
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.api.rtc.id.UserId
@@ -124,7 +126,8 @@ fun rememberElementCallScreenState(
     // The flows come from the call and are stable per stream, so rebuilding this map on
     // recomposition does not disturb a tile that is already drawing.
     val videoFrames = tiles
-        .filter { it.hasVideo }
+        // A remote tile whose media is interrupted draws its avatar, not its last frame (034 R34).
+        .filter { it.hasVideo && (it.isLocal || !it.isMediaInterrupted) }
         .associate { it.tileId to controller.videoFrames(it.memberId, it.streamKind) }
         .toImmutableMap()
 
@@ -262,7 +265,9 @@ internal fun ElementCallSnapshot.callTiles(): ImmutableList<CallTileData> {
         it.copy(isHero = false, isMicrophoneMuted = isMicrophoneMuted, hasVideo = isCameraEnabled)
             .toCallTileData(roomMembers, isLocal = true, isFrontCamera = isFrontCamera)
     }
-    val ranked = roster.order.map { ref -> ref.toCallTileData(roster.detail[ref.id], roomMembers, isFrontCamera = isFrontCamera) }
+    val ranked = roster.order.map { ref ->
+        ref.toCallTileData(roster.detail[ref.id], roomMembers, isFrontCamera = isFrontCamera, isMissingKeys = ref.id.memberId in membersMissingKeys)
+    }
     return (listOfNotNull(own, connection.ringingCallee(roomMembers)) + ranked).showingHands(!isOneToOne).toImmutableList()
 }
 
@@ -335,6 +340,7 @@ private fun ElementCallSnapshot?.toState(
     isCameraPermissionGranted = this?.isCameraPermissionGranted == true,
     isScreenShareAvailable = this?.isScreenShareAvailable == true,
     isScreenSharing = this?.isScreenSharing == true,
+    isScreenShareStartEnabled = this?.ownTile?.connection.let { it != MatrixRtcConnectionState.RECONNECTING && it != MatrixRtcConnectionState.UNREACHABLE },
     isTileStatsVisible = this?.isTileStatsVisible == true,
     videoFrames = videoFrames,
     roomName = this?.roomName,
@@ -347,8 +353,10 @@ private fun ElementCallSnapshot?.toState(
     isStageChromeVisible = isStageChromeVisible,
     ownTileCorner = ownTileCorner,
     isHandRaised = this?.ownTile?.handRaisedAtMs != null,
-    isHandPending = this?.isHandPending == true,
     showsRaiseHandControl = this?.showsRaiseHandControl == true,
+    isRaiseHandEnabled = this?.signalling !is MatrixRtcSignallingHealth.Unreachable,
+    // Over a live call only: a failed one has its own screen.
+    interruptions = this?.interruptions?.takeIf { connection == ElementCallConnection.Connected } ?: persistentListOf(),
     handRequestFailure = this?.handRequestFailure,
     pictureInPictureTileId = pictureInPictureTileId,
     // The call screen's own Activity knows, and sets it on the way out.

@@ -59,7 +59,10 @@ data class MatrixRtcTile(
     val handRaisedAtMs: Long?,
     /** Place in the raised-hand queue over the whole call, 1 for the earliest; null when the hand is down. The core's order, never re-sorted. */
     val handRaisedPosition: Int?,
-    val isReachable: Boolean,
+    /** Draw the avatar over a remote tile that is not [MatrixRtcConnectionState.CONNECTED]: [hasVideo] does not move for it. */
+    val connection: MatrixRtcConnectionState,
+    /** Draw the avatar over a tile that has one, whatever [hasVideo] says. Always null on our own tile. */
+    val unableToDecrypt: MatrixRtcUnableToDecrypt?,
 )
 
 /**
@@ -133,5 +136,6 @@ fun MatrixRtcParticipant.personTile() = MatrixRtcTile(
     isSpeaking = false,
     handRaisedAtMs = null,
     handRaisedPosition = null,
-    isReachable = isReachable,
+    connection = connection,
+    unableToDecrypt = unableToDecrypt,
 )

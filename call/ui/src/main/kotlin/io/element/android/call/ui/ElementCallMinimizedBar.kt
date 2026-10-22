@@ -106,6 +106,17 @@ fun ElementCallMinimizedBar(
                     // and minimizing is how you get there - you shrink the call precisely so you can
                     // go and show something. The full banner does not fit in a 56dp strip, so the
                     // icon carries it next to the duration.
+                    // In the duration's place while anything is interrupted: the line has room for one, and an outage is the
+                    // more useful (034 R37). A tap still restores the call; the list lives on the call screen.
+                    val isInterrupted = call.isInterrupted
+                    if (isInterrupted) {
+                        Icon(
+                            imageVector = ElementCallTheme.icons.interruptions,
+                            contentDescription = null,
+                            tint = ElementCallTheme.colors.onOverlay.copy(alpha = 0.7f),
+                            modifier = Modifier.size(14.dp),
+                        )
+                    }
                     if (call.isScreenSharing) {
                         Icon(
                             imageVector = ElementCallTheme.icons.shareScreenActive,
@@ -174,12 +185,15 @@ private fun ElementCallSnapshot.subtitle(): String = when (val connection = conn
     ElementCallConnection.Joining,
     ElementCallConnection.ConnectingMedia -> stringResource(R.string.element_call_connecting)
     is ElementCallConnection.Calling -> stringResource(R.string.element_call_calling)
-    ElementCallConnection.Degraded -> stringResource(R.string.element_call_connection_unstable)
-    is ElementCallConnection.Failed -> connection.message
+    is ElementCallConnection.Failed -> connection.failure.title()
     is ElementCallConnection.RingNotSent -> stringResource(R.string.element_call_ring_not_sent)
     ElementCallConnection.Ended -> stringResource(R.string.element_call_call_ended)
-    ElementCallConnection.Connected -> rememberCallDuration(connectedAtElapsedMs)
+    ElementCallConnection.Connected -> if (isInterrupted) stringResource(R.string.element_call_interruptions) else rememberCallDuration(connectedAtElapsedMs)
 }
+
+/** Over a live call only: a failed or ended one says that instead. */
+private val ElementCallSnapshot.isInterrupted: Boolean
+    get() = connection == ElementCallConnection.Connected && interruptions.isNotEmpty()
 
 /** Read by the host so content below can consume exactly the space the bar takes. */
 internal val MINIMIZED_CALL_BAR_HEIGHT = 56.dp

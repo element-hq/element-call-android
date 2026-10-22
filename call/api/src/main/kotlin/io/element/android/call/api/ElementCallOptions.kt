@@ -50,6 +50,12 @@ data class ElementCallOptions(
      * 90 s, Element Call web's; the core caps it at 120 s.
      */
     val ringLifetime: Duration? = null,
+    /**
+     * Whether our media may move to another member's media server once ours has been down for a while (feature-hq 034 R25,
+     * C11). Off by default: it only works where that server accepts users from other homeservers, and which deployments do is
+     * something only the host can know, since the SDK keeps nothing of a LiveKit transport but its URL. Read when media connects.
+     */
+    val isSfuFallbackEnabled: Boolean = false,
 ) {
     companion object {
         const val DEFAULT_PARTICIPANT_CAP_FOR_JOIN_LEAVE_SOUNDS = 8

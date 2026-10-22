@@ -15,6 +15,7 @@ import io.element.android.call.api.rtc.MatrixRtcCallKind
 import io.element.android.call.api.rtc.MatrixRtcCallStatus
 import io.element.android.call.api.rtc.MatrixRtcClient
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
+import io.element.android.call.api.rtc.MatrixRtcInterruptions
 import io.element.android.call.api.rtc.MatrixRtcLeaveReason
 import io.element.android.call.api.rtc.MatrixRtcLocalState
 import io.element.android.call.api.rtc.MatrixRtcMediaSession
@@ -23,6 +24,7 @@ import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcRoom
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
+import io.element.android.call.api.rtc.MatrixRtcSignallingHealth
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcTileId
@@ -54,6 +56,18 @@ class FakeMatrixRtcClient(
 
     /** The call joined in the last room. */
     val lastCall: FakeMatrixRtcCall? get() = lastRoom?.lastCall
+
+    /** What [signallingHealth] reports; set it to move the homeserver in and out of reach. */
+    val signalling = MutableStateFlow<MatrixRtcSignallingHealth>(MatrixRtcSignallingHealth.Reachable)
+
+    /** Every [reportConnectivity], in order. */
+    val connectivityReports = mutableListOf<Boolean>()
+
+    override fun signallingHealth(): Flow<MatrixRtcSignallingHealth> = signalling
+
+    override fun reportConnectivity(isOnline: Boolean) {
+        connectivityReports += isOnline
+    }
 
     override suspend fun room(roomId: RoomId, format: MatrixRtcMembershipFormat): Result<MatrixRtcRoom> {
         roomCount++
@@ -141,7 +155,12 @@ class FakeMatrixRtcCall(
     /** The session [connectMedia] connects: a harness gives it pictures and our own tile. */
     var newMediaSession: () -> FakeMatrixRtcMediaSession = { FakeMatrixRtcMediaSession() }
 
-    override suspend fun connectMedia(): Result<MatrixRtcMediaSession> {
+    /** What the last [connectMedia] asked for. */
+    var lastIsSfuFallbackEnabled: Boolean? = null
+        private set
+
+    override suspend fun connectMedia(isSfuFallbackEnabled: Boolean): Result<MatrixRtcMediaSession> {
+        lastIsSfuFallbackEnabled = isSfuFallbackEnabled
         connectMediaCount++
         onConnectMedia()
         return Result.success(newMediaSession().also { lastMediaSession = it }).also {
@@ -172,6 +191,8 @@ class FakeMatrixRtcMediaSession(
      * [pushRoster] for one the declared window narrows, as the core would.
      */
     override val tiles = MutableStateFlow(MatrixRtcTileRoster.EMPTY)
+
+    override val interruptions = MutableStateFlow(MatrixRtcInterruptions.NONE)
 
     /** Every window [setDetailWindow] was given, in order. */
     val detailWindows = mutableListOf<MatrixRtcDetailWindow>()

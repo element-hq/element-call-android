@@ -46,6 +46,9 @@ interface MatrixRtcMediaSession : AutoCloseable {
      */
     val localState: StateFlow<MatrixRtcLocalState?>
 
+    /** What is interrupting the call, cause by cause (feature-hq 034 C5). For any one change it trails [tiles] and [localState]. */
+    val interruptions: StateFlow<MatrixRtcInterruptions>
+
     /**
      * How loud each member is, keyed by member id, ours included.
      *
@@ -233,8 +236,10 @@ data class MatrixRtcParticipant(
     /** Null when the transport has not resolved this participant to a Matrix device. */
     val deviceId: String?,
     val isLocal: Boolean,
-    /** False once the transport considers the participant unreachable. */
-    val isReachable: Boolean,
+    /** The connection carrying their media; for our own row, our own SFU's. */
+    val connection: MatrixRtcConnectionState,
+    /** Always null for our own row. */
+    val unableToDecrypt: MatrixRtcUnableToDecrypt?,
     val streams: List<MatrixRtcStreamState>,
 )
 

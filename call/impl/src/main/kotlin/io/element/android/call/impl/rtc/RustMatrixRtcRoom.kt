@@ -13,6 +13,7 @@ import io.element.android.call.api.rtc.MatrixRtcCall
 import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.MatrixRtcCallKind
 import io.element.android.call.api.rtc.MatrixRtcGroupNotify
+import io.element.android.call.api.rtc.MatrixRtcJoinException
 import io.element.android.call.api.rtc.MatrixRtcRing
 import io.element.android.call.api.rtc.MatrixRtcRoom
 import io.element.android.call.api.rtc.id.RoomId
@@ -28,6 +29,7 @@ import org.matrix.rtc.FfiGroupNotify
 import org.matrix.rtc.FfiJoinSessionParams
 import org.matrix.rtc.FfiJoinTransport
 import org.matrix.rtc.FfiRingConfig
+import org.matrix.rtc.MatrixRtcFfiException
 import org.matrix.rtc.RtcRoom
 import timber.log.Timber
 
@@ -48,7 +50,7 @@ internal class RustMatrixRtcRoom(
         mutex.withLock {
             check(!isShutdown) { "Room $roomId is shut down" }
             val rtcCall = withContext(ffiDispatcher) {
-                rtcRoom.joinCall(
+                joinCallTyped(
                     FfiJoinSessionParams(
                         applicationSlotId = applicationSlotId,
                         // The core picks from the backend's `rtcTransports`, and fails the join when there is none.
@@ -92,6 +94,14 @@ internal class RustMatrixRtcRoom(
         joined?.close()
         rtcRoom.close()
         Timber.i("MatrixRTC: $roomId shut down")
+    }
+
+    private suspend fun joinCallTyped(params: FfiJoinSessionParams) = try {
+        rtcRoom.joinCall(params)
+    } catch (e: MatrixRtcFfiException.JoinTimedOut) {
+        throw MatrixRtcJoinException.TimedOut()
+    } catch (e: MatrixRtcFfiException.JoinRefused) {
+        throw MatrixRtcJoinException.Refused(errcode = e.errcode, reason = e.reason)
     }
 
     private fun MatrixRtcCallKind.toFfi(): FfiCallKind = when (this) {

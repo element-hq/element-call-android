@@ -13,7 +13,9 @@ import com.google.common.truth.Truth.assertThat
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallEndReason
+import io.element.android.call.api.ElementCallFailure
 import io.element.android.call.api.ElementCallHandRequestFailure
+import io.element.android.call.api.ElementCallInterruption
 import io.element.android.call.api.ElementCallOptions
 import io.element.android.call.api.ElementCallRoomContext
 import io.element.android.call.api.ElementCallWindowRect
@@ -23,10 +25,14 @@ import io.element.android.call.api.rtc.MatrixRtcCallEvent
 import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.MatrixRtcCallKind
 import io.element.android.call.api.rtc.MatrixRtcCallStatus
+import io.element.android.call.api.rtc.MatrixRtcConnectionLossReason
+import io.element.android.call.api.rtc.MatrixRtcConnectionState
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionDiagnostic
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcGroupNotify
+import io.element.android.call.api.rtc.MatrixRtcInterruptions
+import io.element.android.call.api.rtc.MatrixRtcJoinException
 import io.element.android.call.api.rtc.MatrixRtcLocalState
 import io.element.android.call.api.rtc.MatrixRtcMediaPhase
 import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
@@ -34,10 +40,12 @@ import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcRing
 import io.element.android.call.api.rtc.MatrixRtcRingPhase
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
+import io.element.android.call.api.rtc.MatrixRtcSignallingHealth
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcTileKind
+import io.element.android.call.api.rtc.MatrixRtcUnableToDecrypt
 import io.element.android.call.api.rtc.id.UserId
 import io.element.android.call.impl.audio.CallSoundEffect
 import io.element.android.call.test.A_ROOM_ID
@@ -66,6 +74,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 private const val A_LOCAL_MEMBER_ID = "6ffd927ac275815176463d6fee57ed62"
@@ -246,7 +255,7 @@ class DefaultElementCallControllerTest {
             controller.setMicrophonePermissionGranted(true)
 
             val states = consumeItemsUntilPredicate { it.connection is ElementCallConnection.Failed }
-            val failure = states.last().connection as ElementCallConnection.Failed
+            val failure = (states.last().connection as ElementCallConnection.Failed).failure as ElementCallFailure.Other
             assertThat(failure.message).contains("LiveKit")
             assertThat(rtcClient.lastRoom?.shutdownCount).isEqualTo(0)
             cancelAndIgnoreRemainingEvents()
@@ -283,12 +292,54 @@ class DefaultElementCallControllerTest {
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
 
-        rtcClient.lastCall!!.status.value = MatrixRtcCallStatus.Ended(MatrixRtcCallEnd.ConnectionClosed("SFU went away"))
+        rtcClient.lastCall!!.status.value = MatrixRtcCallStatus.Ended(MatrixRtcCallEnd.SlotClosed)
         runCurrent()
 
         assertThat(controller.state.value).isNull()
         assertThat(rtcClient.lastCall?.lastMediaSession?.disconnectCount).isEqualTo(1)
         assertThat(rtcClient.lastCall?.leaveCount).isEqualTo(0)
+    }
+
+    /** 034 R27: the reason stays until the user closes it, and the core has already left. */
+    @Test
+    fun `a lost connection is shown until dismissed, and is not left again`() = runTest {
+        val rtcClient = FakeMatrixRtcClient()
+        val lifecycleListener = FakeElementCallLifecycleListener()
+        val controller = createController(rtcClient = rtcClient, lifecycleListener = lifecycleListener)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+
+        rtcClient.lastCall!!.status.value =
+            MatrixRtcCallStatus.Ended(MatrixRtcCallEnd.ConnectionClosed(MatrixRtcConnectionLossReason.NEVER_CONNECTED, "SFU went away"))
+        runCurrent()
+        assertThat(controller.state.value?.connection)
+            .isEqualTo(ElementCallConnection.Failed(ElementCallFailure.ConnectionLost(MatrixRtcConnectionLossReason.NEVER_CONNECTED)))
+
+        controller.hangUp()
+        runCurrent()
+        assertThat(controller.state.value).isNull()
+        assertThat(rtcClient.lastCall?.leaveCount).isEqualTo(0)
+        assertThat(lifecycleListener.endReasons).containsExactly(ElementCallEndReason.CONNECTION_CLOSED)
+    }
+
+    @Test
+    fun `a join the homeserver refused says so`() = runTest {
+        val rtcClient = FakeMatrixRtcClient(joinResult = { Result.failure(MatrixRtcJoinException.Refused(errcode = "M_FORBIDDEN", reason = "not allowed")) })
+        val controller = createController(rtcClient = rtcClient)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+
+        assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.Failed(ElementCallFailure.JoinRefused))
+    }
+
+    @Test
+    fun `a join that timed out says so`() = runTest {
+        val rtcClient = FakeMatrixRtcClient(joinResult = { Result.failure(MatrixRtcJoinException.TimedOut()) })
+        val controller = createController(rtcClient = rtcClient)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+
+        assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.Failed(ElementCallFailure.JoinTimedOut))
     }
 
     /** Every end but our own is one the core already left on (030 C3): leaving again would be a second leave. */
@@ -717,21 +768,86 @@ class DefaultElementCallControllerTest {
         }
     }
 
+    /** 034 R35: a blip shorter than the hold never shows; once up, the list follows the causes at once. */
     @Test
-    fun `a degraded media connection is reported and clears again`() = runTest {
+    fun `interruptions show once a cause has lasted the hold, then follow the causes`() = runTest {
         val rtcClient = FakeMatrixRtcClient()
         val controller = createController(rtcClient = rtcClient)
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
-        val call = rtcClient.lastCall!!
+        val session = rtcClient.lastCall!!.lastMediaSession!!
 
-        call.status.value = MatrixRtcCallStatus.Connected(sinceMs = 0L, degraded = true)
+        session.interruptions.value = MatrixRtcInterruptions.NONE.copy(ownMedia = MatrixRtcConnectionState.RECONNECTING)
+        advanceTimeBy(DefaultElementCallController.INTERRUPTION_HOLD - 1.milliseconds)
+        session.interruptions.value = MatrixRtcInterruptions.NONE
         runCurrent()
-        assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.Degraded)
+        advanceTimeBy(DefaultElementCallController.INTERRUPTION_HOLD)
+        assertThat(controller.state.value?.interruptions).isEmpty()
 
-        call.status.value = MatrixRtcCallStatus.Connected(sinceMs = 0L, degraded = false)
+        session.interruptions.value = MatrixRtcInterruptions.NONE.copy(ownMedia = MatrixRtcConnectionState.RECONNECTING)
+        advanceTimeBy(DefaultElementCallController.INTERRUPTION_HOLD + 1.milliseconds)
+        assertThat(controller.state.value?.interruptions).containsExactly(ElementCallInterruption.OwnMedia)
+
+        session.interruptions.value = MatrixRtcInterruptions.NONE.copy(
+            ownMedia = MatrixRtcConnectionState.RECONNECTING,
+            membersUnreachable = listOf(A_REMOTE_MEMBER_ID),
+        )
         runCurrent()
-        assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.Connected)
+        assertThat(controller.state.value?.interruptions).containsExactly(ElementCallInterruption.OwnMedia, ElementCallInterruption.OthersMedia).inOrder()
+
+        session.interruptions.value = MatrixRtcInterruptions.NONE
+        runCurrent()
+        assertThat(controller.state.value?.interruptions).isEmpty()
+    }
+
+    /** 034 C11: a host opt-in, off unless asked for. */
+    @Test
+    fun `the media server fallback is off unless the host turns it on`() = runTest {
+        val off = FakeMatrixRtcClient()
+        createController(rtcClient = off).setMicrophonePermissionGranted(true)
+        runCurrent()
+        assertThat(off.lastCall?.lastIsSfuFallbackEnabled).isFalse()
+
+        val on = FakeMatrixRtcClient()
+        createController(rtcClient = on, isSfuFallbackEnabled = true).setMicrophonePermissionGranted(true)
+        runCurrent()
+        assertThat(on.lastCall?.lastIsSfuFallbackEnabled).isTrue()
+    }
+
+    /** 034 Q8: counted from the core's report, per spell; a spell that ends clears it. */
+    @Test
+    fun `a member unable to decrypt for long enough is reported missing keys, until they decrypt again`() = runTest {
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+        val session = rtcClient.lastCall!!.lastMediaSession!!
+
+        session.tiles.value = aRoster(aTile(A_REMOTE_MEMBER_ID, unableToDecrypt = MatrixRtcUnableToDecrypt.MISSING_KEY))
+        advanceTimeBy(DefaultElementCallController.KEYS_MISSING_AFTER - 1.milliseconds)
+        assertThat(controller.state.value?.membersMissingKeys).isEmpty()
+        advanceTimeBy(2.milliseconds)
+        assertThat(controller.state.value?.membersMissingKeys).containsExactly(A_REMOTE_MEMBER_ID)
+
+        session.tiles.value = aRoster(aTile(A_REMOTE_MEMBER_ID))
+        runCurrent()
+        assertThat(controller.state.value?.membersMissingKeys).isEmpty()
+    }
+
+    /** 034 C4: the worse of the client's health and the record's copy, so a hop between the two never reads reachable. */
+    @Test
+    fun `an unreachable homeserver is the server entry, from either source`() = runTest {
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+        val session = rtcClient.lastCall!!.lastMediaSession!!
+
+        session.interruptions.value = MatrixRtcInterruptions.NONE.copy(signalling = MatrixRtcSignallingHealth.Unreachable(sinceMs = 3))
+        advanceTimeBy(DefaultElementCallController.INTERRUPTION_HOLD + 1.milliseconds)
+
+        assertThat(controller.state.value?.signalling).isEqualTo(MatrixRtcSignallingHealth.Unreachable(sinceMs = 3))
+        assertThat(controller.state.value?.interruptions).containsExactly(ElementCallInterruption.OwnServer(isMembershipLapsed = false))
     }
 
     @Test
@@ -1783,55 +1899,77 @@ class DefaultElementCallControllerTest {
         assertThat(platform.soundEffectRenderers.single().played).containsExactly(CallSoundEffect.RAISE_HAND)
     }
 
+    /** 034 C4: followed from the start of a call, before the join returns. */
     @Test
-    fun `raising waits for the homeserver, takes no second request meanwhile, and reads the hand from our tile`() = runTest {
+    fun `signalling health is followed from the start of the call`() = runTest {
+        val joinGate = CompletableDeferred<Unit>()
+        val rtcClient = FakeMatrixRtcClient(joinGate = joinGate)
+        val controller = createController(rtcClient = rtcClient)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+
+        rtcClient.signalling.value = MatrixRtcSignallingHealth.Unreachable(sinceMs = 7)
+        runCurrent()
+        assertThat(controller.state.value?.signalling).isEqualTo(MatrixRtcSignallingHealth.Unreachable(sinceMs = 7))
+
+        joinGate.complete(Unit)
+        rtcClient.signalling.value = MatrixRtcSignallingHealth.Reachable
+        runCurrent()
+        assertThat(controller.state.value?.signalling).isEqualTo(MatrixRtcSignallingHealth.Reachable)
+    }
+
+    @Test
+    fun `the host's connectivity report reaches the core`() = runTest {
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
+
+        controller.reportConnectivity(isOnline = false)
+        controller.reportConnectivity(isOnline = true)
+
+        assertThat(rtcClient.connectivityReports).containsExactly(false, true).inOrder()
+    }
+
+    /** 034 C12: the core shows the hand at once and retries it, so a second tap is the reversal, sent at once. */
+    @Test
+    fun `a second tap while a raise is out lowers the hand, and the raise resolves quietly`() = runTest {
         val rtcClient = FakeMatrixRtcClient()
         val controller = createController(rtcClient = rtcClient)
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
         val rtcCall = rtcClient.lastCall!!
-        val session = rtcCall.lastMediaSession!!
-        session.localState.value = MatrixRtcLocalState(tile = aTile(A_LOCAL_MEMBER_ID), isScreenSharing = false)
+        rtcCall.lastMediaSession!!.localState.value = MatrixRtcLocalState(tile = aTile(A_LOCAL_MEMBER_ID), isScreenSharing = false)
         val homeserver = CompletableDeferred<Result<Unit>>()
         rtcCall.raiseHandResult = { homeserver.await() }
 
         controller.setHandRaised(true)
         runCurrent()
-        controller.setHandRaised(true)
         controller.setHandRaised(false)
         runCurrent()
 
-        assertThat(controller.state.value?.isHandPending).isTrue()
         assertThat(rtcCall.raiseHandCount).isEqualTo(1)
-        assertThat(rtcCall.lowerHandCount).isEqualTo(0)
-        // Not up until the core says so, whatever was tapped.
-        assertThat(controller.state.value?.ownTile?.handRaisedAtMs).isNull()
+        assertThat(rtcCall.lowerHandCount).isEqualTo(1)
 
-        session.localState.value = MatrixRtcLocalState(tile = aTile(A_LOCAL_MEMBER_ID, handPosition = 1), isScreenSharing = false)
+        // Superseded by the lower, as the core resolves it.
         homeserver.complete(Result.success(Unit))
         runCurrent()
 
-        assertThat(controller.state.value?.isHandPending).isFalse()
         assertThat(controller.state.value?.handRequestFailure).isNull()
-        assertThat(controller.state.value?.ownTile?.handRaisedPosition).isEqualTo(1)
     }
 
     @Test
-    fun `a failed request is reported until the user has seen it, and the hand stays as it was`() = runTest {
+    fun `a refused request is reported until the user has seen it`() = runTest {
         val rtcClient = FakeMatrixRtcClient()
         val controller = createController(rtcClient = rtcClient)
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
         val rtcCall = rtcClient.lastCall!!
         rtcCall.lastMediaSession!!.localState.value = MatrixRtcLocalState(tile = aTile(A_LOCAL_MEMBER_ID, handPosition = 1), isScreenSharing = false)
-        rtcCall.lowerHandResult = { Result.failure(IllegalStateException("offline")) }
+        rtcCall.lowerHandResult = { Result.failure(IllegalStateException("refused")) }
 
         controller.setHandRaised(false)
         runCurrent()
 
-        assertThat(controller.state.value?.isHandPending).isFalse()
         assertThat(controller.state.value?.handRequestFailure).isEqualTo(ElementCallHandRequestFailure.LOWER)
-        assertThat(controller.state.value?.ownTile?.handRaisedPosition).isEqualTo(1)
 
         controller.clearHandRequestFailure()
         runCurrent()
@@ -1840,21 +1978,13 @@ class DefaultElementCallControllerTest {
     }
 
     @Test
-    fun `a hand already that way, or no own tile yet, sends nothing`() = runTest {
-        val rtcClient = FakeMatrixRtcClient()
-        val controller = createController(rtcClient = rtcClient)
-        controller.setMicrophonePermissionGranted(true)
-        runCurrent()
-        val rtcCall = rtcClient.lastCall!!
+    fun `no call joined yet sends nothing`() = runTest {
+        val controller = createController(rtcClient = FakeMatrixRtcClient())
 
         controller.setHandRaised(true)
         runCurrent()
-        rtcCall.lastMediaSession!!.localState.value = MatrixRtcLocalState(tile = aTile(A_LOCAL_MEMBER_ID, handPosition = 1), isScreenSharing = false)
-        controller.setHandRaised(true)
-        runCurrent()
 
-        assertThat(rtcCall.raiseHandCount).isEqualTo(0)
-        assertThat(controller.state.value?.isHandPending).isFalse()
+        assertThat(controller.state.value?.handRequestFailure).isNull()
     }
 
     private fun TestScope.createController(
@@ -1873,6 +2003,7 @@ class DefaultElementCallControllerTest {
         ),
         isScreenSharingEnabled: Boolean = false,
         participantCapForJoinLeaveSounds: Int = ElementCallOptions.DEFAULT_PARTICIPANT_CAP_FOR_JOIN_LEAVE_SOUNDS,
+        isSfuFallbackEnabled: Boolean = false,
     ): DefaultElementCallController {
         val controller = DefaultElementCallController(
             scope = backgroundScope,
@@ -1887,6 +2018,7 @@ class DefaultElementCallControllerTest {
                 isScreenSharingEnabled = isScreenSharingEnabled,
                 participantCapForJoinLeaveSounds = participantCapForJoinLeaveSounds,
                 ringLifetime = ringLifetime,
+                isSfuFallbackEnabled = isSfuFallbackEnabled,
             ),
         )
         controller.startCall(ElementCallData(roomId = A_ROOM_ID, isAudioCall = isAudioCall, isStartingCall = isStartingCall))

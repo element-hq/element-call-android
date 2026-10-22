@@ -31,15 +31,24 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
+/** A call on the real controller over a scripted core: a ringing or an outage fixture. */
+interface SampleLiveCall {
+    val controller: ElementCallController
+
+    fun start()
+
+    fun close()
+}
+
 /**
- * The one controller the sample's screen and Picture in Picture hold: the [fixtures] controller, or a ringing
+ * The one controller the sample's screen and Picture in Picture hold: the [fixtures] controller, or a live
  * call on the real controller while one runs, which hands back to the fixtures once it has ended.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SampleCallController(private val context: Context, private val scope: CoroutineScope) : ElementCallController {
     val fixtures = SampleElementCallController(scope)
 
-    private var ringing: SampleRingingCall? = null
+    private var live: SampleLiveCall? = null
     private val current = MutableStateFlow<ElementCallController>(fixtures)
     private val target: ElementCallController get() = current.value
 
@@ -51,29 +60,32 @@ class SampleCallController(private val context: Context, private val scope: Coro
     private val pictureInPicture = MutableStateFlow(false)
     override val isInPictureInPicture: StateFlow<Boolean> = pictureInPicture
 
-    /** Open a fixture, ending a ringing call first. */
+    /** Open a fixture, ending a live call first. */
     fun start(snapshot: ElementCallSnapshot) {
-        endRinging()
+        endLiveCall()
         fixtures.start(snapshot)
     }
 
-    fun startRinging(fixture: SampleRingingFixture) {
-        endRinging()
+    fun startRinging(fixture: SampleRingingFixture) = startLive(SampleRingingCall(context, scope, fixture))
+
+    fun startOutage(fixture: SampleOutageFixture) = startLive(SampleOutageCall(context, scope, fixture))
+
+    private fun startLive(call: SampleLiveCall) {
+        endLiveCall()
         fixtures.hangUp()
-        val call = SampleRingingCall(context, scope, fixture)
-        ringing = call
+        live = call
         current.value = call.controller
         call.start()
         scope.launch {
             // Back to the fixtures once the call has come and gone, sounds included.
             call.controller.state.dropWhile { it == null }.first { it == null }
-            if (ringing === call) endRinging()
+            if (live === call) endLiveCall()
         }
     }
 
-    fun endRinging() {
-        val call = ringing ?: return
-        ringing = null
+    fun endLiveCall() {
+        val call = live ?: return
+        live = null
         current.value = fixtures
         call.controller.hangUp()
         call.close()
@@ -117,5 +129,6 @@ class SampleCallController(private val context: Context, private val scope: Coro
     override fun setRankingThreshold(tiles: Int) = target.setRankingThreshold(tiles)
     override fun setHandRaised(raised: Boolean) = target.setHandRaised(raised)
     override fun clearHandRequestFailure() = target.clearHandRequestFailure()
+    override fun reportConnectivity(isOnline: Boolean) = target.reportConnectivity(isOnline)
     override fun hangUp() = target.hangUp()
 }

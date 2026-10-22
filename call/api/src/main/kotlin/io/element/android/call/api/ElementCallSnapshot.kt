@@ -9,8 +9,10 @@ package io.element.android.call.api
 
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
+import io.element.android.call.api.rtc.MatrixRtcConnectionLossReason
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
+import io.element.android.call.api.rtc.MatrixRtcSignallingHealth
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcTile
 import io.element.android.call.api.rtc.MatrixRtcTileKind
@@ -18,8 +20,10 @@ import io.element.android.call.api.rtc.MatrixRtcTileRoster
 import io.element.android.call.api.rtc.id.UserId
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.ImmutableMap
+import kotlinx.collections.immutable.ImmutableSet
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.persistentSetOf
 
 /**
  * Everything known about the call currently running, as one immutable value.
@@ -155,13 +159,17 @@ data class ElementCallSnapshot(
      * a developer who left it on last week should not be handed a screen full of numbers today.
      */
     val isTileStatsVisible: Boolean = false,
-    /**
-     * Whether a raise or a lower of our hand is on its way to the homeserver. Whether the hand is up is
-     * [ownTile]'s, which changes only once the homeserver has it.
-     */
-    val isHandPending: Boolean = false,
-    /** The last raise or lower that failed, until the user has been told or asks again. */
+    /** The last raise or lower the homeserver refused for good, until the user has been told or asks again. */
     val handRequestFailure: ElementCallHandRequestFailure? = null,
+    /** Whether our homeserver answers, from the join on (feature-hq 034 C4): the controls are live before media is. */
+    val signalling: MatrixRtcSignallingHealth = MatrixRtcSignallingHealth.Reachable,
+    /**
+     * The service interruptions list, for the stage's indicator and the minimized bar (feature-hq 034 R13, R35, R37). Empty
+     * until some cause has lasted a moment, and emptied the moment none is left.
+     */
+    val interruptions: ImmutableList<ElementCallInterruption> = persistentListOf(),
+    /** Members the core has reported unable to decrypt for long enough that their tile says the keys are missing (034 Q8). */
+    val membersMissingKeys: ImmutableSet<String> = persistentSetOf(),
 ) {
     /**
      * Whether anybody in the call is sending a picture - a camera or a screen, ours or theirs.
@@ -215,10 +223,23 @@ sealed interface ElementCallConnection {
 
     data object Connected : ElementCallConnection
 
-    /** The transport is up but reporting trouble. */
-    data object Degraded : ElementCallConnection
-
-    data class Failed(val message: String) : ElementCallConnection
+    /** The call could not start or could not be kept. Final; the screen says why until the user closes it with a hang-up (034 R27). */
+    data class Failed(val failure: ElementCallFailure) : ElementCallConnection
 
     data object Ended : ElementCallConnection
+}
+
+/** Why a call failed, typed so each cause is worded the same on every platform (feature-hq 034 R27). */
+sealed interface ElementCallFailure {
+    /** Our own media server was lost and not back within the core's budget, refused us, or was never reached. */
+    data class ConnectionLost(val reason: MatrixRtcConnectionLossReason) : ElementCallFailure
+
+    /** The homeserver did not let the join complete in time. */
+    data object JoinTimedOut : ElementCallFailure
+
+    /** The homeserver refused the join for good. */
+    data object JoinRefused : ElementCallFailure
+
+    /** Anything else that stopped the call from starting. Developer text, shown as it is. */
+    data class Other(val message: String) : ElementCallFailure
 }

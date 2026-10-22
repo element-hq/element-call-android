@@ -12,9 +12,15 @@ import io.element.android.call.api.ElementCallDispatchers
 import io.element.android.call.api.rtc.MatrixRtcClient
 import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 import io.element.android.call.api.rtc.MatrixRtcRoom
+import io.element.android.call.api.rtc.MatrixRtcSignallingHealth
 import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.call.impl.util.runCatchingExceptions
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.matrix.rtc.FfiMembershipFormat
@@ -61,6 +67,28 @@ internal class RustMatrixRtcClient(
             context = context,
             sessionCoroutineScope = sessionCoroutineScope,
         )
+    }
+
+    override fun signallingHealth(): Flow<MatrixRtcSignallingHealth> = flow {
+        val subscription = withContext(ffiDispatcher) { rtcClient().subscribeSignallingHealth() }
+        try {
+            while (true) {
+                val health = runCatchingExceptions { subscription.next() }
+                    .onFailure { Timber.w(it, "MatrixRTC: signalling health subscription failed") }
+                    .getOrNull()
+                    ?: break
+                emit(health.map())
+            }
+        } finally {
+            subscription.close()
+        }
+    }
+        .distinctUntilChanged()
+        .onEach { Timber.i("MatrixRTC: signalling $it") }
+
+    override fun reportConnectivity(isOnline: Boolean) {
+        Timber.i("MatrixRTC: the host reports the homeserver ${if (isOnline) "online" else "offline"}")
+        sessionCoroutineScope.launch(ffiDispatcher) { rtcClient().reportConnectivity(isOnline) }
     }
 
     private fun MatrixRtcMembershipFormat.toFfi(): FfiMembershipFormat = when (this) {

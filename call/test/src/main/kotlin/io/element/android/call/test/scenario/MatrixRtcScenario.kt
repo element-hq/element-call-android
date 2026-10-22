@@ -7,6 +7,7 @@
 
 package io.element.android.call.test.scenario
 
+import io.element.android.call.api.rtc.MatrixRtcConnectionState
 import io.element.android.call.api.rtc.MatrixRtcTile
 import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcTileKind
@@ -93,7 +94,8 @@ data class ScenarioTile(
         isSpeaking = isSpeaking,
         handRaisedAtMs = if (isHandRaised) HAND_RAISED_AT_MS else null,
         handRaisedPosition = handPosition.takeIf { isHandRaised },
-        isReachable = true,
+        connection = MatrixRtcConnectionState.CONNECTED,
+        unableToDecrypt = null,
     )
 
     private companion object {
