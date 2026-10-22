@@ -40,14 +40,15 @@ import timber.log.Timber
 import kotlin.coroutines.resume
 
 /**
- * The full-screen call, in a task of its own.
+ * The full-screen call, on top of the host's Activity in the host's task.
  *
  * Its own Activity so that it alone can show over the lock screen: answering a call on a locked phone
  * must not expose the host's Activity, nor skip the host's own lock. Leaving it for the app asks the
- * keyguard first, then starts [Host.leaveCallScreenIntent], whose Activity applies the host's lock.
+ * keyguard first, then goes back to the host's Activity under it, which applies the host's lock; with
+ * none under it, after a cold start, it starts [Host.leaveCallScreenIntent].
  *
- * Minimizing a video call shrinks this Activity into picture-in-picture over whatever task is underneath,
- * the host's when the call was opened from it; an audio call, or one the system refuses
+ * Minimizing a video call shrinks this Activity into picture-in-picture, which the system moves to a task
+ * of its own, leaving the host's Activity under the window; an audio call, or one the system refuses
  * picture-in-picture, minimizes to the host's [ElementCallOverlay] bar.
  *
  * The host's `Application` implements [Host].
@@ -84,13 +85,16 @@ class ElementCallActivity : ComponentActivity() {
     private var isLeavingForPictureInPicture by mutableStateOf(false)
     private var pictureInPictureShown: CompletableDeferred<Unit>? = null
 
+    /** Minimized into picture-in-picture by this screen with nothing of the app under it, which then follows. */
+    private var isLeavingForAppInPictureInPicture = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val host = application as? Host
         val controller = host?.elementCallController
         if (host == null || controller?.state?.value == null) {
             Timber.w("ElementCall: call screen opened with ${if (host == null) "no host" else "no call"}")
-            finishAndRemoveTask()
+            close()
             return
         }
         this.host = host
@@ -111,7 +115,7 @@ class ElementCallActivity : ComponentActivity() {
             controller.state.first { it == null }
             Timber.d("ElementCall: call over, closing the call screen")
             forgetCallSpotlightMemory(controller)
-            finishAndRemoveTask()
+            close()
         }
         lifecycleScope.launch {
             // Minimized by something other than this screen, the notification or a host, say.
@@ -125,7 +129,7 @@ class ElementCallActivity : ComponentActivity() {
                         controller = controller,
                         isInPictureInPicture = isFloating,
                         onMinimize = ::minimize,
-                        onClose = ::finishAndRemoveTask,
+                        onClose = ::close,
                         isLeavingForPictureInPicture = isLeavingForPictureInPicture,
                         onPictureInPictureShow = { pictureInPictureShown?.complete(Unit) },
                     )
@@ -166,12 +170,12 @@ class ElementCallActivity : ComponentActivity() {
         } else {
             // No way to ask for the keyguard: leave the call running behind it, the bar waits in the app.
             controller.setMaximized(false)
-            finishAndRemoveTask()
+            close()
         }
     }
 
     private fun minimizeUnlocked() {
-        val call = controller.state.value ?: return finishAndRemoveTask()
+        val call = controller.state.value ?: return close()
         if (!call.hasVideo || !canEnterPictureInPicture()) {
             controller.setMaximized(false)
             leaveForApp()
@@ -191,12 +195,14 @@ class ElementCallActivity : ComponentActivity() {
                 // The frame reached the view; then a frame for the layer to be shown, and one for it to reach the screen.
                 repeat(2) { awaitFrame() }
             }
-            // Nothing is started for the app: the task under this one comes up under the window, the host's
-            // when the call was opened from it. Starting it here would close this task in the same transition.
             if (enterPictureInPicture()) {
                 // Now rather than on the mode change, which comes after the host's Activity has resumed under
                 // the window: its overlay would see a maximized call out of picture-in-picture and open it again.
                 controller.setInPictureInPicture(true)
+                // On top of the app's Activity, the window floats over it. Opened with nothing of the app under it,
+                // a notification answered from a cold start, the app follows once the window floats: started now, it
+                // would close this task in the same transition.
+                isLeavingForAppInPictureInPicture = isTaskRoot
             } else {
                 controller.setPictureInPictureEntry(null)
                 controller.setMaximized(false)
@@ -224,12 +230,21 @@ class ElementCallActivity : ComponentActivity() {
         isLeavingForPictureInPicture = false
         pictureInPictureShown = null
         controller.setInPictureInPicture(isInPictureInPicture)
+        if (isInPictureInPicture && isLeavingForAppInPictureInPicture) {
+            isLeavingForAppInPictureInPicture = false
+            startActivity(host.leaveCallScreenIntent(this))
+        }
         if (!isInPictureInPicture && lifecycle.currentState == Lifecycle.State.CREATED) {
             // Out of picture-in-picture while stopped: the window was swiped away, not expanded.
             Timber.d("ElementCall: picture-in-picture dismissed, the call carries on minimized")
             controller.setMaximized(false)
-            finishAndRemoveTask()
+            close()
         }
+    }
+
+    /** Back to the app's Activity this was opened over, or the whole task when this is all there is of it. */
+    private fun close() {
+        if (isTaskRoot) finishAndRemoveTask() else finish()
     }
 
     private fun leaveForApp() {
@@ -238,8 +253,8 @@ class ElementCallActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             setPictureInPictureParams(PictureInPictureParams.Builder().setAutoEnterEnabled(false).build())
         }
-        startActivity(host.leaveCallScreenIntent(this))
-        finishAndRemoveTask()
+        if (isTaskRoot) startActivity(host.leaveCallScreenIntent(this))
+        close()
     }
 
     private suspend fun awaitFrame() = suspendCancellableCoroutine { continuation ->

@@ -126,8 +126,8 @@ code lands.
    exclude it or accept that the call is unavailable there.
 3. A `MatrixBackend` over the host's own Matrix client, handed to `ElementCallStack.Builder`. The sample's
    `SdkMatrixBackend` is one over the Rust SDK ([docs/INTEGRATION.md](docs/INTEGRATION.md), §3).
-4. The call screen is the library's `ElementCallActivity`, in its own task. It is shown over the lock screen while a
-   call is live, so a call answered on a locked phone never shows the host's Activity. The host:
+4. The call screen is the library's `ElementCallActivity`, on top of the host's Activity. It is shown over the lock
+   screen while a call is live, so a call answered on a locked phone never shows the host's Activity. The host:
    - implements `ElementCallActivity.Host` on its `Application`: the controller; `leaveCallScreenIntent`, the
      Activity the call screen leaves for; `onCallActivityCreated`, which calls
      `ElementCallPictureInPicture.attach(activity, controller)` and applies anything every Activity of the host
