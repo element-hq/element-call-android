@@ -355,6 +355,8 @@ private fun ElementCallSnapshot?.toState(
     isHandRaised = this?.ownTile?.handRaisedAtMs != null,
     showsRaiseHandControl = this?.showsRaiseHandControl == true,
     isRaiseHandEnabled = this?.signalling !is MatrixRtcSignallingHealth.Unreachable,
+    // Over a live call only: a failed one has its own screen.
+    interruptions = this?.interruptions?.takeIf { connection == ElementCallConnection.Connected } ?: persistentListOf(),
     handRequestFailure = this?.handRequestFailure,
     pictureInPictureTileId = pictureInPictureTileId,
     // The call screen's own Activity knows, and sets it on the way out.

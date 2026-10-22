@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.PreviewParameter
 import androidx.compose.ui.unit.dp
+import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTileId
@@ -103,6 +104,17 @@ fun ElementCallPictureInPictureContent(
                 }
             }
 
+            // The window's one line of text, as the bar's (034 R37).
+            if (call.connection == ElementCallConnection.Connected && call.interruptions.isNotEmpty()) {
+                Text(
+                    text = stringResource(R.string.element_call_interruptions),
+                    style = ElementCallTheme.typography.bodyXsMedium,
+                    color = ElementCallTheme.colors.onOverlay,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .background(ElementCallTheme.colors.overlayScrim),
+                )
+            }
             if (call.isScreenSharing) {
                 Text(
                     text = stringResource(R.string.element_call_sharing_your_screen),

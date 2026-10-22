@@ -306,6 +306,20 @@ fun ElementCallScreen(
                         }
                     }
                 }
+                // Over the stage, under what sits at its top: the duration, or the fullscreen tile's exit (034 R35).
+                CallInterruptions(
+                    interruptions = state.interruptions,
+                    isIndicatorVisible = if (fullscreen != null) state.isFullscreenChromeVisible else state.isStageChromeVisible,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(
+                            top = when {
+                                fullscreen != null -> statusBarTop + 8.dp
+                                isTopBarHideable -> statusBarTop + TOP_BAR_HEIGHT + INTERRUPTIONS_BELOW_DURATION
+                                else -> topClearance + INTERRUPTIONS_BELOW_DURATION
+                            },
+                        ),
+                )
             }
         }
     }
@@ -763,6 +777,9 @@ private fun RoundCallButton(
 private val BUTTON_SIZE = 48.dp
 
 private const val DISABLED_ALPHA = 0.4f
+
+/** Clear of the duration label, which sits 12dp into the stage. */
+private val INTERRUPTIONS_BELOW_DURATION = 40.dp
 
 /** Between the buttons in the pill. */
 private val BUTTON_GAP = 8.dp

@@ -55,6 +55,8 @@ data class ElementCallIcons(
     val interruptions: ImageVector,
     /** A tile whose member's keys have not come for long enough to say so, or whose media was sent in clear (034 Q8). */
     val keyOff: ImageVector,
+    /** The arrow saying the interruptions indicator opens something. */
+    val chevronRight: ImageVector,
 ) {
     companion object {
         /** The bundled defaults. Resolved in composition, as vector resources are. */
@@ -81,6 +83,7 @@ data class ElementCallIcons(
             error = ImageVector.vectorResource(R.drawable.ic_element_call_error_solid),
             interruptions = ImageVector.vectorResource(R.drawable.ic_element_call_info_solid),
             keyOff = ImageVector.vectorResource(R.drawable.ic_element_call_key_off_solid),
+            chevronRight = ImageVector.vectorResource(R.drawable.ic_element_call_chevron_right),
         )
     }
 }

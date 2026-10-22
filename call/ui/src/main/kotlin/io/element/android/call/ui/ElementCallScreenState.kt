@@ -9,6 +9,7 @@ package io.element.android.call.ui
 
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallHandRequestFailure
+import io.element.android.call.api.ElementCallInterruption
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
@@ -125,6 +126,8 @@ data class ElementCallScreenState(
     val isHandRaised: Boolean,
     /** Whether the raise control is in the bar (009 R2, R33). */
     val showsRaiseHandControl: Boolean,
+    /** The service interruptions list, held until a cause has lasted a moment (034 R13, R35). */
+    val interruptions: ImmutableList<ElementCallInterruption>,
     /** Off while our homeserver is unreachable: a raise could not reach anyone (034 R15). */
     val isRaiseHandEnabled: Boolean,
     /** A raise or lower that failed, to tell the user about (009 R22). */

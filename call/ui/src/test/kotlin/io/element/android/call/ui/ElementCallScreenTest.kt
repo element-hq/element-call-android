@@ -21,9 +21,11 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasStateDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -36,6 +38,7 @@ import androidx.compose.ui.test.v2.runAndroidComposeUiTest
 import com.google.common.truth.Truth.assertThat
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallHandRequestFailure
+import io.element.android.call.api.ElementCallInterruption
 import io.element.android.call.api.rtc.id.UserId
 import io.element.android.call.tests.testutils.EventsRecorder
 import io.element.android.call.tests.testutils.assertNodeWithTextIsDisplayed
@@ -107,6 +110,46 @@ class ElementCallScreenTest : RobolectricTest() {
         clickOn(R.string.element_call_ok)
 
         events.assertList(listOf(ElementCallScreenEvent.DismissHandRequestFailure))
+    }
+
+    /** 034 R35, R36: the indicator opens the list, which goes on its own with the last cause. */
+    @Test
+    fun `the interruptions indicator opens the list, which closes with the last cause`() = runAndroidComposeUiTest<ComponentActivity> {
+        var interruptions by mutableStateOf(listOf<ElementCallInterruption>(ElementCallInterruption.OthersMedia))
+        setContent {
+            ElementCallScreen(
+                state = anElementCallScreenState(
+                    participants = listOf(aLocalParticipant(), aRemoteParticipant()),
+                    interruptions = interruptions,
+                ),
+            )
+        }
+        waitForIdle()
+
+        clickOn(R.string.element_call_interruptions)
+        assertNodeWithTextIsDisplayed(R.string.element_call_interruption_others_media)
+
+        interruptions = emptyList()
+        waitForIdle()
+        onAllNodesWithText(activity!!.getString(R.string.element_call_interruption_others_media)).assertCountEquals(0)
+    }
+
+    /** 034 R15: the disabled hand says why the tap does nothing. */
+    @Test
+    fun `a disabled hand is labelled unavailable`() = runAndroidComposeUiTest<ComponentActivity> {
+        setContent {
+            ElementCallScreen(
+                state = anElementCallScreenState(
+                    participants = listOf(aLocalParticipant(), aRemoteParticipant(), aCrowdParticipant(1)),
+                    isRaiseHandEnabled = false,
+                ),
+            )
+        }
+        waitForIdle()
+
+        onNodeWithContentDescription(activity!!.getString(R.string.element_call_a11y_raise_hand))
+            .assert(hasStateDescription(activity!!.getString(R.string.element_call_a11y_unavailable)))
+            .assertIsNotEnabled()
     }
 
     /** The buttons are labelled by what tapping them does, so a muted call offers to unmute. */

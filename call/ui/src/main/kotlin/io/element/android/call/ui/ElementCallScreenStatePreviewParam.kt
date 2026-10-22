@@ -11,6 +11,7 @@ import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallFailure
 import io.element.android.call.api.ElementCallHandRequestFailure
+import io.element.android.call.api.ElementCallInterruption
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.audio.CallAudioDeviceType
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
@@ -198,6 +199,7 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
                 isScreenShareAvailable = true,
                 isRaiseHandEnabled = false,
                 isScreenShareStartEnabled = false,
+                interruptions = listOf(ElementCallInterruption.OwnServer(isMembershipLapsed = false), ElementCallInterruption.OwnMedia),
             ),
             // One to one, the other person's media reconnecting: the indicator under the full-bleed avatar (034 R23).
             anElementCallScreenState(
@@ -414,6 +416,7 @@ fun anElementCallScreenState(
     handRequestFailure: ElementCallHandRequestFailure? = null,
     isRaiseHandEnabled: Boolean = true,
     isScreenShareStartEnabled: Boolean = true,
+    interruptions: List<ElementCallInterruption> = emptyList(),
     eventSink: (ElementCallScreenEvent) -> Unit = {},
 ) = ElementCallScreenState(
     connection = connection,
@@ -457,6 +460,7 @@ fun anElementCallScreenState(
     showsRaiseHandControl = participants.any { it.isLocal } &&
         (participants.count() >= 3 || participants.any { it.isLocal && it.memberId in handRaisedIds }),
     isRaiseHandEnabled = isRaiseHandEnabled,
+    interruptions = interruptions.toImmutableList(),
     handRequestFailure = handRequestFailure,
     // Nothing to report where a tile is drawn to: a preview has no window to grow out of.
     pictureInPictureTileId = null,
