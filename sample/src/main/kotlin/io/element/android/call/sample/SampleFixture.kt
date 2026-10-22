@@ -9,8 +9,10 @@ package io.element.android.call.sample
 
 import android.os.SystemClock
 import io.element.android.call.api.ElementCallConnection
+import io.element.android.call.api.ElementCallFailure
 import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.ElementCallSnapshot
+import io.element.android.call.api.rtc.MatrixRtcConnectionLossReason
 import io.element.android.call.api.rtc.MatrixRtcConnectionState
 import io.element.android.call.api.rtc.MatrixRtcTile
 import io.element.android.call.api.rtc.MatrixRtcTileId
@@ -65,7 +67,15 @@ enum class SampleFixture(val key: String, val category: Category, val title: Str
         title = "Failed",
         description = "What a homeserver with no LiveKit transport looks like.",
     ) {
-        override fun snapshot() = aConnecting(ElementCallConnection.Failed("Homeserver offers no LiveKit transport"))
+        override fun snapshot() = aConnecting(ElementCallConnection.Failed(ElementCallFailure.Other("Homeserver offers no LiveKit transport")))
+    },
+    CONNECTION_LOST(
+        key = "connection_lost",
+        category = Category.CONNECTING,
+        title = "Connection lost",
+        description = "Our media server was not back within the reconnect budget (034 R27).",
+    ) {
+        override fun snapshot() = aConnecting(ElementCallConnection.Failed(ElementCallFailure.ConnectionLost(MatrixRtcConnectionLossReason.BUDGET)))
     },
     ENDED(
         key = "ended",

@@ -13,6 +13,7 @@ import com.google.common.truth.Truth.assertThat
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallEndReason
+import io.element.android.call.api.ElementCallFailure
 import io.element.android.call.api.ElementCallHandRequestFailure
 import io.element.android.call.api.ElementCallOptions
 import io.element.android.call.api.ElementCallRoomContext
@@ -28,6 +29,7 @@ import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionDiagnostic
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcGroupNotify
+import io.element.android.call.api.rtc.MatrixRtcJoinException
 import io.element.android.call.api.rtc.MatrixRtcLocalState
 import io.element.android.call.api.rtc.MatrixRtcMediaPhase
 import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
@@ -247,7 +249,7 @@ class DefaultElementCallControllerTest {
             controller.setMicrophonePermissionGranted(true)
 
             val states = consumeItemsUntilPredicate { it.connection is ElementCallConnection.Failed }
-            val failure = states.last().connection as ElementCallConnection.Failed
+            val failure = (states.last().connection as ElementCallConnection.Failed).failure as ElementCallFailure.Other
             assertThat(failure.message).contains("LiveKit")
             assertThat(rtcClient.lastRoom?.shutdownCount).isEqualTo(0)
             cancelAndIgnoreRemainingEvents()
@@ -284,12 +286,54 @@ class DefaultElementCallControllerTest {
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
 
-        rtcClient.lastCall!!.status.value = MatrixRtcCallStatus.Ended(MatrixRtcCallEnd.ConnectionClosed(MatrixRtcConnectionLossReason.BUDGET, "SFU went away"))
+        rtcClient.lastCall!!.status.value = MatrixRtcCallStatus.Ended(MatrixRtcCallEnd.SlotClosed)
         runCurrent()
 
         assertThat(controller.state.value).isNull()
         assertThat(rtcClient.lastCall?.lastMediaSession?.disconnectCount).isEqualTo(1)
         assertThat(rtcClient.lastCall?.leaveCount).isEqualTo(0)
+    }
+
+    /** 034 R27: the reason stays until the user closes it, and the core has already left. */
+    @Test
+    fun `a lost connection is shown until dismissed, and is not left again`() = runTest {
+        val rtcClient = FakeMatrixRtcClient()
+        val lifecycleListener = FakeElementCallLifecycleListener()
+        val controller = createController(rtcClient = rtcClient, lifecycleListener = lifecycleListener)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+
+        rtcClient.lastCall!!.status.value =
+            MatrixRtcCallStatus.Ended(MatrixRtcCallEnd.ConnectionClosed(MatrixRtcConnectionLossReason.NEVER_CONNECTED, "SFU went away"))
+        runCurrent()
+        assertThat(controller.state.value?.connection)
+            .isEqualTo(ElementCallConnection.Failed(ElementCallFailure.ConnectionLost(MatrixRtcConnectionLossReason.NEVER_CONNECTED)))
+
+        controller.hangUp()
+        runCurrent()
+        assertThat(controller.state.value).isNull()
+        assertThat(rtcClient.lastCall?.leaveCount).isEqualTo(0)
+        assertThat(lifecycleListener.endReasons).containsExactly(ElementCallEndReason.CONNECTION_CLOSED)
+    }
+
+    @Test
+    fun `a join the homeserver refused says so`() = runTest {
+        val rtcClient = FakeMatrixRtcClient(joinResult = { Result.failure(MatrixRtcJoinException.Refused(errcode = "M_FORBIDDEN", reason = "not allowed")) })
+        val controller = createController(rtcClient = rtcClient)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+
+        assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.Failed(ElementCallFailure.JoinRefused))
+    }
+
+    @Test
+    fun `a join that timed out says so`() = runTest {
+        val rtcClient = FakeMatrixRtcClient(joinResult = { Result.failure(MatrixRtcJoinException.TimedOut()) })
+        val controller = createController(rtcClient = rtcClient)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+
+        assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.Failed(ElementCallFailure.JoinTimedOut))
     }
 
     /** Every end but our own is one the core already left on (030 C3): leaving again would be a second leave. */

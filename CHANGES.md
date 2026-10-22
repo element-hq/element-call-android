@@ -32,6 +32,9 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
   `senderCrossSigned` is `senderConfirmed`, and `relations` answers an empty list when the client cannot serve it. Copy
   the reference backend's `SdkFailures.kt` and `relations`. Tiles and participants have `connection` and
   `unableToDecrypt` for `isReachable`; a join the core gives up on fails with a `MatrixRtcJoinException`.
+- `ElementCallConnection.Failed` carries an `ElementCallFailure` rather than a message, and a call whose media server is
+  lost past the core's budget now ends there, its screen saying why until the user closes it (`hangUp()`), rather than
+  closing at once. `ElementCallIcons` gains `error`.
 - No dead man's switch until the SDK bindings have delayed events: the reference backend refuses them, and the core
   joins without one (docs/FEEDBACK.md, "SDK backend").
 

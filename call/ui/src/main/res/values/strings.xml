@@ -64,6 +64,16 @@
     <string name="element_call_connection_unstable">Connection unstable</string>
     <string name="element_call_call_ended">Call ended</string>
     <string name="element_call_call_failed">Call failed</string>
+    <!-- A failed call's screen (feature-hq 034 R27): a title per kind of failure, a sentence per cause. -->
+    <string name="element_call_failure_connection_lost_title">Connection lost</string>
+    <string name="element_call_failure_connection_failed_title">Couldn’t connect</string>
+    <string name="element_call_failure_join_failed_title">Couldn’t join the call</string>
+    <string name="element_call_failure_connection_lost">Your connection to the call couldn’t be restored.</string>
+    <string name="element_call_failure_connection_refused">The call’s media server refused the connection.</string>
+    <string name="element_call_failure_connection_never_established">The call’s media server couldn’t be reached.</string>
+    <string name="element_call_failure_join_timed_out">Your server didn’t respond in time.</string>
+    <string name="element_call_failure_join_refused">Your server refused to let you join.</string>
+    <string name="element_call_action_close">Close</string>
     <string name="element_call_call_in_progress">Call in progress</string>
     <string name="element_call_version_library">Element Call Android %1$s</string>
     <string name="element_call_version_core">matrix-rust-rtc %1$s</string>

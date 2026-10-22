@@ -49,6 +49,8 @@ data class ElementCallIcons(
     val handRaised: ImageVector,
     /** Beside "Calling…" while a voice call rings; a video call shows [cameraOn]. */
     val voiceCall: ImageVector,
+    /** Heads the screen of a call that failed. */
+    val error: ImageVector,
 ) {
     companion object {
         /** The bundled defaults. Resolved in composition, as vector resources are. */
@@ -72,6 +74,7 @@ data class ElementCallIcons(
             overflow = ImageVector.vectorResource(R.drawable.ic_element_call_overflow_vertical),
             handRaised = ImageVector.vectorResource(R.drawable.ic_element_call_raised_hand_solid),
             voiceCall = ImageVector.vectorResource(R.drawable.ic_element_call_voice_call_solid),
+            error = ImageVector.vectorResource(R.drawable.ic_element_call_error_solid),
         )
     }
 }

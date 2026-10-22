@@ -119,6 +119,14 @@ fun ElementCallScreen(
         modifier = modifier.fillMaxSize(),
         color = ElementCallTheme.colors.bgCanvas,
     ) {
+        // A failed call is over: nothing of it is left to draw but why, and the way out (034 R27).
+        val failed = state.connection as? ElementCallConnection.Failed
+        if (failed != null) {
+            // The bars as the call drew them: left to the window, the status bar's icons went dark on the dark canvas.
+            CallSystemBars(isStatusBarHidden = false)
+            CallFailure(failed = failed, onClose = { state.eventSink(ElementCallScreenEvent.HangUp) })
+            return@Surface
+        }
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val isLandscape = maxWidth > maxHeight
             // The control bar floats over the bottom of the stage in both orientations (spec 003
@@ -567,15 +575,6 @@ private fun ConnectingPlaceholder(state: ElementCallScreenState) {
                 style = ElementCallTheme.typography.headingMdBold,
                 color = ElementCallTheme.colors.textPrimary,
             )
-            val failure = state.connection as? ElementCallConnection.Failed
-            if (failure != null) {
-                Text(
-                    text = failure.message,
-                    style = ElementCallTheme.typography.bodySmRegular,
-                    color = ElementCallTheme.colors.textCritical,
-                    modifier = Modifier.padding(top = 8.dp, start = 24.dp, end = 24.dp),
-                )
-            }
         }
     }
 }
@@ -792,7 +791,7 @@ private fun ElementCallConnection.label(): String = when (this) {
     is ElementCallConnection.RingNotSent -> stringResource(R.string.element_call_ring_not_sent)
     ElementCallConnection.Connected -> stringResource(R.string.element_call_call_in_progress)
     ElementCallConnection.Degraded -> stringResource(R.string.element_call_connection_unstable)
-    is ElementCallConnection.Failed -> stringResource(R.string.element_call_call_failed)
+    is ElementCallConnection.Failed -> failure.title()
     ElementCallConnection.Ended -> stringResource(R.string.element_call_call_ended)
 }
 

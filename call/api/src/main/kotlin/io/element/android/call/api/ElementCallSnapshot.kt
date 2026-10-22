@@ -9,6 +9,7 @@ package io.element.android.call.api
 
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
+import io.element.android.call.api.rtc.MatrixRtcConnectionLossReason
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
@@ -218,7 +219,23 @@ sealed interface ElementCallConnection {
     /** The transport is up but reporting trouble. */
     data object Degraded : ElementCallConnection
 
-    data class Failed(val message: String) : ElementCallConnection
+    /** The call could not start or could not be kept. Final; the screen says why until the user closes it with a hang-up (034 R27). */
+    data class Failed(val failure: ElementCallFailure) : ElementCallConnection
 
     data object Ended : ElementCallConnection
+}
+
+/** Why a call failed, typed so each cause is worded the same on every platform (feature-hq 034 R27). */
+sealed interface ElementCallFailure {
+    /** Our own media server was lost and not back within the core's budget, refused us, or was never reached. */
+    data class ConnectionLost(val reason: MatrixRtcConnectionLossReason) : ElementCallFailure
+
+    /** The homeserver did not let the join complete in time. */
+    data object JoinTimedOut : ElementCallFailure
+
+    /** The homeserver refused the join for good. */
+    data object JoinRefused : ElementCallFailure
+
+    /** Anything else that stopped the call from starting. Developer text, shown as it is. */
+    data class Other(val message: String) : ElementCallFailure
 }

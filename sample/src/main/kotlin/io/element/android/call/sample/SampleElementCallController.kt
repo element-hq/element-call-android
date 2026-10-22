@@ -10,6 +10,7 @@ package io.element.android.call.sample
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.ElementCallData
+import io.element.android.call.api.ElementCallFailure
 import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.ElementCallWindowRect
@@ -103,7 +104,7 @@ class SampleElementCallController(
         it.copy(
             isMicrophonePermissionGranted = granted,
             connection = when {
-                !granted -> ElementCallConnection.Failed("Microphone permission denied")
+                !granted -> ElementCallConnection.Failed(ElementCallFailure.Other("Microphone permission denied"))
                 it.connection == ElementCallConnection.RequestingPermission -> ElementCallConnection.Connected
                 else -> it.connection
             },

@@ -11,6 +11,7 @@ import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallEndReason
+import io.element.android.call.api.ElementCallFailure
 import io.element.android.call.api.ElementCallHandRequestFailure
 import io.element.android.call.api.ElementCallLifecycleListener
 import io.element.android.call.api.ElementCallOptions
@@ -29,6 +30,7 @@ import io.element.android.call.api.rtc.MatrixRtcCallStatus
 import io.element.android.call.api.rtc.MatrixRtcClient
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcGroupNotify
+import io.element.android.call.api.rtc.MatrixRtcJoinException
 import io.element.android.call.api.rtc.MatrixRtcLeaveReason
 import io.element.android.call.api.rtc.MatrixRtcMediaSession
 import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
@@ -313,7 +315,7 @@ internal class DefaultElementCallController(
                 val current = _state.value ?: return@withLock
                 if (!granted) {
                     Timber.i("ElementCall: microphone permission denied")
-                    updateState { it.copy(connection = ElementCallConnection.Failed("Microphone permission denied")) }
+                    updateState { it.copy(connection = ElementCallConnection.Failed(ElementCallFailure.Other("Microphone permission denied"))) }
                     return@withLock
                 }
                 // The host re-reports a permission it already has whenever it is recreated, so this
@@ -546,7 +548,11 @@ internal class DefaultElementCallController(
             updateState { it.copy(connection = ElementCallConnection.Calling(callee = null, isRinging = false)) }
         }
         val joined = room.joinCall(kind = kind).getOrElse {
-            fail("Join failed: ${it.message}")
+            when (it) {
+                is MatrixRtcJoinException.TimedOut -> fail(ElementCallFailure.JoinTimedOut, "Join failed: ${it.message}")
+                is MatrixRtcJoinException.Refused -> fail(ElementCallFailure.JoinRefused, "Join failed: ${it.message}")
+                else -> fail("Join failed: ${it.message}")
+            }
             return
         }
         rtcCall = joined
@@ -665,6 +671,12 @@ internal class DefaultElementCallController(
                         updateState { it.copy(connection = ElementCallConnection.RingNotSent((it.connection as? ElementCallConnection.Calling)?.callee)) }
                         return@collect
                     }
+                    // Likewise said until the user closes it (034 R27); the core has already left.
+                    val lost = status.reason as? MatrixRtcCallEnd.ConnectionClosed
+                    if (lost != null) {
+                        fail(ElementCallFailure.ConnectionLost(lost.reason), "Connection lost: ${lost.message}")
+                        return@collect
+                    }
                     updateState { it.copy(connection = ElementCallConnection.Ended) }
                     // Torn down from a coroutine of its own, not this one: endCall cancels the job this
                     // collector runs in, and a coroutine cannot wait for its own death. Never left again:
@@ -770,9 +782,11 @@ internal class DefaultElementCallController(
         if (plays) soundEffectRenderer?.play(CallSoundEffect.RAISE_HAND)
     }
 
-    private fun fail(message: String) {
+    private fun fail(message: String) = fail(ElementCallFailure.Other(message), message)
+
+    private fun fail(failure: ElementCallFailure, message: String) {
         Timber.w("ElementCall: $message")
-        _state.update { it?.copy(connection = ElementCallConnection.Failed(message)) }
+        _state.update { it?.copy(connection = ElementCallConnection.Failed(failure)) }
         // Not torn down here: the message is the whole point of the failed state, and clearing the
         // snapshot would take it off screen before it could be read. The host dismisses the call.
     }

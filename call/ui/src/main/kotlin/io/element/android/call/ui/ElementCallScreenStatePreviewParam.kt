@@ -9,10 +9,12 @@ package io.element.android.call.ui
 
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import io.element.android.call.api.ElementCallConnection
+import io.element.android.call.api.ElementCallFailure
 import io.element.android.call.api.ElementCallHandRequestFailure
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.audio.CallAudioDeviceType
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
+import io.element.android.call.api.rtc.MatrixRtcConnectionLossReason
 import io.element.android.call.api.rtc.MatrixRtcConnectionState
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcParticipant
@@ -188,7 +190,7 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
                 memberCount = 2,
                 participants = listOf(aLocalParticipant(), aRemoteParticipant(connection = MatrixRtcConnectionState.RECONNECTING)),
             ),
-            anElementCallScreenState(connection = ElementCallConnection.Failed("Homeserver offers no LiveKit transport")),
+            anElementCallScreenState(connection = ElementCallConnection.Failed(ElementCallFailure.ConnectionLost(MatrixRtcConnectionLossReason.BUDGET))),
             anElementCallScreenState(connection = ElementCallConnection.Ended),
             // A DM, both on video: the other person full-bleed, us as a thumbnail with the switch
             // camera button on it, the duration over the top, and no switch camera in the bar.
