@@ -8,9 +8,10 @@
 
     <application>
         <!--
-          ~ Its own task, so it alone shows over the lock screen and shrinks into picture-in-picture while
-          ~ the host's Activity stays usable. Out of Recents: the call is reached from the bar, the
-          ~ notification or the picture-in-picture window.
+          ~ In the host's task, on top of its Activity, so minimizing into picture-in-picture leaves the
+          ~ host's Activity already under the window. It alone shows over the lock screen. Out of Recents
+          ~ when it is all there is of a task: the call is reached from the bar, the notification or the
+          ~ picture-in-picture window.
           -->
         <activity
             android:name=".ElementCallActivity"
@@ -20,7 +21,6 @@
             android:launchMode="singleTask"
             android:resizeableActivity="true"
             android:supportsPictureInPicture="true"
-            android:taskAffinity="${applicationId}.call"
             android:theme="@style/Theme.ElementCall.CallScreen" />
     </application>
 

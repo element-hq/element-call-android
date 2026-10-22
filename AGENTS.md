@@ -146,8 +146,8 @@ until one does.
 ### No DI framework, no Appyx, one Activity
 
 - Plain constructors and one builder, `ElementCallStack.Builder`. Metro stays in the host.
-- The library ships one Activity, `ElementCallActivity` in `call/ui`: the full-screen call in its own task, so that it
-  alone shows over the lock screen. The host's `Application` implements its `Host`. Everything else is composables
+- The library ships one Activity, `ElementCallActivity` in `call/ui`: the full-screen call on top of the host's
+  Activity, so that it alone shows over the lock screen. The host's `Application` implements its `Host`. Everything else is composables
   and a PiP binder; the sample app owns the host Activity.
 
 ## What is temporary

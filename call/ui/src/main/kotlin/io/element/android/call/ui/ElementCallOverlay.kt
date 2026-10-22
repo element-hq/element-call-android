@@ -52,8 +52,8 @@ import io.element.android.call.ui.util.scaffoldScrollableContentInsets
  * Draws a minimized call above the host's content as a bar, and opens [ElementCallActivity] when the call
  * is maximized. This is spec rule R9: the minimized UI is the component's, where it sits is the host's.
  *
- * The full screen is never drawn here. It is its own Activity, in its own task, so that it alone can show
- * over the lock screen and shrink into picture-in-picture while the host's Activity stays usable.
+ * The full screen is never drawn here. It is its own Activity, on top of the host's, so that it alone can show
+ * over the lock screen and shrink into picture-in-picture over the host's Activity.
  *
  * @param controller the call to draw, from `ElementCallStack.controller`, or null before there is one. Compose
  * the overlay even then: switching between the overlay and bare content would rebuild the host's content.
