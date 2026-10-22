@@ -38,13 +38,17 @@ class SampleActivity : ComponentActivity() {
         fixture?.let { controller.start(it.snapshot()) }
         val ringingFixture = requested?.let(SampleRingingFixture::fromKey)
         ringingFixture?.let { controller.startRinging(it) }
+        val outageFixture = requested?.let(SampleOutageFixture::fromKey)
+        outageFixture?.let { controller.startOutage(it) }
         val requestedScenario = intent.getStringExtra(EXTRA_SCENARIO)
         val scenario = requestedScenario?.takeIf { it in scenarios }?.let(MatrixRtcScenario::load)
         // On the home screen rather than only in the log: a test that asked for a fixture that is not
         // there otherwise fails on a missing tile, which is true and about nothing.
         val launchError = when {
-            requested != null && fixture == null && ringingFixture == null ->
-                "Unknown fixture '$requested'. Known: ${(SampleFixture.entries.map { it.key } + SampleRingingFixture.entries.map { it.key }).joinToString()}"
+            requested != null && fixture == null && ringingFixture == null && outageFixture == null -> {
+                val known = SampleFixture.entries.map { it.key } + SampleRingingFixture.entries.map { it.key } + SampleOutageFixture.entries.map { it.key }
+                "Unknown fixture '$requested'. Known: ${known.joinToString()}"
+            }
             requestedScenario != null && scenario == null -> "Unknown scenario '$requestedScenario'. Known: ${scenarios.joinToString()}"
             else -> null
         }

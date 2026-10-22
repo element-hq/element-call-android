@@ -85,7 +85,7 @@ enum class SampleRingingFixture(val key: String, val title: String, val descript
  * One ringing fixture through the real controller, the real screen and the real sounds, over a scripted core
  * and no homeserver: the ring goes out 0.5 s after the join, and the outcome comes 6 s later.
  */
-class SampleRingingCall(context: Context, private val scope: CoroutineScope, private val fixture: SampleRingingFixture) {
+class SampleRingingCall(context: Context, private val scope: CoroutineScope, private val fixture: SampleRingingFixture) : SampleLiveCall {
     private val joined = CompletableDeferred<Unit>()
     private val call = FakeMatrixRtcCall(ROOM_ID, "m.call#room").apply {
         status.value = MatrixRtcCallStatus.Calling(BOB, MatrixRtcRingPhase.Sending, MatrixRtcMediaPhase.Connecting)
@@ -101,14 +101,14 @@ class SampleRingingCall(context: Context, private val scope: CoroutineScope, pri
         .options(ElementCallOptions(ringLifetime = RING_LIFETIME))
         .build(scope)
 
-    val controller: ElementCallController get() = stack.controller
+    override val controller: ElementCallController get() = stack.controller
 
-    fun start() {
+    override fun start() {
         controller.startCall(ElementCallData(roomId = ROOM_ID, isAudioCall = fixture.isAudioCall, isStartingCall = true))
         scope.launch { play() }
     }
 
-    fun close() = stack.close()
+    override fun close() = stack.close()
 
     private suspend fun play() {
         joined.await()

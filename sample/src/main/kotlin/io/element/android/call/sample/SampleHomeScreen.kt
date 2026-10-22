@@ -41,6 +41,7 @@ fun SampleHomeScreen(
     onAnswerOnLockScreen: () -> Unit,
     onOpen: (SampleFixture) -> Unit,
     onOpenRinging: (SampleRingingFixture) -> Unit,
+    onOpenOutage: (SampleOutageFixture) -> Unit,
     onOpenScenario: (String) -> Unit,
     modifier: Modifier = Modifier,
     launchError: String? = null,
@@ -150,6 +151,32 @@ fun SampleHomeScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { onOpenRinging(fixture) }
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                ) {
+                    Text(text = fixture.title, style = MaterialTheme.typography.bodyLarge)
+                    Text(text = fixture.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(text = fixture.key, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                }
+                HorizontalDivider()
+            }
+            item {
+                Text(
+                    text = "Outages",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                )
+                Text(
+                    text = "A group call on the real controller whose interruptions record changes on a timeline, as the core's would (034).",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
+            items(SampleOutageFixture.entries, key = { it.key }) { fixture ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { onOpenOutage(fixture) }
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                 ) {
                     Text(text = fixture.title, style = MaterialTheme.typography.bodyLarge)
