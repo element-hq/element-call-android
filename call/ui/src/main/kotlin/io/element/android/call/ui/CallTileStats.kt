@@ -24,7 +24,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.element.android.call.api.rtc.MatrixRtcConnectionState
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.ui.theme.ElementCallTheme
@@ -83,7 +82,7 @@ internal fun CallTileStatsOverlay(
     frameEncryption: MatrixRtcFrameEncryptionState?,
     requestedWidth: Int,
     requestedHeight: Int,
-    connection: MatrixRtcConnectionState,
+    mediaState: CallTileMediaState,
     modifier: Modifier = Modifier,
 ) {
     var sample by remember { mutableStateOf(FrameSample(0, 0, 0)) }
@@ -131,8 +130,8 @@ internal fun CallTileStatsOverlay(
         if (frameEncryption != null) {
             StatLine("e2ee ${frameEncryption.name.lowercase()}")
         }
-        if (connection != MatrixRtcConnectionState.CONNECTED) {
-            StatLine(connection.name)
+        if (mediaState != CallTileMediaState.LIVE) {
+            StatLine(mediaState.name)
         }
     }
 }

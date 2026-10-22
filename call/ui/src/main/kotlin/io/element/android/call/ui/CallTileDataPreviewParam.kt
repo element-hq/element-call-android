@@ -25,6 +25,9 @@ open class CallTileDataPreviewParam : PreviewParameterProvider<CallTileData> {
             aRemoteParticipant(isMuted = true).toTile(roomMember = A_BOB),
             // Reconnecting: the connection carrying their media is being re-established.
             aRemoteParticipant(connection = MatrixRtcConnectionState.RECONNECTING).toTile(roomMember = A_BOB),
+            // Waiting for their keys, then saying they stayed away (034 R33, Q8).
+            aRemoteParticipant().toTile(roomMember = A_BOB).copy(mediaState = CallTileMediaState.UNDECRYPTABLE),
+            aRemoteParticipant().toTile(roomMember = A_BOB).copy(mediaState = CallTileMediaState.KEYS_MISSING),
             // A shared screen: video, no badges, drawn as a spotlight.
             aRemoteParticipant().toTile(roomMember = A_BOB).copy(streamKind = MatrixRtcStreamKind.SCREEN_SHARE, hasVideo = true),
             // A hand up, second in the queue: the orange ring and the numbered badge.

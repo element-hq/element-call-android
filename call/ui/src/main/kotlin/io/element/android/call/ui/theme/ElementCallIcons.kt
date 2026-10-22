@@ -53,6 +53,8 @@ data class ElementCallIcons(
     val error: ImageVector,
     /** The service interruptions indicator, on the stage and in the minimized bar. */
     val interruptions: ImageVector,
+    /** A tile whose member's keys have not come for long enough to say so, or whose media was sent in clear (034 Q8). */
+    val keyOff: ImageVector,
 ) {
     companion object {
         /** The bundled defaults. Resolved in composition, as vector resources are. */
@@ -78,6 +80,7 @@ data class ElementCallIcons(
             voiceCall = ImageVector.vectorResource(R.drawable.ic_element_call_voice_call_solid),
             error = ImageVector.vectorResource(R.drawable.ic_element_call_error_solid),
             interruptions = ImageVector.vectorResource(R.drawable.ic_element_call_info_solid),
+            keyOff = ImageVector.vectorResource(R.drawable.ic_element_call_key_off_solid),
         )
     }
 }

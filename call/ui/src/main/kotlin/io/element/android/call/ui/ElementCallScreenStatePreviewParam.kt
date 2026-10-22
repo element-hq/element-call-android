@@ -199,6 +199,12 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
                 isRaiseHandEnabled = false,
                 isScreenShareStartEnabled = false,
             ),
+            // One to one, the other person's media reconnecting: the indicator under the full-bleed avatar (034 R23).
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
+                memberCount = 2,
+                participants = listOf(aLocalParticipant(), aRemoteParticipant(connection = MatrixRtcConnectionState.RECONNECTING)),
+            ),
             anElementCallScreenState(connection = ElementCallConnection.Failed(ElementCallFailure.ConnectionLost(MatrixRtcConnectionLossReason.BUDGET))),
             anElementCallScreenState(connection = ElementCallConnection.Ended),
             // A DM, both on video: the other person full-bleed, us as a thumbnail with the switch

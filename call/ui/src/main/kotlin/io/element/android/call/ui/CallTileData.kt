@@ -37,10 +37,8 @@ data class CallTileData(
     val hasVideo: Boolean,
     /** Only ever our own front camera: see [isVideoMirrored]'s use in the tile. */
     val isVideoMirrored: Boolean,
-    /** The connection carrying this member's media; on our own tile, our own SFU's. */
-    val connection: MatrixRtcConnectionState = MatrixRtcConnectionState.CONNECTED,
-    /** Why their media cannot be shown, if it cannot. Never set on our own tile. */
-    val unableToDecrypt: MatrixRtcUnableToDecrypt? = null,
+    /** Whether this tile's media is arriving and can be shown (034 R23, R29, R33). */
+    val mediaState: CallTileMediaState = CallTileMediaState.LIVE,
     /**
      * Which of the member's streams this tile draws: with [memberId], the tile's identity.
      *
@@ -61,6 +59,12 @@ data class CallTileData(
     val ring: CallRing? = null,
 ) {
     val isHandRaised: Boolean get() = handPosition != null
+
+    /**
+     * The name tag shows the media indicator, and a remote tile draws its avatar rather than its last frame. Our own tile keeps
+     * its live preview, which is local capture (034 R34).
+     */
+    val isMediaInterrupted: Boolean get() = mediaState != CallTileMediaState.LIVE
 
     /**
      * [MatrixRtcTile.id] as one string, for a keyed list and a test tag.
@@ -104,6 +108,7 @@ fun MatrixRtcTile.toCallTileData(
     roomMembers: Map<UserId, ElementCallRoomMember>,
     isLocal: Boolean,
     isFrontCamera: Boolean,
+    isMissingKeys: Boolean = false,
 ): CallTileData {
     val isScreenShare = id.kind == MatrixRtcTileKind.SCREEN_SHARE
     return CallTileData(
@@ -117,8 +122,7 @@ fun MatrixRtcTile.toCallTileData(
         // Mirroring a remote member would be wrong twice over: it is not how they look to
         // themselves, and any text in frame reads backwards.
         isVideoMirrored = isLocal && !isScreenShare && isFrontCamera,
-        connection = connection,
-        unableToDecrypt = unableToDecrypt,
+        mediaState = CallTileMediaState.of(connection, unableToDecrypt, isMissingKeys),
         streamKind = id.kind.videoStreamKind,
         isHero = isHero,
         hasDetail = true,
@@ -135,8 +139,11 @@ fun MatrixRtcTileRef.toCallTileData(
     detail: MatrixRtcTile?,
     roomMembers: Map<UserId, ElementCallRoomMember>,
     isFrontCamera: Boolean,
+    isMissingKeys: Boolean = false,
 ): CallTileData {
-    if (detail != null) return detail.toCallTileData(roomMembers, isLocal = false, isFrontCamera = isFrontCamera).copy(isHero = isHero)
+    if (detail != null) {
+        return detail.toCallTileData(roomMembers, isLocal = false, isFrontCamera = isFrontCamera, isMissingKeys = isMissingKeys).copy(isHero = isHero)
+    }
     return CallTileData(
         memberId = id.memberId,
         userId = userId,
@@ -159,4 +166,42 @@ enum class CallRing {
 
     /** It could not be sent, so they were never called (R4). */
     NOT_SENT,
+}
+
+/** Why a tile's media is not reaching the screen, if it is not. */
+enum class CallTileMediaState {
+    LIVE,
+
+    /** Our own tile only, until our media server is first up. */
+    CONNECTING,
+
+    /** The connection carrying it is being re-established, or nothing can reach it. On our own tile, our own media server (034 R23). */
+    RECONNECTING,
+
+    /** It arrives, and cannot be decrypted (034 R33). */
+    UNDECRYPTABLE,
+
+    /** It has not been decryptable for long enough that the wait is not the moment around a key rotation (034 Q8). */
+    KEYS_MISSING,
+
+    /** Its sender declared it unencrypted in an encrypted call, and the core refused it. */
+    NOT_ENCRYPTED,
+    ;
+
+    companion object {
+        /** By its two causes. A lost connection wins: it is why nothing decrypts either. */
+        fun of(connection: MatrixRtcConnectionState, unableToDecrypt: MatrixRtcUnableToDecrypt?, isMissingKeys: Boolean): CallTileMediaState =
+            when (connection) {
+                MatrixRtcConnectionState.CONNECTING -> CONNECTING
+                MatrixRtcConnectionState.RECONNECTING,
+                MatrixRtcConnectionState.UNREACHABLE -> RECONNECTING
+                MatrixRtcConnectionState.CONNECTED -> when (unableToDecrypt) {
+                    null -> LIVE
+                    // Nothing to wait for: the core will never play it.
+                    MatrixRtcUnableToDecrypt.NOT_ENCRYPTED -> NOT_ENCRYPTED
+                    MatrixRtcUnableToDecrypt.MISSING_KEY,
+                    MatrixRtcUnableToDecrypt.BAD_KEY -> if (isMissingKeys) KEYS_MISSING else UNDECRYPTABLE
+                }
+            }
+    }
 }

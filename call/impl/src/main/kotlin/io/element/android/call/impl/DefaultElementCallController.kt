@@ -52,6 +52,7 @@ import io.element.android.call.impl.audio.RaisedHandSoundPolicy
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableMap
+import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.FlowPreview
@@ -80,6 +81,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Owns the one native call that can be running, for as long as it runs.
@@ -243,6 +245,23 @@ internal class DefaultElementCallController(
                 interruptionHoldJob = null
                 val signalling = _state.value?.signalling ?: MatrixRtcSignallingHealth.Reachable
                 updateState { it.copy(interruptions = ElementCallInterruption.entries(signalling, interruptionRecord.value).toImmutableList()) }
+            }
+        }
+    }
+
+    /** When each member's current spell of being unable to decrypt reaches [KEYS_MISSING_AFTER]. */
+    private val keySpells = mutableMapOf<String, Job>()
+
+    /** Kept once it has fired, so a spell that outlasts the wait is not granted a second one. */
+    private fun CoroutineScope.reconcileKeySpells(unableToDecrypt: Set<String>) {
+        val ended = keySpells.keys - unableToDecrypt
+        ended.forEach { keySpells.remove(it)?.cancel() }
+        if (ended.isNotEmpty()) updateState { it.copy(membersMissingKeys = (it.membersMissingKeys - ended).toImmutableSet()) }
+        for (memberId in unableToDecrypt - keySpells.keys) {
+            keySpells[memberId] = launch {
+                delay(KEYS_MISSING_AFTER)
+                Timber.w("ElementCall: $memberId's keys have stayed away for $KEYS_MISSING_AFTER")
+                updateState { it.copy(membersMissingKeys = (it.membersMissingKeys + memberId).toImmutableSet()) }
             }
         }
     }
@@ -775,6 +794,16 @@ internal class DefaultElementCallController(
         observe { rtcCall.memberCount.collect { value -> updateState { it.copy(memberCount = value) } } }
         observe { call.tiles.collect { value -> updateState { it.copy(roster = value) } } }
         observe { call.interruptions.collect { interruptionRecord.value = it } }
+        keySpells.clear()
+        observe {
+            // From both the tiles and the record: a change reaches the tiles first (C5), and a spell has to have begun by
+            // then or the tile would draw its spinner for the moment in between.
+            combine(call.tiles, call.interruptions) { roster, record ->
+                record.unableToDecrypt.toSet() + roster.detail.values.filter { it.unableToDecrypt != null }.map { it.id.memberId }
+            }
+                .distinctUntilChanged()
+                .collect { reconcileKeySpells(it) }
+        }
         observe {
             call.localState
                 .map { it?.tile }
@@ -923,6 +952,13 @@ internal class DefaultElementCallController(
 
         /** How long a cause has to last before the interruptions list shows it, as on iOS. */
         val INTERRUPTION_HOLD = 2500.milliseconds
+
+        /**
+         * How long a tile shows it is waiting for a member's key before saying the key is missing. Counted from the core's
+         * report, which already waited out a key rotation (its key grace, C6). Nothing here can tell why a key does not come,
+         * so past this a tile says only that it is missing, for that one member (034 Q8).
+         */
+        val KEYS_MISSING_AFTER = 10.seconds
 
         /**
          * How long a member's video stream stays open after the last tile drawing it goes away.

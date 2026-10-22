@@ -22,6 +22,12 @@
     <string name="element_call_a11y_minimize_call">Minimize call</string>
     <string name="element_call_a11y_more_options">More options</string>
     <string name="element_call_a11y_selected">Selected</string>
+    <!-- A tile's media indicator (feature-hq 034 R40, Q8). -->
+    <string name="element_call_a11y_media_connecting">Connecting</string>
+    <string name="element_call_a11y_media_reconnecting">Reconnecting</string>
+    <string name="element_call_a11y_media_undecryptable">Waiting for encryption keys</string>
+    <string name="element_call_a11y_media_keys_missing">Encryption keys missing</string>
+    <string name="element_call_a11y_media_not_encrypted">Not encrypted</string>
     <!-- A control an interruption has disabled (feature-hq 034 R15). -->
     <string name="element_call_a11y_unavailable">Unavailable</string>
     <string name="element_call_action_stop">Stop</string>

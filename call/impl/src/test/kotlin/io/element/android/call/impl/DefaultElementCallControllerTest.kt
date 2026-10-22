@@ -45,6 +45,7 @@ import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcTileKind
+import io.element.android.call.api.rtc.MatrixRtcUnableToDecrypt
 import io.element.android.call.api.rtc.id.UserId
 import io.element.android.call.impl.audio.CallSoundEffect
 import io.element.android.call.test.A_ROOM_ID
@@ -797,6 +798,26 @@ class DefaultElementCallControllerTest {
         session.interruptions.value = MatrixRtcInterruptions.NONE
         runCurrent()
         assertThat(controller.state.value?.interruptions).isEmpty()
+    }
+
+    /** 034 Q8: counted from the core's report, per spell; a spell that ends clears it. */
+    @Test
+    fun `a member unable to decrypt for long enough is reported missing keys, until they decrypt again`() = runTest {
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+        val session = rtcClient.lastCall!!.lastMediaSession!!
+
+        session.tiles.value = aRoster(aTile(A_REMOTE_MEMBER_ID, unableToDecrypt = MatrixRtcUnableToDecrypt.MISSING_KEY))
+        advanceTimeBy(DefaultElementCallController.KEYS_MISSING_AFTER - 1.milliseconds)
+        assertThat(controller.state.value?.membersMissingKeys).isEmpty()
+        advanceTimeBy(2.milliseconds)
+        assertThat(controller.state.value?.membersMissingKeys).containsExactly(A_REMOTE_MEMBER_ID)
+
+        session.tiles.value = aRoster(aTile(A_REMOTE_MEMBER_ID))
+        runCurrent()
+        assertThat(controller.state.value?.membersMissingKeys).isEmpty()
     }
 
     /** 034 C4: the worse of the client's health and the record's copy, so a hop between the two never reads reachable. */

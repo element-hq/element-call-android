@@ -20,8 +20,10 @@ import io.element.android.call.api.rtc.MatrixRtcTileRoster
 import io.element.android.call.api.rtc.id.UserId
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.ImmutableMap
+import kotlinx.collections.immutable.ImmutableSet
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.persistentMapOf
+import kotlinx.collections.immutable.persistentSetOf
 
 /**
  * Everything known about the call currently running, as one immutable value.
@@ -166,6 +168,8 @@ data class ElementCallSnapshot(
      * until some cause has lasted a moment, and emptied the moment none is left.
      */
     val interruptions: ImmutableList<ElementCallInterruption> = persistentListOf(),
+    /** Members the core has reported unable to decrypt for long enough that their tile says the keys are missing (034 Q8). */
+    val membersMissingKeys: ImmutableSet<String> = persistentSetOf(),
 ) {
     /**
      * Whether anybody in the call is sending a picture - a camera or a screen, ours or theirs.

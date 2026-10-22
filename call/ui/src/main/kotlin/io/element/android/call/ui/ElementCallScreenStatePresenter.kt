@@ -126,7 +126,8 @@ fun rememberElementCallScreenState(
     // The flows come from the call and are stable per stream, so rebuilding this map on
     // recomposition does not disturb a tile that is already drawing.
     val videoFrames = tiles
-        .filter { it.hasVideo }
+        // A remote tile whose media is interrupted draws its avatar, not its last frame (034 R34).
+        .filter { it.hasVideo && (it.isLocal || !it.isMediaInterrupted) }
         .associate { it.tileId to controller.videoFrames(it.memberId, it.streamKind) }
         .toImmutableMap()
 
@@ -264,7 +265,9 @@ internal fun ElementCallSnapshot.callTiles(): ImmutableList<CallTileData> {
         it.copy(isHero = false, isMicrophoneMuted = isMicrophoneMuted, hasVideo = isCameraEnabled)
             .toCallTileData(roomMembers, isLocal = true, isFrontCamera = isFrontCamera)
     }
-    val ranked = roster.order.map { ref -> ref.toCallTileData(roster.detail[ref.id], roomMembers, isFrontCamera = isFrontCamera) }
+    val ranked = roster.order.map { ref ->
+        ref.toCallTileData(roster.detail[ref.id], roomMembers, isFrontCamera = isFrontCamera, isMissingKeys = ref.id.memberId in membersMissingKeys)
+    }
     return (listOfNotNull(own, connection.ringingCallee(roomMembers)) + ranked).showingHands(!isOneToOne).toImmutableList()
 }
 
