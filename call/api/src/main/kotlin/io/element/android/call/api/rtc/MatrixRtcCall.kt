@@ -49,8 +49,13 @@ interface MatrixRtcCall : AutoCloseable {
     /** Lower our hand, as [raiseHand] raises it. A no-op while it is down. */
     suspend fun lowerHand(): Result<Unit>
 
-    /** Connect to the media transport the call was joined on. */
-    suspend fun connectMedia(): Result<MatrixRtcMediaSession>
+    /**
+     * Connect to the media transport the call was joined on. Returns once the engine is up, without waiting for our own media
+     * server, which the core connects as it would reconnect a lost one (feature-hq 034 C10).
+     *
+     * @param isSfuFallbackEnabled see [io.element.android.call.api.ElementCallOptions.isSfuFallbackEnabled].
+     */
+    suspend fun connectMedia(isSfuFallbackEnabled: Boolean = false): Result<MatrixRtcMediaSession>
 
     /**
      * Leave the call, publishing a leave membership event. Returns without waiting for it to be sent: one attempt, and if it

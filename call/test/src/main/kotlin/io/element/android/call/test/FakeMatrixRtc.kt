@@ -155,7 +155,12 @@ class FakeMatrixRtcCall(
     /** The session [connectMedia] connects: a harness gives it pictures and our own tile. */
     var newMediaSession: () -> FakeMatrixRtcMediaSession = { FakeMatrixRtcMediaSession() }
 
-    override suspend fun connectMedia(): Result<MatrixRtcMediaSession> {
+    /** What the last [connectMedia] asked for. */
+    var lastIsSfuFallbackEnabled: Boolean? = null
+        private set
+
+    override suspend fun connectMedia(isSfuFallbackEnabled: Boolean): Result<MatrixRtcMediaSession> {
+        lastIsSfuFallbackEnabled = isSfuFallbackEnabled
         connectMediaCount++
         onConnectMedia()
         return Result.success(newMediaSession().also { lastMediaSession = it }).also {

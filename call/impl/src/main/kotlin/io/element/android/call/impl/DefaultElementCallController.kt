@@ -669,7 +669,7 @@ internal class DefaultElementCallController(
 
     /** Media, the microphone, the routing and the observers. @return what failed, or null. */
     private suspend fun CoroutineScope.connectMediaAndObserve(joined: MatrixRtcCall): String? {
-        val connected = joined.connectMedia().getOrElse {
+        val connected = joined.connectMedia(isSfuFallbackEnabled = options.isSfuFallbackEnabled).getOrElse {
             return "Media failed: ${it.message}"
         }
         call = connected

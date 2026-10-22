@@ -800,6 +800,20 @@ class DefaultElementCallControllerTest {
         assertThat(controller.state.value?.interruptions).isEmpty()
     }
 
+    /** 034 C11: a host opt-in, off unless asked for. */
+    @Test
+    fun `the media server fallback is off unless the host turns it on`() = runTest {
+        val off = FakeMatrixRtcClient()
+        createController(rtcClient = off).setMicrophonePermissionGranted(true)
+        runCurrent()
+        assertThat(off.lastCall?.lastIsSfuFallbackEnabled).isFalse()
+
+        val on = FakeMatrixRtcClient()
+        createController(rtcClient = on, isSfuFallbackEnabled = true).setMicrophonePermissionGranted(true)
+        runCurrent()
+        assertThat(on.lastCall?.lastIsSfuFallbackEnabled).isTrue()
+    }
+
     /** 034 Q8: counted from the core's report, per spell; a spell that ends clears it. */
     @Test
     fun `a member unable to decrypt for long enough is reported missing keys, until they decrypt again`() = runTest {
@@ -1989,6 +2003,7 @@ class DefaultElementCallControllerTest {
         ),
         isScreenSharingEnabled: Boolean = false,
         participantCapForJoinLeaveSounds: Int = ElementCallOptions.DEFAULT_PARTICIPANT_CAP_FOR_JOIN_LEAVE_SOUNDS,
+        isSfuFallbackEnabled: Boolean = false,
     ): DefaultElementCallController {
         val controller = DefaultElementCallController(
             scope = backgroundScope,
@@ -2003,6 +2018,7 @@ class DefaultElementCallControllerTest {
                 isScreenSharingEnabled = isScreenSharingEnabled,
                 participantCapForJoinLeaveSounds = participantCapForJoinLeaveSounds,
                 ringLifetime = ringLifetime,
+                isSfuFallbackEnabled = isSfuFallbackEnabled,
             ),
         )
         controller.startCall(ElementCallData(roomId = A_ROOM_ID, isAudioCall = isAudioCall, isStartingCall = isStartingCall))
