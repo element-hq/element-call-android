@@ -13,10 +13,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
@@ -73,29 +75,31 @@ private fun InterruptionsIndicator(onClick: () -> Unit, modifier: Modifier = Mod
     Row(
         modifier = modifier
             .clip(CircleShape)
-            .background(ElementCallTheme.colors.overlayScrim)
+            // Opaque, as the design has it: over a bright picture a translucent pill lost its label.
+            .background(ElementCallTheme.colors.bgSubtleSecondary)
             .clickable(role = Role.Button, onClick = onClick)
-            .padding(start = 12.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+            .heightIn(min = 40.dp)
+            .padding(start = 12.dp, end = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Icon(
             imageVector = ElementCallTheme.icons.interruptions,
             contentDescription = null,
-            tint = ElementCallTheme.colors.onOverlay,
-            modifier = Modifier.size(16.dp),
+            tint = ElementCallTheme.colors.iconPrimary,
+            modifier = Modifier.size(20.dp),
         )
         Text(
             text = stringResource(R.string.element_call_interruptions),
-            style = ElementCallTheme.typography.bodySmMedium,
-            color = ElementCallTheme.colors.onOverlay,
+            style = ElementCallTheme.typography.bodyMdMedium,
+            color = ElementCallTheme.colors.textPrimary,
             maxLines = 1,
         )
         Icon(
             imageVector = ElementCallTheme.icons.chevronRight,
             contentDescription = null,
-            tint = ElementCallTheme.colors.onOverlay,
-            modifier = Modifier.size(16.dp),
+            tint = ElementCallTheme.colors.iconPrimary,
+            modifier = Modifier.size(20.dp),
         )
     }
 }
@@ -107,7 +111,7 @@ private fun InterruptionsSheet(interruptions: ImmutableList<ElementCallInterrupt
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         // The host's Material theme would paint it otherwise, as AudioDevicePicker explains.
-        containerColor = ElementCallTheme.colors.bgSubtlePrimary,
+        containerColor = ElementCallTheme.colors.bgCanvas,
         contentColor = ElementCallTheme.colors.textPrimary,
     ) {
         InterruptionsList(interruptions, modifier = Modifier.navigationBarsPadding())
@@ -119,19 +123,36 @@ private fun InterruptionsSheet(interruptions: ImmutableList<ElementCallInterrupt
 internal fun InterruptionsList(interruptions: ImmutableList<ElementCallInterruption>, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier.fillMaxWidth().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Text(
             text = stringResource(R.string.element_call_interruptions),
-            style = ElementCallTheme.typography.bodyLgMedium,
+            style = ElementCallTheme.typography.headingMdBold,
             color = ElementCallTheme.colors.textPrimary,
+            modifier = Modifier.padding(bottom = 12.dp),
         )
+        // A card per entry, each marked as something not working, as the design draws them.
         interruptions.forEach { interruption ->
-            Text(
-                text = interruption.text(),
-                style = ElementCallTheme.typography.bodyMdRegular,
-                color = ElementCallTheme.colors.textPrimary,
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(ElementCallTheme.colors.bgSubtleSecondary, RoundedCornerShape(8.dp))
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                Icon(
+                    imageVector = ElementCallTheme.icons.unavailable,
+                    contentDescription = null,
+                    tint = ElementCallTheme.colors.iconCritical,
+                    modifier = Modifier.size(20.dp),
+                )
+                Text(
+                    text = interruption.text(),
+                    style = ElementCallTheme.typography.bodyMdRegular,
+                    color = ElementCallTheme.colors.textPrimary,
+                )
+            }
         }
     }
 }
@@ -175,7 +196,7 @@ internal class InterruptionsImmutableListPreviewParam : PreviewParameterProvider
 internal fun InterruptionsListPreview(
     @PreviewParameter(InterruptionsImmutableListPreviewParam::class) interruptions: ImmutableList<ElementCallInterruption>,
 ) = ElementCallPreview {
-    InterruptionsList(interruptions, modifier = Modifier.background(ElementCallTheme.colors.bgSubtlePrimary))
+    InterruptionsList(interruptions, modifier = Modifier.background(ElementCallTheme.colors.bgCanvas))
 }
 
 @PreviewsDayNight

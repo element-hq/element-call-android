@@ -7,7 +7,12 @@
 
 package io.element.android.call.ui
 
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -21,7 +26,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -480,12 +484,26 @@ private fun MediaIndicator(state: CallTileMediaState) {
             modifier = Modifier.size(14.dp),
         )
     } else {
-        CircularProgressIndicator(
+        // Compound's glyph in a quiet grey, as the design draws it: it says "waiting", not "wrong". Still with reduce
+        // motion on, where the glyph alone says it.
+        val turn = if (rememberReduceMotion()) {
+            0f
+        } else {
+            val spin by rememberInfiniteTransition(label = "spinner").animateFloat(
+                initialValue = 0f,
+                targetValue = 360f,
+                animationSpec = infiniteRepeatable(tween(durationMillis = 1000, easing = LinearEasing)),
+                label = "turn",
+            )
+            spin
+        }
+        Icon(
+            imageVector = ElementCallTheme.icons.spinner,
+            contentDescription = label,
+            tint = ElementCallTheme.colors.iconSecondary,
             modifier = Modifier
-                .size(12.dp)
-                .semantics { contentDescription = label },
-            color = ElementCallTheme.colors.onOverlay,
-            strokeWidth = 1.5.dp,
+                .size(14.dp)
+                .graphicsLayer { rotationZ = turn },
         )
     }
 }
