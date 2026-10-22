@@ -28,6 +28,10 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
   backend with `FakeMatrixBackend`. `element-call` exposes the core's AAR as an `api` dependency.
 - Media keys are received for the whole session, and a sender is confirmed as the host's client decides: the
   reference backend confirms a sender unless its shield is red, after the SDK's own sender trust requirement.
+- The core's 034 bindings: a `MatrixBackend` error carries `retryAfterMs` and `permanent`, `FfiEventEncryption`'s
+  `senderCrossSigned` is `senderConfirmed`, and `relations` answers an empty list when the client cannot serve it. Copy
+  the reference backend's `SdkFailures.kt` and `relations`. Tiles and participants have `connection` and
+  `unableToDecrypt` for `isReachable`; a join the core gives up on fails with a `MatrixRtcJoinException`.
 - No dead man's switch until the SDK bindings have delayed events: the reference backend refuses them, and the core
   joins without one (docs/FEEDBACK.md, "SDK backend").
 

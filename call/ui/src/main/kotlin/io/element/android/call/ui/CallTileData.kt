@@ -8,11 +8,13 @@
 package io.element.android.call.ui
 
 import io.element.android.call.api.ElementCallRoomMember
+import io.element.android.call.api.rtc.MatrixRtcConnectionState
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTile
 import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcTileKind
 import io.element.android.call.api.rtc.MatrixRtcTileRef
+import io.element.android.call.api.rtc.MatrixRtcUnableToDecrypt
 import io.element.android.call.api.rtc.id.UserId
 
 /**
@@ -35,15 +37,10 @@ data class CallTileData(
     val hasVideo: Boolean,
     /** Only ever our own front camera: see [isVideoMirrored]'s use in the tile. */
     val isVideoMirrored: Boolean,
-    /**
-     * Whether the transport can currently reach this member.
-     *
-     * The nearest thing the FFI gives us to "which SFU is this person on". Matrix RTC allows a call to
-     * be carried by several SFUs at once, so in a federated deployment a member can be in the call and
-     * not reachable from ours - but `FfiParticipant` exposes only this boolean, not the transport, so
-     * this is the whole of what a debug readout can say about it. Shown in the tile stats overlay only.
-     */
-    val isReachable: Boolean = true,
+    /** The connection carrying this member's media; on our own tile, our own SFU's. */
+    val connection: MatrixRtcConnectionState = MatrixRtcConnectionState.CONNECTED,
+    /** Why their media cannot be shown, if it cannot. Never set on our own tile. */
+    val unableToDecrypt: MatrixRtcUnableToDecrypt? = null,
     /**
      * Which of the member's streams this tile draws: with [memberId], the tile's identity.
      *
@@ -120,7 +117,8 @@ fun MatrixRtcTile.toCallTileData(
         // Mirroring a remote member would be wrong twice over: it is not how they look to
         // themselves, and any text in frame reads backwards.
         isVideoMirrored = isLocal && !isScreenShare && isFrontCamera,
-        isReachable = isReachable,
+        connection = connection,
+        unableToDecrypt = unableToDecrypt,
         streamKind = id.kind.videoStreamKind,
         isHero = isHero,
         hasDetail = true,

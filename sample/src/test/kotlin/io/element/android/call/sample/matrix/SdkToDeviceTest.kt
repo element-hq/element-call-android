@@ -28,7 +28,7 @@ class SdkToDeviceTest {
         assertThat(message.contentJson).isEqualTo(A_CONTENT)
         assertThat(message.encryption.encrypted).isTrue()
         assertThat(message.encryption.senderDeviceId).isEqualTo(A_SENDER_DEVICE)
-        assertThat(message.encryption.senderCrossSigned).isTrue()
+        assertThat(message.encryption.senderConfirmed).isTrue()
     }
 
     @Test

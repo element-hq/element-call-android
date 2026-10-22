@@ -63,6 +63,17 @@ class SdkRoomEventsTest {
         assertThat(failure.errcode).isEqualTo("M_FORBIDDEN")
         assertThat(failure.status).isNull()
         assertThat(failure.reason).isEqualTo("Not allowed")
+        assertThat(failure.retryAfterMs).isNull()
+        assertThat(failure.permanent).isFalse()
+    }
+
+    @Test
+    fun `a rate limit reaches the core with its retry-after`() {
+        val failure = ClientException.MatrixApi(ErrorKind.LimitExceeded(7_000uL), "M_LIMIT_EXCEEDED", "Too many requests", null)
+            .toFfiBackendException() as FfiBackendException.Failed
+
+        assertThat(failure.errcode).isEqualTo("M_LIMIT_EXCEEDED")
+        assertThat(failure.retryAfterMs).isEqualTo(7_000uL)
     }
 
     @Test

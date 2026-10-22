@@ -53,7 +53,8 @@ interface MatrixRtcCall : AutoCloseable {
     suspend fun connectMedia(): Result<MatrixRtcMediaSession>
 
     /**
-     * Leave the call, publishing a leave membership event.
+     * Leave the call, publishing a leave membership event. Returns without waiting for it to be sent: one attempt, and if it
+     * fails the delayed leave or the membership's lifetime removes us (feature-hq 034 C10).
      */
     suspend fun leave(reason: MatrixRtcLeaveReason? = null): Result<Unit>
 }

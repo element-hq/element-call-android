@@ -19,6 +19,6 @@ import org.matrix.rustcomponents.sdk.ShieldState
  * what remains, the client confirms the sender unless its shield is red.
  */
 internal fun EventEncryptionInfo?.toFfi(): FfiEventEncryption = when (this) {
-    null -> FfiEventEncryption(encrypted = false, senderDeviceId = null, senderCrossSigned = null)
-    else -> FfiEventEncryption(encrypted = true, senderDeviceId = senderDeviceId, senderCrossSigned = shieldState !is ShieldState.Red)
+    null -> FfiEventEncryption(encrypted = false, senderDeviceId = null, senderConfirmed = null)
+    else -> FfiEventEncryption(encrypted = true, senderDeviceId = senderDeviceId, senderConfirmed = shieldState !is ShieldState.Red)
 }

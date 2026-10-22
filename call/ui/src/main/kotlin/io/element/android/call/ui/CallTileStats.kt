@@ -24,6 +24,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.element.android.call.api.rtc.MatrixRtcConnectionState
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.ui.theme.ElementCallTheme
@@ -82,7 +83,7 @@ internal fun CallTileStatsOverlay(
     frameEncryption: MatrixRtcFrameEncryptionState?,
     requestedWidth: Int,
     requestedHeight: Int,
-    isReachable: Boolean,
+    connection: MatrixRtcConnectionState,
     modifier: Modifier = Modifier,
 ) {
     var sample by remember { mutableStateOf(FrameSample(0, 0, 0)) }
@@ -130,11 +131,8 @@ internal fun CallTileStatsOverlay(
         if (frameEncryption != null) {
             StatLine("e2ee ${frameEncryption.name.lowercase()}")
         }
-        // Only when it is false, which is the whole point of showing it: a member in the call but not
-        // reachable from our transport is what a multi-SFU call looks like when a leg is down, and it
-        // is the only signal the FFI gives us about which SFU is carrying whom.
-        if (!isReachable) {
-            StatLine("UNREACHABLE")
+        if (connection != MatrixRtcConnectionState.CONNECTED) {
+            StatLine(connection.name)
         }
     }
 }

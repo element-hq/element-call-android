@@ -233,8 +233,10 @@ data class MatrixRtcParticipant(
     /** Null when the transport has not resolved this participant to a Matrix device. */
     val deviceId: String?,
     val isLocal: Boolean,
-    /** False once the transport considers the participant unreachable. */
-    val isReachable: Boolean,
+    /** The connection carrying their media; for our own row, our own SFU's. */
+    val connection: MatrixRtcConnectionState,
+    /** Always null for our own row. */
+    val unableToDecrypt: MatrixRtcUnableToDecrypt?,
     val streams: List<MatrixRtcStreamState>,
 )
 

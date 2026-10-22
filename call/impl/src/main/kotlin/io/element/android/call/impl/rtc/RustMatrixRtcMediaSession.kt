@@ -474,7 +474,7 @@ internal class RustMatrixRtcMediaSession(
                 }
             }
             // A refused key and a key that never arrived both leave the member at MISSING_KEY, and
-            // the reason used to stay inside the core. NotCrossSigned in particular is something the
+            // the reason used to stay inside the core. SenderNotConfirmed in particular is something the
             // user can act on rather than a fault.
             is MatrixRtcCallEvent.KeyDiscarded ->
                 Timber.w(

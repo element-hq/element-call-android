@@ -9,6 +9,7 @@ package io.element.android.call.ui
 
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import io.element.android.call.api.ElementCallRoomMember
+import io.element.android.call.api.rtc.MatrixRtcConnectionState
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.personTile
 
@@ -22,8 +23,8 @@ open class CallTileDataPreviewParam : PreviewParameterProvider<CallTileData> {
             aRemoteParticipant().toTile(roomMember = A_BOB).copy(hasVideo = true, isActiveSpeaker = true),
             // Muted, with a name from the room.
             aRemoteParticipant(isMuted = true).toTile(roomMember = A_BOB),
-            // Not reachable: the core has them in the slot but the transport does not see them.
-            aRemoteParticipant(isReachable = false).toTile(roomMember = A_BOB),
+            // Reconnecting: the connection carrying their media is being re-established.
+            aRemoteParticipant(connection = MatrixRtcConnectionState.RECONNECTING).toTile(roomMember = A_BOB),
             // A shared screen: video, no badges, drawn as a spotlight.
             aRemoteParticipant().toTile(roomMember = A_BOB).copy(streamKind = MatrixRtcStreamKind.SCREEN_SHARE, hasVideo = true),
             // A hand up, second in the queue: the orange ring and the numbered badge.

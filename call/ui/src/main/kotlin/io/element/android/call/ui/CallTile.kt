@@ -198,7 +198,7 @@ fun CallTile(
                 frameEncryption = stats.frameEncryption,
                 requestedWidth = stats.requestedWidth,
                 requestedHeight = stats.requestedHeight,
-                isReachable = tile.isReachable,
+                connection = tile.connection,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(4.dp),

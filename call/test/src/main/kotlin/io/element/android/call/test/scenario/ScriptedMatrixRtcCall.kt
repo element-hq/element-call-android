@@ -7,6 +7,7 @@
 
 package io.element.android.call.test.scenario
 
+import io.element.android.call.api.rtc.MatrixRtcConnectionState
 import io.element.android.call.api.rtc.MatrixRtcLocalState
 import io.element.android.call.api.rtc.MatrixRtcTile
 import io.element.android.call.api.rtc.MatrixRtcTileId
@@ -82,7 +83,8 @@ class ScriptedMatrixRtcCall(private val client: FakeMatrixRtcClient) {
         isSpeaking = false,
         handRaisedAtMs = handPosition?.let { 1_000L },
         handRaisedPosition = handPosition,
-        isReachable = true,
+        connection = MatrixRtcConnectionState.CONNECTED,
+        unableToDecrypt = null,
     )
 
     companion object {

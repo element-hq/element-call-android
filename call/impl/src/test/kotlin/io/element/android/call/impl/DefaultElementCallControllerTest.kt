@@ -23,6 +23,7 @@ import io.element.android.call.api.rtc.MatrixRtcCallEvent
 import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.MatrixRtcCallKind
 import io.element.android.call.api.rtc.MatrixRtcCallStatus
+import io.element.android.call.api.rtc.MatrixRtcConnectionLossReason
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionDiagnostic
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
@@ -283,7 +284,7 @@ class DefaultElementCallControllerTest {
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
 
-        rtcClient.lastCall!!.status.value = MatrixRtcCallStatus.Ended(MatrixRtcCallEnd.ConnectionClosed("SFU went away"))
+        rtcClient.lastCall!!.status.value = MatrixRtcCallStatus.Ended(MatrixRtcCallEnd.ConnectionClosed(MatrixRtcConnectionLossReason.BUDGET, "SFU went away"))
         runCurrent()
 
         assertThat(controller.state.value).isNull()

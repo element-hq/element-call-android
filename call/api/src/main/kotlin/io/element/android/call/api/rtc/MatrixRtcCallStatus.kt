@@ -74,6 +74,18 @@ sealed interface MatrixRtcCallEnd {
     /** The call's slot was closed, which ended the call without us asking. */
     data object SlotClosed : MatrixRtcCallEnd
 
-    /** The connection to our own focus closed and will not come back. */
-    data class ConnectionClosed(val message: String) : MatrixRtcCallEnd
+    /** Our own SFU connection was given up: [reason] is for the screen, [message] for logs only. Our leave has been issued. */
+    data class ConnectionClosed(val reason: MatrixRtcConnectionLossReason, val message: String) : MatrixRtcCallEnd
+}
+
+/** Why our own SFU connection was given up (feature-hq 034 C10). */
+enum class MatrixRtcConnectionLossReason {
+    /** Lost, and not back within the reconnect budget. */
+    BUDGET,
+
+    /** The SFU or its token service refused us. */
+    REFUSED,
+
+    /** Never established within the budget from the connect request. */
+    NEVER_CONNECTED,
 }

@@ -11,6 +11,7 @@ import android.os.SystemClock
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.ElementCallSnapshot
+import io.element.android.call.api.rtc.MatrixRtcConnectionState
 import io.element.android.call.api.rtc.MatrixRtcTile
 import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcTileKind
@@ -290,7 +291,8 @@ enum class SampleFixture(val key: String, val category: Category, val title: Str
             isSpeaking = '!' in flags,
             handRaisedAtMs = if ('^' in flags) 1L else null,
             handRaisedPosition = null,
-            isReachable = true,
+            connection = MatrixRtcConnectionState.CONNECTED,
+            unableToDecrypt = null,
         )
 
         private fun roomMembersOf(tiles: List<MatrixRtcTile>) = tiles.associate {

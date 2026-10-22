@@ -16,6 +16,7 @@ import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.rtc.MatrixRtcCallEnd
 import io.element.android.call.api.rtc.MatrixRtcCallEvent
 import io.element.android.call.api.rtc.MatrixRtcCallStatus
+import io.element.android.call.api.rtc.MatrixRtcConnectionState
 import io.element.android.call.api.rtc.MatrixRtcLocalState
 import io.element.android.call.api.rtc.MatrixRtcMediaPhase
 import io.element.android.call.api.rtc.MatrixRtcRingPhase
@@ -159,7 +160,8 @@ class SampleRingingCall(context: Context, private val scope: CoroutineScope, pri
             isSpeaking = false,
             handRaisedAtMs = null,
             handRaisedPosition = null,
-            isReachable = true,
+            connection = MatrixRtcConnectionState.CONNECTED,
+            unableToDecrypt = null,
         )
     }
 }

@@ -13,6 +13,7 @@ import io.element.android.call.api.ElementCallHandRequestFailure
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.audio.CallAudioDeviceType
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
+import io.element.android.call.api.rtc.MatrixRtcConnectionState
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
@@ -185,7 +186,7 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
             anElementCallScreenState(
                 connection = ElementCallConnection.Degraded,
                 memberCount = 2,
-                participants = listOf(aLocalParticipant(), aRemoteParticipant(isReachable = false)),
+                participants = listOf(aLocalParticipant(), aRemoteParticipant(connection = MatrixRtcConnectionState.RECONNECTING)),
             ),
             anElementCallScreenState(connection = ElementCallConnection.Failed("Homeserver offers no LiveKit transport")),
             anElementCallScreenState(connection = ElementCallConnection.Ended),
@@ -485,16 +486,18 @@ fun aLocalParticipant(isMuted: Boolean = false) = MatrixRtcParticipant(
     userId = UserId("@alice:example.org"),
     deviceId = "ALICEDEVICE",
     isLocal = true,
-    isReachable = true,
+    connection = MatrixRtcConnectionState.CONNECTED,
+    unableToDecrypt = null,
     streams = listOf(MatrixRtcStreamState(MatrixRtcStreamKind.MICROPHONE, isMuted)),
 )
 
-fun aRemoteParticipant(isReachable: Boolean = true, isMuted: Boolean = false) = MatrixRtcParticipant(
+fun aRemoteParticipant(connection: MatrixRtcConnectionState = MatrixRtcConnectionState.CONNECTED, isMuted: Boolean = false) = MatrixRtcParticipant(
     memberId = A_REMOTE_MEMBER_ID,
     userId = UserId("@bob:example.org"),
     deviceId = "BOBDEVICE",
     isLocal = false,
-    isReachable = isReachable,
+    connection = connection,
+    unableToDecrypt = null,
     streams = persistentListOf(MatrixRtcStreamState(MatrixRtcStreamKind.MICROPHONE, isMuted = isMuted)),
 )
 
@@ -521,7 +524,8 @@ fun aCrowdParticipant(index: Int) = MatrixRtcParticipant(
     userId = UserId("@member$index:example.org"),
     deviceId = "DEVICE$index",
     isLocal = false,
-    isReachable = true,
+    connection = MatrixRtcConnectionState.CONNECTED,
+    unableToDecrypt = null,
     streams = listOf(MatrixRtcStreamState(MatrixRtcStreamKind.MICROPHONE, isMuted = index % 3 == 0)),
 )
 
@@ -539,7 +543,8 @@ fun aStaleParticipant() = MatrixRtcParticipant(
     userId = UserId("@carol:example.org"),
     deviceId = null,
     isLocal = false,
-    isReachable = true,
+    connection = MatrixRtcConnectionState.CONNECTED,
+    unableToDecrypt = null,
     streams = emptyList(),
 )
 
