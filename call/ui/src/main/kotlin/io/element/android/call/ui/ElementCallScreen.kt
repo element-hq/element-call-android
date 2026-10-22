@@ -631,6 +631,7 @@ private fun CallControlsBar(
                     if (state.isScreenSharing) R.string.element_call_a11y_stop_screen_share else R.string.element_call_a11y_start_screen_share
                 ),
                 isActive = state.isScreenSharing,
+                enabled = state.isScreenSharing || state.isScreenShareStartEnabled,
             )
         }
         RoundCallButton(
@@ -653,6 +654,7 @@ private fun RaiseHandButton(state: ElementCallScreenState) {
         icon = ElementCallTheme.icons.handRaised,
         contentDescription = stringResource(if (state.isHandRaised) R.string.element_call_a11y_lower_hand else R.string.element_call_a11y_raise_hand),
         isActive = state.isHandRaised,
+        enabled = state.isRaiseHandEnabled,
         modifier = Modifier.semantics { if (state.isHandRaised) stateDescription = raisedState },
     )
 }
@@ -722,16 +724,24 @@ private fun RoundCallButton(
 ) {
     val resolvedBackground = background
         // Darker than the pill it sits in, which is bgSubtleSecondary.
-        ?: if (isActive) ElementCallTheme.colors.controlActiveBackground else ElementCallTheme.colors.bgCanvas
-    val resolvedTint = tint
-        ?: if (isActive) ElementCallTheme.colors.controlActiveContent else ElementCallTheme.colors.iconPrimary
+        ?: if (isActive && enabled) ElementCallTheme.colors.controlActiveBackground else ElementCallTheme.colors.bgCanvas
+    val resolvedTint = when {
+        // Resting, with a faint glyph: the theme has no disabled colour, and adding one would change a port every host fills.
+        !enabled -> ElementCallTheme.colors.iconSecondary.copy(alpha = DISABLED_ALPHA)
+        tint != null -> tint
+        isActive -> ElementCallTheme.colors.controlActiveContent
+        else -> ElementCallTheme.colors.iconPrimary
+    }
+    val unavailable = stringResource(R.string.element_call_a11y_unavailable)
     // A dark button over a dark tile would be only its icon; the ring tells it apart from what it
     // floats over, as the design draws it. The light and the coloured ones stand out on their own.
-    val hasRing = background == null && !isActive
+    val hasRing = background == null && !(isActive && enabled)
     IconButton(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier
+            // Said rather than only drawn: a screen reader user needs to know why the tap does nothing (034 R15).
+            .semantics { if (!enabled) stateDescription = unavailable }
             .size(BUTTON_SIZE)
             .clip(CircleShape)
             .background(resolvedBackground)
@@ -751,6 +761,8 @@ private fun RoundCallButton(
  * pill, which with the bar's padding just fits a 360dp phone (009 R17).
  */
 private val BUTTON_SIZE = 48.dp
+
+private const val DISABLED_ALPHA = 0.4f
 
 /** Between the buttons in the pill. */
 private val BUTTON_GAP = 8.dp

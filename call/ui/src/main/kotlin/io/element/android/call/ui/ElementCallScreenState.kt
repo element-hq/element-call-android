@@ -77,6 +77,8 @@ data class ElementCallScreenState(
      * app being involved, so the button has to follow this rather than its own memory of the last tap.
      */
     val isScreenSharing: Boolean,
+    /** Off while our own media server reconnects, as a share could not start; stopping one never is (034 R15). */
+    val isScreenShareStartEnabled: Boolean,
     /** Whether tiles are showing their debug readout. Toggled by long-pressing a tile. */
     val isTileStatsVisible: Boolean,
     /**
@@ -123,6 +125,8 @@ data class ElementCallScreenState(
     val isHandRaised: Boolean,
     /** Whether the raise control is in the bar (009 R2, R33). */
     val showsRaiseHandControl: Boolean,
+    /** Off while our homeserver is unreachable: a raise could not reach anyone (034 R15). */
+    val isRaiseHandEnabled: Boolean,
     /** A raise or lower that failed, to tell the user about (009 R22). */
     val handRequestFailure: ElementCallHandRequestFailure?,
     /**

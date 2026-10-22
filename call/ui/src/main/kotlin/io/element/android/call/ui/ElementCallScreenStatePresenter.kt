@@ -21,6 +21,8 @@ import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.ElementCallVersion
+import io.element.android.call.api.rtc.MatrixRtcConnectionState
+import io.element.android.call.api.rtc.MatrixRtcSignallingHealth
 import io.element.android.call.api.rtc.MatrixRtcTileKind
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.api.rtc.id.UserId
@@ -335,6 +337,7 @@ private fun ElementCallSnapshot?.toState(
     isCameraPermissionGranted = this?.isCameraPermissionGranted == true,
     isScreenShareAvailable = this?.isScreenShareAvailable == true,
     isScreenSharing = this?.isScreenSharing == true,
+    isScreenShareStartEnabled = this?.ownTile?.connection.let { it != MatrixRtcConnectionState.RECONNECTING && it != MatrixRtcConnectionState.UNREACHABLE },
     isTileStatsVisible = this?.isTileStatsVisible == true,
     videoFrames = videoFrames,
     roomName = this?.roomName,
@@ -348,6 +351,7 @@ private fun ElementCallSnapshot?.toState(
     ownTileCorner = ownTileCorner,
     isHandRaised = this?.ownTile?.handRaisedAtMs != null,
     showsRaiseHandControl = this?.showsRaiseHandControl == true,
+    isRaiseHandEnabled = this?.signalling !is MatrixRtcSignallingHealth.Unreachable,
     handRequestFailure = this?.handRequestFailure,
     pictureInPictureTileId = pictureInPictureTileId,
     // The call screen's own Activity knows, and sets it on the way out.

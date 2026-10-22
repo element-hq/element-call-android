@@ -190,6 +190,15 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
                 memberCount = 2,
                 participants = listOf(aLocalParticipant(), aRemoteParticipant(connection = MatrixRtcConnectionState.RECONNECTING)),
             ),
+            // Our homeserver and our media server away: the hand and starting a share are disabled, the rest never is (034 R15).
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
+                memberCount = 3,
+                participants = listOf(aLocalParticipant(), aRemoteParticipant(), aCrowdParticipant(1)),
+                isScreenShareAvailable = true,
+                isRaiseHandEnabled = false,
+                isScreenShareStartEnabled = false,
+            ),
             anElementCallScreenState(connection = ElementCallConnection.Failed(ElementCallFailure.ConnectionLost(MatrixRtcConnectionLossReason.BUDGET))),
             anElementCallScreenState(connection = ElementCallConnection.Ended),
             // A DM, both on video: the other person full-bleed, us as a thumbnail with the switch
@@ -397,6 +406,8 @@ fun anElementCallScreenState(
     isCameraSwitchAvailable: Boolean = true,
     ownTileCorner: ElementCallOwnTileCorner = ElementCallOwnTileCorner.Initial,
     handRequestFailure: ElementCallHandRequestFailure? = null,
+    isRaiseHandEnabled: Boolean = true,
+    isScreenShareStartEnabled: Boolean = true,
     eventSink: (ElementCallScreenEvent) -> Unit = {},
 ) = ElementCallScreenState(
     connection = connection,
@@ -416,6 +427,7 @@ fun anElementCallScreenState(
     isCameraPermissionGranted = isCameraPermissionGranted,
     isScreenShareAvailable = isScreenShareAvailable,
     isScreenSharing = isScreenSharing,
+    isScreenShareStartEnabled = isScreenShareStartEnabled,
     isTileStatsVisible = isTileStatsVisible,
     videoFrames = videoFrames.toImmutableMap(),
     roomName = roomName,
@@ -438,6 +450,7 @@ fun anElementCallScreenState(
     // As the presenter decides it: three people, or our own hand up.
     showsRaiseHandControl = participants.any { it.isLocal } &&
         (participants.count() >= 3 || participants.any { it.isLocal && it.memberId in handRaisedIds }),
+    isRaiseHandEnabled = isRaiseHandEnabled,
     handRequestFailure = handRequestFailure,
     // Nothing to report where a tile is drawn to: a preview has no window to grow out of.
     pictureInPictureTileId = null,
