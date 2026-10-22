@@ -11,6 +11,7 @@ import android.content.Context
 import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallSnapshot
+import io.element.android.call.api.ElementCallWindowRect
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
@@ -81,6 +82,21 @@ class SampleCallController(private val context: Context, private val scope: Coro
     override fun setInPictureInPicture(isInPictureInPicture: Boolean) {
         pictureInPicture.value = isInPictureInPicture
         target.setInPictureInPicture(isInPictureInPicture)
+    }
+
+    private val pictureInPictureSourceFlow = MutableStateFlow<ElementCallWindowRect?>(null)
+    override val pictureInPictureSource: StateFlow<ElementCallWindowRect?> = pictureInPictureSourceFlow
+
+    // Frozen in the window, as the real controller does, so the window keeps its shape.
+    override fun setPictureInPictureSource(source: ElementCallWindowRect?) {
+        if (!pictureInPicture.value) pictureInPictureSourceFlow.value = source
+    }
+
+    private val pictureInPictureEntryFlow = MutableStateFlow<ElementCallWindowRect?>(null)
+    override val pictureInPictureEntry: StateFlow<ElementCallWindowRect?> = pictureInPictureEntryFlow
+
+    override fun setPictureInPictureEntry(entry: ElementCallWindowRect?) {
+        pictureInPictureEntryFlow.value = entry
     }
     override fun startCall(callData: ElementCallData) = target.startCall(callData)
     override fun setMicrophonePermissionGranted(granted: Boolean) = target.setMicrophonePermissionGranted(granted)

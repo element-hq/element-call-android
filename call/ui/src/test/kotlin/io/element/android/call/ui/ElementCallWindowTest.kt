@@ -13,6 +13,7 @@ import android.Manifest
 import android.app.Application
 import androidx.activity.ComponentActivity
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.test.AndroidComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -102,7 +103,12 @@ class ElementCallWindowTest : RobolectricTest() {
     private fun AndroidComposeUiTest<ComponentActivity>.setWindow(controller: FakeElementCallController) {
         setContent {
             CompositionLocalProvider(LocalInspectionMode provides true) {
-                ElementCallWindow(controller = controller, onMinimize = { minimizeCount++ }, onClose = {})
+                ElementCallWindow(
+                    controller = controller,
+                    isInPictureInPicture = controller.isInPictureInPicture.collectAsState().value,
+                    onMinimize = { minimizeCount++ },
+                    onClose = {},
+                )
             }
         }
     }

@@ -53,6 +53,19 @@ internal class CallTextureView(context: Context) : TextureView(context), Texture
     /** Told when the view's size changes, so the last frame can be drawn again at the new shape (000 R15). */
     var onResized: (() -> Unit)? = null
 
+    /**
+     * Told once, on the main thread, when the first video frame has reached the view: until then it is black.
+     * Not the first texture update, which is the renderer clearing its new surface.
+     */
+    var onFirstFrame: (() -> Unit)? = null
+        set(value) {
+            field = value
+            if (value != null) eglRenderer.addFrameListener({ hasDrawnFrame = true }, 0f)
+        }
+
+    @Volatile
+    private var hasDrawnFrame = false
+
     fun onFrame(frame: VideoFrame) = eglRenderer.onFrame(frame)
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -98,7 +111,11 @@ internal class CallTextureView(context: Context) : TextureView(context), Texture
         return true
     }
 
-    override fun onSurfaceTextureUpdated(surfaceTexture: SurfaceTexture) = Unit
+    override fun onSurfaceTextureUpdated(surfaceTexture: SurfaceTexture) {
+        if (!hasDrawnFrame) return
+        onFirstFrame?.invoke()
+        onFirstFrame = null
+    }
 
     private fun updateLayoutAspectRatio(width: Int, height: Int) {
         if (width <= 0 || height <= 0) return

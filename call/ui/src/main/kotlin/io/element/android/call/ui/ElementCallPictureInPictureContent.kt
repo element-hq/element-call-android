@@ -15,6 +15,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -57,21 +60,27 @@ fun ElementCallPictureInPictureContent(
     modifier: Modifier = Modifier,
     /** What the call screen's spotlight showed, which this follows (spec 003 R68). */
     spotlightId: MatrixRtcTileId? = null,
+    /** Told once what the window shows is on screen: the first video frame, or at once for an avatar. */
+    onShow: (() -> Unit)? = null,
 ) {
     // Ourselves only when nobody else is in the call (019 R15).
     val spotlit = call.pictureInPictureCandidate(spotlightId)
     val memberId = spotlit?.id?.memberId
     val kind = spotlit?.kind ?: MatrixRtcStreamKind.CAMERA
     val hasVideo = spotlit?.hasVideo == true
+    val isVideo = memberId != null && hasVideo
+    val currentOnShow by rememberUpdatedState(onShow)
+    LaunchedEffect(isVideo) { if (!isVideo) currentOnShow?.invoke() }
 
     Surface(modifier = modifier.fillMaxSize(), color = Color.Black) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             when {
-                memberId != null && hasVideo -> CallVideoRenderer(
-                    frames = videoFrames(memberId, kind),
+                isVideo -> CallVideoRenderer(
+                    frames = videoFrames(checkNotNull(memberId), kind),
                     // Our own front camera mirrors, as the self view does everywhere.
                     isMirrored = spotlit.isLocal && call.isFrontCamera,
                     modifier = Modifier.fillMaxSize(),
+                    onFirstFrame = { currentOnShow?.invoke() },
                 )
                 spotlit != null -> ElementCallAvatar(
                     userId = spotlit.userId,

@@ -56,6 +56,7 @@ import kotlin.math.roundToInt
  * (1, the whole picture, letterboxed) the video is drawn. A share in the spotlight fits entirely;
  * a camera there is drawn halfway, so a portrait picture is cropped by half of what filling would
  * crop (spec 003 R15, R16).
+ * @param onFirstFrame told once the first video frame is on screen: until then the renderer is black.
  */
 @Composable
 fun CallVideoRenderer(
@@ -65,10 +66,13 @@ fun CallVideoRenderer(
     frameCounter: TileFrameCounter? = null,
     onVideoSizeChange: ((IntSize) -> Unit)? = null,
     fit: Float = 0f,
+    onFirstFrame: (() -> Unit)? = null,
 ) {
+    val currentOnFirstFrame by rememberUpdatedState(onFirstFrame)
     // Previews and Paparazzi have no GL context, and the renderer's init would try to make one.
     // A placeholder keeps every screenshot test that renders this screen alive.
     if (LocalInspectionMode.current) {
+        LaunchedEffect(Unit) { currentOnFirstFrame?.invoke() }
         Box(modifier = modifier, contentAlignment = Alignment.Center) {
             Text(
                 text = "video",
@@ -118,6 +122,7 @@ fun CallVideoRenderer(
                 // A surface that only repaints when a frame arrives stretches the last one it drew to
                 // whatever shape it has reached; the last frame is drawn again at each new size (000 R15).
                 onResized = { handle.rerender() }
+                this.onFirstFrame = { currentOnFirstFrame?.invoke() }
                 isAttached = true
             }
         },

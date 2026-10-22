@@ -15,20 +15,29 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.view.Choreographer
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.core.app.PendingIntentCompat
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.lifecycleScope
 import io.element.android.call.api.ElementCallController
 import io.element.android.call.ui.theme.ElementCallStyle
 import io.element.android.call.ui.theme.ElementCallTheme
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
+import kotlin.coroutines.resume
 
 /**
  * The full-screen call, in a task of its own.
@@ -67,6 +76,14 @@ class ElementCallActivity : ComponentActivity() {
     private lateinit var controller: ElementCallController
     private lateinit var host: Host
 
+    // The window's own mode, not the controller's flag, which is set as soon as the window is asked for: the
+    // screen must keep drawing the call until the system has taken its picture to shrink.
+    private var isFloating by mutableStateOf(false)
+
+    // Home from Android 12: the system shrinks the screen without waiting, so the chrome goes at once instead.
+    private var isLeavingForPictureInPicture by mutableStateOf(false)
+    private var pictureInPictureShown: CompletableDeferred<Unit>? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val host = application as? Host
@@ -82,6 +99,14 @@ class ElementCallActivity : ComponentActivity() {
         showWhenLocked()
         host.onCallActivityCreated(this, controller)
         addOnPictureInPictureModeChangedListener { info -> onPictureInPictureChanged(info.isInPictureInPictureMode) }
+        addOnUserLeaveHintListener {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && controller.shouldEnterPictureInPicture.value) isLeavingForPictureInPicture = true
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            addOnPictureInPictureUiStateChangedListener { if (it.isTransitioningToPip) isLeavingForPictureInPicture = true }
+        }
+        // A way out that ended somewhere else, a dialog or Recents left again, brings the chrome back.
+        lifecycle.addObserver(LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) isLeavingForPictureInPicture = false })
         lifecycleScope.launch {
             controller.state.first { it == null }
             Timber.d("ElementCall: call over, closing the call screen")
@@ -96,7 +121,14 @@ class ElementCallActivity : ComponentActivity() {
         setContent {
             host.CallScreenContent { style ->
                 ElementCallTheme(style = style) {
-                    ElementCallWindow(controller = controller, onMinimize = ::minimize, onClose = ::finishAndRemoveTask)
+                    ElementCallWindow(
+                        controller = controller,
+                        isInPictureInPicture = isFloating,
+                        onMinimize = ::minimize,
+                        onClose = ::finishAndRemoveTask,
+                        isLeavingForPictureInPicture = isLeavingForPictureInPicture,
+                        onPictureInPictureShow = { pictureInPictureShown?.complete(Unit) },
+                    )
                 }
             }
         }
@@ -109,13 +141,6 @@ class ElementCallActivity : ComponentActivity() {
         if (::controller.isInitialized && controller.isInPictureInPicture.value && !isChangingConfigurations) {
             controller.setInPictureInPicture(false)
         }
-    }
-
-    /** Below S the system cannot be told to shrink on its own, and Home and Recents are all there is to go on. */
-    override fun onUserLeaveHint() {
-        super.onUserLeaveHint()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S || !::controller.isInitialized) return
-        if (controller.shouldEnterPictureInPicture.value) enterPictureInPicture()
     }
 
     private fun showWhenLocked() {
@@ -147,21 +172,44 @@ class ElementCallActivity : ComponentActivity() {
 
     private fun minimizeUnlocked() {
         val call = controller.state.value ?: return finishAndRemoveTask()
-        // Nothing is started for the app: the task under this one comes up under the window, the host's when
-        // the call was opened from it. Starting it here would close this task in the same transition.
-        if (call.hasVideo && enterPictureInPicture()) {
-            // Now rather than on the mode change, which comes after the host's Activity has resumed under the
-            // window: its overlay would see a maximized call out of picture-in-picture and open it again.
-            controller.setInPictureInPicture(true)
+        if (!call.hasVideo || !canEnterPictureInPicture()) {
+            controller.setMaximized(false)
+            leaveForApp()
             return
         }
-        controller.setMaximized(false)
-        leaveForApp()
+        // The window's content drawn first where the system shrinks from, and only once it shows: what shrinks
+        // is then what the window will show, rather than the layout around the tile or a black renderer.
+        val decorView = window.decorView
+        val entry = controller.pictureInPictureSource.value?.grownToFill(decorView.width, decorView.height)
+        val shown = CompletableDeferred<Unit>().takeIf { entry != null }
+        pictureInPictureShown = shown
+        entry?.let(controller::setPictureInPictureEntry)
+        lifecycleScope.launch {
+            if (shown != null) {
+                // Bounded, so a stream that stalls delays minimising rather than blocking it.
+                withTimeoutOrNull(PICTURE_IN_PICTURE_SHOWN_TIMEOUT_MS) { shown.await() }
+                // The frame reached the view; then a frame for the layer to be shown, and one for it to reach the screen.
+                repeat(2) { awaitFrame() }
+            }
+            // Nothing is started for the app: the task under this one comes up under the window, the host's
+            // when the call was opened from it. Starting it here would close this task in the same transition.
+            if (enterPictureInPicture()) {
+                // Now rather than on the mode change, which comes after the host's Activity has resumed under
+                // the window: its overlay would see a maximized call out of picture-in-picture and open it again.
+                controller.setInPictureInPicture(true)
+            } else {
+                controller.setPictureInPictureEntry(null)
+                controller.setMaximized(false)
+                leaveForApp()
+            }
+        }
     }
+
+    private fun canEnterPictureInPicture(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)
 
     private fun enterPictureInPicture(): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
-        if (!packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) return false
         // False, or a throw on some versions, when the user turned picture-in-picture off for the app.
         return try {
             enterPictureInPictureMode(PictureInPictureParams.Builder().build())
@@ -172,6 +220,9 @@ class ElementCallActivity : ComponentActivity() {
     }
 
     private fun onPictureInPictureChanged(isInPictureInPicture: Boolean) {
+        isFloating = isInPictureInPicture
+        isLeavingForPictureInPicture = false
+        pictureInPictureShown = null
         controller.setInPictureInPicture(isInPictureInPicture)
         if (!isInPictureInPicture && lifecycle.currentState == Lifecycle.State.CREATED) {
             // Out of picture-in-picture while stopped: the window was swiped away, not expanded.
@@ -191,7 +242,15 @@ class ElementCallActivity : ComponentActivity() {
         finishAndRemoveTask()
     }
 
+    private suspend fun awaitFrame() = suspendCancellableCoroutine { continuation ->
+        val callback = Choreographer.FrameCallback { continuation.resume(Unit) }
+        Choreographer.getInstance().postFrameCallback(callback)
+        continuation.invokeOnCancellation { Choreographer.getInstance().removeFrameCallback(callback) }
+    }
+
     companion object {
+        private const val PICTURE_IN_PICTURE_SHOWN_TIMEOUT_MS = 500L
+
         /** Open the call screen, from anywhere: the answer from a ringing screen, the host, a notification. */
         fun start(context: Context, options: Bundle? = null) {
             context.startActivity(intent(context), options)

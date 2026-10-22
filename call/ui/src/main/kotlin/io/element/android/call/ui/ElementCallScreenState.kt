@@ -128,6 +128,16 @@ data class ElementCallScreenState(
     /** A raise or lower that failed, to tell the user about (009 R22). */
     val handRequestFailure: ElementCallHandRequestFailure?,
     /**
+     * The [CallTileData.tileId] picture-in-picture would show, or null when it shows no tile of ours
+     * (alone in the call). The tile drawing it reports where it is, so the window grows out of it.
+     */
+    val pictureInPictureTileId: String?,
+    /**
+     * The system is about to shrink the screen into the floating window without waiting: the chrome and our own
+     * floating tile are hidden at once, so what shrinks is the call rather than its controls.
+     */
+    val isLeavingForPictureInPicture: Boolean,
+    /**
      * What the overflow menu shows: the library version and the core it was built against. Carried in
      * state rather than read from `ElementCallVersion` where they are drawn, so previews and screenshots
      * show a fixed value rather than one that changes with every release.
