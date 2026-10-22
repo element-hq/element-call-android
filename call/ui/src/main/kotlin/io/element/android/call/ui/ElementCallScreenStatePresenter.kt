@@ -347,7 +347,6 @@ private fun ElementCallSnapshot?.toState(
     isStageChromeVisible = isStageChromeVisible,
     ownTileCorner = ownTileCorner,
     isHandRaised = this?.ownTile?.handRaisedAtMs != null,
-    isHandPending = this?.isHandPending == true,
     showsRaiseHandControl = this?.showsRaiseHandControl == true,
     handRequestFailure = this?.handRequestFailure,
     pictureInPictureTileId = pictureInPictureTileId,

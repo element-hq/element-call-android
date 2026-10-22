@@ -156,12 +156,7 @@ data class ElementCallSnapshot(
      * a developer who left it on last week should not be handed a screen full of numbers today.
      */
     val isTileStatsVisible: Boolean = false,
-    /**
-     * Whether a raise or a lower of our hand is on its way to the homeserver. Whether the hand is up is
-     * [ownTile]'s, which changes only once the homeserver has it.
-     */
-    val isHandPending: Boolean = false,
-    /** The last raise or lower that failed, until the user has been told or asks again. */
+    /** The last raise or lower the homeserver refused for good, until the user has been told or asks again. */
     val handRequestFailure: ElementCallHandRequestFailure? = null,
 ) {
     /**

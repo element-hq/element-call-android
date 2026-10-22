@@ -366,24 +366,16 @@ internal class DefaultElementCallController(
     }
 
     override fun setHandRaised(raised: Boolean) {
+        val rtcCall = rtcCall ?: return
+        updateState { it.copy(handRequestFailure = null) }
+        // Not gated on a request in flight: the core holds the hand as a desired state, so a second tap is the
+        // reversal, and the first then resolves quietly (034 C12). It fails only on a refusal.
         scope.launch {
-            val rtcCall = rtcCall ?: return@launch
-            var isSending = false
-            // Checked and set in one step, so two taps cannot both send.
-            updateState { snapshot ->
-                val isUp = snapshot.ownTile?.handRaisedAtMs != null
-                isSending = !snapshot.isHandPending && snapshot.ownTile != null && isUp != raised
-                if (isSending) snapshot.copy(isHandPending = true, handRequestFailure = null) else snapshot
-            }
-            if (!isSending) return@launch
             val result = if (raised) rtcCall.raiseHand() else rtcCall.lowerHand()
-            val failure = when {
-                result.isSuccess -> null
-                raised -> ElementCallHandRequestFailure.RAISE
-                else -> ElementCallHandRequestFailure.LOWER
+            Timber.i("ElementCall: ${if (raised) "raising" else "lowering"} our hand ${if (result.isSuccess) "done" else "refused"}")
+            if (result.isFailure) {
+                updateState { it.copy(handRequestFailure = if (raised) ElementCallHandRequestFailure.RAISE else ElementCallHandRequestFailure.LOWER) }
             }
-            Timber.i("ElementCall: ${if (raised) "raising" else "lowering"} our hand ${if (failure == null) "done" else "failed"}")
-            updateState { it.copy(isHandPending = false, handRequestFailure = failure) }
         }
     }
 

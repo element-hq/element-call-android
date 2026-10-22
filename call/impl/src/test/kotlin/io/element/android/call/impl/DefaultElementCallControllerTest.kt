@@ -1828,55 +1828,47 @@ class DefaultElementCallControllerTest {
         assertThat(platform.soundEffectRenderers.single().played).containsExactly(CallSoundEffect.RAISE_HAND)
     }
 
+    /** 034 C12: the core shows the hand at once and retries it, so a second tap is the reversal, sent at once. */
     @Test
-    fun `raising waits for the homeserver, takes no second request meanwhile, and reads the hand from our tile`() = runTest {
+    fun `a second tap while a raise is out lowers the hand, and the raise resolves quietly`() = runTest {
         val rtcClient = FakeMatrixRtcClient()
         val controller = createController(rtcClient = rtcClient)
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
         val rtcCall = rtcClient.lastCall!!
-        val session = rtcCall.lastMediaSession!!
-        session.localState.value = MatrixRtcLocalState(tile = aTile(A_LOCAL_MEMBER_ID), isScreenSharing = false)
+        rtcCall.lastMediaSession!!.localState.value = MatrixRtcLocalState(tile = aTile(A_LOCAL_MEMBER_ID), isScreenSharing = false)
         val homeserver = CompletableDeferred<Result<Unit>>()
         rtcCall.raiseHandResult = { homeserver.await() }
 
         controller.setHandRaised(true)
         runCurrent()
-        controller.setHandRaised(true)
         controller.setHandRaised(false)
         runCurrent()
 
-        assertThat(controller.state.value?.isHandPending).isTrue()
         assertThat(rtcCall.raiseHandCount).isEqualTo(1)
-        assertThat(rtcCall.lowerHandCount).isEqualTo(0)
-        // Not up until the core says so, whatever was tapped.
-        assertThat(controller.state.value?.ownTile?.handRaisedAtMs).isNull()
+        assertThat(rtcCall.lowerHandCount).isEqualTo(1)
 
-        session.localState.value = MatrixRtcLocalState(tile = aTile(A_LOCAL_MEMBER_ID, handPosition = 1), isScreenSharing = false)
+        // Superseded by the lower, as the core resolves it.
         homeserver.complete(Result.success(Unit))
         runCurrent()
 
-        assertThat(controller.state.value?.isHandPending).isFalse()
         assertThat(controller.state.value?.handRequestFailure).isNull()
-        assertThat(controller.state.value?.ownTile?.handRaisedPosition).isEqualTo(1)
     }
 
     @Test
-    fun `a failed request is reported until the user has seen it, and the hand stays as it was`() = runTest {
+    fun `a refused request is reported until the user has seen it`() = runTest {
         val rtcClient = FakeMatrixRtcClient()
         val controller = createController(rtcClient = rtcClient)
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
         val rtcCall = rtcClient.lastCall!!
         rtcCall.lastMediaSession!!.localState.value = MatrixRtcLocalState(tile = aTile(A_LOCAL_MEMBER_ID, handPosition = 1), isScreenSharing = false)
-        rtcCall.lowerHandResult = { Result.failure(IllegalStateException("offline")) }
+        rtcCall.lowerHandResult = { Result.failure(IllegalStateException("refused")) }
 
         controller.setHandRaised(false)
         runCurrent()
 
-        assertThat(controller.state.value?.isHandPending).isFalse()
         assertThat(controller.state.value?.handRequestFailure).isEqualTo(ElementCallHandRequestFailure.LOWER)
-        assertThat(controller.state.value?.ownTile?.handRaisedPosition).isEqualTo(1)
 
         controller.clearHandRequestFailure()
         runCurrent()
@@ -1885,21 +1877,13 @@ class DefaultElementCallControllerTest {
     }
 
     @Test
-    fun `a hand already that way, or no own tile yet, sends nothing`() = runTest {
-        val rtcClient = FakeMatrixRtcClient()
-        val controller = createController(rtcClient = rtcClient)
-        controller.setMicrophonePermissionGranted(true)
-        runCurrent()
-        val rtcCall = rtcClient.lastCall!!
+    fun `no call joined yet sends nothing`() = runTest {
+        val controller = createController(rtcClient = FakeMatrixRtcClient())
 
         controller.setHandRaised(true)
         runCurrent()
-        rtcCall.lastMediaSession!!.localState.value = MatrixRtcLocalState(tile = aTile(A_LOCAL_MEMBER_ID, handPosition = 1), isScreenSharing = false)
-        controller.setHandRaised(true)
-        runCurrent()
 
-        assertThat(rtcCall.raiseHandCount).isEqualTo(0)
-        assertThat(controller.state.value?.isHandPending).isFalse()
+        assertThat(controller.state.value?.handRequestFailure).isNull()
     }
 
     private fun TestScope.createController(

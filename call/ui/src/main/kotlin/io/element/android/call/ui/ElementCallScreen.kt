@@ -54,7 +54,6 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -645,10 +644,7 @@ private fun CallControlsBar(
     }
 }
 
-/**
- * Shows the hand as the homeserver has it, never the tap (009 R5): while a request is out the button
- * spins and takes no taps, and lands on whatever our tile then says.
- */
+/** Shows the hand as requested, as our tile does; a second tap takes it back (034 C12). */
 @Composable
 private fun RaiseHandButton(state: ElementCallScreenState) {
     val raisedState = stringResource(R.string.element_call_a11y_hand_raised_state)
@@ -657,8 +653,6 @@ private fun RaiseHandButton(state: ElementCallScreenState) {
         icon = ElementCallTheme.icons.handRaised,
         contentDescription = stringResource(if (state.isHandRaised) R.string.element_call_a11y_lower_hand else R.string.element_call_a11y_raise_hand),
         isActive = state.isHandRaised,
-        enabled = !state.isHandPending,
-        isBusy = state.isHandPending,
         modifier = Modifier.semantics { if (state.isHandRaised) stateDescription = raisedState },
     )
 }
@@ -725,8 +719,6 @@ private fun RoundCallButton(
     enabled: Boolean = true,
     background: Color? = null,
     tint: Color? = null,
-    /** A progress ring in place of the icon, while what the button asked for is on its way. */
-    isBusy: Boolean = false,
 ) {
     val resolvedBackground = background
         // Darker than the pill it sits in, which is bgSubtleSecondary.
@@ -745,21 +737,11 @@ private fun RoundCallButton(
             .background(resolvedBackground)
             .then(if (hasRing) Modifier.border(1.dp, ElementCallTheme.colors.borderControl, CircleShape) else Modifier),
     ) {
-        if (isBusy) {
-            CircularProgressIndicator(
-                modifier = Modifier
-                    .size(BUSY_INDICATOR_SIZE)
-                    .semantics { this.contentDescription = contentDescription },
-                color = resolvedTint,
-                strokeWidth = 2.dp,
-            )
-        } else {
-            Icon(
-                imageVector = icon,
-                contentDescription = contentDescription,
-                tint = resolvedTint,
-            )
-        }
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = resolvedTint,
+        )
     }
 }
 
@@ -769,8 +751,6 @@ private fun RoundCallButton(
  * pill, which with the bar's padding just fits a 360dp phone (009 R17).
  */
 private val BUTTON_SIZE = 48.dp
-
-private val BUSY_INDICATOR_SIZE = 20.dp
 
 /** Between the buttons in the pill. */
 private val BUTTON_GAP = 8.dp

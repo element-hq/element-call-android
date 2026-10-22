@@ -119,10 +119,8 @@ data class ElementCallScreenState(
     val isStageChromeVisible: Boolean,
     /** The corner our floating tile is in (019 R18, R20). */
     val ownTileCorner: ElementCallOwnTileCorner,
-    /** Whether our hand is up, as the homeserver has it: never the tap just made (009 R5). */
+    /** Whether our hand is up, as our tile shows it: the core shows a request at once and retries it until it lands. */
     val isHandRaised: Boolean,
-    /** A raise or lower is on its way: the control shows progress and takes no taps. */
-    val isHandPending: Boolean,
     /** Whether the raise control is in the bar (009 R2, R33). */
     val showsRaiseHandControl: Boolean,
     /** A raise or lower that failed, to tell the user about (009 R22). */

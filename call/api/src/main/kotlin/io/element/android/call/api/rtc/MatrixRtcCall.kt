@@ -41,12 +41,12 @@ interface MatrixRtcCall : AutoCloseable {
     val status: StateFlow<MatrixRtcCallStatus>
 
     /**
-     * Raise our hand on this membership. Succeeds once the homeserver has it, which is when our tile shows
-     * it; a no-op while it is up.
+     * Raise our hand on this membership. Our tile shows it at once; suspends until it has landed, however long signalling is
+     * away, and succeeds early when a lower supersedes it or the call ends. Fails only on a refusal (feature-hq 034 C12).
      */
     suspend fun raiseHand(): Result<Unit>
 
-    /** Lower our hand. A no-op while it is down. */
+    /** Lower our hand, as [raiseHand] raises it. A no-op while it is down. */
     suspend fun lowerHand(): Result<Unit>
 
     /** Connect to the media transport the call was joined on. */

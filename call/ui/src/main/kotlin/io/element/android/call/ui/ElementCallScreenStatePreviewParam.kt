@@ -319,13 +319,6 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
                 handRaisedIds = setOf(A_LOCAL_MEMBER_ID, A_REMOTE_MEMBER_ID, aCrowdMemberId(2)),
                 videoFrames = mapOf(A_REMOTE_MEMBER_ID to emptyFlow()),
             ),
-            // Our raise on its way to the homeserver: the button spins and still shows the hand down (009 R5).
-            anElementCallScreenState(
-                connection = ElementCallConnection.Connected,
-                memberCount = 4,
-                participants = listOf(aLocalParticipant(), aRemoteParticipant()) + (1..2).map { aCrowdParticipant(it) },
-                isHandPending = true,
-            ),
             // The speaker in the spotlight with a hand up carries it in the name pill (009 C4).
             anElementCallScreenState(
                 connection = ElementCallConnection.Connected,
@@ -403,7 +396,6 @@ fun anElementCallScreenState(
     isStageChromeVisible: Boolean = true,
     isCameraSwitchAvailable: Boolean = true,
     ownTileCorner: ElementCallOwnTileCorner = ElementCallOwnTileCorner.Initial,
-    isHandPending: Boolean = false,
     handRequestFailure: ElementCallHandRequestFailure? = null,
     eventSink: (ElementCallScreenEvent) -> Unit = {},
 ) = ElementCallScreenState(
@@ -443,7 +435,6 @@ fun anElementCallScreenState(
     isStageChromeVisible = isStageChromeVisible,
     ownTileCorner = ownTileCorner,
     isHandRaised = participants.any { it.isLocal && it.memberId in handRaisedIds },
-    isHandPending = isHandPending,
     // As the presenter decides it: three people, or our own hand up.
     showsRaiseHandControl = participants.any { it.isLocal } &&
         (participants.count() >= 3 || participants.any { it.isLocal && it.memberId in handRaisedIds }),
