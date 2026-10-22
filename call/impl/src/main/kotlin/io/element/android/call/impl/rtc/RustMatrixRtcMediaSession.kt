@@ -149,7 +149,34 @@ internal class RustMatrixRtcMediaSession(
             remoteVideoFlows.getOrPut(MatrixRtcStreamRef(memberId, kind)) { remoteVideoFrames(memberId, kind) }
         }
 
-    private fun remoteVideoFrames(memberId: String, kind: MatrixRtcStreamKind): Flow<MatrixRtcVideoFrame> = flow {
+    /** Bumped on each `StreamStarted` of a stream we read, see [reopenStream]. */
+    private val trackReplacements = ConcurrentHashMap<MatrixRtcStreamRef, MutableStateFlow<Int>>()
+
+    private fun remoteVideoFrames(memberId: String, kind: MatrixRtcStreamKind): Flow<MatrixRtcVideoFrame> =
+        readFollowingReplacements(trackReplacements.getOrPut(MatrixRtcStreamRef(memberId, kind)) { MutableStateFlow(0) }) {
+            readVideoTrack(memberId, kind)
+        }
+            // `stream.next()` blocks, so the whole producer above belongs off the collector's thread.
+            .flowOn(dispatchers.io)
+            // Conflated for the same reason capture drops frames: a renderer that falls behind must not
+            // become backpressure on the decoder.
+            //
+            // A Channel rather than `buffer(...)`, and that is not a style choice. A dropped frame is
+            // never collected, so nothing downstream can release it - and now that a frame owns native
+            // memory, every drop would leak most of a megabyte. Dropping is the *normal* case for a
+            // renderer that has fallen behind, so this would be a leak under exactly the conditions that
+            // cause it. `buffer(...)` has no undelivered-element hook; `Channel` does, which is the only
+            // reason this is spelled out by hand.
+            //
+            // **The order of these two lines is load-bearing.** Conflation releases each frame as soon as
+            // `emit` returns, so nothing downstream of it may buffer: `flowOn` after this put a 64-deep
+            // channel between the release and the renderer, so every frame was freed while still queued
+            // and the renderer got a dead frame it had to refuse. The core kept decoding at 30fps and
+            // about one frame in a hundred reached the screen. Conflating last means `emit` returns only
+            // once a subscriber has actually taken the frame.
+            .conflateReleasingDropped()
+
+    private fun readVideoTrack(memberId: String, kind: MatrixRtcStreamKind): Flow<MatrixRtcVideoFrame> = flow {
         val stream = withContext(ffiDispatcher) {
             runCatchingExceptions { mediaSession.videoStream(memberId, kind.map()) }
                 .onFailure { Timber.w(it, "MatrixRTC: cannot open $kind video stream for $memberId") }
@@ -180,25 +207,6 @@ internal class RustMatrixRtcMediaSession(
             stream.close()
         }
     }
-        // `stream.next()` blocks, so the whole producer above belongs off the collector's thread.
-        .flowOn(dispatchers.io)
-        // Conflated for the same reason capture drops frames: a renderer that falls behind must not
-        // become backpressure on the decoder.
-        //
-        // A Channel rather than `buffer(...)`, and that is not a style choice. A dropped frame is
-        // never collected, so nothing downstream can release it - and now that a frame owns native
-        // memory, every drop would leak most of a megabyte. Dropping is the *normal* case for a
-        // renderer that has fallen behind, so this would be a leak under exactly the conditions that
-        // cause it. `buffer(...)` has no undelivered-element hook; `Channel` does, which is the only
-        // reason this is spelled out by hand.
-        //
-        // **The order of these two lines is load-bearing.** Conflation releases each frame as soon as
-        // `emit` returns, so nothing downstream of it may buffer: `flowOn` after this put a 64-deep
-        // channel between the release and the renderer, so every frame was freed while still queued
-        // and the renderer got a dead frame it had to refuse. The core kept decoding at 30fps and
-        // about one frame in a hundred reached the screen. Conflating last means `emit` returns only
-        // once a subscriber has actually taken the frame.
-        .conflateReleasingDropped()
 
     private val _audioLevels = MutableStateFlow<Map<String, MatrixRtcAudioLevel>>(emptyMap())
     override val audioLevels: StateFlow<Map<String, MatrixRtcAudioLevel>> = _audioLevels
@@ -264,6 +272,7 @@ internal class RustMatrixRtcMediaSession(
         // so their cached flows are dead weight from here on. All of them: a member who was sharing
         // their screen as well as their camera has one per kind.
         remoteVideoFlows.keys.removeAll { it.memberId == memberId }
+        trackReplacements.keys.removeAll { it.memberId == memberId }
         appliedConstraints.keys.removeAll { it.memberId == memberId }
     }
 
@@ -456,6 +465,7 @@ internal class RustMatrixRtcMediaSession(
 
     private suspend fun handleInternally(event: MatrixRtcCallEvent) {
         when (event) {
+            is MatrixRtcCallEvent.StreamStarted -> reopenStream(event.memberId, event.kind)
             // Both directions of the transition are logged, and at warn: the difference between a
             // quiet call and a broken one has to survive the log level being turned down, and a
             // failure that clears on its own is a rotation delay rather than a bug - which is only
@@ -489,6 +499,27 @@ internal class RustMatrixRtcMediaSession(
             is MatrixRtcCallEvent.KeyImported ->
                 Timber.i("MatrixRTC: key index ${event.keyIndex} imported for ${event.memberId}")
             else -> Unit
+        }
+    }
+
+    /**
+     * A stream that starts while we already read it is a new track under the same name: the core reports a start only after
+     * a stop, and a LiveKit full restart or a peer moving to another SFU replaces tracks that way (feature-hq 034 C6). The
+     * reader on the old track never yields again, so without this everyone froze on their last frame after an outage.
+     */
+    private suspend fun reopenStream(memberId: String, kind: MatrixRtcStreamKind) {
+        when (kind) {
+            MatrixRtcStreamKind.MICROPHONE -> if (playbackClaims.contains(memberId)) {
+                Timber.i("MatrixRTC: reopening the audio of $memberId on its new track")
+                audioPlayback.stop(memberId)
+                playbackClaims.remove(memberId)
+                playAudioOf(memberId)
+            }
+            MatrixRtcStreamKind.CAMERA, MatrixRtcStreamKind.SCREEN_SHARE -> trackReplacements[MatrixRtcStreamRef(memberId, kind)]?.let {
+                Timber.i("MatrixRTC: reopening the $kind of $memberId on its new track")
+                it.update { generation -> generation + 1 }
+            }
+            MatrixRtcStreamKind.SCREEN_SHARE_AUDIO, MatrixRtcStreamKind.DATA -> Unit
         }
     }
 
