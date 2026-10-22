@@ -23,6 +23,7 @@ import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcRoom
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
+import io.element.android.call.api.rtc.MatrixRtcSignallingHealth
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcTileId
@@ -54,6 +55,18 @@ class FakeMatrixRtcClient(
 
     /** The call joined in the last room. */
     val lastCall: FakeMatrixRtcCall? get() = lastRoom?.lastCall
+
+    /** What [signallingHealth] reports; set it to move the homeserver in and out of reach. */
+    val signalling = MutableStateFlow<MatrixRtcSignallingHealth>(MatrixRtcSignallingHealth.Reachable)
+
+    /** Every [reportConnectivity], in order. */
+    val connectivityReports = mutableListOf<Boolean>()
+
+    override fun signallingHealth(): Flow<MatrixRtcSignallingHealth> = signalling
+
+    override fun reportConnectivity(isOnline: Boolean) {
+        connectivityReports += isOnline
+    }
 
     override suspend fun room(roomId: RoomId, format: MatrixRtcMembershipFormat): Result<MatrixRtcRoom> {
         roomCount++

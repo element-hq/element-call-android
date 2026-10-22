@@ -328,7 +328,11 @@ internal class DefaultElementCallController(
                 platform.startForegroundService()
                 audioFocus.requestAudioFocus {}
 
-                callJob = scope.launch { runCall(current.callData) }
+                callJob = scope.launch {
+                    // From the start, not the join: a join made during an outage is when the user first needs it (034 C4).
+                    launch { rtcClient.signallingHealth().collect { value -> updateState { it.copy(signalling = value) } } }
+                    runCall(current.callData)
+                }
             }
         }
     }
@@ -378,6 +382,8 @@ internal class DefaultElementCallController(
             }
         }
     }
+
+    override fun reportConnectivity(isOnline: Boolean) = rtcClient.reportConnectivity(isOnline)
 
     override fun clearHandRequestFailure() {
         updateState { it.copy(handRequestFailure = null) }

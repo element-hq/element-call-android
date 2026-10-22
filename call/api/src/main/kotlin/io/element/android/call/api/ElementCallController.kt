@@ -138,6 +138,13 @@ interface ElementCallController {
     /** The user has been told about [ElementCallSnapshot.handRequestFailure]. */
     fun clearHandRequestFailure()
 
+    /**
+     * From the host's Matrix client: it has gone offline (`false`), or a request has succeeded since it was (`true`). Report
+     * the transition out of offline only, never sync merely starting (feature-hq 034 C3). Optional: without it the core goes
+     * by its own sends, which notice an outage at the next one. See [ElementCallSnapshot.signalling].
+     */
+    fun reportConnectivity(isOnline: Boolean)
+
     /** End the call and publish a leave membership. */
     fun hangUp()
 }

@@ -12,6 +12,7 @@ import io.element.android.call.api.rtc.MatrixRtcAudioLevel
 import io.element.android.call.api.rtc.MatrixRtcConnectionLossReason
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
+import io.element.android.call.api.rtc.MatrixRtcSignallingHealth
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcTile
 import io.element.android.call.api.rtc.MatrixRtcTileKind
@@ -158,6 +159,8 @@ data class ElementCallSnapshot(
     val isTileStatsVisible: Boolean = false,
     /** The last raise or lower the homeserver refused for good, until the user has been told or asks again. */
     val handRequestFailure: ElementCallHandRequestFailure? = null,
+    /** Whether our homeserver answers, from the join on (feature-hq 034 C4): the controls are live before media is. */
+    val signalling: MatrixRtcSignallingHealth = MatrixRtcSignallingHealth.Reachable,
 ) {
     /**
      * Whether anybody in the call is sending a picture - a camera or a screen, ours or theirs.

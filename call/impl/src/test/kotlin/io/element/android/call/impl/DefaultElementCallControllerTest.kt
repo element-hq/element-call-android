@@ -37,6 +37,7 @@ import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcRing
 import io.element.android.call.api.rtc.MatrixRtcRingPhase
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
+import io.element.android.call.api.rtc.MatrixRtcSignallingHealth
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcTileId
@@ -1826,6 +1827,36 @@ class DefaultElementCallControllerTest {
         runCurrent()
 
         assertThat(platform.soundEffectRenderers.single().played).containsExactly(CallSoundEffect.RAISE_HAND)
+    }
+
+    /** 034 C4: followed from the start of a call, before the join returns. */
+    @Test
+    fun `signalling health is followed from the start of the call`() = runTest {
+        val joinGate = CompletableDeferred<Unit>()
+        val rtcClient = FakeMatrixRtcClient(joinGate = joinGate)
+        val controller = createController(rtcClient = rtcClient)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+
+        rtcClient.signalling.value = MatrixRtcSignallingHealth.Unreachable(sinceMs = 7)
+        runCurrent()
+        assertThat(controller.state.value?.signalling).isEqualTo(MatrixRtcSignallingHealth.Unreachable(sinceMs = 7))
+
+        joinGate.complete(Unit)
+        rtcClient.signalling.value = MatrixRtcSignallingHealth.Reachable
+        runCurrent()
+        assertThat(controller.state.value?.signalling).isEqualTo(MatrixRtcSignallingHealth.Reachable)
+    }
+
+    @Test
+    fun `the host's connectivity report reaches the core`() = runTest {
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
+
+        controller.reportConnectivity(isOnline = false)
+        controller.reportConnectivity(isOnline = true)
+
+        assertThat(rtcClient.connectivityReports).containsExactly(false, true).inOrder()
     }
 
     /** 034 C12: the core shows the hand at once and retries it, so a second tap is the reversal, sent at once. */

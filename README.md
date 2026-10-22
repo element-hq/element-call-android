@@ -146,6 +146,10 @@ code lands.
    `ElementCallForegroundService` in its own manifest, with `tools:node="merge"`; the library's service declares
    only `microphone|camera`. That type is Play-reviewed, so the library does not declare it, and without it the
    first share is a `SecurityException` on Android 14+.
+6. Optional, and worth it if the host's client can tell: `controller.reportConnectivity(isOnline)`, `false` when its
+   Matrix client goes offline and `true` once a request has succeeded again, not when sync merely starts. The call then
+   says "your server is unreachable" at once and retries its sends the moment the server is back; without it, it
+   notices at its next send.
 
 ## Documentation
 

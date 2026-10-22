@@ -117,5 +117,6 @@ class SampleCallController(private val context: Context, private val scope: Coro
     override fun setRankingThreshold(tiles: Int) = target.setRankingThreshold(tiles)
     override fun setHandRaised(raised: Boolean) = target.setHandRaised(raised)
     override fun clearHandRequestFailure() = target.clearHandRequestFailure()
+    override fun reportConnectivity(isOnline: Boolean) = target.reportConnectivity(isOnline)
     override fun hangUp() = target.hangUp()
 }

@@ -206,6 +206,9 @@ class SampleElementCallController(
 
     override fun clearHandRequestFailure() = update { it.copy(handRequestFailure = null) }
 
+    /** The fixtures script the homeserver's reach themselves. */
+    override fun reportConnectivity(isOnline: Boolean) = Unit
+
     override fun hangUp() {
         _state.value = null
     }
