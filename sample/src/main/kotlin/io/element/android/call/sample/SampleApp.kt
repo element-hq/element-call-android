@@ -8,6 +8,7 @@
 package io.element.android.call.sample
 
 import android.Manifest
+import android.app.Activity
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -28,6 +29,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,6 +63,8 @@ fun SampleApp(
 ) {
     val controller = harness.controller
     val fixtures = remember { SampleFixture.entries.toImmutableList() }
+    val labAccount by harness.lab.account.collectAsState()
+    val labNotice by harness.lab.notice.collectAsState()
     val context = LocalContext.current
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         SampleLockScreenCall.schedule(context, harness)
@@ -96,6 +101,11 @@ fun SampleApp(
                         controller.startOutage(it)
                     },
                     onOpenScenario = { name -> harness.play(MatrixRtcScenario.load(name)) },
+                    labAccount = labAccount,
+                    labNotice = labNotice,
+                    onScanLab = { (context as? Activity)?.let(harness.lab::scan) },
+                    onRejoinLab = harness.lab::rejoin,
+                    onLogOutLab = harness.lab::logOut,
                     modifier = contentModifier,
                 )
             }

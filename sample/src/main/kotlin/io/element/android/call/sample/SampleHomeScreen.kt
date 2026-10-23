@@ -45,6 +45,11 @@ fun SampleHomeScreen(
     onOpenRinging: (SampleRingingFixture) -> Unit,
     onOpenOutage: (SampleOutageFixture) -> Unit,
     onOpenScenario: (String) -> Unit,
+    labAccount: String?,
+    labNotice: String?,
+    onScanLab: () -> Unit,
+    onRejoinLab: () -> Unit,
+    onLogOutLab: () -> Unit,
     modifier: Modifier = Modifier,
     launchError: String? = null,
 ) {
@@ -77,6 +82,7 @@ fun SampleHomeScreen(
                     )
                 }
             }
+            labSection(labAccount, labNotice, onScanLab, onRejoinLab, onLogOutLab)
             section(key = "host", title = "Host", rows = listOf(0, 1)) { row, shapes ->
                 if (row == 0) {
                     SegmentedListItem(
@@ -131,6 +137,43 @@ fun SampleHomeScreen(
         }
     }
 }
+
+/**
+ * The lab (feature-hq `harness/lab.md`): the account kept on this phone with its call and its logout, or how to log in,
+ * which is scanning the lab page's code with the camera.
+ */
+private fun LazyListScope.labSection(account: String?, notice: String?, onScan: () -> Unit, onRejoin: () -> Unit, onLogOut: () -> Unit) {
+    val description = notice ?: account?.let { "Signed in as $it. A code for another account logs this one out first." }
+        ?: "Scan an account's code on the lab page to log in and join its call."
+    val rows = if (account == null) listOf(LabRow.SCAN) else listOf(LabRow.REJOIN, LabRow.SCAN, LabRow.LOG_OUT)
+    section(key = "lab", title = "Lab", description = description, rows = rows) { row, shapes ->
+        when (row) {
+            LabRow.SCAN -> SegmentedListItem(
+                onClick = onScan,
+                shapes = shapes,
+                colors = sectionColors(),
+                supportingContent = { Text("The camera app cannot open a lab code; scan it here.") },
+                content = { Text("Scan a lab code") },
+            )
+            LabRow.REJOIN -> SegmentedListItem(
+                onClick = onRejoin,
+                shapes = shapes,
+                colors = sectionColors(),
+                supportingContent = { Text("The same device, back into the lab call.") },
+                content = { Text("Rejoin the lab call") },
+            )
+            LabRow.LOG_OUT -> SegmentedListItem(
+                onClick = onLogOut,
+                shapes = shapes,
+                colors = sectionColors(),
+                supportingContent = { Text("Logs this device out on the lab's homeserver and forgets it.") },
+                content = { Text("Log out", color = MaterialTheme.colorScheme.error) },
+            )
+        }
+    }
+}
+
+private enum class LabRow { SCAN, REJOIN, LOG_OUT }
 
 /** A titled group of rows, rounded as one card and split by thin gaps, the Material counterpart of an iOS inset grouped list. */
 private fun <T> LazyListScope.section(

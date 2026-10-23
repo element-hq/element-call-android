@@ -42,6 +42,8 @@ dependencies {
     implementation(projects.call.test)
     // SdkMatrixBackend, the reference MatrixBackend over the Rust SDK. The harness itself runs on fakes.
     implementation(libs.matrix.sdk)
+    implementation(libs.rustls.platform.verifier)
+    implementation(libs.play.services.code.scanner)
     implementation(variantOf(libs.jna) { artifactType("aar") })
     implementation(libs.serialization.json)
     implementation(libs.androidx.activity.activity)

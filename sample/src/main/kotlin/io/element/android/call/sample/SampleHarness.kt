@@ -15,6 +15,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import io.element.android.call.sample.lab.SampleLab
 import io.element.android.call.test.scenario.MatrixRtcScenario
 import io.element.android.call.ui.ElementCallStageDriver
 import kotlinx.coroutines.CoroutineScope
@@ -32,6 +33,7 @@ import kotlinx.coroutines.launch
 @Stable
 class SampleHarness(context: Context, internal val scope: CoroutineScope) {
     val controller = SampleCallController(context = context, scope = scope)
+    val lab = SampleLab(context = context, scope = scope, controller = controller)
     val driver = ElementCallStageDriver()
 
     var player: SampleScenarioPlayer? by mutableStateOf(null)

@@ -7,10 +7,12 @@
 
 package io.element.android.call.sample
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import io.element.android.call.sample.lab.SampleLabJoin
 import io.element.android.call.test.scenario.MatrixRtcScenario
 import kotlinx.collections.immutable.toImmutableList
 import timber.log.Timber
@@ -54,6 +56,7 @@ class SampleActivity : ComponentActivity() {
         }
         launchError?.let { Timber.w("Sample: $it") }
         scenario?.let(harness::play)
+        openLab(intent)
 
         setContent {
             SampleApp(
@@ -62,6 +65,17 @@ class SampleActivity : ComponentActivity() {
                 launchError = launchError,
             )
         }
+    }
+
+    // singleTask: a code scanned while the app runs arrives here.
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        openLab(intent)
+    }
+
+    /** The lab's QR code, opened from the camera: `elementcall-lab://join?...` (`lab/SampleLabJoin.kt`). */
+    private fun openLab(intent: Intent?) {
+        intent?.data?.let(SampleLabJoin::parse)?.let(harness.lab::open)
     }
 
     /**
