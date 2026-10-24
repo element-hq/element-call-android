@@ -16,6 +16,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,9 +24,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.Science
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
@@ -75,39 +81,61 @@ fun SampleApp(
                 controller = controller,
                 style = if (harness.isStyleOverridden) rememberLoudElementCallStyle() else null,
             ) { contentModifier ->
-                SampleHomeScreen(
-                    fixtures = fixtures,
-                    scenarios = scenarios,
-                    launchError = launchError,
-                    isStyleOverridden = harness.isStyleOverridden,
-                    onToggleStyle = { harness.isStyleOverridden = !harness.isStyleOverridden },
-                    onAnswerOnLockScreen = {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        } else {
-                            SampleLockScreenCall.schedule(context, harness)
-                        }
-                    },
-                    onOpen = {
-                        harness.stopScenario()
-                        controller.start(it.snapshot())
-                    },
-                    onOpenRinging = {
-                        harness.stopScenario()
-                        controller.startRinging(it)
-                    },
-                    onOpenOutage = {
-                        harness.stopScenario()
-                        controller.startOutage(it)
-                    },
-                    onOpenScenario = { name -> harness.play(MatrixRtcScenario.load(name)) },
-                    labAccount = labAccount,
-                    labNotice = labNotice,
-                    onScanLab = { (context as? Activity)?.let(harness.lab::scan) },
-                    onRejoinLab = harness.lab::rejoin,
-                    onLogOutLab = harness.lab::logOut,
-                    modifier = contentModifier,
-                )
+                Column(modifier = contentModifier) {
+                    when (harness.tab) {
+                        SampleTab.FIXTURES ->
+                        SampleHomeScreen(
+                            fixtures = fixtures,
+                            scenarios = scenarios,
+                            launchError = launchError,
+                            isStyleOverridden = harness.isStyleOverridden,
+                            onToggleStyle = { harness.isStyleOverridden = !harness.isStyleOverridden },
+                            onAnswerOnLockScreen = {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                                } else {
+                                    SampleLockScreenCall.schedule(context, harness)
+                                }
+                            },
+                            onOpen = {
+                                harness.stopScenario()
+                                controller.start(it.snapshot())
+                            },
+                            onOpenRinging = {
+                                harness.stopScenario()
+                                controller.startRinging(it)
+                            },
+                            onOpenOutage = {
+                                harness.stopScenario()
+                                controller.startOutage(it)
+                            },
+                            onOpenScenario = { name -> harness.play(MatrixRtcScenario.load(name)) },
+                            modifier = Modifier.weight(1f),
+                        )
+                        SampleTab.LAB -> SampleLabScreen(
+                            account = labAccount,
+                            notice = labNotice,
+                            onScan = { (context as? Activity)?.let(harness.lab::scan) },
+                            onRejoin = harness.lab::rejoin,
+                            onLogOut = harness.lab::logOut,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    NavigationBar {
+                        NavigationBarItem(
+                            selected = harness.tab == SampleTab.FIXTURES,
+                            onClick = { harness.tab = SampleTab.FIXTURES },
+                            icon = { Icon(Icons.Outlined.GridView, contentDescription = null) },
+                            label = { Text("Fixtures") },
+                        )
+                        NavigationBarItem(
+                            selected = harness.tab == SampleTab.LAB,
+                            onClick = { harness.tab = SampleTab.LAB },
+                            icon = { Icon(Icons.Outlined.Science, contentDescription = null) },
+                            label = { Text("Lab") },
+                        )
+                    }
+                }
             }
             harness.player?.let { ScenarioBar(player = it) }
         }

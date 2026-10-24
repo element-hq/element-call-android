@@ -75,7 +75,9 @@ class SampleActivity : ComponentActivity() {
 
     /** The lab's QR code, opened from the camera: `elementcall-lab://join?...` (`lab/SampleLabJoin.kt`). */
     private fun openLab(intent: Intent?) {
-        intent?.data?.let(SampleLabJoin::parse)?.let(harness.lab::open)
+        val join = intent?.data?.let(SampleLabJoin::parse) ?: return
+        harness.tab = SampleTab.LAB
+        harness.lab.open(join)
     }
 
     /**

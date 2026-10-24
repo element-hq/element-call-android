@@ -42,6 +42,9 @@ class SampleHarness(context: Context, internal val scope: CoroutineScope) {
     /** The override is the proof that the style port reaches every colour. */
     var isStyleOverridden: Boolean by mutableStateOf(false)
 
+    /** The tab on screen; a lab code opening the app switches to the lab. */
+    var tab: SampleTab by mutableStateOf(SampleTab.FIXTURES)
+
     /** The Activity in front, which a scenario's `rotate` frame turns: the call screen while it is open. */
     var resumedActivity: Activity? = null
 
@@ -72,3 +75,6 @@ class SampleHarness(context: Context, internal val scope: CoroutineScope) {
         resumedActivity?.requestedOrientation = if (isLandscape) ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
     }
 }
+
+/** The sample's two tabs: the fixtures and scenarios, or the lab, a real call over a logged-in account. */
+enum class SampleTab { FIXTURES, LAB }

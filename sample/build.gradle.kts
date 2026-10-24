@@ -44,6 +44,7 @@ dependencies {
     implementation(libs.matrix.sdk)
     implementation(libs.rustls.platform.verifier)
     implementation(libs.play.services.code.scanner)
+    implementation(libs.androidx.compose.material.icons)
     implementation(variantOf(libs.jna) { artifactType("aar") })
     implementation(libs.serialization.json)
     implementation(libs.androidx.activity.activity)
