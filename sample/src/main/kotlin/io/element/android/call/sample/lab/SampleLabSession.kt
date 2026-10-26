@@ -281,6 +281,10 @@ class SampleLabSession private constructor(
         private suspend fun startSync(client: Client, roomId: String): Pair<SyncService, Room> {
             val syncService = client.syncService().withOfflineMode().finish()
             syncService.start()
+            // The room list asks for one timeline event per room, so after a gap only the latest arrives and a hand
+            // raised in between is lost. A room subscription asks for 20.
+            runCatchingExceptions { syncService.roomListService().setRoomSubscriptions(listOf(roomId)) }
+                .onFailure { Timber.w(it, "Lab: no room subscription for $roomId") }
             repeat(60) {
                 runCatchingExceptions { client.getRoom(roomId) }.getOrNull()?.let { return syncService to it }
                 delay(500)
