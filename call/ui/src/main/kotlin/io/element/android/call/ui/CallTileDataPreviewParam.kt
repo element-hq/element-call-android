@@ -34,9 +34,8 @@ open class CallTileDataPreviewParam : PreviewParameterProvider<CallTileData> {
             aRemoteParticipant().toTile(roomMember = A_BOB).copy(handPosition = 2),
             // Speaking with a hand up: the speaking ring wins, the badge stays.
             aRemoteParticipant().toTile(roomMember = A_BOB).copy(hasVideo = true, isActiveSpeaker = true, handPosition = 12),
-            // The callee a DM call is ringing, and the one it could not ring (030 R15, R4).
-            aRemoteParticipant().toTile(roomMember = A_BOB).copy(ring = CallRing.CALLING),
-            aRemoteParticipant().toTile(roomMember = A_BOB).copy(ring = CallRing.NOT_SENT),
+            // No ringing callee: it is drawn only full-bleed, one to one, and a tile-sized box cuts it off. The
+            // ElementCallScreen previews show it ringing and not rung (030 R15, R4).
         )
 }
 
