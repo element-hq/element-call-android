@@ -181,8 +181,11 @@ enum class CallTileMediaState {
     /** It arrives, and cannot be decrypted (034 R33). */
     UNDECRYPTABLE,
 
-    /** It has not been decryptable for long enough that the wait is not the moment around a key rotation (034 Q8). */
+    /** Its sender's key has not reached us for long enough that the wait is not the moment around a key rotation (034 Q8). */
     KEYS_MISSING,
+
+    /** The key we hold has not decrypted it for as long: wrong, not late. */
+    KEY_INVALID,
 
     /** Its sender declared it unencrypted in an encrypted call, and the core refused it. */
     NOT_ENCRYPTED,
@@ -199,8 +202,8 @@ enum class CallTileMediaState {
                     null -> LIVE
                     // Nothing to wait for: the core will never play it.
                     MatrixRtcUnableToDecrypt.NOT_ENCRYPTED -> NOT_ENCRYPTED
-                    MatrixRtcUnableToDecrypt.MISSING_KEY,
-                    MatrixRtcUnableToDecrypt.BAD_KEY -> if (isMissingKeys) KEYS_MISSING else UNDECRYPTABLE
+                    MatrixRtcUnableToDecrypt.MISSING_KEY -> if (isMissingKeys) KEYS_MISSING else UNDECRYPTABLE
+                    MatrixRtcUnableToDecrypt.BAD_KEY -> if (isMissingKeys) KEY_INVALID else UNDECRYPTABLE
                 }
             }
     }

@@ -26,11 +26,15 @@ class CallTileMediaStateTest {
     }
 
     @Test
-    fun `a missing key waits, then says the keys are missing`() {
+    fun `a key failure waits, then says whether the key is missing or does not decrypt`() {
+        assertThat(CallTileMediaState.of(MatrixRtcConnectionState.CONNECTED, MatrixRtcUnableToDecrypt.MISSING_KEY, isMissingKeys = false))
+            .isEqualTo(CallTileMediaState.UNDECRYPTABLE)
         assertThat(CallTileMediaState.of(MatrixRtcConnectionState.CONNECTED, MatrixRtcUnableToDecrypt.BAD_KEY, isMissingKeys = false))
             .isEqualTo(CallTileMediaState.UNDECRYPTABLE)
         assertThat(CallTileMediaState.of(MatrixRtcConnectionState.CONNECTED, MatrixRtcUnableToDecrypt.MISSING_KEY, isMissingKeys = true))
             .isEqualTo(CallTileMediaState.KEYS_MISSING)
+        assertThat(CallTileMediaState.of(MatrixRtcConnectionState.CONNECTED, MatrixRtcUnableToDecrypt.BAD_KEY, isMissingKeys = true))
+            .isEqualTo(CallTileMediaState.KEY_INVALID)
     }
 
     @Test
