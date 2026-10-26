@@ -8,7 +8,9 @@
 package io.element.android.call.ui
 
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
+import io.element.android.call.api.ElementCallInterruption
 import io.element.android.call.api.ElementCallSnapshot
+import io.element.android.call.api.rtc.MatrixRtcConnectionState
 
 /**
  * The picture-in-picture window, which shows one member: the states are about who that is and whether
@@ -23,5 +25,10 @@ open class MinimizedElementCallSnapshotPreviewParam : PreviewParameterProvider<E
             aCallSnapshot(participants = listOf(aLocalParticipant(), aRemoteParticipant())),
             // Alone in the call: ourselves, since there is nobody else to show.
             aCallSnapshot(participants = listOf(aLocalParticipant())),
+            // The other person's media away: their avatar, and the window's line says why (034 R34, R37).
+            aCallSnapshot(
+                participants = listOf(aLocalParticipant(), aRemoteParticipant(connection = MatrixRtcConnectionState.RECONNECTING)),
+                interruptions = listOf(ElementCallInterruption.OthersMedia),
+            ),
         )
 }

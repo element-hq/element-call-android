@@ -9,6 +9,7 @@ package io.element.android.call.ui
 
 import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.ElementCallSnapshot
+import io.element.android.call.api.rtc.MatrixRtcConnectionState
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.id.UserId
@@ -51,7 +52,9 @@ fun ElementCallSnapshot.pictureInPictureCandidate(spotlightId: MatrixRtcTileId?)
             id = chosen.id,
             userId = chosen.userId,
             roomMember = roomMembers[chosen.userId],
-            hasVideo = roster.detail[chosen.id]?.hasVideo == true,
+            // An interrupted member is their avatar here too, not their last frame (034 R34).
+            hasVideo =
+                roster.detail[chosen.id]?.let { it.hasVideo && it.connection == MatrixRtcConnectionState.CONNECTED && it.unableToDecrypt == null } == true,
             isLocal = false,
             isRingingCallee = false,
         )

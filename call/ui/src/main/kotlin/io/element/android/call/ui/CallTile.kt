@@ -7,7 +7,12 @@
 
 package io.element.android.call.ui
 
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -15,6 +20,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -177,6 +183,23 @@ fun CallTile(
                     .padding(6.dp),
             )
         }
+        // Without a name pill, the media indicator gets a badge of its own (034 R23, R29, R33). One to one, under the
+        // avatar: the tile's corner is under the control bar and the home indicator (019 R4). Placed as iOS does it,
+        // until design places it.
+        if (!showName && tile.isMediaInterrupted) {
+            MediaIndicatorBadge(
+                state = tile.mediaState,
+                modifier = if (appearance == CallTileAppearance.FullBleed) {
+                    Modifier
+                        .align(Alignment.Center)
+                        .offset(y = ElementCallAvatarSize.Spotlight / 2 + FULL_BLEED_INDICATOR_GAP)
+                } else {
+                    Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(6.dp)
+                },
+            )
+        }
         val handPosition = tile.handPosition
         if (handPosition != null && !isHandInPill) {
             ElementCallRaisedHandBadge(
@@ -198,7 +221,7 @@ fun CallTile(
                 frameEncryption = stats.frameEncryption,
                 requestedWidth = stats.requestedWidth,
                 requestedHeight = stats.requestedHeight,
-                isReachable = tile.isReachable,
+                mediaState = tile.mediaState,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(4.dp),
@@ -283,7 +306,12 @@ internal fun NamePill(
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         val handPosition = tile.handPosition.takeIf { showsHand }
+        // In the icon slot, after the hand (009 C4): a spinner while the media may yet come, the key once it will not.
+        if (handPosition == null && tile.isMediaInterrupted) {
+            MediaIndicator(tile.mediaState)
+        }
         val icon = when {
+            handPosition == null && tile.isMediaInterrupted -> null
             handPosition != null -> ElementCallTheme.icons.handRaised
             tile.isScreenShare -> ElementCallTheme.icons.shareScreenActive
             !tile.hasDetail -> null
@@ -416,3 +444,69 @@ internal fun CallTilePreview(@PreviewParameter(CallTileDataPreviewParam::class) 
  */
 @Composable
 private fun CallTileData.label(): String = if (isLocal) stringResource(R.string.element_call_you) else displayName
+
+/** [MediaIndicator] on its own, for a tile drawn without a name pill. */
+@Composable
+private fun MediaIndicatorBadge(state: CallTileMediaState, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .clip(CircleShape)
+            .background(ElementCallTheme.colors.overlayScrim)
+            .padding(6.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        MediaIndicator(state)
+    }
+}
+
+/**
+ * The name tag's indicator for media that is not reaching the screen (034 R23, R29, R33): read when focused, never announced. A
+ * spinner while it may yet come, and the key in critical red once a member's keys have stayed away, which says what is
+ * missing without guessing why (034 Q8), or at once for media sent in clear, which will never come.
+ */
+@Composable
+private fun MediaIndicator(state: CallTileMediaState) {
+    val label = stringResource(
+        when (state) {
+            CallTileMediaState.LIVE,
+            CallTileMediaState.RECONNECTING -> R.string.element_call_a11y_media_reconnecting
+            CallTileMediaState.CONNECTING -> R.string.element_call_a11y_media_connecting
+            CallTileMediaState.UNDECRYPTABLE -> R.string.element_call_a11y_media_undecryptable
+            CallTileMediaState.KEYS_MISSING -> R.string.element_call_a11y_media_keys_missing
+            CallTileMediaState.NOT_ENCRYPTED -> R.string.element_call_a11y_media_not_encrypted
+        }
+    )
+    if (state == CallTileMediaState.KEYS_MISSING || state == CallTileMediaState.NOT_ENCRYPTED) {
+        Icon(
+            imageVector = ElementCallTheme.icons.keyOff,
+            contentDescription = label,
+            tint = ElementCallTheme.colors.iconCritical,
+            modifier = Modifier.size(14.dp),
+        )
+    } else {
+        // Compound's glyph in a quiet grey, as the design draws it: it says "waiting", not "wrong". Still with reduce
+        // motion on, where the glyph alone says it.
+        val turn = if (rememberReduceMotion()) {
+            0f
+        } else {
+            val spin by rememberInfiniteTransition(label = "spinner").animateFloat(
+                initialValue = 0f,
+                targetValue = 360f,
+                animationSpec = infiniteRepeatable(tween(durationMillis = 1000, easing = LinearEasing)),
+                label = "turn",
+            )
+            spin
+        }
+        Icon(
+            imageVector = ElementCallTheme.icons.spinner,
+            contentDescription = label,
+            tint = ElementCallTheme.colors.iconSecondary,
+            modifier = Modifier
+                .size(14.dp)
+                .graphicsLayer { rotationZ = turn },
+        )
+    }
+}
+
+/** Between the full-bleed tile's avatar and the media indicator under it. */
+private val FULL_BLEED_INDICATOR_GAP = 24.dp

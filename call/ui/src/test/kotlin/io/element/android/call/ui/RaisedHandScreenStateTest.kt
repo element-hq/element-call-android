@@ -14,13 +14,17 @@ import com.google.common.truth.Truth.assertThat
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallSnapshot
+import io.element.android.call.api.rtc.MatrixRtcConnectionState
+import io.element.android.call.api.rtc.MatrixRtcSignallingHealth
 import io.element.android.call.api.rtc.MatrixRtcTile
 import io.element.android.call.api.rtc.MatrixRtcTileKind
+import io.element.android.call.api.rtc.MatrixRtcUnableToDecrypt
 import io.element.android.call.test.A_ROOM_ID
 import io.element.android.call.test.FakeElementCallController
 import io.element.android.call.test.aTile
 import io.element.android.call.tests.testutils.WarmUpRule
 import io.element.android.call.tests.testutils.consumeItemsUntilPredicate
+import kotlinx.collections.immutable.persistentSetOf
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
@@ -107,6 +111,63 @@ class RaisedHandScreenStateTest {
 
             assertThat(controller.handRaisedCalls).containsExactly(false)
             assertThat(controller.clearHandRequestFailureCount).isEqualTo(1)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    /** 034 R34: a remote tile whose media is interrupted draws its avatar; ours keeps its live preview. */
+    @Test
+    fun `an interrupted remote tile opens no video, and our own keeps its preview`() = runTest {
+        val controller = FakeElementCallController(
+            initialState = aHandSnapshot(
+                own = aTile(A_LOCAL_MEMBER_ID, connection = MatrixRtcConnectionState.RECONNECTING),
+                aTile(A_REMOTE_MEMBER_ID, unableToDecrypt = MatrixRtcUnableToDecrypt.MISSING_KEY),
+                aTile(ANOTHER_REMOTE_MEMBER_ID),
+            ).copy(isCameraEnabled = true, membersMissingKeys = persistentSetOf(A_REMOTE_MEMBER_ID)),
+        )
+
+        moleculeFlow(RecompositionMode.Immediate) { rememberElementCallScreenState(controller, aNavigator()) }.test {
+            val state = awaitItem()
+
+            assertThat(state.videoFrames.keys).containsExactly(A_LOCAL_MEMBER_ID, ANOTHER_REMOTE_MEMBER_ID)
+            assertThat(state.tiles.map { it.mediaState })
+                .containsExactly(CallTileMediaState.RECONNECTING, CallTileMediaState.KEYS_MISSING, CallTileMediaState.LIVE)
+                .inOrder()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    /** 034 R15: while our homeserver is away a raise could not reach anyone; while our media server is, a share could not start. */
+    @Test
+    fun `the hand and starting a share are disabled while they cannot work`() = runTest {
+        val controller = FakeElementCallController(
+            initialState = aHandSnapshot(own = aTile(A_LOCAL_MEMBER_ID), aTile(A_REMOTE_MEMBER_ID), aTile(ANOTHER_REMOTE_MEMBER_ID)),
+        )
+
+        moleculeFlow(RecompositionMode.Immediate) { rememberElementCallScreenState(controller, aNavigator()) }.test {
+            val healthy = awaitItem()
+            assertThat(healthy.isRaiseHandEnabled).isTrue()
+            assertThat(healthy.isScreenShareStartEnabled).isTrue()
+
+            controller.state.value = aHandSnapshot(
+                own = aTile(A_LOCAL_MEMBER_ID, connection = MatrixRtcConnectionState.RECONNECTING),
+                aTile(A_REMOTE_MEMBER_ID),
+                aTile(ANOTHER_REMOTE_MEMBER_ID),
+            ).copy(signalling = MatrixRtcSignallingHealth.Unreachable(sinceMs = 1))
+            val interrupted = consumeItemsUntilPredicate { !it.isRaiseHandEnabled }.last()
+            assertThat(interrupted.isScreenShareStartEnabled).isFalse()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `our first connect does not disable starting a share`() = runTest {
+        val controller = FakeElementCallController(
+            initialState = aHandSnapshot(own = aTile(A_LOCAL_MEMBER_ID, connection = MatrixRtcConnectionState.CONNECTING), aTile(A_REMOTE_MEMBER_ID)),
+        )
+
+        moleculeFlow(RecompositionMode.Immediate) { rememberElementCallScreenState(controller, aNavigator()) }.test {
+            assertThat(awaitItem().isScreenShareStartEnabled).isTrue()
             cancelAndIgnoreRemainingEvents()
         }
     }

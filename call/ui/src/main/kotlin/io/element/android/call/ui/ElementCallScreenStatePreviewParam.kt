@@ -9,10 +9,14 @@ package io.element.android.call.ui
 
 import androidx.compose.ui.tooling.preview.PreviewParameterProvider
 import io.element.android.call.api.ElementCallConnection
+import io.element.android.call.api.ElementCallFailure
 import io.element.android.call.api.ElementCallHandRequestFailure
+import io.element.android.call.api.ElementCallInterruption
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.audio.CallAudioDeviceType
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
+import io.element.android.call.api.rtc.MatrixRtcConnectionLossReason
+import io.element.android.call.api.rtc.MatrixRtcConnectionState
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
@@ -183,11 +187,27 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
                 selectedAudioDevice = A_BLUETOOTH_HEADSET,
             ),
             anElementCallScreenState(
-                connection = ElementCallConnection.Degraded,
+                connection = ElementCallConnection.Connected,
                 memberCount = 2,
-                participants = listOf(aLocalParticipant(), aRemoteParticipant(isReachable = false)),
+                participants = listOf(aLocalParticipant(), aRemoteParticipant(connection = MatrixRtcConnectionState.RECONNECTING)),
             ),
-            anElementCallScreenState(connection = ElementCallConnection.Failed("Homeserver offers no LiveKit transport")),
+            // Our homeserver and our media server away: the hand and starting a share are disabled, the rest never is (034 R15).
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
+                memberCount = 3,
+                participants = listOf(aLocalParticipant(), aRemoteParticipant(), aCrowdParticipant(1)),
+                isScreenShareAvailable = true,
+                isRaiseHandEnabled = false,
+                isScreenShareStartEnabled = false,
+                interruptions = listOf(ElementCallInterruption.OwnServer(isMembershipLapsed = false), ElementCallInterruption.OwnMedia),
+            ),
+            // One to one, the other person's media reconnecting: the indicator under the full-bleed avatar (034 R23).
+            anElementCallScreenState(
+                connection = ElementCallConnection.Connected,
+                memberCount = 2,
+                participants = listOf(aLocalParticipant(), aRemoteParticipant(connection = MatrixRtcConnectionState.RECONNECTING)),
+            ),
+            anElementCallScreenState(connection = ElementCallConnection.Failed(ElementCallFailure.ConnectionLost(MatrixRtcConnectionLossReason.BUDGET))),
             anElementCallScreenState(connection = ElementCallConnection.Ended),
             // A DM, both on video: the other person full-bleed, us as a thumbnail with the switch
             // camera button on it, the duration over the top, and no switch camera in the bar.
@@ -316,13 +336,6 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
                 handRaisedIds = setOf(A_LOCAL_MEMBER_ID, A_REMOTE_MEMBER_ID, aCrowdMemberId(2)),
                 videoFrames = mapOf(A_REMOTE_MEMBER_ID to emptyFlow()),
             ),
-            // Our raise on its way to the homeserver: the button spins and still shows the hand down (009 R5).
-            anElementCallScreenState(
-                connection = ElementCallConnection.Connected,
-                memberCount = 4,
-                participants = listOf(aLocalParticipant(), aRemoteParticipant()) + (1..2).map { aCrowdParticipant(it) },
-                isHandPending = true,
-            ),
             // The speaker in the spotlight with a hand up carries it in the name pill (009 C4).
             anElementCallScreenState(
                 connection = ElementCallConnection.Connected,
@@ -400,8 +413,10 @@ fun anElementCallScreenState(
     isStageChromeVisible: Boolean = true,
     isCameraSwitchAvailable: Boolean = true,
     ownTileCorner: ElementCallOwnTileCorner = ElementCallOwnTileCorner.Initial,
-    isHandPending: Boolean = false,
     handRequestFailure: ElementCallHandRequestFailure? = null,
+    isRaiseHandEnabled: Boolean = true,
+    isScreenShareStartEnabled: Boolean = true,
+    interruptions: List<ElementCallInterruption> = emptyList(),
     eventSink: (ElementCallScreenEvent) -> Unit = {},
 ) = ElementCallScreenState(
     connection = connection,
@@ -421,6 +436,7 @@ fun anElementCallScreenState(
     isCameraPermissionGranted = isCameraPermissionGranted,
     isScreenShareAvailable = isScreenShareAvailable,
     isScreenSharing = isScreenSharing,
+    isScreenShareStartEnabled = isScreenShareStartEnabled,
     isTileStatsVisible = isTileStatsVisible,
     videoFrames = videoFrames.toImmutableMap(),
     roomName = roomName,
@@ -440,10 +456,11 @@ fun anElementCallScreenState(
     isStageChromeVisible = isStageChromeVisible,
     ownTileCorner = ownTileCorner,
     isHandRaised = participants.any { it.isLocal && it.memberId in handRaisedIds },
-    isHandPending = isHandPending,
     // As the presenter decides it: three people, or our own hand up.
     showsRaiseHandControl = participants.any { it.isLocal } &&
         (participants.count() >= 3 || participants.any { it.isLocal && it.memberId in handRaisedIds }),
+    isRaiseHandEnabled = isRaiseHandEnabled,
+    interruptions = interruptions.toImmutableList(),
     handRequestFailure = handRequestFailure,
     // Nothing to report where a tile is drawn to: a preview has no window to grow out of.
     pictureInPictureTileId = null,
@@ -485,16 +502,18 @@ fun aLocalParticipant(isMuted: Boolean = false) = MatrixRtcParticipant(
     userId = UserId("@alice:example.org"),
     deviceId = "ALICEDEVICE",
     isLocal = true,
-    isReachable = true,
+    connection = MatrixRtcConnectionState.CONNECTED,
+    unableToDecrypt = null,
     streams = listOf(MatrixRtcStreamState(MatrixRtcStreamKind.MICROPHONE, isMuted)),
 )
 
-fun aRemoteParticipant(isReachable: Boolean = true, isMuted: Boolean = false) = MatrixRtcParticipant(
+fun aRemoteParticipant(connection: MatrixRtcConnectionState = MatrixRtcConnectionState.CONNECTED, isMuted: Boolean = false) = MatrixRtcParticipant(
     memberId = A_REMOTE_MEMBER_ID,
     userId = UserId("@bob:example.org"),
     deviceId = "BOBDEVICE",
     isLocal = false,
-    isReachable = isReachable,
+    connection = connection,
+    unableToDecrypt = null,
     streams = persistentListOf(MatrixRtcStreamState(MatrixRtcStreamKind.MICROPHONE, isMuted = isMuted)),
 )
 
@@ -521,7 +540,8 @@ fun aCrowdParticipant(index: Int) = MatrixRtcParticipant(
     userId = UserId("@member$index:example.org"),
     deviceId = "DEVICE$index",
     isLocal = false,
-    isReachable = true,
+    connection = MatrixRtcConnectionState.CONNECTED,
+    unableToDecrypt = null,
     streams = listOf(MatrixRtcStreamState(MatrixRtcStreamKind.MICROPHONE, isMuted = index % 3 == 0)),
 )
 
@@ -539,7 +559,8 @@ fun aStaleParticipant() = MatrixRtcParticipant(
     userId = UserId("@carol:example.org"),
     deviceId = null,
     isLocal = false,
-    isReachable = true,
+    connection = MatrixRtcConnectionState.CONNECTED,
+    unableToDecrypt = null,
     streams = emptyList(),
 )
 

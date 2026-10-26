@@ -54,7 +54,6 @@ import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -119,6 +118,14 @@ fun ElementCallScreen(
         modifier = modifier.fillMaxSize(),
         color = ElementCallTheme.colors.bgCanvas,
     ) {
+        // A failed call is over: nothing of it is left to draw but why, and the way out (034 R27).
+        val failed = state.connection as? ElementCallConnection.Failed
+        if (failed != null) {
+            // The bars as the call drew them: left to the window, the status bar's icons went dark on the dark canvas.
+            CallSystemBars(isStatusBarHidden = false)
+            CallFailure(failed = failed, onClose = { state.eventSink(ElementCallScreenEvent.HangUp) })
+            return@Surface
+        }
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val isLandscape = maxWidth > maxHeight
             // The control bar floats over the bottom of the stage in both orientations (spec 003
@@ -299,6 +306,20 @@ fun ElementCallScreen(
                         }
                     }
                 }
+                // Over the stage, under what sits at its top: the duration, or the fullscreen tile's exit (034 R35).
+                CallInterruptions(
+                    interruptions = state.interruptions,
+                    isIndicatorVisible = if (fullscreen != null) state.isFullscreenChromeVisible else state.isStageChromeVisible,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .padding(
+                            top = when {
+                                fullscreen != null -> statusBarTop + 8.dp
+                                isTopBarHideable -> statusBarTop + TOP_BAR_HEIGHT + INTERRUPTIONS_BELOW_DURATION
+                                else -> topClearance + INTERRUPTIONS_BELOW_DURATION
+                            },
+                        ),
+                )
             }
         }
     }
@@ -483,7 +504,7 @@ private fun CallingLabel(isAudioCall: Boolean) {
  */
 @Composable
 private fun CallDurationLabel(state: ElementCallScreenState, modifier: Modifier = Modifier) {
-    val isConnected = state.connection is ElementCallConnection.Connected || state.connection is ElementCallConnection.Degraded
+    val isConnected = state.connection is ElementCallConnection.Connected
     if (!state.isDm || !isConnected) return
     Text(
         text = rememberCallDuration(state.connectedAtElapsedMs),
@@ -567,15 +588,6 @@ private fun ConnectingPlaceholder(state: ElementCallScreenState) {
                 style = ElementCallTheme.typography.headingMdBold,
                 color = ElementCallTheme.colors.textPrimary,
             )
-            val failure = state.connection as? ElementCallConnection.Failed
-            if (failure != null) {
-                Text(
-                    text = failure.message,
-                    style = ElementCallTheme.typography.bodySmRegular,
-                    color = ElementCallTheme.colors.textCritical,
-                    modifier = Modifier.padding(top = 8.dp, start = 24.dp, end = 24.dp),
-                )
-            }
         }
     }
 }
@@ -633,6 +645,7 @@ private fun CallControlsBar(
                     if (state.isScreenSharing) R.string.element_call_a11y_stop_screen_share else R.string.element_call_a11y_start_screen_share
                 ),
                 isActive = state.isScreenSharing,
+                enabled = state.isScreenSharing || state.isScreenShareStartEnabled,
             )
         }
         RoundCallButton(
@@ -646,10 +659,7 @@ private fun CallControlsBar(
     }
 }
 
-/**
- * Shows the hand as the homeserver has it, never the tap (009 R5): while a request is out the button
- * spins and takes no taps, and lands on whatever our tile then says.
- */
+/** Shows the hand as requested, as our tile does; a second tap takes it back (034 C12). */
 @Composable
 private fun RaiseHandButton(state: ElementCallScreenState) {
     val raisedState = stringResource(R.string.element_call_a11y_hand_raised_state)
@@ -658,8 +668,7 @@ private fun RaiseHandButton(state: ElementCallScreenState) {
         icon = ElementCallTheme.icons.handRaised,
         contentDescription = stringResource(if (state.isHandRaised) R.string.element_call_a11y_lower_hand else R.string.element_call_a11y_raise_hand),
         isActive = state.isHandRaised,
-        enabled = !state.isHandPending,
-        isBusy = state.isHandPending,
+        enabled = state.isRaiseHandEnabled,
         modifier = Modifier.semantics { if (state.isHandRaised) stateDescription = raisedState },
     )
 }
@@ -726,41 +735,37 @@ private fun RoundCallButton(
     enabled: Boolean = true,
     background: Color? = null,
     tint: Color? = null,
-    /** A progress ring in place of the icon, while what the button asked for is on its way. */
-    isBusy: Boolean = false,
 ) {
     val resolvedBackground = background
         // Darker than the pill it sits in, which is bgSubtleSecondary.
-        ?: if (isActive) ElementCallTheme.colors.controlActiveBackground else ElementCallTheme.colors.bgCanvas
-    val resolvedTint = tint
-        ?: if (isActive) ElementCallTheme.colors.controlActiveContent else ElementCallTheme.colors.iconPrimary
+        ?: if (isActive && enabled) ElementCallTheme.colors.controlActiveBackground else ElementCallTheme.colors.bgCanvas
+    val resolvedTint = when {
+        // Resting, with a faint glyph: the theme has no disabled colour, and adding one would change a port every host fills.
+        !enabled -> ElementCallTheme.colors.iconSecondary.copy(alpha = DISABLED_ALPHA)
+        tint != null -> tint
+        isActive -> ElementCallTheme.colors.controlActiveContent
+        else -> ElementCallTheme.colors.iconPrimary
+    }
+    val unavailable = stringResource(R.string.element_call_a11y_unavailable)
     // A dark button over a dark tile would be only its icon; the ring tells it apart from what it
     // floats over, as the design draws it. The light and the coloured ones stand out on their own.
-    val hasRing = background == null && !isActive
+    val hasRing = background == null && !(isActive && enabled)
     IconButton(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier
+            // Said rather than only drawn: a screen reader user needs to know why the tap does nothing (034 R15).
+            .semantics { if (!enabled) stateDescription = unavailable }
             .size(BUTTON_SIZE)
             .clip(CircleShape)
             .background(resolvedBackground)
             .then(if (hasRing) Modifier.border(1.dp, ElementCallTheme.colors.borderControl, CircleShape) else Modifier),
     ) {
-        if (isBusy) {
-            CircularProgressIndicator(
-                modifier = Modifier
-                    .size(BUSY_INDICATOR_SIZE)
-                    .semantics { this.contentDescription = contentDescription },
-                color = resolvedTint,
-                strokeWidth = 2.dp,
-            )
-        } else {
-            Icon(
-                imageVector = icon,
-                contentDescription = contentDescription,
-                tint = resolvedTint,
-            )
-        }
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = resolvedTint,
+        )
     }
 }
 
@@ -771,7 +776,10 @@ private fun RoundCallButton(
  */
 private val BUTTON_SIZE = 48.dp
 
-private val BUSY_INDICATOR_SIZE = 20.dp
+private const val DISABLED_ALPHA = 0.4f
+
+/** Clear of the duration label, which sits 12dp into the stage. */
+private val INTERRUPTIONS_BELOW_DURATION = 40.dp
 
 /** Between the buttons in the pill. */
 private val BUTTON_GAP = 8.dp
@@ -791,8 +799,7 @@ private fun ElementCallConnection.label(): String = when (this) {
     is ElementCallConnection.Calling -> stringResource(R.string.element_call_calling)
     is ElementCallConnection.RingNotSent -> stringResource(R.string.element_call_ring_not_sent)
     ElementCallConnection.Connected -> stringResource(R.string.element_call_call_in_progress)
-    ElementCallConnection.Degraded -> stringResource(R.string.element_call_connection_unstable)
-    is ElementCallConnection.Failed -> stringResource(R.string.element_call_call_failed)
+    is ElementCallConnection.Failed -> failure.title()
     ElementCallConnection.Ended -> stringResource(R.string.element_call_call_ended)
 }
 

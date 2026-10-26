@@ -91,6 +91,10 @@ fun SampleApp(
                         harness.stopScenario()
                         controller.startRinging(it)
                     },
+                    onOpenOutage = {
+                        harness.stopScenario()
+                        controller.startOutage(it)
+                    },
                     onOpenScenario = { name -> harness.play(MatrixRtcScenario.load(name)) },
                     modifier = contentModifier,
                 )

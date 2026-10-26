@@ -83,7 +83,7 @@ class StickyEventSetTest {
     fun `an encrypted event carries its sending device and whether it is cross-signed`() {
         val event = aStickyEvent(ALICE, "\$a", encryption = anEncryptionInfo(ALICE, ShieldState.None)).toFfiEventIn()!!
 
-        assertThat(event.encryption).isEqualTo(FfiEventEncryption(encrypted = true, senderDeviceId = A_SENDER_DEVICE, senderCrossSigned = true))
+        assertThat(event.encryption).isEqualTo(FfiEventEncryption(encrypted = true, senderDeviceId = A_SENDER_DEVICE, senderConfirmed = true))
     }
 
     private fun aKey(sender: String) = StickyKey(sender = sender, eventType = A_DECLINE_TYPE, stickyKey = "key-$sender")

@@ -49,6 +49,18 @@ data class ElementCallIcons(
     val handRaised: ImageVector,
     /** Beside "Calling…" while a voice call rings; a video call shows [cameraOn]. */
     val voiceCall: ImageVector,
+    /** Heads the screen of a call that failed. */
+    val error: ImageVector,
+    /** The service interruptions indicator, on the stage and in the minimized bar. */
+    val interruptions: ImageVector,
+    /** A tile whose member's keys have not come for long enough to say so, or whose media was sent in clear (034 Q8). */
+    val keyOff: ImageVector,
+    /** The arrow saying the interruptions indicator opens something. */
+    val chevronRight: ImageVector,
+    /** Beside each entry of the interruptions list: something not working. */
+    val unavailable: ImageVector,
+    /** A tile whose media is not arriving; turned where it is drawn. */
+    val spinner: ImageVector,
 ) {
     companion object {
         /** The bundled defaults. Resolved in composition, as vector resources are. */
@@ -72,6 +84,12 @@ data class ElementCallIcons(
             overflow = ImageVector.vectorResource(R.drawable.ic_element_call_overflow_vertical),
             handRaised = ImageVector.vectorResource(R.drawable.ic_element_call_raised_hand_solid),
             voiceCall = ImageVector.vectorResource(R.drawable.ic_element_call_voice_call_solid),
+            error = ImageVector.vectorResource(R.drawable.ic_element_call_error_solid),
+            interruptions = ImageVector.vectorResource(R.drawable.ic_element_call_info_solid),
+            keyOff = ImageVector.vectorResource(R.drawable.ic_element_call_key_off_solid),
+            chevronRight = ImageVector.vectorResource(R.drawable.ic_element_call_chevron_right),
+            unavailable = ImageVector.vectorResource(R.drawable.ic_element_call_close),
+            spinner = ImageVector.vectorResource(R.drawable.ic_element_call_spinner),
         )
     }
 }

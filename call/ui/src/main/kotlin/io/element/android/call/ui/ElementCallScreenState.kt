@@ -9,6 +9,7 @@ package io.element.android.call.ui
 
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallHandRequestFailure
+import io.element.android.call.api.ElementCallInterruption
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
@@ -77,6 +78,8 @@ data class ElementCallScreenState(
      * app being involved, so the button has to follow this rather than its own memory of the last tap.
      */
     val isScreenSharing: Boolean,
+    /** Off while our own media server reconnects, as a share could not start; stopping one never is (034 R15). */
+    val isScreenShareStartEnabled: Boolean,
     /** Whether tiles are showing their debug readout. Toggled by long-pressing a tile. */
     val isTileStatsVisible: Boolean,
     /**
@@ -119,12 +122,14 @@ data class ElementCallScreenState(
     val isStageChromeVisible: Boolean,
     /** The corner our floating tile is in (019 R18, R20). */
     val ownTileCorner: ElementCallOwnTileCorner,
-    /** Whether our hand is up, as the homeserver has it: never the tap just made (009 R5). */
+    /** Whether our hand is up, as our tile shows it: the core shows a request at once and retries it until it lands. */
     val isHandRaised: Boolean,
-    /** A raise or lower is on its way: the control shows progress and takes no taps. */
-    val isHandPending: Boolean,
     /** Whether the raise control is in the bar (009 R2, R33). */
     val showsRaiseHandControl: Boolean,
+    /** The service interruptions list, held until a cause has lasted a moment (034 R13, R35). */
+    val interruptions: ImmutableList<ElementCallInterruption>,
+    /** Off while our homeserver is unreachable: a raise could not reach anyone (034 R15). */
+    val isRaiseHandEnabled: Boolean,
     /** A raise or lower that failed, to tell the user about (009 R22). */
     val handRequestFailure: ElementCallHandRequestFailure?,
     /**

@@ -167,6 +167,13 @@ class FakeElementCallController(
         clearHandRequestFailureCount++
     }
 
+    /** Every [reportConnectivity], in order. */
+    val connectivityReports = mutableListOf<Boolean>()
+
+    override fun reportConnectivity(isOnline: Boolean) {
+        connectivityReports += isOnline
+    }
+
     override fun hangUp() {
         hangUpCount++
     }

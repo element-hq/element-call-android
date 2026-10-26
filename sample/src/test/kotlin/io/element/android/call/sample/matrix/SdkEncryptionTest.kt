@@ -19,7 +19,7 @@ class SdkEncryptionTest {
     fun `no encryption info is cleartext, with nothing said about a sender`() {
         val info: EventEncryptionInfo? = null
 
-        assertThat(info.toFfi()).isEqualTo(FfiEventEncryption(encrypted = false, senderDeviceId = null, senderCrossSigned = null))
+        assertThat(info.toFfi()).isEqualTo(FfiEventEncryption(encrypted = false, senderDeviceId = null, senderConfirmed = null))
     }
 
     @Test
@@ -30,7 +30,7 @@ class SdkEncryptionTest {
             ShieldState.Grey(TimelineEventShieldStateCode.AUTHENTICITY_NOT_GUARANTEED),
         ).forEach { shield ->
             assertThat(anEncryptionInfo(ALICE, shield).toFfi())
-                .isEqualTo(FfiEventEncryption(encrypted = true, senderDeviceId = A_SENDER_DEVICE, senderCrossSigned = true))
+                .isEqualTo(FfiEventEncryption(encrypted = true, senderDeviceId = A_SENDER_DEVICE, senderConfirmed = true))
         }
     }
 
@@ -41,7 +41,7 @@ class SdkEncryptionTest {
             ShieldState.Red(TimelineEventShieldStateCode.VERIFICATION_VIOLATION),
             ShieldState.Red(TimelineEventShieldStateCode.MISMATCHED_SENDER),
         ).forEach { shield ->
-            assertThat(anEncryptionInfo(ALICE, shield).toFfi().senderCrossSigned).isFalse()
+            assertThat(anEncryptionInfo(ALICE, shield).toFfi().senderConfirmed).isFalse()
         }
     }
 

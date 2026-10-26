@@ -103,10 +103,11 @@ internal class RustMatrixRtcCall(
             .onFailure { Timber.w(it, "MatrixRTC: failed to lower our hand in $roomId/$slotId") }
     }
 
-    override suspend fun connectMedia(): Result<MatrixRtcMediaSession> = runCatchingExceptions {
+    override suspend fun connectMedia(isSfuFallbackEnabled: Boolean): Result<MatrixRtcMediaSession> = runCatchingExceptions {
         mediaSession?.let { return@runCatchingExceptions it }
         // The core takes the focus from the join and the account and tokens from the backend.
-        val ffiMediaSession = withContext(ffiDispatcher) { connectMediaSession(rtcCall, MediaSessionConfig(stability = null)) }
+        val ffiMediaSession =
+            withContext(ffiDispatcher) { connectMediaSession(rtcCall, MediaSessionConfig(stability = null, sfuFallback = isSfuFallbackEnabled)) }
         RustMatrixRtcMediaSession(
             // The id the core minted at join time, which is also what the media roster reports us under.
             localMemberId = memberId,

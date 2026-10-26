@@ -129,13 +129,21 @@ interface ElementCallController {
     fun setRankingThreshold(tiles: Int)
 
     /**
-     * Raise or lower our hand. Ignored while a request is pending, before the call has joined, and when the hand
-     * is already that way. See [ElementCallSnapshot.isHandPending] and [ElementCallSnapshot.handRequestFailure].
+     * Raise or lower our hand. Our tile shows it at once and the core retries until it lands, however long the homeserver
+     * is away; a second tap takes it back (feature-hq 034 C12). Ignored before the call has joined. Only a refusal reaches
+     * [ElementCallSnapshot.handRequestFailure].
      */
     fun setHandRaised(raised: Boolean)
 
     /** The user has been told about [ElementCallSnapshot.handRequestFailure]. */
     fun clearHandRequestFailure()
+
+    /**
+     * From the host's Matrix client: it has gone offline (`false`), or a request has succeeded since it was (`true`). Report
+     * the transition out of offline only, never sync merely starting (feature-hq 034 C3). Optional: without it the core goes
+     * by its own sends, which notice an outage at the next one. See [ElementCallSnapshot.signalling].
+     */
+    fun reportConnectivity(isOnline: Boolean)
 
     /** End the call and publish a leave membership. */
     fun hangUp()

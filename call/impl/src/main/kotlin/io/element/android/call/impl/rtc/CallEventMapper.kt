@@ -10,15 +10,19 @@ package io.element.android.call.impl.rtc
 import io.element.android.call.api.rtc.MatrixRtcCallEnd
 import io.element.android.call.api.rtc.MatrixRtcCallEvent
 import io.element.android.call.api.rtc.MatrixRtcCallStatus
+import io.element.android.call.api.rtc.MatrixRtcConnectionLossReason
+import io.element.android.call.api.rtc.MatrixRtcConnectionState
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionDiagnostic
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
+import io.element.android.call.api.rtc.MatrixRtcInterruptions
 import io.element.android.call.api.rtc.MatrixRtcKeyRejection
 import io.element.android.call.api.rtc.MatrixRtcLocalState
 import io.element.android.call.api.rtc.MatrixRtcMediaPhase
 import io.element.android.call.api.rtc.MatrixRtcMembership
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcRingPhase
+import io.element.android.call.api.rtc.MatrixRtcSignallingHealth
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcTile
@@ -26,18 +30,23 @@ import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcTileKind
 import io.element.android.call.api.rtc.MatrixRtcTileRef
 import io.element.android.call.api.rtc.MatrixRtcTileRoster
+import io.element.android.call.api.rtc.MatrixRtcUnableToDecrypt
 import io.element.android.call.api.rtc.id.UserId
 import org.matrix.rtc.FfiCallEnd
 import org.matrix.rtc.FfiCallEvent
 import org.matrix.rtc.FfiCallStatus
 import org.matrix.rtc.FfiCallTile
+import org.matrix.rtc.FfiConnectionLossReason
+import org.matrix.rtc.FfiConnectionState
 import org.matrix.rtc.FfiFrameEncryptionDiagnostic
 import org.matrix.rtc.FfiFrameEncryptionState
+import org.matrix.rtc.FfiInterruptions
 import org.matrix.rtc.FfiKeyRejection
 import org.matrix.rtc.FfiLocalState
 import org.matrix.rtc.FfiMediaPhase
 import org.matrix.rtc.FfiReceiveStats
 import org.matrix.rtc.FfiRingPhase
+import org.matrix.rtc.FfiSignallingHealth
 import org.matrix.rtc.FfiStreamKind
 import org.matrix.rtc.FfiStreamRef
 import org.matrix.rtc.FfiStreamStats
@@ -45,6 +54,7 @@ import org.matrix.rtc.FfiTileId
 import org.matrix.rtc.FfiTileKind
 import org.matrix.rtc.FfiTileRef
 import org.matrix.rtc.FfiTileRoster
+import org.matrix.rtc.FfiUnableToDecrypt
 import org.matrix.rtc.JoinedMembership
 
 /**
@@ -75,7 +85,7 @@ internal fun FfiCallEvent.map(): MatrixRtcCallEvent? = when (this) {
 
 internal fun FfiKeyRejection.map(): MatrixRtcKeyRejection = when (this) {
     is FfiKeyRejection.Cleartext -> MatrixRtcKeyRejection.Cleartext
-    is FfiKeyRejection.NotCrossSigned -> MatrixRtcKeyRejection.NotCrossSigned
+    is FfiKeyRejection.SenderNotConfirmed -> MatrixRtcKeyRejection.SenderNotConfirmed
     is FfiKeyRejection.UnverifiableDevice -> MatrixRtcKeyRejection.UnverifiableDevice
     is FfiKeyRejection.RoomMismatch -> MatrixRtcKeyRejection.RoomMismatch(claimed)
     is FfiKeyRejection.SenderMismatch -> MatrixRtcKeyRejection.SenderMismatch(expected, actual)
@@ -173,8 +183,37 @@ internal fun FfiCallTile.map() = MatrixRtcTile(
     isSpeaking = speaking,
     handRaisedAtMs = handRaisedAtMs?.toLong(),
     handRaisedPosition = handRaisedPosition?.toInt(),
-    isReachable = reachable,
+    connection = connection.map(),
+    unableToDecrypt = unableToDecrypt?.map(),
 )
+
+internal fun FfiInterruptions.map() = MatrixRtcInterruptions(
+    signalling = signalling.map(),
+    isOwnMembershipLapsed = ownMembershipLapsed,
+    ownMedia = ownMedia.map(),
+    membersReconnecting = membersReconnecting,
+    membersUnreachable = membersUnreachable,
+    unableToDecrypt = unableToDecrypt,
+    unmappable = unmappable,
+)
+
+internal fun FfiSignallingHealth.map(): MatrixRtcSignallingHealth = when (this) {
+    is FfiSignallingHealth.Reachable -> MatrixRtcSignallingHealth.Reachable
+    is FfiSignallingHealth.Unreachable -> MatrixRtcSignallingHealth.Unreachable(sinceMs.toLong())
+}
+
+internal fun FfiConnectionState.map(): MatrixRtcConnectionState = when (this) {
+    FfiConnectionState.CONNECTED -> MatrixRtcConnectionState.CONNECTED
+    FfiConnectionState.CONNECTING -> MatrixRtcConnectionState.CONNECTING
+    FfiConnectionState.RECONNECTING -> MatrixRtcConnectionState.RECONNECTING
+    FfiConnectionState.UNREACHABLE -> MatrixRtcConnectionState.UNREACHABLE
+}
+
+internal fun FfiUnableToDecrypt.map(): MatrixRtcUnableToDecrypt = when (this) {
+    FfiUnableToDecrypt.MISSING_KEY -> MatrixRtcUnableToDecrypt.MISSING_KEY
+    FfiUnableToDecrypt.BAD_KEY -> MatrixRtcUnableToDecrypt.BAD_KEY
+    FfiUnableToDecrypt.NOT_ENCRYPTED -> MatrixRtcUnableToDecrypt.NOT_ENCRYPTED
+}
 
 /**
  * Detail is a subsequence of the order, joined by identity: the core only sends full records for the
@@ -221,5 +260,11 @@ private fun FfiCallEnd.map(): MatrixRtcCallEnd = when (this) {
     is FfiCallEnd.OthersLeft -> MatrixRtcCallEnd.OthersLeft
     is FfiCallEnd.Empty -> MatrixRtcCallEnd.Empty
     is FfiCallEnd.SlotClosed -> MatrixRtcCallEnd.SlotClosed
-    is FfiCallEnd.ConnectionClosed -> MatrixRtcCallEnd.ConnectionClosed(message)
+    is FfiCallEnd.ConnectionClosed -> MatrixRtcCallEnd.ConnectionClosed(reason.map(), message)
+}
+
+private fun FfiConnectionLossReason.map(): MatrixRtcConnectionLossReason = when (this) {
+    FfiConnectionLossReason.BUDGET -> MatrixRtcConnectionLossReason.BUDGET
+    FfiConnectionLossReason.REFUSED -> MatrixRtcConnectionLossReason.REFUSED
+    FfiConnectionLossReason.NEVER_CONNECTED -> MatrixRtcConnectionLossReason.NEVER_CONNECTED
 }

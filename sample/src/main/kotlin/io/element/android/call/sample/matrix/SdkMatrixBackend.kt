@@ -110,9 +110,12 @@ class SdkMatrixBackend(
     override fun subscribeToDevice(eventTypes: List<String>, sink: ToDeviceSink): BackendSubscription =
         JobSubscription(sessionScope.deliver("to-device $eventTypes", client.toDeviceMessages(eventTypes, dispatchers), sink::onToDeviceMessage))
 
-    /** `Room.loadOrFetchEventWithRelations` returns typed content, with neither raw JSON nor encryption info. */
-    override suspend fun relations(roomId: String, eventId: String, relType: String, eventType: String): List<FfiEventIn> =
-        throw FfiBackendException.Failed(errcode = null, status = null, reason = "Relations are not exposed by the SDK bindings")
+    /**
+     * `Room.loadOrFetchEventWithRelations` returns typed content, with neither raw JSON nor encryption info, so a hand raised
+     * before we joined shows only once it changes. None rather than a failure, which is how the core asks a backend that cannot
+     * serve them to say so.
+     */
+    override suspend fun relations(roomId: String, eventId: String, relType: String, eventType: String): List<FfiEventIn> = emptyList()
 
     override suspend fun openidToken(): FfiOpenIdToken = send("openidToken") {
         val token = client.requestOpenidToken()
@@ -130,12 +133,16 @@ class SdkMatrixBackend(
     private fun delayedEventsNotSupported() = FfiBackendException.Failed(
         errcode = "M_UNRECOGNIZED",
         status = null,
+        retryAfterMs = null,
+        permanent = false,
         reason = "Delayed events are not exposed by the SDK bindings",
     )
 
     /** The caller closes it. */
     private fun room(roomId: String): Room {
-        return client.getRoom(roomId) ?: throw FfiBackendException.Failed(errcode = null, status = null, reason = "Not a joined room: $roomId")
+        // Final, and no Matrix code says so: inventing one would be a lie about the homeserver.
+        return client.getRoom(roomId)
+            ?: throw FfiBackendException.Failed(errcode = null, status = null, retryAfterMs = null, permanent = true, reason = "Not a joined room: $roomId")
     }
 
     /** Off uniffi's thread, logged on entry, and failing as the core reads failures. */

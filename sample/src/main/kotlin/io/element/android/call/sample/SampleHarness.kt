@@ -47,7 +47,7 @@ class SampleHarness(context: Context, internal val scope: CoroutineScope) {
 
     fun play(scenario: MatrixRtcScenario) {
         stopScenario()
-        controller.endRinging()
+        controller.endLiveCall()
         val player = SampleScenarioPlayer(controller.fixtures, scenario, driver, ::rotate)
         this.player = player
         player.start()

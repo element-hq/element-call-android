@@ -10,6 +10,7 @@ package io.element.android.call.sample
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.ElementCallData
+import io.element.android.call.api.ElementCallFailure
 import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.ElementCallWindowRect
@@ -25,7 +26,6 @@ import io.element.android.call.test.ElementCallTestPattern
 import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -35,7 +35,6 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
 import timber.log.Timber
 
 /**
@@ -103,7 +102,7 @@ class SampleElementCallController(
         it.copy(
             isMicrophonePermissionGranted = granted,
             connection = when {
-                !granted -> ElementCallConnection.Failed("Microphone permission denied")
+                !granted -> ElementCallConnection.Failed(ElementCallFailure.Other("Microphone permission denied"))
                 it.connection == ElementCallConnection.RequestingPermission -> ElementCallConnection.Connected
                 else -> it.connection
             },
@@ -199,20 +198,16 @@ class SampleElementCallController(
         Timber.d("Sample: $memberId/$kind wants $constraints")
     }
 
-    /** Pending for a moment, as a homeserver round trip is, so the spinner can be seen; then our hand joins or leaves the queue. */
+    /** Shown at once, as the core shows a request on our tile. */
     override fun setHandRaised(raised: Boolean) {
-        val snapshot = _state.value ?: return
-        val own = snapshot.ownTile ?: return
-        val isUp = own.handRaisedAtMs != null
-        if (snapshot.isHandPending || isUp == raised) return
-        update { it.copy(isHandPending = true) }
-        scope.launch {
-            delay(HAND_ROUND_TRIP_MS)
-            update { it.withOwnHand(raised).copy(isHandPending = false) }
-        }
+        if (_state.value?.ownTile == null) return
+        update { it.withOwnHand(raised) }
     }
 
     override fun clearHandRequestFailure() = update { it.copy(handRequestFailure = null) }
+
+    /** The fixtures script the homeserver's reach themselves. */
+    override fun reportConnectivity(isOnline: Boolean) = Unit
 
     override fun hangUp() {
         _state.value = null
@@ -246,6 +241,5 @@ class SampleElementCallController(
     private companion object {
         val PORTRAIT_MEMBERS = setOf(SampleFixture.memberIdOf("Bob"), SampleFixture.memberIdOf("Erin"))
         val OWN_MEMBER = SampleFixture.memberIdOf("Alice")
-        const val HAND_ROUND_TRIP_MS = 600L
     }
 }

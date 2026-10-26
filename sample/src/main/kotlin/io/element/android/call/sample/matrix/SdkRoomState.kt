@@ -59,6 +59,6 @@ internal fun RoomStateEvent.toFfiEventIn(eventType: String): FfiEventIn? {
         stateKey = stateKey,
         originServerTs = timestamp ?: return null,
         contentJson = contentJson,
-        encryption = FfiEventEncryption(encrypted = false, senderDeviceId = null, senderCrossSigned = null),
+        encryption = FfiEventEncryption(encrypted = false, senderDeviceId = null, senderConfirmed = null),
     )
 }
