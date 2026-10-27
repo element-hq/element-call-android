@@ -12,6 +12,10 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 ## Unreleased
 
+_Nothing yet._
+
+## 0.1.0-rc.9 - 2026-10-27
+
 - The full-screen call is `ElementCallActivity`, the library's own Activity in its own task, so a call answered on a
   locked phone shows over the keyguard without the host's Activity. The host's `Application` implements
   `ElementCallActivity.Host` (README, host requirement 4), and `ElementCallPictureInPicture.attach` moves into its
@@ -44,6 +48,29 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 - The reference backend needs `sdk-android` 26.10.23: its sends no longer let the SDK retry, leaving retries to the core.
 - No dead man's switch until the SDK bindings have delayed events: the reference backend refuses them, and the core
   joins without one (docs/FEEDBACK.md, "SDK backend").
+
+
+
+### What's Changed
+
+✨ Features
+* Spec034: resilience to transient network and infrastructure failures  by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/68
+
+🐛 Bugfixes
+* Let our inline tile go fullscreen in a small call by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/60
+* Re-read the joined members on every member event, not on a count change by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/64
+* PIP: Shrink what the floating window will show, not the whole call screen by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/67
+
+⚠️ API Changes
+* **breaking** Remove rust-sdk dependency and widget-driver stop gap by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/62
+* Show the call screen in an Activity of its own, over the lock screen by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/65
+* chore: bump matrix-rust-rtc 0.5.0-rc.8 by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/72
+
+🧱 Build
+* Chore: Immutable release by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/73
+
+
+**Full Changelog**: https://github.com/element-hq/element-call-android/compare/v0.1.0-rc.8...v0.1.0-rc.9
 
 ## 0.1.0-rc.8 - 2026-10-15
 
