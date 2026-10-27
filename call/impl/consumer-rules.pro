@@ -23,6 +23,8 @@
 -keep class livekit.org.webrtc.** { *; }
 -keep class livekit.org.jni_zero.** { *; }
 -dontwarn livekit.org.webrtc.**
+# JniZero names JniZeroJni, generated per app by jni_zero and absent from the core's jar.
+-dontwarn livekit.org.jni_zero.**
 
 # kotlinx.serialization, for the JSON the core wrapper carries.
 -keepattributes *Annotation*, InnerClasses
