@@ -2,10 +2,10 @@ name: Release
 
 # Cuts a release from a release/<version> branch, the way element-call-ios does: scripts/release.sh
 # validates the version, generates the notes from the pull request labels, closes the changelog section,
-# stamps VERSION_NAME, builds and tests, and lays out the release assets; this workflow then commits, tags
-# v<version>, pushes both atomically and creates the GitHub release with the assets, which is where a host
-# resolves the library from (README, "Consuming a release"). The changelog reaches main afterwards through an
-# ordinary pull request. See RELEASING.md, including why publishing to Maven Central is gated on a
+# stamps VERSION_NAME, builds and tests, and lays out the release assets; this workflow then drafts the GitHub
+# release with the assets, commits, tags v<version>, pushes both atomically and publishes the release, which is
+# where a host resolves the library from (README, "Consuming a release"). The changelog reaches main afterwards
+# through an ordinary pull request. See RELEASING.md, including why publishing to Maven Central is gated on a
 # repository variable.
 on:
   workflow_dispatch:
@@ -113,8 +113,8 @@ jobs:
         run: ./gradlew :sample:assembleDebug $CI_GRADLE_ARG_PROPERTIES
 
       # Uploaded on every run, before anything is published. On a dry run this is the output to read; on a
-      # real run it is the recovery path: if release creation fails after the tag has been pushed, the notes
-      # and assets it needed are here, and RELEASING.md's "If it fails halfway" says what to do with them.
+      # real run it is the recovery path: if drafting or publishing the release fails, the notes and assets it
+      # needed are here, and RELEASING.md's "If it fails halfway" says what to do with them.
       - name: Upload the notes, changelog and assets
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -130,6 +130,38 @@ jobs:
 
       # Everything from here changes the world, so the dry run stops here. dry_run defaults to true: the
       # normal path is to run this workflow twice.
+
+      # Releases are immutable: assets can be added only to a draft, so the release is drafted with all of them
+      # here, before the tag is pushed, and published once it is. A failed upload leaves a draft and no tag, and
+      # dispatching again finishes the draft. --clobber only ever replaces an asset of a draft, which nobody can
+      # have resolved yet. The assets are what a host's Ivy repository resolves, so their names are the
+      # artifacts' own (<artifactId>-<version>[-classifier].<ext>) and must not change.
+      - name: Draft the release
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.prepare.outputs.tag }}
+          PRERELEASE: ${{ steps.prepare.outputs.prerelease }}
+          NOTES: ${{ steps.prepare.outputs.notes }}
+        run: |
+          assets=(build/release-assets/* sample/build/outputs/apk/debug/sample-debug.apk)
+          draft="$(gh release view "$TAG" --json isDraft --jq .isDraft 2>/dev/null || echo none)"
+          case "$draft" in
+            none)
+              args=(--draft --title "$TAG" --notes-file "$NOTES")
+              if [ "$PRERELEASE" = "yes" ]; then
+                args+=(--prerelease)
+              fi
+              gh release create "$TAG" "${args[@]}" "${assets[@]}"
+              ;;
+            true)
+              echo "Release $TAG is already drafted; finishing its assets."
+              gh release upload "$TAG" "${assets[@]}" --clobber
+              ;;
+            *)
+              echo "Release $TAG is already published; leaving it alone."
+              ;;
+          esac
 
       # One --atomic push, so the tag and the changelog entry describing it land together or not at all, and
       # the tagged tree contains its own changelog and its own version. Path-explicit add, not `git add -A`:
@@ -150,29 +182,20 @@ jobs:
 
       # Idempotent, because the tag is pushed in the step above and re-dispatching the same version would be
       # refused for existing already. If this step is what failed, running the workflow again cannot be the
-      # fix, so it must be able to finish the job on a tag that is already there rather than erroring on a
-      # release that is already there.
+      # fix, so it must be able to finish the job on a release that is already published.
       #
-      # --verify-tag so it refuses to invent a tag if the push above somehow did not land. --prerelease for
-      # anything with a hyphen in it, so an rc never becomes "latest". The assets are what a host's Ivy
-      # repository resolves, so their names are the artifacts' own (<artifactId>-<version>[-classifier].<ext>)
-      # and must not change.
-      - name: Create the release
+      # --verify-tag so it refuses to publish a release whose tag the push above did not land. Publishing
+      # makes it immutable: its assets and its tag never change again.
+      - name: Publish the release
         if: ${{ !inputs.dry_run }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.prepare.outputs.tag }}
-          PRERELEASE: ${{ steps.prepare.outputs.prerelease }}
-          NOTES: ${{ steps.prepare.outputs.notes }}
         run: |
-          if gh release view "$TAG" > /dev/null 2>&1; then
-            echo "Release $TAG already exists; leaving it alone."
+          if [ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" = "true" ]; then
+            gh release edit "$TAG" --draft=false --verify-tag
           else
-            args=(--verify-tag --title "$TAG" --notes-file "$NOTES")
-            if [ "$PRERELEASE" = "yes" ]; then
-              args+=(--prerelease)
-            fi
-            gh release create "$TAG" "${args[@]}" build/release-assets/* sample/build/outputs/apk/debug/sample-debug.apk
+            echo "Release $TAG is already published; leaving it alone."
           fi
           gh release view "$TAG" --json url,isPrerelease,tagName,assets --jq '{url, isPrerelease, tagName, assets: [.assets[].name]}'
 

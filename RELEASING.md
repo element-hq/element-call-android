@@ -175,15 +175,16 @@ the version.
 
 ## If it fails halfway
 
-The mutating steps are, in order: **push** (commit and tag, atomically), **create the release**, then the gated
-Central publish. Everything before them changes nothing, so a failure there needs no cleanup: fix the cause and
-dispatch again.
+The mutating steps are, in order: **draft the release** with its assets, **push** (commit and tag, atomically),
+**publish the release**, then the gated Central publish. Everything before them changes nothing, so a failure there
+needs no cleanup: fix the cause and dispatch again.
 
 | What happened | What to do |
 | --- | --- |
-| Push failed | Nothing landed: the push is `--atomic`, so the branch and the tag move together or not at all. Fix the cause and dispatch again. |
-| Push landed, release creation failed | Dispatch again, same branch and version. The release step is idempotent: it leaves an existing release alone and creates one for a tag that is already pushed. Should an earlier check refuse first, do it by hand: `gh release create v<version> --verify-tag --title v<version> --notes-file release-notes.md build/release-assets/*` (add `--prerelease` for a hyphenated version), taking the notes and the assets from the run's `release-<version>` artifact, uploaded before anything is published for exactly this case. |
-| Release created, an asset is missing | `gh release upload v<version> <file>` from the same artifact. Never replace an asset a host may already have resolved. |
+| Drafting failed | Nothing is public and no tag is pushed. Dispatch again, same branch and version: the step finishes an existing draft, uploading its assets again. |
+| Push failed | Only a draft exists, and the push is `--atomic`, so the branch and the tag move together or not at all. Fix the cause and dispatch again. |
+| Push landed, publishing failed | Dispatch again, same branch and version: both release steps are idempotent. Should an earlier check refuse first, do it by hand: `gh release edit v<version> --draft=false --verify-tag`. |
+| Published, an asset is missing or wrong | Releases are immutable, so nothing can be added or replaced: release a new patch. |
 
 **Never delete and re-push a tag to retry.** A host may already have resolved the assets under it, and Gradle
 caches by module and version, so a tag that changes meaning is far worse than a missing release page. Release a new
@@ -266,8 +267,10 @@ LABELS
 | *(none)* | The release workflow runs entirely on the built-in `GITHUB_TOKEN`. |
 | `MAVEN_CENTRAL_PUBLISH` (variable), `MAVEN_CENTRAL_*`, `MAVEN_SIGNING_*` | The gated Central publish only. |
 
-Two settings this depends on:
+Three settings this depends on:
 
+- **Release immutability is on** (Settings → General → Releases), so a published release's assets and tag never
+  change under a host that resolved them.
 - **`release/*` must not be protected**, or the workflow cannot push the release commit to it.
 - **The pull request back to `main` is opened by hand.** A pull request opened with `GITHUB_TOKEN` does not trigger
   other workflows, so the checks would not run on it; the job summary gives you the link rather than the workflow
