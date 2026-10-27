@@ -29,7 +29,9 @@ class FakeMatrixBackend(
     private val sendRoomEventResult: (roomId: String, eventType: String, contentJson: String) -> String = { _, _, _ -> lambdaError() },
     private val sendStickyEventResult: (roomId: String, eventType: String, contentJson: String, durationMs: ULong) -> String =
         { _, _, _, _ -> lambdaError() },
-    private val sendDelayedEventResult: (roomId: String, eventType: String, stateKey: String?, contentJson: String, delayMs: ULong) -> String =
+    private val sendDelayedStateEventResult: (roomId: String, eventType: String, stateKey: String, contentJson: String, delayMs: ULong) -> String =
+        { _, _, _, _, _ -> lambdaError() },
+    private val sendDelayedStickyEventResult: (roomId: String, eventType: String, contentJson: String, stickyDurationMs: ULong, delayMs: ULong) -> String =
         { _, _, _, _, _ -> lambdaError() },
     private val updateDelayedEventResult: (roomId: String, delayId: String, restart: Boolean) -> Unit = { _, _, _ -> lambdaError() },
     private val redactEventResult: (roomId: String, eventId: String, reason: String?) -> Unit = { _, _, _ -> lambdaError() },
@@ -51,8 +53,16 @@ class FakeMatrixBackend(
     override suspend fun sendStickyEvent(roomId: String, eventType: String, contentJson: String, durationMs: ULong): String =
         sendStickyEventResult(roomId, eventType, contentJson, durationMs)
 
-    override suspend fun sendDelayedEvent(roomId: String, eventType: String, stateKey: String?, contentJson: String, delayMs: ULong): String =
-        sendDelayedEventResult(roomId, eventType, stateKey, contentJson, delayMs)
+    override suspend fun sendDelayedStateEvent(roomId: String, eventType: String, stateKey: String, contentJson: String, delayMs: ULong): String =
+        sendDelayedStateEventResult(roomId, eventType, stateKey, contentJson, delayMs)
+
+    override suspend fun sendDelayedStickyEvent(
+        roomId: String,
+        eventType: String,
+        contentJson: String,
+        stickyDurationMs: ULong,
+        delayMs: ULong,
+    ): String = sendDelayedStickyEventResult(roomId, eventType, contentJson, stickyDurationMs, delayMs)
 
     override suspend fun restartDelayedEvent(roomId: String, delayId: String) = updateDelayedEventResult(roomId, delayId, true)
 

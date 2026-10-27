@@ -25,6 +25,7 @@ import org.matrix.rtc.MatrixBackend
 import org.matrix.rtc.RoomSink
 import org.matrix.rtc.ToDeviceSink
 import org.matrix.rustcomponents.sdk.Client
+import org.matrix.rustcomponents.sdk.RequestConfigOverride
 import org.matrix.rustcomponents.sdk.Room
 import timber.log.Timber
 
@@ -48,20 +49,31 @@ class SdkMatrixBackend(
     private val userId = client.userId()
     private val deviceId = client.deviceId()
 
+    /** The core retries a failed send itself, within its own budget, so the SDK must not retry underneath it. */
+    private val noRetry = RequestConfigOverride(retryLimit = 0uL, timeout = null)
+
     override fun ownUserId(): String = userId
 
     override fun ownDeviceId(): String = deviceId
 
     override suspend fun sendStickyEvent(roomId: String, eventType: String, contentJson: String, durationMs: ULong): String =
-        send("sendStickyEvent($eventType)") { room(roomId).use { it.sendStickyRaw(eventType, contentJson, durationMs) } }
+        send("sendStickyEvent($eventType)") { room(roomId).use { it.sendStickyRaw(eventType, contentJson, durationMs, noRetry) } }
 
     /**
      * The bindings have no delayed events (matrix-rust-sdk#6973), so this answers as a homeserver without MSC4140:
      * the core joins without a dead man's switch, never asks again this session, and shortens the membership's
      * lifetime instead.
      */
-    override suspend fun sendDelayedEvent(roomId: String, eventType: String, stateKey: String?, contentJson: String, delayMs: ULong): String =
+    override suspend fun sendDelayedStateEvent(roomId: String, eventType: String, stateKey: String, contentJson: String, delayMs: ULong): String =
         throw delayedEventsNotSupported()
+
+    override suspend fun sendDelayedStickyEvent(
+        roomId: String,
+        eventType: String,
+        contentJson: String,
+        stickyDurationMs: ULong,
+        delayMs: ULong,
+    ): String = throw delayedEventsNotSupported()
 
     // Never called: no delayed event was ever scheduled.
     override suspend fun restartDelayedEvent(roomId: String, delayId: String) = throw delayedEventsNotSupported()
@@ -69,10 +81,10 @@ class SdkMatrixBackend(
     override suspend fun cancelDelayedEvent(roomId: String, delayId: String) = throw delayedEventsNotSupported()
 
     override suspend fun sendStateEvent(roomId: String, eventType: String, stateKey: String, contentJson: String): String =
-        send("sendStateEvent($eventType)") { room(roomId).use { it.sendStateEventRaw(eventType, stateKey, contentJson) } }
+        send("sendStateEvent($eventType)") { room(roomId).use { it.sendStateEventRaw(eventType, stateKey, contentJson, noRetry) } }
 
     override suspend fun sendRoomEvent(roomId: String, eventType: String, contentJson: String): String =
-        send("sendRoomEvent($eventType)") { room(roomId).use { it.sendRaw(eventType, contentJson) } }
+        send("sendRoomEvent($eventType)") { room(roomId).use { it.sendRaw(eventType, contentJson, noRetry) } }
 
     override suspend fun redactEvent(roomId: String, eventId: String, reason: String?) =
         send("redactEvent") { room(roomId).use { it.redact(eventId, reason) } }

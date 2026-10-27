@@ -136,7 +136,8 @@ one copy of its own.
 | Method | Maps to | Returns |
 | :--- | :--- | :--- |
 | `sendStickyEvent` | `room.sendStickyEvent(type, json, durationMs)` (MSC4354) | the event id |
-| `sendDelayedEvent` | `room.sendDelayedEvent(type, stateKey?, json, delayMs)` (MSC4140); a state key makes it a state event | the **delay id** |
+| `sendDelayedStateEvent` | `room.sendDelayedStateEvent(type, stateKey, json, delayMs)` (MSC4140) | the **delay id** |
+| `sendDelayedStickyEvent` | a delayed sticky event (MSC4140 + MSC4354), sticky for `stickyDurationMs` once it fires; never a plain delayed event in its place | the **delay id** |
 | `restartDelayedEvent` / `cancelDelayedEvent` | `room.updateDelayedEvent(delayId, RESTART / CANCEL)` | — |
 | `sendStateEvent` | `room.sendRawStateEvent(type, stateKey, json)` | the event id |
 | `sendRoomEvent` | a message-like send, encrypted in an encrypted room | the event id |

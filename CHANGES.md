@@ -39,7 +39,9 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
   implementing `ElementCallController` or `MatrixRtcClient` itself adds it, and `signallingHealth()` on the latter.
 - `ElementCallConnection.Degraded` is gone: what is interrupted is `ElementCallSnapshot.interruptions`, grouped into
   our server, our media and others' media, and `ElementCallIcons` gains `interruptions`, `keyOff`, `chevronRight`, `unavailable` and `spinner`.
-- Core: matrix-rust-rtc `0.5.0-rc.7`; a host's Ivy repository must point at the `v0.5.0-rc.7` asset.
+- Core: matrix-rust-rtc `0.5.0-rc.8`; a host's Ivy repository must point at the `v0.5.0-rc.8` asset.
+- `MatrixBackend.sendDelayedEvent` is `sendDelayedStateEvent` and `sendDelayedStickyEvent`; the reference backend refuses both.
+- The reference backend needs `sdk-android` 26.10.23: its sends no longer let the SDK retry, leaving retries to the core.
 - No dead man's switch until the SDK bindings have delayed events: the reference backend refuses them, and the core
   joins without one (docs/FEEDBACK.md, "SDK backend").
 
