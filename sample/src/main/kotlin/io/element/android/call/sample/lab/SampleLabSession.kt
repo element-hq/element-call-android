@@ -11,6 +11,7 @@ import android.content.Context
 import io.element.android.call.api.ElementCallOptions
 import io.element.android.call.api.rtc.MatrixRtcLogLevel
 import io.element.android.call.api.rtc.MatrixRtcLoggingConfiguration
+import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 import io.element.android.call.impl.ElementCallStack
 import io.element.android.call.sample.matrix.SdkElementCallRoomContext
 import io.element.android.call.sample.matrix.SdkMatrixBackend
@@ -53,10 +54,14 @@ class SampleLabSession private constructor(
     val client: Client,
     val room: Room,
     val roomId: String,
+    val format: MatrixRtcMembershipFormat,
     val stack: ElementCallStack,
     private val syncService: SyncService,
     private val scope: CoroutineScope,
 ) {
+    /** Whether a code for this session's account can reuse it: the same room, in the same call format. */
+    fun serves(join: SampleLabJoin) = roomId == join.roomId && format == join.format
+
     /** The host's connectivity report (034 R11) from the sync's state: offline on `OFFLINE` or `ERROR`, online on the `RUNNING` after one. */
     fun observeConnectivity(report: (Boolean) -> Unit): TaskHandle {
         var isOffline = false
@@ -107,6 +112,7 @@ class SampleLabSession private constructor(
         val deviceId: String,
         val homeserverUrl: String,
         val oauthData: String?,
+        val format: MatrixRtcMembershipFormat,
     ) {
         fun isAccount(homeserver: String, user: String) = this.homeserver == homeserver && this.user == user
 
@@ -124,6 +130,7 @@ class SampleLabSession private constructor(
                 .put("deviceId", deviceId)
                 .put("homeserverUrl", homeserverUrl)
                 .put("oauthData", oauthData)
+                .put("format", format.labName)
             prefs(context).edit().putString(KEY, json.toString()).apply()
         }
 
@@ -144,6 +151,7 @@ class SampleLabSession private constructor(
                     deviceId = json.getString("deviceId"),
                     homeserverUrl = json.getString("homeserverUrl"),
                     oauthData = json.optString("oauthData").takeIf { it.isNotEmpty() && it != "null" },
+                    format = labFormat(json.optString("format")),
                 )
             }
 
@@ -177,7 +185,7 @@ class SampleLabSession private constructor(
             Saved.load(context)?.let { saved ->
                 if (saved.isAccount(join.homeserver, join.user) && isValid(trust, saved)) {
                     Timber.i("Lab: reusing the kept session ${saved.userId} / ${saved.deviceId}")
-                    return@withContext restore(context, saved, join.roomId, parentScope)
+                    return@withContext restore(context, saved, join.roomId, join.format, parentScope)
                 }
                 Timber.i("Lab: the kept session ${saved.userId} is for another account or no longer valid; logging it out")
                 logOut(context, trust, saved)
@@ -198,18 +206,19 @@ class SampleLabSession private constructor(
                 deviceId = session.deviceId,
                 homeserverUrl = session.homeserverUrl,
                 oauthData = session.oauthData,
+                format = join.format,
             ).store(context)
             val (syncService, room) = startSync(client, join.roomId)
             adoptIdentity(client, join.password, join.recoveryKey)
             sayHi(room)
-            make(context, client, room, join.roomId, syncService, parentScope)
+            make(context, client, room, join.roomId, join.format, syncService, parentScope)
         }
 
         /** The kept session, for rejoining without a code. */
         suspend fun restoreSaved(context: Context, parentScope: CoroutineScope): SampleLabSession = withContext(Dispatchers.IO) {
             val saved = Saved.load(context) ?: throw Failure("no lab session kept on this phone")
             install(context, saved.homeserver)
-            restore(context, saved, saved.roomId, parentScope)
+            restore(context, saved, saved.roomId, saved.format, parentScope)
         }
 
         /** The kept session logged out without a live client. A token the server no longer knows (a lab reset) is only forgotten. */
@@ -234,12 +243,18 @@ class SampleLabSession private constructor(
             }
         }
 
-        private suspend fun restore(context: Context, saved: Saved, roomId: String, parentScope: CoroutineScope): SampleLabSession {
+        private suspend fun restore(
+            context: Context,
+            saved: Saved,
+            roomId: String,
+            format: MatrixRtcMembershipFormat,
+            parentScope: CoroutineScope,
+        ): SampleLabSession {
             val client = makeClient(context, saved.homeserver)
             client.restoreSession(saved.session)
-            if (roomId != saved.roomId) saved.copy(roomId = roomId).store(context)
+            if (roomId != saved.roomId || format != saved.format) saved.copy(roomId = roomId, format = format).store(context)
             val (syncService, room) = startSync(client, roomId)
-            return make(context, client, room, roomId, syncService, parentScope)
+            return make(context, client, room, roomId, format, syncService, parentScope)
         }
 
         /**
@@ -355,16 +370,22 @@ class SampleLabSession private constructor(
             client: Client,
             room: Room,
             roomId: String,
+            format: MatrixRtcMembershipFormat,
             syncService: SyncService,
             parentScope: CoroutineScope,
         ): SampleLabSession {
             val scope = CoroutineScope(parentScope.coroutineContext + SupervisorJob(parentScope.coroutineContext[kotlinx.coroutines.Job]))
             val stack = ElementCallStack.Builder(context, SdkMatrixBackend(client, scope))
                 .roomContext(SdkElementCallRoomContext(client))
-                .options(ElementCallOptions(logging = MatrixRtcLoggingConfiguration(logLevel = MatrixRtcLogLevel.INFO, writesToLogcat = true)))
+                .options(
+                    ElementCallOptions(
+                        membershipFormat = format,
+                        logging = MatrixRtcLoggingConfiguration(logLevel = MatrixRtcLogLevel.INFO, writesToLogcat = true),
+                    )
+                )
                 .build(scope)
-            Timber.i("Lab: logged in as ${client.userId()}, room $roomId synced")
-            return SampleLabSession(client, room, roomId, stack, syncService, scope)
+            Timber.i("Lab: logged in as ${client.userId()}, room $roomId synced, call format $format")
+            return SampleLabSession(client, room, roomId, format, stack, syncService, scope)
         }
     }
 }

@@ -13,6 +13,7 @@ import android.net.Uri
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
+import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 import io.element.android.call.sample.SampleCallController
 import io.element.android.call.sample.matrix.runCatchingExceptions
 import kotlinx.coroutines.CoroutineScope
@@ -33,6 +34,11 @@ class SampleLab(private val context: Context, private val scope: CoroutineScope,
     /** The kept account's Matrix ID, null when logged out. */
     val account: StateFlow<String?> = accountFlow
 
+    private val formatFlow = MutableStateFlow(SampleLabSession.Saved.load(context)?.format)
+
+    /** The kept session's call format, which the lab page's code set, null when logged out. */
+    val format: StateFlow<MatrixRtcMembershipFormat?> = formatFlow
+
     private val noticeFlow = MutableStateFlow<String?>(null)
 
     /** What the last lab action is doing, or why it failed. */
@@ -43,7 +49,7 @@ class SampleLab(private val context: Context, private val scope: CoroutineScope,
 
     fun open(join: SampleLabJoin) = start("Logging in as ${join.user}…") { current ->
         val sameAccount = SampleLabSession.Saved.load(context)?.isAccount(join.homeserver, join.user) == true
-        if (current != null && sameAccount && current.roomId == join.roomId) {
+        if (current != null && sameAccount && current.serves(join)) {
             current
         } else {
             if (current != null) {
@@ -79,6 +85,7 @@ class SampleLab(private val context: Context, private val scope: CoroutineScope,
         val current = session
         session = null
         accountFlow.value = null
+        formatFlow.value = null
         noticeFlow.value = null
         job = scope.launch {
             if (current != null) current.logOut(context) else SampleLabSession.logOutSaved(context)
@@ -94,12 +101,14 @@ class SampleLab(private val context: Context, private val scope: CoroutineScope,
                 .onSuccess {
                     session = it
                     accountFlow.value = SampleLabSession.Saved.load(context)?.userId
+                    formatFlow.value = it.format
                     noticeFlow.value = null
                     controller.startLab(SampleLabCall(it))
                 }
                 .onFailure {
                     Timber.w(it, "Lab: could not join")
                     accountFlow.value = SampleLabSession.Saved.load(context)?.userId
+                    formatFlow.value = SampleLabSession.Saved.load(context)?.format
                     noticeFlow.value = "Lab: ${it.message}"
                 }
         }

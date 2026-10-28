@@ -18,7 +18,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
+import io.element.android.call.sample.lab.label
 
 /**
  * The lab tab (feature-hq `harness/lab.md`): a real call over a logged-in account. The account kept on this phone with
@@ -27,6 +30,7 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun SampleLabScreen(
     account: String?,
+    format: MatrixRtcMembershipFormat?,
     notice: String?,
     onScan: () -> Unit,
     onRejoin: () -> Unit,
@@ -35,7 +39,7 @@ fun SampleLabScreen(
 ) {
     val description = notice ?: account?.let { "Signed in as $it. A code for another account logs this one out first." }
         ?: "Scan an account's code on the lab page to log in and join its call."
-    val rows = if (account == null) listOf(LabRow.SCAN) else listOf(LabRow.REJOIN, LabRow.SCAN, LabRow.LOG_OUT)
+    val rows = if (account == null) listOf(LabRow.SCAN) else listOf(LabRow.FORMAT, LabRow.REJOIN, LabRow.SCAN, LabRow.LOG_OUT)
     Surface(modifier = modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.safeDrawingPadding(),
@@ -50,6 +54,13 @@ fun SampleLabScreen(
             }
             section(key = "lab", title = "Account", description = description, rows = rows) { row, shapes ->
                 when (row) {
+                    LabRow.FORMAT -> SegmentedListItem(
+                        onClick = onScan,
+                        shapes = shapes,
+                        colors = sectionColors(),
+                        supportingContent = { Text("Set by the lab page; scan its code again after switching it there.") },
+                        content = { Text("Call format: ${format?.label ?: "unknown"}", fontWeight = FontWeight.Bold) },
+                    )
                     LabRow.SCAN -> SegmentedListItem(
                         onClick = onScan,
                         shapes = shapes,
@@ -77,4 +88,4 @@ fun SampleLabScreen(
     }
 }
 
-private enum class LabRow { SCAN, REJOIN, LOG_OUT }
+private enum class LabRow { FORMAT, SCAN, REJOIN, LOG_OUT }

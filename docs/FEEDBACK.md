@@ -1099,9 +1099,8 @@ the sender as confirmed (`senderCrossSigned`, item 30) unless the shield is red.
 - State outside sliding sync's `required_state`: `subscribeToStateEvents` reads the store. The call member type is
   in the default set; `m.rtc.slot` is not, so the sticky modes would read every room as slotless.
 
-**Membership format pin.** Calls stay pinned to `ROOM_STATE` (`DefaultElementCallController`;
-`ElementCallOptions.membershipFormat` is read but not obeyed) until the sticky modes have been tried against other
-clients and the slot state above is readable.
+**Membership format.** Calls use `ElementCallOptions.membershipFormat`, `ROOM_STATE` by default. A sticky mode needs
+the slot state above, so a host that asks for one reads it from the homeserver itself, as the sample does.
 
 ## Host-side log lines worth keeping
 

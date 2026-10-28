@@ -71,6 +71,7 @@ fun SampleApp(
     val fixtures = remember { SampleFixture.entries.toImmutableList() }
     val labAccount by harness.lab.account.collectAsState()
     val labNotice by harness.lab.notice.collectAsState()
+    val labFormat by harness.lab.format.collectAsState()
     val context = LocalContext.current
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         SampleLockScreenCall.schedule(context, harness)
@@ -114,6 +115,7 @@ fun SampleApp(
                         )
                         SampleTab.LAB -> SampleLabScreen(
                             account = labAccount,
+                            format = labFormat,
                             notice = labNotice,
                             onScan = { (context as? Activity)?.let(harness.lab::scan) },
                             onRejoin = harness.lab::rejoin,

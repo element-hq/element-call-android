@@ -105,8 +105,15 @@ class SdkMatrixBackend(
         Timber.i("MatrixRTC: subscribing $roomId to state ${subjects.stateEventTypes}, timeline ${subjects.timelineEventTypes}")
         val job = sessionScope.launch {
             deliver("sticky events", room.stickyEventSets(dispatchers), sink::onStickyEvents)
-            for (type in subjects.stateEventTypes) {
+            val (slotTypes, stateTypes) = subjects.stateEventTypes.partition { it in SLOT_EVENT_TYPES }
+            for (type in stateTypes) {
                 deliver("state $type", room.stateEventSets(type, dispatchers)) { sink.onStateEvents(type, it) }
+            }
+            if (slotTypes.isNotEmpty()) {
+                // Read again when the sticky set changes: a member joining is when a slot that opened since matters.
+                deliver("slot state", client.slotEventSets(roomId, slotTypes, room.stickyEventSets(dispatchers), dispatchers)) { sets ->
+                    sets.forEach { (type, events) -> sink.onStateEvents(type, events) }
+                }
             }
             deliver("joined members", room.joinedMemberIds(dispatchers), sink::onJoinedMembers)
             deliver("encryption", room.encryptionUpdates(dispatchers), sink::onEncryption)
