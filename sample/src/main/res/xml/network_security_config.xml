@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?><!--
+  ~ Copyright (c) 2026 Element Creations Ltd.
+  ~
+  ~ SPDX-License-Identifier: AGPL-3.0-only OR LicenseRef-Element-Commercial.
+  ~ Please see LICENSE files in the repository root for full details.
+  -->
+<network-security-config>
+    <!-- The lab serves its CA on plain HTTP under nip.io names, for a phone that trusts nothing yet (lab/SampleLabTrust.kt).
+         Its names trust the CA the tester installed as a user certificate in every build, so the profileable release
+         build reaches the lab too; every other host keeps the system's trust. -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">nip.io</domain>
+        <trust-anchors>
+            <certificates src="user" />
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+    <!-- The SDK trusts the lab's CA, installed by the tester as a user certificate, in debug builds only. -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="user" />
+            <certificates src="system" />
+        </trust-anchors>
+    </debug-overrides>
+</network-security-config>

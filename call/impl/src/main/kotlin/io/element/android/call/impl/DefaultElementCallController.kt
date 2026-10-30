@@ -35,7 +35,6 @@ import io.element.android.call.api.rtc.MatrixRtcInterruptions
 import io.element.android.call.api.rtc.MatrixRtcJoinException
 import io.element.android.call.api.rtc.MatrixRtcLeaveReason
 import io.element.android.call.api.rtc.MatrixRtcMediaSession
-import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 import io.element.android.call.api.rtc.MatrixRtcRing
 import io.element.android.call.api.rtc.MatrixRtcRingPhase
 import io.element.android.call.api.rtc.MatrixRtcRoom
@@ -595,15 +594,8 @@ internal class DefaultElementCallController(
         // Read once, here, rather than observed: the format is fixed for the lifetime of a room -
         // it decides the member id, the SFU identity and the token endpoint as well as the wire
         // format - so changing it mid-call is not something the core could act on.
-        //
-        // Temporary: pinned to the room-state format until the sticky formats, whose events now go through the
-        // SDK, have been tried against other clients - see `docs/FEEDBACK.md`, "SDK backend". The
-        // option is still read so the pin is visible in the log, and so that lifting it is a one-line change here.
-        val preferredMembershipFormat = options.membershipFormat
-        val membershipFormat = MatrixRtcMembershipFormat.ROOM_STATE
-        if (preferredMembershipFormat != membershipFormat) {
-            Timber.i("ElementCall: membership format $preferredMembershipFormat is not available on the released SDK, pinned to $membershipFormat")
-        }
+        // The default is the room-state format; a host asks for another when its peers speak it.
+        val membershipFormat = options.membershipFormat
         Timber.i("ElementCall: joining with membership format $membershipFormat")
 
         val room = rtcClient.room(callData.roomId, membershipFormat).getOrElse {
