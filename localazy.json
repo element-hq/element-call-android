@@ -1,0 +1,75 @@
+{
+  "readKey": "a7580769542256117579-70975387172511848f4c6533943d776547bad4853931ba352ee684b738f4494e",
+  "conversion": {
+    "actions": [
+      {
+        "type": "android",
+        "output": "call/impl/src/main/res/values/localazy.xml",
+        "includeKeys": [
+          "REGEX:element_call_notification_.*"
+        ],
+        "excludeKeys": [
+          "REGEX:.*_ios"
+        ],
+        "conditions": [
+          "equals: ${langAndroidResNoScript}, en | equals: ${file}, mobile.json"
+        ],
+        "replacements": {
+          "...": "…"
+        }
+      },
+      {
+        "type": "android",
+        "output": "call/ui/src/main/res/values/localazy.xml",
+        "excludeKeys": [
+          "REGEX:.*_ios",
+          "REGEX:element_call_notification_.*"
+        ],
+        "conditions": [
+          "equals: ${langAndroidResNoScript}, en | equals: ${file}, mobile.json"
+        ],
+        "replacements": {
+          "...": "…"
+        }
+      },
+      {
+        "group": "all",
+        "type": "android",
+        "output": "call/impl/src/main/res/values-${langAndroidResNoScript}/translations.xml",
+        "includeKeys": [
+          "REGEX:element_call_notification_.*"
+        ],
+        "excludeKeys": [
+          "REGEX:.*_ios"
+        ],
+        "conditions": [
+          "!equals: ${langAndroidResNoScript}, en | equals: ${file}, mobile.json"
+        ],
+        "replacements": {
+          "...": "…"
+        },
+        "langAliases": {
+          "id": "in"
+        }
+      },
+      {
+        "group": "all",
+        "type": "android",
+        "output": "call/ui/src/main/res/values-${langAndroidResNoScript}/translations.xml",
+        "excludeKeys": [
+          "REGEX:.*_ios",
+          "REGEX:element_call_notification_.*"
+        ],
+        "conditions": [
+          "!equals: ${langAndroidResNoScript}, en | equals: ${file}, mobile.json"
+        ],
+        "replacements": {
+          "...": "…"
+        },
+        "langAliases": {
+          "id": "in"
+        }
+      }
+    ]
+  }
+}

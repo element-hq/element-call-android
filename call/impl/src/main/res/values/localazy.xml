@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+  <string name="element_call_notification_call_in_progress_android">"Call in progress"</string>
+  <string name="element_call_notification_calling_android">"Calling…"</string>
+  <string name="element_call_notification_channel_name_android">"Ongoing call"</string>
+  <string name="element_call_notification_hang_up_android">"Hang up"</string>
+  <string name="element_call_notification_mute_microphone_android">"Mute"</string>
+  <string name="element_call_notification_unmute_microphone_android">"Unmute"</string>
+</resources>
