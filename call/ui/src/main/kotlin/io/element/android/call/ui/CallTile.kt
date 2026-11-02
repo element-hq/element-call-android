@@ -461,8 +461,8 @@ private fun MediaIndicatorBadge(state: CallTileMediaState, modifier: Modifier = 
 
 /**
  * The name tag's indicator for media that is not reaching the screen (034 R23, R29, R33): read when focused, never announced. A
- * spinner while it may yet come, and the key in critical red once a member's keys have stayed away, which says what is
- * missing without guessing why (034 Q8), or at once for media sent in clear, which will never come.
+ * spinner while it may yet come. Once a member's keys have stayed away (034 Q8), the key: in the name's colour when theirs
+ * has not reached us, in critical red when the one we hold does not decrypt, and red at once for media sent in clear.
  */
 @Composable
 private fun MediaIndicator(state: CallTileMediaState) {
@@ -473,14 +473,15 @@ private fun MediaIndicator(state: CallTileMediaState) {
             CallTileMediaState.CONNECTING -> R.string.element_call_a11y_media_connecting
             CallTileMediaState.UNDECRYPTABLE -> R.string.element_call_a11y_media_undecryptable
             CallTileMediaState.KEYS_MISSING -> R.string.element_call_a11y_media_keys_missing
+            CallTileMediaState.KEY_INVALID -> R.string.element_call_a11y_media_key_invalid
             CallTileMediaState.NOT_ENCRYPTED -> R.string.element_call_a11y_media_not_encrypted
         }
     )
-    if (state == CallTileMediaState.KEYS_MISSING || state == CallTileMediaState.NOT_ENCRYPTED) {
+    if (state == CallTileMediaState.KEYS_MISSING || state == CallTileMediaState.KEY_INVALID || state == CallTileMediaState.NOT_ENCRYPTED) {
         Icon(
             imageVector = ElementCallTheme.icons.keyOff,
             contentDescription = label,
-            tint = ElementCallTheme.colors.iconCritical,
+            tint = if (state == CallTileMediaState.KEYS_MISSING) ElementCallTheme.colors.onOverlay else ElementCallTheme.colors.iconCritical,
             modifier = Modifier.size(14.dp),
         )
     } else {
