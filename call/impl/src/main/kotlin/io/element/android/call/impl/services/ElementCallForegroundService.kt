@@ -117,7 +117,7 @@ class ElementCallForegroundService : Service() {
      */
     private fun buildNotification(content: NotificationContent, config: ElementCallNotificationConfig): Notification {
         val isMuted = content.isMuted
-        val title = content.roomName?.takeIf { it.isNotBlank() } ?: getString(R.string.element_call_notification_call_in_progress)
+        val title = content.roomName?.takeIf { it.isNotBlank() } ?: getString(R.string.element_call_notification_call_in_progress_android)
         // CallStyle needs somebody to name the call after, and for a room that is the room.
         val caller = Person.Builder().setName(title).setImportant(true).build()
 
@@ -132,7 +132,7 @@ class ElementCallForegroundService : Service() {
             .setStyle(NotificationCompat.CallStyle.forOngoingCall(caller, hangUpIntent))
             .addPerson(caller)
             .apply {
-                if (content.isCalling) setContentText(getString(R.string.element_call_notification_calling))
+                if (content.isCalling) setContentText(getString(R.string.element_call_notification_calling_android))
                 // The duration from the moment the call connected, which in a DM is the pickup (030 R31).
                 content.connectedAtElapsedMs?.let { connectedAt ->
                     setWhen(System.currentTimeMillis() - (SystemClock.elapsedRealtime() - connectedAt))
@@ -151,7 +151,13 @@ class ElementCallForegroundService : Service() {
                     } else {
                         config.muteIcon ?: R.drawable.ic_element_call_notification_mic_on
                     },
-                    getString(if (isMuted) R.string.element_call_notification_unmute_microphone else R.string.element_call_notification_mute_microphone),
+                    getString(
+                        if (isMuted) {
+                            R.string.element_call_notification_unmute_microphone_android
+                        } else {
+                            R.string.element_call_notification_mute_microphone_android
+                        }
+                    ),
                     muteIntent,
                 ).build()
             )
@@ -196,7 +202,7 @@ class ElementCallForegroundService : Service() {
         val manager = getSystemService<NotificationManager>() ?: return
         val channel = NotificationChannel(
             config.channelId,
-            config.channelName ?: getString(R.string.element_call_notification_channel_name),
+            config.channelName ?: getString(R.string.element_call_notification_channel_name_android),
             NotificationManager.IMPORTANCE_LOW,
         )
         manager.createNotificationChannel(channel)

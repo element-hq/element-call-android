@@ -118,8 +118,16 @@ until one does.
 
 ### Strings
 
-- English strings live in each module's `res/values/strings.xml`, keys prefixed `element_call_`. A host can overlay
-  a key by declaring it with the same name. No Localazy project yet.
+- Translated in the element-call Localazy project, in `mobile.json`, which iOS downloads too (feature-hq spec 036;
+  the workflow is in CONTRIBUTING.md). A key must exist there before code uses it: each module's
+  `res/values/localazy.xml` and `res/values-*/translations.xml` are downloaded, never written. Keys starting
+  `element_call_notification_` go to `call/impl`, every other key to `call/ui`.
+- `strings.xml` holds only what is not translated, marked `translatable="false"`.
+- A key only Android uses ends in `_android`, and the code says so (`R.string.element_call_notification_hang_up_android`).
+  Keys ending in `_ios` are never downloaded.
+- Whole sentences, never assembled: "Move to" plus a corner's name is English word order, so each corner has its key.
+- A host overriding a key at resource merge is not supported: it is not prevented, but nothing keeps the key names
+  stable for it.
 
 ### Previews and screenshots
 

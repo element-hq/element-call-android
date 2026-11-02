@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-ALLOWED=$(grep -oE '^[[:space:]]*- pr-[a-z]+' .github/release.yml | sed -E 's/^[[:space:]]*- //')
+ALLOWED=$(grep -oE '^[[:space:]]*- pr-[a-z0-9]+' .github/release.yml | sed -E 's/^[[:space:]]*- //')
 FOUND=$(jq -r '.[] | select(startswith("pr-"))' <<<"${LABELS:-[]}")
 COUNT=$(grep -c . <<<"$FOUND" || true)
 

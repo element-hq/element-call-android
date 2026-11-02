@@ -1,0 +1,47 @@
+name: Translations
+
+on:
+  schedule:
+    # Mondays, as Element X's translations do.
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  download:
+    # Never on a fork: it opens a pull request here.
+    if: github.repository == 'element-hq/element-call-android'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the Localazy CLI
+        run: |
+          curl -sS https://dist.localazy.com/debian/pubkey.gpg | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/localazy.gpg
+          echo "deb [arch=amd64 signed-by=/etc/apt/trusted.gpg.d/localazy.gpg] https://maven.localazy.com/repository/apt/ stable main" | sudo tee /etc/apt/sources.list.d/localazy.list
+          sudo apt-get update && sudo apt-get install localazy
+
+      - name: Download every language
+        run: ./tools/localazy/download-strings.sh --all-languages
+
+      # A bot's token rather than GITHUB_TOKEN: a pull request opened with GITHUB_TOKEN triggers no
+      # workflows, so the tests would never run on it.
+      - name: Open a pull request
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ secrets.ELEMENT_BOT_TOKEN }}
+          author: Element CI <ci@element.io>
+          commit-message: Translations update
+          title: Translations update
+          body: Strings downloaded from the element-call Localazy project by the Translations workflow.
+          labels: pr-i18n
+          branch: translations/update
+          base: main
+          add-paths: |
+            call/*/src/main/res/values/localazy.xml
+            call/*/src/main/res/values-*/translations.xml

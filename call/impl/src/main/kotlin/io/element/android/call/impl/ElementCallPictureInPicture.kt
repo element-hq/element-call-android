@@ -182,14 +182,16 @@ object ElementCallPictureInPicture {
 
     @RequiresApi(Build.VERSION_CODES.O)
     private fun microphoneAction(context: Context, isMuted: Boolean): RemoteAction {
-        val title = context.getString(if (isMuted) R.string.element_call_notification_unmute_microphone else R.string.element_call_notification_mute_microphone)
+        val title = context.getString(
+            if (isMuted) R.string.element_call_notification_unmute_microphone_android else R.string.element_call_notification_mute_microphone_android
+        )
         val icon = if (isMuted) R.drawable.ic_element_call_notification_mic_off else R.drawable.ic_element_call_notification_mic_on
         return RemoteAction(Icon.createWithResource(context, icon), title, title, ElementCallActionIntents.toggleMute(context))
     }
 
     @RequiresApi(Build.VERSION_CODES.O)
     private fun hangUpAction(context: Context): RemoteAction {
-        val title = context.getString(R.string.element_call_notification_hang_up)
+        val title = context.getString(R.string.element_call_notification_hang_up_android)
         val icon = Icon.createWithResource(context, R.drawable.ic_element_call_notification_end_call)
         return RemoteAction(icon, title, title, ElementCallActionIntents.hangUp(context))
     }

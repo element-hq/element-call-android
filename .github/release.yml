@@ -24,6 +24,9 @@ changelog:
     - title: 🧱 Build
       labels:
         - pr-build
+    - title: 🗣 Translations
+      labels:
+        - pr-i18n
     - title: 📄 Documentation
       labels:
         - pr-doc

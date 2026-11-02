@@ -5,6 +5,7 @@
 * [Before you start](#before-you-start)
 * [Etiquette](#etiquette)
 * [Submitting a pull request](#submitting-a-pull-request)
+* [Strings](#strings)
 * [Code quality](#code-quality)
 * [Tests](#tests)
 
@@ -32,6 +33,20 @@ enforces. The build needs a locally built `matrix-rust-rtc` AAR, see [docs/local
   observe, which keeps it out of the release notes. CI checks it.
 - Add the `Record-Screenshots` label when a Composable preview is added or changed, so that CI records the screenshots.
 - Screenshots or a video for visual changes.
+
+## Strings
+
+The call screen's text comes from the [element-call Localazy project](https://localazy.com/p/element-call), from the
+file `mobile.json`, which Element Call iOS downloads too. Nothing here uploads to it.
+
+1. Add the string in Localazy's dashboard, to `mobile.json`. The key starts with `element_call_` and ends in `_android`
+   if only Android uses it. Placeholders are numbered: `%1$s`, `%1$d`.
+2. Run `./tools/localazy/download-strings.sh` (needs the [Localazy CLI](https://localazy.com/docs/cli/installation)).
+   It writes each module's `values/localazy.xml`.
+3. Use the `R.string` in code, never a literal.
+
+Never edit `localazy.xml` or `translations.xml` by hand. Translations arrive in a pull request the Translations workflow
+opens every Monday.
 
 ## Code quality
 
