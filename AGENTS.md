@@ -120,7 +120,8 @@ until one does.
 
 - Translated in the element-call Localazy project, in `mobile.json`, which iOS downloads too (feature-hq spec 036;
   the workflow is in CONTRIBUTING.md). A key must exist there before code uses it: each module's
-  `res/values/localazy.xml` and `res/values-*/translations.xml` are downloaded, never written. Keys starting
+  `res/values/localazy.xml` and `res/values-*/translations.xml` are downloaded, never written, and carry no licence
+  header (`check.sh` skips them). Keys starting
   `element_call_notification_` go to `call/impl`, every other key to `call/ui`.
 - `strings.xml` holds only what is not translated, marked `translatable="false"`.
 - A key only Android uses ends in `_android`, and the code says so (`R.string.element_call_notification_hang_up_android`).

@@ -28,7 +28,9 @@ if git grep -l "New Vector" -- . ':!tools/quality/check.sh' ':!tools/quality/fix
     git grep -l "New Vector" -- . ':!tools/quality/check.sh' ':!tools/quality/fix_headers.py' ':!tests/konsist/**/KonsistLicenseTest.kt' >&2
     exit 1
 fi
-if git ls-files '*.kt' '*.kts' '*.xml' '*.sh' '*.py' '*.pro' | xargs grep -L "Copyright (c) 2026 Element Creations Ltd." | grep . ; then
+# Not the strings downloaded from Localazy, which are never written by hand (AGENTS.md, Strings), as in Element X.
+if git ls-files '*.kt' '*.kts' '*.xml' '*.sh' '*.py' '*.pro' ':!*/res/values/localazy.xml' ':!*/res/values-*/translations.xml' \
+    | xargs grep -L "Copyright (c) 2026 Element Creations Ltd." | grep . ; then
     echo "❌ The files above lack the copyright notice. Run tools/quality/fix_headers.py." >&2
     exit 1
 fi
