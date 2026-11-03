@@ -133,7 +133,7 @@ fun SampleHomeScreen(
 }
 
 /** A titled group of rows, rounded as one card and split by thin gaps, the Material counterpart of an iOS inset grouped list. */
-private fun <T> LazyListScope.section(
+internal fun <T> LazyListScope.section(
     key: String,
     title: String,
     rows: List<T>,
@@ -195,4 +195,4 @@ private fun FixtureRow(
 }
 
 @Composable
-private fun sectionColors(): ListItemColors = ListItemDefaults.segmentedColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
+internal fun sectionColors(): ListItemColors = ListItemDefaults.segmentedColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)

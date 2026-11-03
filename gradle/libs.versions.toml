@@ -108,6 +108,10 @@ test_composable_preview_scanner = "io.github.sergio-sastre.ComposablePreviewScan
 # Only the sample depends on it, for its reference MatrixBackend; the library does not. Bump it with
 # Element X.
 matrix_sdk = "org.matrix.rustcomponents:sdk-android:26.10.23"
+# The SDK's TLS verifier on Android calls this Java half (the sample's lab login); Element X carries the same.
+rustls_platform_verifier = "org.rustls:rustls-platform-verifier:0.2.0"
+# The sample's "Scan a lab code": Play services draws the scanner, so the app needs no camera permission.
+play_services_code_scanner = "com.google.android.gms:play-services-code-scanner:16.1.0"
 
 # Others
 serialization_json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "serialization_json" }

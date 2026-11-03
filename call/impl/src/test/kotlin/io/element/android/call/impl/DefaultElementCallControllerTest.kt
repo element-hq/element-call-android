@@ -221,12 +221,8 @@ class DefaultElementCallControllerTest {
         }
     }
 
-    /**
-     * Temporary, with the pin it tests: until the sticky modes have been tried against other clients the
-     * option is read but not obeyed. Restore per-mode tests when the pin goes (see `docs/FEEDBACK.md`, "SDK backend").
-     */
     @Test
-    fun `a call opens its room in the room-state membership format whatever the option says`() = runTest {
+    fun `a call opens its room in the membership format the option asks for`() = runTest {
         MatrixRtcMembershipFormat.entries.forEach { preferred ->
             val rtcClient = FakeMatrixRtcClient()
             val controller = createController(rtcClient = rtcClient, membershipFormat = preferred)
@@ -239,7 +235,7 @@ class DefaultElementCallControllerTest {
                 // Passed to the room rather than merely stored: the format also fixes the member id, the SFU
                 // identity and the token endpoint, so a call joined with the wrong one connects and
                 // stays silent rather than failing.
-                assertThat(rtcClient.lastMembershipFormat).isEqualTo(MatrixRtcMembershipFormat.ROOM_STATE)
+                assertThat(rtcClient.lastMembershipFormat).isEqualTo(preferred)
                 cancelAndIgnoreRemainingEvents()
             }
         }

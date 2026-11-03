@@ -18,9 +18,8 @@ data class ElementCallOptions(
     /**
      * Which generation of Element Call a call should be reachable by. See [MatrixRtcMembershipFormat].
      *
-     * Temporary: pinned to [MatrixRtcMembershipFormat.ROOM_STATE], whatever is asked for, until the two
-     * sticky modes (MSC4354) have been tried against other clients (`docs/FEEDBACK.md`, "SDK backend"). A
-     * different value is logged so the pin is visible; lifting it is a one-line change in the controller.
+     * Room state by default, the format the deployed Element Call rooms use. The sticky formats (MSC4354) need
+     * an open `m.rtc.slot` in the room, which nothing in Element Call opens yet.
      */
     val membershipFormat: MatrixRtcMembershipFormat = MatrixRtcMembershipFormat.ROOM_STATE,
     /**

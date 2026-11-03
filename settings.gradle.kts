@@ -18,6 +18,14 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // The Java half of the Matrix SDK's TLS verifier on Android, for the sample's lab login only. Published by the
+        // rustls project in its own repository, not on Maven Central; Element X resolves it the same way.
+        exclusiveContent {
+            forRepository {
+                maven { url = uri("https://github.com/rustls/rustls-platform-verifier/raw/maven-archive/android-release-support/maven/") }
+            }
+            filter { includeModule("org.rustls", "rustls-platform-verifier") }
+        }
         // The matrix-rust-rtc core, io.element.android:matrix-rtc-android, as the file in rtc/local: the
         // release gradle.properties pins (./tools/rtc/fetch-rust-rtc) or a local build (./tools/rtc/build-rust-rtc).
         // The pattern names no version on purpose - whatever file is there is the core, and rtc/local

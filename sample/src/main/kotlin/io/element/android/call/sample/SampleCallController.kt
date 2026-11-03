@@ -70,6 +70,9 @@ class SampleCallController(private val context: Context, private val scope: Coro
 
     fun startOutage(fixture: SampleOutageFixture) = startLive(SampleOutageCall(context, scope, fixture))
 
+    /** A real call in the lab (`lab/SampleLab.kt`). */
+    fun startLab(call: SampleLiveCall) = startLive(call)
+
     private fun startLive(call: SampleLiveCall) {
         endLiveCall()
         fixtures.hangUp()
