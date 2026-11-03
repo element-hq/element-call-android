@@ -10,6 +10,7 @@ package io.element.android.call.ui
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallHandRequestFailure
 import io.element.android.call.api.ElementCallInterruption
+import io.element.android.call.api.ElementCallReactionsPreference
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
@@ -80,7 +81,7 @@ data class ElementCallScreenState(
     val isScreenSharing: Boolean,
     /** Off while our own media server reconnects, as a share could not start; stopping one never is (034 R15). */
     val isScreenShareStartEnabled: Boolean,
-    /** Whether tiles are showing their debug readout. Toggled by long-pressing a tile. */
+    /** Whether tiles are showing their debug readout, toggled from the Preferences sheet in developer mode. */
     val isTileStatsVisible: Boolean,
     /**
      * Video by [CallTileData.tileId], for the tiles that have video - ourselves included. Empty
@@ -149,6 +150,17 @@ data class ElementCallScreenState(
      */
     val libraryVersion: String,
     val coreVersion: String,
+    /**
+     * Each received reaction as it should appear, for the overlay to collect itself: a list here would recompose the
+     * whole screen, stage included, with every one (feature-hq 037 R5). Stable for the screen's life.
+     */
+    val reactions: Flow<ElementCallReactionBubbleData>,
+    /** Whether the Preferences sheet is up: saved across rotation, gone with the screen in PiP or minimised (037 R12a). */
+    val isPreferencesVisible: Boolean,
+    val reactionsPreference: ElementCallReactionsPreference,
+    val soundEffectsVolume: Float,
+    /** Whether the sheet offers Developer options (037 R16). */
+    val isDeveloperModeEnabled: Boolean,
     val eventSink: (ElementCallScreenEvent) -> Unit,
 ) {
     val spotlightTileId: String? get() = spotlight.tileId

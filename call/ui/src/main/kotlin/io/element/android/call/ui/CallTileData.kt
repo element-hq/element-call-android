@@ -84,7 +84,7 @@ data class CallTileData(
      * to a placeholder like "Unknown" that would be identical for everyone whose profile is still
      * loading.
      */
-    val displayName: String get() = roomMember?.displayName?.takeIf { it.isNotBlank() } ?: userId.value
+    val displayName: String get() = callDisplayName(roomMember, userId)
 
     val isScreenShare: Boolean get() = streamKind == MatrixRtcStreamKind.SCREEN_SHARE
 
@@ -208,3 +208,7 @@ enum class CallTileMediaState {
             }
     }
 }
+
+/** A member's name as the call shows it, on a tile or a reaction alike: their display name, else their Matrix ID. */
+internal fun callDisplayName(roomMember: ElementCallRoomMember?, userId: UserId): String =
+    roomMember?.displayName?.takeIf { it.isNotBlank() } ?: userId.value

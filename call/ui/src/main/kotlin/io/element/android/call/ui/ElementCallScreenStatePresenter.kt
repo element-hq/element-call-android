@@ -14,10 +14,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallController
+import io.element.android.call.api.ElementCallPreferences
 import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.ElementCallVersion
@@ -35,6 +37,7 @@ import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /**
@@ -66,6 +69,25 @@ fun rememberElementCallScreenState(
     }
 
     val current = snapshot
+
+    // Saved across rotation and backgrounding; picture-in-picture and minimising dispose this presenter, so the sheet
+    // is closed when the screen comes back (037 R12a).
+    var isPreferencesVisible by rememberSaveable { mutableStateOf(false) }
+    val preferences by controller.preferences.collectAsState()
+    val latestSnapshot by rememberUpdatedState(current)
+    // Named once, as the reaction appears, and kept for its flight whatever the sender does next (037 R7, R7a).
+    val reactions = remember(controller) {
+        controller.reactions.map { reaction ->
+            val snapshot = latestSnapshot
+            ElementCallReactionBubbleData(
+                id = reaction.id,
+                emoji = reaction.emoji,
+                senderName = callDisplayName(snapshot?.roomMembers?.get(reaction.userId), reaction.userId),
+                isLocal = snapshot?.ownTile?.id?.memberId == reaction.memberId,
+                spread = reaction.spread,
+            )
+        }
+    }
 
     val tiles = current?.callTiles() ?: persistentListOf()
     // While a DM call rings, the chrome stays up and a tap on the stage leaves it there (030 R19).
@@ -146,6 +168,11 @@ fun rememberElementCallScreenState(
             }
             ElementCallScreenEvent.SwitchCamera -> controller.switchCamera()
             ElementCallScreenEvent.ToggleTileStats -> controller.toggleTileStats()
+            ElementCallScreenEvent.ShowPreferences -> isPreferencesVisible = true
+            ElementCallScreenEvent.DismissPreferences -> isPreferencesVisible = false
+            is ElementCallScreenEvent.SetReactionsPreference -> controller.setReactionsPreference(event.preference)
+            is ElementCallScreenEvent.SetSoundEffectsVolume -> controller.setSoundEffectsVolume(event.volume)
+            ElementCallScreenEvent.PlaySoundEffectsVolumeSample -> controller.playSoundEffectsVolumeSample()
             is ElementCallScreenEvent.SetVideoConstraints ->
                 controller.setVideoConstraints(event.memberId, event.kind, event.constraints)
             is ElementCallScreenEvent.SetComposedTiles -> controller.setComposedTiles(event.tileIds)
@@ -238,6 +265,10 @@ fun rememberElementCallScreenState(
         isStageChromeVisible = tiles.isEmpty() || isRinging || stageChrome.isVisible,
         ownTileCorner = spotlightMemory.ownTileCorner,
         pictureInPictureTileId = pictureInPictureTileId,
+        reactions = reactions,
+        isPreferencesVisible = isPreferencesVisible,
+        preferences = preferences,
+        isDeveloperModeEnabled = controller.isDeveloperModeEnabled,
         eventSink = ::handleEvent,
     )
 }
@@ -321,6 +352,10 @@ private fun ElementCallSnapshot?.toState(
     isStageChromeVisible: Boolean,
     ownTileCorner: ElementCallOwnTileCorner,
     pictureInPictureTileId: String?,
+    reactions: Flow<ElementCallReactionBubbleData>,
+    isPreferencesVisible: Boolean,
+    preferences: ElementCallPreferences,
+    isDeveloperModeEnabled: Boolean,
     eventSink: (ElementCallScreenEvent) -> Unit,
 ) = ElementCallScreenState(
     connection = this?.connection ?: ElementCallConnection.RequestingPermission,
@@ -363,5 +398,10 @@ private fun ElementCallSnapshot?.toState(
     isLeavingForPictureInPicture = false,
     libraryVersion = ElementCallVersion.library,
     coreVersion = ElementCallVersion.core,
+    reactions = reactions,
+    isPreferencesVisible = isPreferencesVisible,
+    reactionsPreference = preferences.reactions,
+    soundEffectsVolume = preferences.soundEffectsVolume,
+    isDeveloperModeEnabled = isDeveloperModeEnabled,
     eventSink = eventSink,
 )

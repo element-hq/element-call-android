@@ -17,6 +17,8 @@ import io.element.android.call.api.ElementCallFailure
 import io.element.android.call.api.ElementCallHandRequestFailure
 import io.element.android.call.api.ElementCallInterruption
 import io.element.android.call.api.ElementCallOptions
+import io.element.android.call.api.ElementCallPreferences
+import io.element.android.call.api.ElementCallReactionsPreference
 import io.element.android.call.api.ElementCallRoomContext
 import io.element.android.call.api.ElementCallWindowRect
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
@@ -49,10 +51,13 @@ import io.element.android.call.api.rtc.MatrixRtcUnableToDecrypt
 import io.element.android.call.api.rtc.id.UserId
 import io.element.android.call.impl.audio.CallSoundEffect
 import io.element.android.call.test.A_ROOM_ID
+import io.element.android.call.test.A_USER_ID
 import io.element.android.call.test.FakeElementCallLifecycleListener
+import io.element.android.call.test.FakeElementCallPreferencesStore
 import io.element.android.call.test.FakeElementCallRoomContextProvider
 import io.element.android.call.test.FakeMatrixRtcCall
 import io.element.android.call.test.FakeMatrixRtcClient
+import io.element.android.call.test.FakeMatrixRtcMediaSession
 import io.element.android.call.test.aRoster
 import io.element.android.call.test.aTile
 import io.element.android.call.test.aWindowedRoster
@@ -80,6 +85,7 @@ import kotlin.time.Duration.Companion.seconds
 private const val A_LOCAL_MEMBER_ID = "6ffd927ac275815176463d6fee57ed62"
 private const val A_REMOTE_MEMBER_ID = "2921a8e353fbc938be76f5b2f4946178"
 private const val ANOTHER_REMOTE_MEMBER_ID = "3d7f0c7c6f2a4d0b9e8a1c5b7d6e4f21"
+private val A_REACTING_USER_ID = UserId("@carol:example.org")
 private val A_RECEIVE_STATS = MatrixRtcReceiveStats(
     packetsReceived = 1_200,
     packetsLost = 0,
@@ -1983,6 +1989,149 @@ class DefaultElementCallControllerTest {
         assertThat(controller.state.value?.handRequestFailure).isNull()
     }
 
+    private suspend fun TestScope.aCallWithReactions(
+        platform: FakeElementCallPlatform = FakeElementCallPlatform(),
+        preferencesStore: FakeElementCallPreferencesStore = FakeElementCallPreferencesStore(),
+    ): Triple<DefaultElementCallController, FakeMatrixRtcMediaSession, FakeElementCallPlatform> {
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient, platform = platform, preferencesStore = preferencesStore)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+        val session = rtcClient.lastCall?.lastMediaSession!!
+        session.localState.value = MatrixRtcLocalState(tile = aTile(session.localMemberId, userId = A_USER_ID), isScreenSharing = false)
+        session.tiles.value = aRoster(aTile(A_REMOTE_MEMBER_ID, userId = A_REACTING_USER_ID))
+        runCurrent()
+        return Triple(controller, session, platform)
+    }
+
+    @Test
+    fun `a reaction appears after its spread, with its sound, resolved as web would`() = runTest {
+        val (controller, session, platform) = aCallWithReactions(platform = FakeElementCallPlatform(reactionSpread = 300.milliseconds))
+        controller.reactions.test {
+            session.emit(MatrixRtcCallEvent.Reaction(A_REMOTE_MEMBER_ID, emoji = "👍", name = "thumbsup"))
+            runCurrent()
+            advanceTimeBy(299.milliseconds)
+            expectNoEvents()
+            assertThat(platform.soundEffectRenderers.single().reactions).isEmpty()
+
+            advanceTimeBy(1.milliseconds)
+            val reaction = awaitItem()
+            assertThat(reaction.memberId).isEqualTo(A_REMOTE_MEMBER_ID)
+            assertThat(reaction.userId).isEqualTo(A_REACTING_USER_ID)
+            assertThat(reaction.emoji).isEqualTo("👍")
+            assertThat(reaction.spread).isEqualTo(300.milliseconds)
+            // The core calls 👍 silent; web plays its generic sound (037 R9).
+            assertThat(platform.soundEffectRenderers.single().reactions).containsExactly("generic")
+        }
+    }
+
+    @Test
+    fun `the spread never exceeds half a second`() = runTest {
+        val (controller, session, _) = aCallWithReactions(platform = FakeElementCallPlatform(reactionSpread = 2.seconds))
+        controller.reactions.test {
+            session.emit(MatrixRtcCallEvent.Reaction(A_REMOTE_MEMBER_ID, emoji = "🎉", name = "party"))
+            runCurrent()
+            advanceTimeBy(501.milliseconds)
+            assertThat(awaitItem().spread).isEqualTo(500.milliseconds)
+        }
+    }
+
+    @Test
+    fun `silent shows without a sound, off shows and plays nothing, and each applies from the next reaction`() = runTest {
+        val (controller, session, platform) = aCallWithReactions(platform = FakeElementCallPlatform(reactionSpread = 100.milliseconds))
+        val renderer = platform.soundEffectRenderers.single()
+        controller.reactions.test {
+            session.emit(MatrixRtcCallEvent.Reaction(A_REMOTE_MEMBER_ID, emoji = "🎉", name = "party"))
+            runCurrent()
+            // Changed while the first is still waiting out its spread: it keeps the preference it arrived under (037 R15).
+            controller.setReactionsPreference(ElementCallReactionsPreference.WITHOUT_SOUND)
+            advanceTimeBy(101.milliseconds)
+            awaitItem()
+            assertThat(renderer.reactions).containsExactly("party")
+
+            session.emit(MatrixRtcCallEvent.Reaction(A_REMOTE_MEMBER_ID, emoji = "👏", name = "clapping"))
+            advanceTimeBy(101.milliseconds)
+            awaitItem()
+            assertThat(renderer.reactions).containsExactly("party")
+
+            controller.setReactionsPreference(ElementCallReactionsPreference.OFF)
+            session.emit(MatrixRtcCallEvent.Reaction(A_REMOTE_MEMBER_ID, emoji = "👏", name = "clapping"))
+            advanceTimeBy(1.seconds)
+            expectNoEvents()
+            assertThat(renderer.reactions).containsExactly("party")
+        }
+    }
+
+    @Test
+    fun `a reaction with no voice free still appears`() = runTest {
+        val (controller, session, platform) = aCallWithReactions()
+        platform.soundEffectRenderers.single().isReactionVoiceFree = false
+        controller.reactions.test {
+            session.emit(MatrixRtcCallEvent.Reaction(A_REMOTE_MEMBER_ID, emoji = "🎉", name = "party"))
+            runCurrent()
+            assertThat(awaitItem().emoji).isEqualTo("🎉")
+        }
+    }
+
+    @Test
+    fun `our own reaction carries our user id, and one from a member off the roster is dropped`() = runTest {
+        val (controller, session, _) = aCallWithReactions()
+        controller.reactions.test {
+            session.emit(MatrixRtcCallEvent.Reaction(session.localMemberId, emoji = "🎉", name = "party"))
+            session.emit(MatrixRtcCallEvent.Reaction("aStranger", emoji = "🎉", name = "party"))
+            runCurrent()
+            assertThat(awaitItem().userId).isEqualTo(A_USER_ID)
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `a reaction nobody collected is not replayed`() = runTest {
+        val (controller, session, _) = aCallWithReactions()
+        session.emit(MatrixRtcCallEvent.Reaction(A_REMOTE_MEMBER_ID, emoji = "🎉", name = "party"))
+        runCurrent()
+        controller.reactions.test {
+            runCurrent()
+            expectNoEvents()
+        }
+    }
+
+    @Test
+    fun `the preferences come from the store and go back to it`() = runTest {
+        val store = FakeElementCallPreferencesStore(reactions = ElementCallReactionsPreference.WITHOUT_SOUND, soundEffectsVolume = 0.2f)
+        val (controller, _, platform) = aCallWithReactions(preferencesStore = store)
+        assertThat(controller.preferences.value).isEqualTo(ElementCallPreferences(ElementCallReactionsPreference.WITHOUT_SOUND, 0.2f))
+        assertThat(platform.soundEffectRenderers.single().volume).isEqualTo(0.2f)
+
+        controller.setReactionsPreference(ElementCallReactionsPreference.OFF)
+        controller.setSoundEffectsVolume(1.5f)
+
+        assertThat(store.reactions).isEqualTo(ElementCallReactionsPreference.OFF)
+        assertThat(store.soundEffectsVolume).isEqualTo(1f)
+        assertThat(controller.preferences.value).isEqualTo(ElementCallPreferences(ElementCallReactionsPreference.OFF, 1f))
+        // Applied to the running call's sounds at once, those playing included (037 R22).
+        assertThat(platform.soundEffectRenderers.single().volume).isEqualTo(1f)
+    }
+
+    @Test
+    fun `letting go of the slider plays the generic sound once`() = runTest {
+        val (controller, _, platform) = aCallWithReactions()
+        controller.playSoundEffectsVolumeSample()
+        assertThat(platform.soundEffectRenderers.single().reactions).containsExactly("generic")
+    }
+
+    @Test
+    fun `tile stats are only for developers`() = runTest {
+        val developer = createController(isDeveloperModeEnabled = true)
+        val user = createController(isDeveloperModeEnabled = false)
+
+        developer.toggleTileStats()
+        user.toggleTileStats()
+
+        assertThat(developer.state.value?.isTileStatsVisible).isTrue()
+        assertThat(user.state.value?.isTileStatsVisible).isFalse()
+    }
+
     private fun TestScope.createController(
         rtcClient: FakeMatrixRtcClient = FakeMatrixRtcClient(),
         audioDeviceController: FakeCallAudioDeviceController = FakeCallAudioDeviceController(),
@@ -2000,6 +2149,8 @@ class DefaultElementCallControllerTest {
         isScreenSharingEnabled: Boolean = false,
         participantCapForJoinLeaveSounds: Int = ElementCallOptions.DEFAULT_PARTICIPANT_CAP_FOR_JOIN_LEAVE_SOUNDS,
         isSfuFallbackEnabled: Boolean = false,
+        isDeveloperModeEnabled: Boolean = true,
+        preferencesStore: FakeElementCallPreferencesStore = FakeElementCallPreferencesStore(),
     ): DefaultElementCallController {
         val controller = DefaultElementCallController(
             scope = backgroundScope,
@@ -2015,7 +2166,9 @@ class DefaultElementCallControllerTest {
                 participantCapForJoinLeaveSounds = participantCapForJoinLeaveSounds,
                 ringLifetime = ringLifetime,
                 isSfuFallbackEnabled = isSfuFallbackEnabled,
+                isDeveloperModeEnabled = isDeveloperModeEnabled,
             ),
+            preferencesStore = preferencesStore,
         )
         controller.startCall(ElementCallData(roomId = A_ROOM_ID, isAudioCall = isAudioCall, isStartingCall = isStartingCall))
         runCurrent()

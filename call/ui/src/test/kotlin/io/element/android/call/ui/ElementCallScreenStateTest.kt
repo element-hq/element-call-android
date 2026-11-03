@@ -13,11 +13,13 @@ import app.cash.turbine.test
 import com.google.common.truth.Truth.assertThat
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallData
+import io.element.android.call.api.ElementCallReactionsPreference
 import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.ElementCallVersion
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
 import io.element.android.call.api.rtc.MatrixRtcParticipant
+import io.element.android.call.api.rtc.MatrixRtcReaction
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcTile
@@ -27,6 +29,7 @@ import io.element.android.call.api.rtc.MatrixRtcTileRoster
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.id.UserId
 import io.element.android.call.test.A_ROOM_ID
+import io.element.android.call.test.A_USER_ID
 import io.element.android.call.test.FakeElementCallController
 import io.element.android.call.test.aCameraParticipant
 import io.element.android.call.test.aSharingParticipant
@@ -44,6 +47,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
+import kotlin.time.Duration
 
 private const val ANOTHER_REMOTE_MEMBER_ID = "3d7f0c7c6f2a4d0b9e8a1c5b7d6e4f21"
 private val A_ROOM_MEMBER = ElementCallRoomMember(userId = UserId("@bob:example.org"), displayName = "Bob", avatarUrl = null)
@@ -56,6 +60,7 @@ private val A_ROOM_MEMBER = ElementCallRoomMember(userId = UserId("@bob:example.
  * business, in the impl module.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
+@Suppress("LargeClass")
 class ElementCallScreenStateTest {
     @get:Rule val warmUpRule = WarmUpRule()
 
@@ -783,6 +788,71 @@ class ElementCallScreenStateTest {
     )
 
     /** The core's tiles default to its shape for [participants]; pass [tiles] to rank them yourself. */
+    @Test
+    fun `the preferences sheet opens and closes, and its controls reach the controller`() = runTest {
+        val controller = FakeElementCallController(initialState = aConnectedSnapshot())
+
+        moleculeFlow(RecompositionMode.Immediate) { rememberElementCallScreenState(controller, aNavigator()) }.test {
+            val closed = awaitItem()
+            assertThat(closed.isPreferencesVisible).isFalse()
+            closed.eventSink(ElementCallScreenEvent.ShowPreferences)
+            val open = consumeItemsUntilPredicate { it.isPreferencesVisible }.last()
+
+            open.eventSink(ElementCallScreenEvent.SetReactionsPreference(ElementCallReactionsPreference.WITHOUT_SOUND))
+            open.eventSink(ElementCallScreenEvent.SetSoundEffectsVolume(0.8f))
+            open.eventSink(ElementCallScreenEvent.PlaySoundEffectsVolumeSample)
+            val changed = consumeItemsUntilPredicate { it.soundEffectsVolume == 0.8f }.last()
+            assertThat(changed.reactionsPreference).isEqualTo(ElementCallReactionsPreference.WITHOUT_SOUND)
+            assertThat(controller.soundEffectsVolumeSampleCount).isEqualTo(1)
+
+            changed.eventSink(ElementCallScreenEvent.DismissPreferences)
+            consumeItemsUntilPredicate { !it.isPreferencesVisible }
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `developer options follow the host`() = runTest {
+        val controller = FakeElementCallController(initialState = aConnectedSnapshot(), isDeveloperModeEnabled = false)
+
+        moleculeFlow(RecompositionMode.Immediate) { rememberElementCallScreenState(controller, aNavigator()) }.test {
+            assertThat(awaitItem().isDeveloperModeEnabled).isFalse()
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    /** As the sender's tile names them (037 R7): "You" for this device, our name for another of ours, the Matrix ID without a name. */
+    @Test
+    fun `a reaction is named as its sender's tile is`() = runTest {
+        val bob = UserId("@bob:example.org")
+        val nameless = UserId("@nameless:example.org")
+        val controller = FakeElementCallController(
+            initialState = aConnectedSnapshot(participants = listOf(aLocalParticipant())).copy(
+                roomMembers = persistentMapOf(bob to ElementCallRoomMember(bob, displayName = "Bob", avatarUrl = null)),
+            ),
+        )
+
+        moleculeFlow(RecompositionMode.Immediate) { rememberElementCallScreenState(controller, aNavigator()) }.test {
+            val state = awaitItem()
+            state.reactions.test {
+                controller.reactions.emit(aReaction(id = 1, memberId = A_LOCAL_MEMBER_ID, userId = A_USER_ID))
+                controller.reactions.emit(aReaction(id = 2, memberId = "bobsPhone", userId = bob))
+                controller.reactions.emit(aReaction(id = 3, memberId = "someone", userId = nameless))
+
+                assertThat(awaitItem().isLocal).isTrue()
+                awaitItem().let {
+                    assertThat(it.isLocal).isFalse()
+                    assertThat(it.senderName).isEqualTo("Bob")
+                }
+                assertThat(awaitItem().senderName).isEqualTo("@nameless:example.org")
+            }
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    private fun aReaction(id: Long, memberId: String, userId: UserId) =
+        MatrixRtcReaction(id = id, memberId = memberId, userId = userId, emoji = "🎉", spread = Duration.ZERO)
+
     private fun aConnectedSnapshot(
         participants: List<MatrixRtcParticipant> = emptyList(),
         tiles: List<MatrixRtcTile> = participants.previewTiles(),

@@ -9,10 +9,13 @@ package io.element.android.call.test
 
 import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.ElementCallData
+import io.element.android.call.api.ElementCallPreferences
+import io.element.android.call.api.ElementCallReactionsPreference
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.ElementCallWindowRect
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
+import io.element.android.call.api.rtc.MatrixRtcReaction
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
@@ -21,6 +24,7 @@ import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 
@@ -33,6 +37,7 @@ import kotlinx.coroutines.flow.flow
  */
 class FakeElementCallController(
     initialState: ElementCallSnapshot? = null,
+    override val isDeveloperModeEnabled: Boolean = true,
 ) : ElementCallController {
     override val state = MutableStateFlow(initialState)
     override val shouldEnterPictureInPicture = MutableStateFlow(false)
@@ -118,6 +123,25 @@ class FakeElementCallController(
 
     override fun setMaximized(maximized: Boolean) {
         maximizedCalls += maximized
+    }
+
+    override val preferences = MutableStateFlow(ElementCallPreferences.DEFAULT)
+
+    /** What a test pushes here is what the screen draws, as if each had just finished its spread. */
+    override val reactions = MutableSharedFlow<MatrixRtcReaction>(extraBufferCapacity = 64)
+
+    var soundEffectsVolumeSampleCount = 0
+
+    override fun setReactionsPreference(preference: ElementCallReactionsPreference) {
+        preferences.value = preferences.value.copy(reactions = preference)
+    }
+
+    override fun setSoundEffectsVolume(volume: Float) {
+        preferences.value = preferences.value.copy(soundEffectsVolume = volume)
+    }
+
+    override fun playSoundEffectsVolumeSample() {
+        soundEffectsVolumeSampleCount++
     }
 
     override fun toggleTileStats() {

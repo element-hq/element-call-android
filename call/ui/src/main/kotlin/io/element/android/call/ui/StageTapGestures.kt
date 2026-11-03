@@ -19,11 +19,10 @@ import androidx.compose.ui.input.pointer.PointerEventTimeoutCancellationExceptio
 import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.onClick
-import androidx.compose.ui.semantics.onLongClick
 import androidx.compose.ui.semantics.semantics
 
 /**
- * A tile's tap, double tap and long press.
+ * A tile's tap and double tap. A long press is neither, and does nothing.
  *
  * Unlike `combinedClickable`, the single tap is reported on its own touch-up rather than after the
  * system's double-tap timeout, which made the chrome feel as if the tap had not worked. The screen
@@ -37,28 +36,22 @@ import androidx.compose.ui.semantics.semantics
 internal fun Modifier.tileTapGestures(
     onTap: () -> Unit,
     onDoubleTap: () -> Unit,
-    onLongPress: () -> Unit,
 ): Modifier {
     val currentOnTap by rememberUpdatedState(onTap)
     val currentOnDoubleTap by rememberUpdatedState(onDoubleTap)
-    val currentOnLongPress by rememberUpdatedState(onLongPress)
     // Merging, as `combinedClickable` did: the tile reads as one node, and its tag takes the tile's place.
     return semantics(mergeDescendants = true) {
         onClick {
             currentOnTap()
             true
         }
-        onLongClick {
-            currentOnLongPress()
-            true
-        }
     }.pointerInput(Unit) {
         awaitEachGesture {
             awaitFirstDown()
-            val firstUp = awaitTapUp(onLongPress = { currentOnLongPress() }) ?: return@awaitEachGesture
+            val firstUp = awaitTapUp() ?: return@awaitEachGesture
             currentOnTap()
             val secondDown = withTimeoutOrNull(viewConfiguration.doubleTapTimeoutMillis) { awaitSecondDown(firstUp) }
-            if (secondDown != null && awaitTapUp(onLongPress = { currentOnLongPress() }) != null) currentOnDoubleTap()
+            if (secondDown != null && awaitTapUp() != null) currentOnDoubleTap()
         }
     }
 }
@@ -76,11 +69,10 @@ internal fun Modifier.stageGapTaps(onTap: () -> Unit): Modifier {
 }
 
 /** The up ending a tap, consumed; null if the gesture became something else, a long press included. */
-private suspend fun AwaitPointerEventScope.awaitTapUp(onLongPress: () -> Unit): PointerInputChange? {
+private suspend fun AwaitPointerEventScope.awaitTapUp(): PointerInputChange? {
     return try {
         withTimeout(viewConfiguration.longPressTimeoutMillis) { waitForUpOrCancellation() }?.apply { consume() }
     } catch (_: PointerEventTimeoutCancellationException) {
-        onLongPress()
         do {
             val event = awaitPointerEvent()
             event.changes.forEach { it.consume() }

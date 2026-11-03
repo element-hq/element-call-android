@@ -110,6 +110,10 @@ fun SampleApp(
                                 harness.stopScenario()
                                 controller.startOutage(it)
                             },
+                            onOpenReactions = {
+                                harness.stopScenario()
+                                controller.startReactions()
+                            },
                             onOpenScenario = { name -> harness.play(MatrixRtcScenario.load(name)) },
                             modifier = Modifier.weight(1f),
                         )

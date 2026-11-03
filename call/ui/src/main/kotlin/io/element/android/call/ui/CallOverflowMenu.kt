@@ -7,10 +7,11 @@
 
 package io.element.android.call.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
@@ -20,17 +21,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import io.element.android.call.ui.preview.ElementCallPreview
 import io.element.android.call.ui.preview.PreviewsDayNight
 import io.element.android.call.ui.theme.ElementCallTheme
 
 /**
- * The top bar's three dots and what they open: for now, which Element Call this is.
- *
- * Read-only on purpose. What people need from a menu mid-call is a version to put in a bug report, and
- * a line of text is the shortest path to it. Nothing in it is an action, so nothing here is an event.
+ * The top bar's three dots and what they open: for now, only Preferences (feature-hq 037 R12). The menu is kept, rather
+ * than the button opening the sheet, because the design has more to come in it.
  */
 @Composable
 internal fun CallOverflowMenu(state: ElementCallScreenState, modifier: Modifier = Modifier) {
@@ -51,39 +50,32 @@ internal fun CallOverflowMenu(state: ElementCallScreenState, modifier: Modifier 
             // otherwise take the host's theme, and a light-themed host got near-white text on white.
             containerColor = ElementCallTheme.colors.bgSubtlePrimary,
         ) {
-            CallVersionMenuContent(libraryVersion = state.libraryVersion, coreVersion = state.coreVersion)
+            CallOverflowMenuItems(
+                onPreferences = {
+                    isExpanded = false
+                    state.eventSink(ElementCallScreenEvent.ShowPreferences)
+                },
+            )
         }
     }
 }
 
-/**
- * The version lines. Plain text rather than menu items: there is nothing to tap, and a disabled item
- * would grey out the one thing the menu is for.
- */
 @Composable
-internal fun CallVersionMenuContent(
-    libraryVersion: String,
-    coreVersion: String,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier = modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-        Text(
-            text = stringResource(R.string.element_call_version_library, libraryVersion),
-            style = ElementCallTheme.typography.bodyMdRegular,
-            color = ElementCallTheme.colors.textPrimary,
-        )
-        Text(
-            text = stringResource(R.string.element_call_version_core, coreVersion),
-            style = ElementCallTheme.typography.bodySmRegular,
-            color = ElementCallTheme.colors.textSecondary,
-        )
-    }
+private fun CallOverflowMenuItems(onPreferences: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text(text = stringResource(R.string.element_call_preferences_title), color = ElementCallTheme.colors.textPrimary) },
+        leadingIcon = { Icon(ElementCallTheme.icons.preferences, contentDescription = null, tint = ElementCallTheme.colors.iconSecondary) },
+        onClick = onPreferences,
+        modifier = Modifier.testTag(ElementCallTestTags.PREFERENCES),
+    )
 }
 
 // The menu itself is a popup, which a screenshot cannot capture, so what it holds is previewed instead;
 // the screen previews cover the button in the bar.
 @PreviewsDayNight
 @Composable
-internal fun CallVersionMenuContentPreview() = ElementCallPreview {
-    CallVersionMenuContent(libraryVersion = "0.4.0", coreVersion = "0.3.0")
+internal fun CallOverflowMenuItemsPreview() = ElementCallPreview {
+    Column(modifier = Modifier.background(ElementCallTheme.colors.bgSubtlePrimary)) {
+        CallOverflowMenuItems(onPreferences = {})
+    }
 }

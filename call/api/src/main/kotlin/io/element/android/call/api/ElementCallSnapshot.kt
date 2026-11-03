@@ -153,7 +153,7 @@ data class ElementCallSnapshot(
     /** Whether the call is showing full screen, as opposed to docked in the minimized bar. */
     val isMaximized: Boolean = true,
     /**
-     * Whether tiles are showing their debug readout, toggled by long-pressing one.
+     * Whether tiles are showing their debug readout, toggled from the Preferences sheet in developer mode.
      *
      * Deliberately per call rather than persisted: it is answering a question about *this* call, and
      * a developer who left it on last week should not be handed a screen full of numbers today.

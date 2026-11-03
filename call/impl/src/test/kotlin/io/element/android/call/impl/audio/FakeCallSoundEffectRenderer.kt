@@ -7,7 +7,26 @@
 
 package io.element.android.call.impl.audio
 
-internal class FakeCallSoundEffectRenderer : CallSoundEffectRenderer {
+internal class FakeCallSoundEffectRenderer(initialVolume: Float = 0.5f) : CallSoundEffectRenderer {
+    /** The level the effects play at now. */
+    var volume = initialVolume
+        private set
+
+    /** Every reaction sound asked for, in order, played or not. */
+    val reactions = mutableListOf<String>()
+
+    /** What [playReaction] answers: false as when eight already play. */
+    var isReactionVoiceFree = true
+
+    override fun playReaction(sound: String): Boolean {
+        reactions += sound
+        return isReactionVoiceFree
+    }
+
+    override fun setVolume(volume: Float) {
+        this.volume = volume
+    }
+
     val played = mutableListOf<CallSoundEffect>()
     var releaseCount = 0
 

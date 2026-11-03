@@ -45,6 +45,10 @@ data class ElementCallIcons(
     val participants: ImageVector,
     /** The top bar's more-options button, which opens the overflow menu. */
     val overflow: ImageVector,
+    /** The overflow menu's way into the Preferences sheet. */
+    val preferences: ImageVector,
+    /** Closes a sheet. */
+    val close: ImageVector,
     /** A raised hand, on a tile whose member has one up. */
     val handRaised: ImageVector,
     /** Beside "Calling…" while a voice call rings; a video call shows [cameraOn]. */
@@ -82,6 +86,8 @@ data class ElementCallIcons(
             selected = ImageVector.vectorResource(R.drawable.ic_element_call_check),
             participants = ImageVector.vectorResource(R.drawable.ic_element_call_user_profile),
             overflow = ImageVector.vectorResource(R.drawable.ic_element_call_overflow_vertical),
+            preferences = ImageVector.vectorResource(R.drawable.ic_element_call_preferences),
+            close = ImageVector.vectorResource(R.drawable.ic_element_call_close),
             handRaised = ImageVector.vectorResource(R.drawable.ic_element_call_raised_hand_solid),
             voiceCall = ImageVector.vectorResource(R.drawable.ic_element_call_voice_call_solid),
             error = ImageVector.vectorResource(R.drawable.ic_element_call_error_solid),

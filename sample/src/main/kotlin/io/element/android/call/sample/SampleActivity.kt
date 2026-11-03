@@ -17,6 +17,7 @@ import io.element.android.call.test.scenario.MatrixRtcScenario
 import kotlinx.collections.immutable.toImmutableList
 import timber.log.Timber
 import java.util.zip.ZipFile
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * The host's Activity, and everything a host Activity has to do: put
@@ -42,13 +43,19 @@ class SampleActivity : ComponentActivity() {
         ringingFixture?.let { controller.startRinging(it) }
         val outageFixture = requested?.let(SampleOutageFixture::fromKey)
         outageFixture?.let { controller.startOutage(it) }
+        val isReactionsFixture = requested == REACTIONS_FIXTURE
+        if (isReactionsFixture) {
+            val pace = intent.getStringExtra(EXTRA_REACTION_INTERVAL)?.toDoubleOrNull()?.seconds ?: 1.seconds
+            controller.startReactions(pace)
+        }
         val requestedScenario = intent.getStringExtra(EXTRA_SCENARIO)
         val scenario = requestedScenario?.takeIf { it in scenarios }?.let(MatrixRtcScenario::load)
         // On the home screen rather than only in the log: a test that asked for a fixture that is not
         // there otherwise fails on a missing tile, which is true and about nothing.
         val launchError = when {
-            requested != null && fixture == null && ringingFixture == null && outageFixture == null -> {
-                val known = SampleFixture.entries.map { it.key } + SampleRingingFixture.entries.map { it.key } + SampleOutageFixture.entries.map { it.key }
+            requested != null && fixture == null && ringingFixture == null && outageFixture == null && !isReactionsFixture -> {
+                val known = SampleFixture.entries.map { it.key } + SampleRingingFixture.entries.map { it.key } +
+                    SampleOutageFixture.entries.map { it.key } + REACTIONS_FIXTURE
                 "Unknown fixture '$requested'. Known: ${known.joinToString()}"
             }
             requestedScenario != null && scenario == null -> "Unknown scenario '$requestedScenario'. Known: ${scenarios.joinToString()}"
@@ -99,5 +106,11 @@ class SampleActivity : ComponentActivity() {
 
         /** A scenario's name under `scenarios/`, as a string extra: `--es scenario 004_scroll_and_rank`. */
         const val EXTRA_SCENARIO = "scenario"
+
+        /** feature-hq's `reactions` fixture, on the real controller. */
+        const val REACTIONS_FIXTURE = "reactions"
+
+        /** Its pace in seconds, for tuning or a stress run: `--es reactionInterval 0.05`. */
+        const val EXTRA_REACTION_INTERVAL = "reactionInterval"
     }
 }
