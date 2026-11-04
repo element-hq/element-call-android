@@ -51,9 +51,9 @@ import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.api.rtc.id.UserId
 import io.element.android.call.impl.audio.CallSoundEffect
 import io.element.android.call.impl.audio.CallSoundEffectRenderer
+import io.element.android.call.impl.audio.GENERIC_REACTION_SOUND
 import io.element.android.call.impl.audio.JoinLeaveSoundPolicy
 import io.element.android.call.impl.audio.RaisedHandSoundPolicy
-import io.element.android.call.impl.rtc.MatrixRtcReactionCatalogue
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableMap
@@ -540,7 +540,7 @@ internal class DefaultElementCallController(
 
     override fun playSoundEffectsVolumeSample() {
         Timber.i("ElementCall: sound effects volume ${(_preferences.value.soundEffectsVolume * 100).roundToInt()} %")
-        soundEffectRenderer?.playReaction(MatrixRtcReactionCatalogue.GENERIC_SOUND)
+        soundEffectRenderer?.playReaction(GENERIC_REACTION_SOUND)
     }
 
     /**
@@ -900,20 +900,19 @@ internal class DefaultElementCallController(
             Timber.w("ElementCall: reaction from ${event.memberId}, who is not on the roster")
             return
         }
-        val resolved = platform.reactionCatalogue.resolve(event.name, event.emoji)
         val spread = platform.reactionSpread().coerceIn(Duration.ZERO, MAXIMUM_REACTION_SPREAD)
         val reaction = MatrixRtcReaction(
             id = ++nextReactionId,
             memberId = event.memberId,
             userId = userId,
-            emoji = resolved.emoji,
+            emoji = event.emoji,
             spread = spread,
         )
         launch {
             delay(spread)
             // With its bubble, not on arrival (037 R2b).
-            if (preference == ElementCallReactionsPreference.WITH_SOUND && soundEffectRenderer?.playReaction(resolved.sound) == false) {
-                Timber.i("ElementCall: reaction sound ${resolved.sound} not played, eight already are")
+            if (preference == ElementCallReactionsPreference.WITH_SOUND && soundEffectRenderer?.playReaction(event.sound) == false) {
+                Timber.i("ElementCall: reaction sound ${event.sound} not played, eight already are")
             }
             _reactions.emit(reaction)
         }

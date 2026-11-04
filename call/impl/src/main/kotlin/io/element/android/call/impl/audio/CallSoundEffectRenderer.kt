@@ -27,6 +27,9 @@ internal enum class CallSoundEffect(@RawRes val resId: Int) {
     TIMEOUT(R.raw.element_call_call_timeout),
 }
 
+/** Web's sound for a reaction without one of its own, and the volume sample. */
+internal const val GENERIC_REACTION_SOUND = "generic"
+
 /** Plays the call's sound effects over the call's own audio. One per call, released when it ends. */
 internal interface CallSoundEffectRenderer {
     fun play(sound: CallSoundEffect)
@@ -196,8 +199,6 @@ internal class DefaultCallSoundEffectRenderer(
 
         /** Longer than any of web's end sounds, for a file the platform cannot measure. */
         const val FALLBACK_DURATION_MS = 3_000L
-
-        const val GENERIC_REACTION_SOUND = "generic"
 
         /**
          * Web's reaction sounds by asset name, pinned in docs/sounds.md, each with the gain that brings it to the join sound's

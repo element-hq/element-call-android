@@ -15,12 +15,14 @@ class SdkRtcTransportsTest {
     @Test
     fun `transports keep their order, as the core picks the first it can use`() {
         val json = listOf(
-            RtcTransport.LiveKit(serviceUrl = "https://sfu.example.org/jwt"),
+            RtcTransport.LiveKit(url = null, serviceUrl = "https://sfu.example.org/jwt"),
+            RtcTransport.LiveKit(url = "wss://sfu.example.org", serviceUrl = null),
             RtcTransport.Custom(transportType = "org.example.mesh", data = """{"url":"https://mesh.example.org"}"""),
         ).toJson()
 
         assertThat(json).isEqualTo(
             """[{"type":"livekit","livekit_service_url":"https://sfu.example.org/jwt"},""" +
+                """{"type":"livekit","url":"wss://sfu.example.org"},""" +
                 """{"url":"https://mesh.example.org","type":"org.example.mesh"}]"""
         )
     }

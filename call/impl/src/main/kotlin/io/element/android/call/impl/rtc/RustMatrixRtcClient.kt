@@ -92,8 +92,7 @@ internal class RustMatrixRtcClient(
     }
 
     private fun MatrixRtcMembershipFormat.toFfi(): FfiMembershipFormat = when (this) {
-        MatrixRtcMembershipFormat.CURRENT -> FfiMembershipFormat.CURRENT
-        MatrixRtcMembershipFormat.STICKY2025 -> FfiMembershipFormat.STICKY2025
+        MatrixRtcMembershipFormat.MSC -> FfiMembershipFormat.MSC
         MatrixRtcMembershipFormat.ROOM_STATE -> FfiMembershipFormat.ROOM_STATE
     }
 

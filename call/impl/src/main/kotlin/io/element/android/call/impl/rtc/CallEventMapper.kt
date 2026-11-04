@@ -57,7 +57,6 @@ import org.matrix.rtc.FfiTileRoster
 import org.matrix.rtc.FfiUnableToDecrypt
 import org.matrix.rtc.JoinedMembership
 
-/** The core's `sound` hint on a reaction is not kept: it disagrees with web, see [MatrixRtcReactionCatalogue]. */
 internal fun FfiCallEvent.map(): MatrixRtcCallEvent = when (this) {
     is FfiCallEvent.ParticipantJoined -> MatrixRtcCallEvent.ParticipantJoined(memberId, UserId(userId), participantCount.toInt())
     is FfiCallEvent.ParticipantLeft -> MatrixRtcCallEvent.ParticipantLeft(memberId, participantCount.toInt())
@@ -77,7 +76,7 @@ internal fun FfiCallEvent.map(): MatrixRtcCallEvent = when (this) {
     is FfiCallEvent.UnknownParticipant -> MatrixRtcCallEvent.UnknownParticipant(identity)
     is FfiCallEvent.HandRaised -> MatrixRtcCallEvent.HandRaised(memberId)
     is FfiCallEvent.HandLowered -> MatrixRtcCallEvent.HandLowered(memberId)
-    is FfiCallEvent.Reaction -> MatrixRtcCallEvent.Reaction(memberId, emoji, name)
+    is FfiCallEvent.Reaction -> MatrixRtcCallEvent.Reaction(memberId, emoji, name, sound)
 }
 
 internal fun FfiKeyRejection.map(): MatrixRtcKeyRejection = when (this) {
