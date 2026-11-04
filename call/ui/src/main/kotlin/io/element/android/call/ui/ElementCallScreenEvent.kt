@@ -7,6 +7,7 @@
 
 package io.element.android.call.ui
 
+import io.element.android.call.api.ElementCallReactionsPreference
 import io.element.android.call.api.ElementCallWindowRect
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
@@ -31,14 +32,20 @@ sealed interface ElementCallScreenEvent {
     /** Swap the front and back cameras. */
     data object SwitchCamera : ElementCallScreenEvent
 
-    /**
-     * Show or hide the per-tile debug readout.
-     *
-     * Reached by long-pressing any tile rather than from a settings screen, because the questions it
-     * answers - is this the layer we asked for, is the network dropping it - come up *during* a call
-     * and are gone by the time anyone has navigated away and back.
-     */
+    /** Show or hide the per-tile debug readout, from the Preferences sheet's Developer options (037 R16). */
     data object ToggleTileStats : ElementCallScreenEvent
+
+    data object ShowPreferences : ElementCallScreenEvent
+
+    data object DismissPreferences : ElementCallScreenEvent
+
+    data class SetReactionsPreference(val preference: ElementCallReactionsPreference) : ElementCallScreenEvent
+
+    /** As the slider moves: applied at once, to sounds already playing too (037 R22). */
+    data class SetSoundEffectsVolume(val volume: Float) : ElementCallScreenEvent
+
+    /** The slider let go of (037 R24). */
+    data object PlaySoundEffectsVolumeSample : ElementCallScreenEvent
 
     /**
      * Report how large a member's video is actually being drawn, so the SFU can send a layer that

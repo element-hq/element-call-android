@@ -11,11 +11,14 @@ import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallFailure
+import io.element.android.call.api.ElementCallPreferences
+import io.element.android.call.api.ElementCallReactionsPreference
 import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.ElementCallWindowRect
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
+import io.element.android.call.api.rtc.MatrixRtcReaction
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTileId
@@ -31,6 +34,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -131,6 +135,20 @@ class SampleElementCallController(
     override fun setMaximized(maximized: Boolean) = update { it.copy(isMaximized = maximized) }
 
     override fun toggleTileStats() = update { it.copy(isTileStatsVisible = !it.isTileStatsVisible) }
+
+    override val isDeveloperModeEnabled = true
+    override val preferences = MutableStateFlow(ElementCallPreferences.DEFAULT)
+    override val reactions = emptyFlow<MatrixRtcReaction>()
+
+    override fun setReactionsPreference(preference: ElementCallReactionsPreference) {
+        preferences.value = preferences.value.copy(reactions = preference)
+    }
+
+    override fun setSoundEffectsVolume(volume: Float) {
+        preferences.value = preferences.value.copy(soundEffectsVolume = volume)
+    }
+
+    override fun playSoundEffectsVolumeSample() = Unit
 
     /**
      * One pattern per stream, stable for the life of the controller, as the real controller's flows are.

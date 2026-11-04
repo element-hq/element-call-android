@@ -16,6 +16,9 @@ import io.element.android.call.api.ElementCallHandRequestFailure
 import io.element.android.call.api.ElementCallInterruption
 import io.element.android.call.api.ElementCallLifecycleListener
 import io.element.android.call.api.ElementCallOptions
+import io.element.android.call.api.ElementCallPreferences
+import io.element.android.call.api.ElementCallPreferencesStore
+import io.element.android.call.api.ElementCallReactionsPreference
 import io.element.android.call.api.ElementCallRoomContextProvider
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.ElementCallWindowRect
@@ -35,6 +38,7 @@ import io.element.android.call.api.rtc.MatrixRtcInterruptions
 import io.element.android.call.api.rtc.MatrixRtcJoinException
 import io.element.android.call.api.rtc.MatrixRtcLeaveReason
 import io.element.android.call.api.rtc.MatrixRtcMediaSession
+import io.element.android.call.api.rtc.MatrixRtcReaction
 import io.element.android.call.api.rtc.MatrixRtcRing
 import io.element.android.call.api.rtc.MatrixRtcRingPhase
 import io.element.android.call.api.rtc.MatrixRtcRoom
@@ -44,10 +48,12 @@ import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
+import io.element.android.call.api.rtc.id.UserId
 import io.element.android.call.impl.audio.CallSoundEffect
 import io.element.android.call.impl.audio.CallSoundEffectRenderer
 import io.element.android.call.impl.audio.JoinLeaveSoundPolicy
 import io.element.android.call.impl.audio.RaisedHandSoundPolicy
+import io.element.android.call.impl.rtc.MatrixRtcReactionCatalogue
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableMap
@@ -58,12 +64,15 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -79,6 +88,8 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.roundToInt
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
@@ -107,12 +118,28 @@ internal class DefaultElementCallController(
     private val lifecycleListener: ElementCallLifecycleListener,
     private val roomContextProvider: ElementCallRoomContextProvider,
     private val options: ElementCallOptions,
+    private val preferencesStore: ElementCallPreferencesStore,
 ) : ElementCallController {
     private val mutex = Mutex()
 
     private val _state = MutableStateFlow<ElementCallSnapshot?>(null)
 
     override val state: StateFlow<ElementCallSnapshot?> = _state.asStateFlow()
+
+    override val isDeveloperModeEnabled: Boolean get() = options.isDeveloperModeEnabled
+
+    private val _preferences = MutableStateFlow(
+        ElementCallPreferences(reactions = preferencesStore.reactions, soundEffectsVolume = preferencesStore.soundEffectsVolume.coerceIn(0f, 1f))
+    )
+
+    override val preferences: StateFlow<ElementCallPreferences> = _preferences.asStateFlow()
+
+    // Not replayed: a reaction nobody is drawing, in picture-in-picture or minimised, is gone (037 R8).
+    private val _reactions = MutableSharedFlow<MatrixRtcReaction>(extraBufferCapacity = 64, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+
+    override val reactions: Flow<MatrixRtcReaction> = _reactions.asSharedFlow()
+
+    private var nextReactionId = 0L
 
     /**
      * A maximized call, or a minimized one with a picture in it. The second case completes the
@@ -494,7 +521,26 @@ internal class DefaultElementCallController(
     }
 
     override fun toggleTileStats() {
+        if (!options.isDeveloperModeEnabled) return
         updateState { it.copy(isTileStatsVisible = !it.isTileStatsVisible) }
+    }
+
+    override fun setReactionsPreference(preference: ElementCallReactionsPreference) {
+        Timber.i("ElementCall: reactions $preference")
+        preferencesStore.reactions = preference
+        _preferences.update { it.copy(reactions = preference) }
+    }
+
+    override fun setSoundEffectsVolume(volume: Float) {
+        val clamped = volume.coerceIn(0f, 1f)
+        preferencesStore.soundEffectsVolume = clamped
+        _preferences.update { it.copy(soundEffectsVolume = clamped) }
+        soundEffectRenderer?.setVolume(clamped)
+    }
+
+    override fun playSoundEffectsVolumeSample() {
+        Timber.i("ElementCall: sound effects volume ${(_preferences.value.soundEffectsVolume * 100).roundToInt()} %")
+        soundEffectRenderer?.playReaction(MatrixRtcReactionCatalogue.GENERIC_SOUND)
     }
 
     /**
@@ -628,7 +674,7 @@ internal class DefaultElementCallController(
         // ringback plays through the call's audio (030 R24), on whatever output the picker shows.
         joinLeaveSoundPolicy = JoinLeaveSoundPolicy(options.participantCapForJoinLeaveSounds)
         raisedHandSoundPolicy = RaisedHandSoundPolicy()
-        soundEffectRenderer = platform.createCallSoundEffectRenderer()
+        soundEffectRenderer = platform.createCallSoundEffectRenderer(_preferences.value.soundEffectsVolume)
         // Communication mode is device-wide state we borrow, held for as long as the call runs and
         // handed back in endCall(). Routing choices do not stick outside that mode, so the speaker
         // preference has to be applied after it, not before.
@@ -833,11 +879,49 @@ internal class DefaultElementCallController(
                     is MatrixRtcCallEvent.ParticipantJoined -> playJoinLeaveSound(CallSoundEffect.JOIN, event.memberId, event.participantCount)
                     is MatrixRtcCallEvent.ParticipantLeft -> playJoinLeaveSound(CallSoundEffect.LEAVE, event.memberId, event.participantCount)
                     is MatrixRtcCallEvent.HandRaised -> playRaisedHandSound(event.memberId)
+                    is MatrixRtcCallEvent.Reaction -> this@startObservers.receiveReaction(event, call.localMemberId)
                     else -> Unit
                 }
             }
         }
     }
+
+    /**
+     * Which reactions arrive at all is the core's: only while we are in the call, never a replay, never a member's second
+     * inside three seconds. What is left here is the user's preference, the spread, and the sound with its bubble.
+     */
+    private fun CoroutineScope.receiveReaction(event: MatrixRtcCallEvent.Reaction, localMemberId: String) {
+        // Read on arrival: a change applies to the next reaction and leaves those already scheduled alone (037 R15).
+        val preference = _preferences.value.reactions
+        Timber.i("ElementCall: ${event.memberId} reacted ${event.name.ifEmpty { "(no name)" }}: $preference")
+        if (preference == ElementCallReactionsPreference.OFF) return
+        val snapshot = _state.value ?: return
+        val userId = snapshot.userIdOf(event.memberId, localMemberId) ?: run {
+            Timber.w("ElementCall: reaction from ${event.memberId}, who is not on the roster")
+            return
+        }
+        val resolved = platform.reactionCatalogue.resolve(event.name, event.emoji)
+        val spread = platform.reactionSpread().coerceIn(Duration.ZERO, MAXIMUM_REACTION_SPREAD)
+        val reaction = MatrixRtcReaction(
+            id = ++nextReactionId,
+            memberId = event.memberId,
+            userId = userId,
+            emoji = resolved.emoji,
+            spread = spread,
+        )
+        launch {
+            delay(spread)
+            // With its bubble, not on arrival (037 R2b).
+            if (preference == ElementCallReactionsPreference.WITH_SOUND && soundEffectRenderer?.playReaction(resolved.sound) == false) {
+                Timber.i("ElementCall: reaction sound ${resolved.sound} not played, eight already are")
+            }
+            _reactions.emit(reaction)
+        }
+    }
+
+    private fun ElementCallSnapshot.userIdOf(memberId: String, localMemberId: String): UserId? =
+        ownTile?.takeIf { memberId == localMemberId }?.userId
+            ?: roster.order.firstOrNull { it.id.memberId == memberId }?.userId
 
     /** One line per announced change, played or not, so a rageshake shows how often a membership lapses and returns. */
     private fun playJoinLeaveSound(sound: CallSoundEffect, memberId: String, participantCount: Int) {

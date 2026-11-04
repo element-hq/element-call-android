@@ -44,6 +44,7 @@ fun SampleHomeScreen(
     onOpen: (SampleFixture) -> Unit,
     onOpenRinging: (SampleRingingFixture) -> Unit,
     onOpenOutage: (SampleOutageFixture) -> Unit,
+    onOpenReactions: () -> Unit,
     onOpenScenario: (String) -> Unit,
     modifier: Modifier = Modifier,
     launchError: String? = null,
@@ -118,6 +119,19 @@ fun SampleHomeScreen(
                 rows = SampleOutageFixture.entries,
             ) { fixture, shapes ->
                 FixtureRow(title = fixture.title, description = fixture.description, launchKey = fixture.key, shapes = shapes) { onOpenOutage(fixture) }
+            }
+            section(
+                key = "reactions",
+                title = "Reactions",
+                description = "Received reactions on a 22 s loop, through the real controller with their sounds (037).",
+                rows = listOf(SampleActivity.REACTIONS_FIXTURE),
+            ) { key, shapes ->
+                FixtureRow(
+                    title = "Reactions",
+                    description = "One a second from each member in turn, then four claps at once. The long name is shortened in the middle.",
+                    launchKey = key,
+                    shapes = shapes,
+                ) { onOpenReactions() }
             }
             section(
                 key = "scenarios",

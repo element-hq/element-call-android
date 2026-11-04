@@ -198,6 +198,14 @@ fun ElementCallScreen(
                 // All the chrome, gone at once rather than slid away when the system is about to shrink the
                 // screen into the floating window: what it shrinks should be the call, not its controls.
                 val chromeAlpha = if (state.isLeavingForPictureInPicture) 0f else 1f
+                // Over the stage and a fullscreen tile, under the controls, with or without them (037 R8).
+                // Not at all with animations removed: the sounds still play, from the controller (R6).
+                if (!reduceMotion) {
+                    ElementCallReactionsOverlay(
+                        reactions = state.reactions,
+                        modifier = Modifier.fillMaxSize().graphicsLayer { alpha = chromeAlpha },
+                    )
+                }
                 Box(modifier = Modifier.fillMaxSize().graphicsLayer { alpha = chromeAlpha }) {
                     if (!isTopBarHideable) {
                         // Faded rather than removed when a tile goes fullscreen, in step with the stage's scrim: removed
@@ -322,6 +330,9 @@ fun ElementCallScreen(
                 )
             }
         }
+    }
+    if (state.isPreferencesVisible) {
+        ElementCallPreferencesSheet(state = state)
     }
     state.handRequestFailure?.let { failure ->
         HandRequestFailureDialog(failure = failure, onDismiss = { state.eventSink(ElementCallScreenEvent.DismissHandRequestFailure) })

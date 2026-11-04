@@ -12,6 +12,7 @@ import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallFailure
 import io.element.android.call.api.ElementCallHandRequestFailure
 import io.element.android.call.api.ElementCallInterruption
+import io.element.android.call.api.ElementCallReactionsPreference
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.audio.CallAudioDeviceType
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
@@ -417,6 +418,11 @@ fun anElementCallScreenState(
     isRaiseHandEnabled: Boolean = true,
     isScreenShareStartEnabled: Boolean = true,
     interruptions: List<ElementCallInterruption> = emptyList(),
+    reactions: Flow<ElementCallReactionBubbleData> = emptyFlow(),
+    isPreferencesVisible: Boolean = false,
+    reactionsPreference: ElementCallReactionsPreference = ElementCallReactionsPreference.WITH_SOUND,
+    soundEffectsVolume: Float = 0.5f,
+    isDeveloperModeEnabled: Boolean = false,
     eventSink: (ElementCallScreenEvent) -> Unit = {},
 ) = ElementCallScreenState(
     connection = connection,
@@ -467,6 +473,11 @@ fun anElementCallScreenState(
     isLeavingForPictureInPicture = false,
     libraryVersion = libraryVersion,
     coreVersion = coreVersion,
+    reactions = reactions,
+    isPreferencesVisible = isPreferencesVisible,
+    reactionsPreference = reactionsPreference,
+    soundEffectsVolume = soundEffectsVolume,
+    isDeveloperModeEnabled = isDeveloperModeEnabled,
     eventSink = eventSink,
 )
 

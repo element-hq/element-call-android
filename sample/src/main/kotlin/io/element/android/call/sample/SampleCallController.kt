@@ -10,10 +10,13 @@ package io.element.android.call.sample
 import android.content.Context
 import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.ElementCallData
+import io.element.android.call.api.ElementCallPreferences
+import io.element.android.call.api.ElementCallReactionsPreference
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.ElementCallWindowRect
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
+import io.element.android.call.api.rtc.MatrixRtcReaction
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTileId
@@ -30,6 +33,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 /** A call on the real controller over a scripted core: a ringing or an outage fixture. */
 interface SampleLiveCall {
@@ -69,6 +74,8 @@ class SampleCallController(private val context: Context, private val scope: Coro
     fun startRinging(fixture: SampleRingingFixture) = startLive(SampleRingingCall(context, scope, fixture))
 
     fun startOutage(fixture: SampleOutageFixture) = startLive(SampleOutageCall(context, scope, fixture))
+
+    fun startReactions(pace: Duration = 1.seconds) = startLive(SampleReactionsCall(context, scope, pace))
 
     /** A real call in the lab (`lab/SampleLab.kt`). */
     fun startLab(call: SampleLiveCall) = startLive(call)
@@ -123,6 +130,13 @@ class SampleCallController(private val context: Context, private val scope: Coro
     override fun selectAudioDevice(device: CallAudioDevice) = target.selectAudioDevice(device)
     override fun setMaximized(maximized: Boolean) = target.setMaximized(maximized)
     override fun toggleTileStats() = target.toggleTileStats()
+    override val isDeveloperModeEnabled: Boolean get() = target.isDeveloperModeEnabled
+    override val preferences: StateFlow<ElementCallPreferences> =
+        current.flatMapLatest { it.preferences }.stateIn(scope, SharingStarted.Eagerly, ElementCallPreferences.DEFAULT)
+    override val reactions: Flow<MatrixRtcReaction> = current.flatMapLatest { it.reactions }
+    override fun setReactionsPreference(preference: ElementCallReactionsPreference) = target.setReactionsPreference(preference)
+    override fun setSoundEffectsVolume(volume: Float) = target.setSoundEffectsVolume(volume)
+    override fun playSoundEffectsVolumeSample() = target.playSoundEffectsVolumeSample()
     override fun videoFrames(memberId: String, kind: MatrixRtcStreamKind): Flow<MatrixRtcVideoFrame> = target.videoFrames(memberId, kind)
     override fun setScreenShareEnabled(token: MatrixRtcScreenCaptureToken?) = target.setScreenShareEnabled(token)
     override fun setVideoConstraints(memberId: String, kind: MatrixRtcStreamKind, constraints: MatrixRtcVideoConstraints) =

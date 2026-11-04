@@ -31,6 +31,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
 import androidx.compose.ui.test.swipeUp
@@ -224,23 +225,29 @@ class ElementCallScreenTest : RobolectricTest() {
         onNodeWithContentDescription(activity!!.getString(R.string.element_call_a11y_stop_screen_share)).assertDoesNotExist()
     }
 
-    /** The overflow menu says which Element Call this is, and asks the controller for nothing. */
+    /** The overflow menu's one item opens the Preferences sheet (037 R12). */
     @Test
-    fun `the overflow menu shows the versions`() = runAndroidComposeUiTest<ComponentActivity> {
+    fun `the overflow menu opens the preferences`() = runAndroidComposeUiTest<ComponentActivity> {
         val events = EventsRecorder<ElementCallScreenEvent>()
-        setContent {
-            ElementCallScreen(
-                state = anElementCallScreenState(libraryVersion = "1.2.3", coreVersion = "4.5.6", eventSink = events),
-            )
-        }
+        setContent { ElementCallScreen(state = anElementCallScreenState(eventSink = events)) }
         waitForIdle()
         events.clear()
 
         clickOnContentDescription(R.string.element_call_a11y_more_options)
+        onNodeWithText(activity!!.getString(R.string.element_call_preferences_title)).performClick()
 
-        onNodeWithText(activity!!.getString(R.string.element_call_version_library, "1.2.3")).assertIsDisplayed()
-        onNodeWithText(activity!!.getString(R.string.element_call_version_core, "4.5.6")).assertIsDisplayed()
-        events.assertEmpty()
+        events.assertSingle(ElementCallScreenEvent.ShowPreferences)
+    }
+
+    /** The versions are in the sheet's About, for everyone (037 R17). */
+    @Test
+    fun `the preferences show the versions`() = runAndroidComposeUiTest<ComponentActivity> {
+        setContent {
+            ElementCallPreferencesContent(state = anElementCallScreenState(libraryVersion = "1.2.3", coreVersion = "4.5.6"), onClose = {})
+        }
+
+        onNodeWithText(activity!!.getString(R.string.element_call_preferences_version, "1.2.3")).assertExists()
+        onNodeWithText(activity!!.getString(R.string.element_call_preferences_core_version, "4.5.6")).assertExists()
     }
 
     /** There is no camera to switch while it is off: the button on our tile is only drawn with a picture to turn around. */

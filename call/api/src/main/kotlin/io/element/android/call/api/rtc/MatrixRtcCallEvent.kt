@@ -32,6 +32,12 @@ sealed interface MatrixRtcCallEvent {
     /** A hand came down, or left with its owner, while we are in the call. */
     data class HandLowered(val memberId: String) : MatrixRtcCallEvent
 
+    /**
+     * An emoji reaction, while we are in the call: never a replay, never a member's second inside three seconds.
+     * [emoji] is the first character of what was sent and [name] is verbatim, empty when none was given.
+     */
+    data class Reaction(val memberId: String, val emoji: String, val name: String) : MatrixRtcCallEvent
+
     data class StreamStarted(val memberId: String, val kind: MatrixRtcStreamKind) : MatrixRtcCallEvent
 
     data class StreamStopped(val memberId: String, val kind: MatrixRtcStreamKind) : MatrixRtcCallEvent

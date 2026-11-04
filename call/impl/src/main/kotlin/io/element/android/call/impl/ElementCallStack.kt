@@ -12,6 +12,7 @@ import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.ElementCallDispatchers
 import io.element.android.call.api.ElementCallLifecycleListener
 import io.element.android.call.api.ElementCallOptions
+import io.element.android.call.api.ElementCallPreferencesStore
 import io.element.android.call.api.ElementCallRoomContextProvider
 import io.element.android.call.api.NoOpElementCallLifecycleListener
 import io.element.android.call.api.NoOpElementCallRoomContextProvider
@@ -62,6 +63,7 @@ class ElementCallStack private constructor(
         private var options: ElementCallOptions = ElementCallOptions()
         private var dispatchers: ElementCallDispatchers = ElementCallDispatchers.Default
         private var rtcClient: MatrixRtcClient? = null
+        private var preferencesStore: ElementCallPreferencesStore? = null
 
         /** Room names, direct flags and member profiles. Defaults to none: tiles show user ids. */
         fun roomContext(provider: ElementCallRoomContextProvider) = apply { roomContextProvider = provider }
@@ -78,6 +80,9 @@ class ElementCallStack private constructor(
         fun options(options: ElementCallOptions) = apply { this.options = options }
 
         fun dispatchers(dispatchers: ElementCallDispatchers) = apply { this.dispatchers = dispatchers }
+
+        /** Where the user's in-call preferences are kept. Defaults to this device's own storage. */
+        fun preferencesStore(store: ElementCallPreferencesStore) = apply { preferencesStore = store }
 
         /**
          * The RTC client, in place of the Rust one over [backend]: for a harness that plays a
@@ -107,6 +112,7 @@ class ElementCallStack private constructor(
                 lifecycleListener = lifecycleListener,
                 roomContextProvider = roomContextProvider,
                 options = options,
+                preferencesStore = preferencesStore ?: DefaultElementCallPreferencesStore(context),
             )
             return ElementCallStack(controller, options).also { ElementCallStackRegistry.register(it) }
         }

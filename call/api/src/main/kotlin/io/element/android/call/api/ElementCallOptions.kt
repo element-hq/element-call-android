@@ -55,6 +55,8 @@ data class ElementCallOptions(
      * something only the host can know, since the SDK keeps nothing of a LiveKit transport but its URL. Read when media connects.
      */
     val isSfuFallbackEnabled: Boolean = false,
+    /** Whether the host is in developer mode: the Preferences sheet then offers Developer options, the only way to tile stats (feature-hq 037 R16). */
+    val isDeveloperModeEnabled: Boolean = false,
 ) {
     companion object {
         const val DEFAULT_PARTICIPANT_CAP_FOR_JOIN_LEAVE_SOUNDS = 8

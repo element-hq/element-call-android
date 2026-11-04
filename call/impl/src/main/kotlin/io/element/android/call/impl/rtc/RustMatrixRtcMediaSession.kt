@@ -363,12 +363,8 @@ internal class RustMatrixRtcMediaSession(
                     ?: break
 
                 val mapped = event.map()
-                if (mapped != null) {
-                    handleInternally(mapped)
-                    _events.emit(mapped)
-                } else {
-                    Timber.d("MatrixRTC: ignoring ${event::class.simpleName}, not carried by this library yet")
-                }
+                handleInternally(mapped)
+                _events.emit(mapped)
             }
         }
     }

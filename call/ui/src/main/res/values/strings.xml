@@ -9,6 +9,4 @@
       ~ Product names and versions, nothing to translate. Every other string is in localazy.xml, downloaded
       ~ from the element-call Localazy project (CONTRIBUTING.md, "Strings").
       -->
-    <string name="element_call_version_library" translatable="false">Element Call Android %1$s</string>
-    <string name="element_call_version_core" translatable="false">matrix-rust-rtc %1$s</string>
 </resources>

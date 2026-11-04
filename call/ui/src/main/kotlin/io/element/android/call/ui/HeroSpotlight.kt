@@ -170,7 +170,6 @@ internal fun HeroSpotlight(
                     .tileTapGestures(
                         onTap = onTap,
                         onDoubleTap = { state.eventSink(ElementCallScreenEvent.ToggleFullscreen(tile.tileId)) },
-                        onLongPress = { state.eventSink(ElementCallScreenEvent.ToggleTileStats) },
                     )
                     .then(pictureInPictureSource),
             )

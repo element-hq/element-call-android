@@ -22,4 +22,13 @@ object ElementCallTestTags {
 
     /** The fullscreen HUD's close button, which leaves fullscreen and is not the minimise button (spec 000 R12). */
     const val EXIT_FULLSCREEN = "element_call_exit_fullscreen"
+
+    /** The overflow menu's Preferences item and the sheet it opens (feature-hq 037), named as iOS names them. */
+    const val PREFERENCES = "element_call_preferences"
+    const val PREFERENCES_SHEET = "element_call_preferences_sheet"
+    const val PREFERENCES_CLOSE = "element_call_preferences_close"
+    const val PREFERENCES_REACTIONS = "element_call_preferences_reactions"
+    const val PREFERENCES_SOUND_EFFECTS_VOLUME = "element_call_preferences_sound_effects_volume"
+    const val PREFERENCES_TILE_STATS = "element_call_preferences_tile_stats"
+    const val PREFERENCES_VERSION = "element_call_preferences_version"
 }

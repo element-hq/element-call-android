@@ -9,6 +9,7 @@ package io.element.android.call.api
 
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
+import io.element.android.call.api.rtc.MatrixRtcReaction
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTileId
@@ -92,8 +93,29 @@ interface ElementCallController {
     /** Full screen or docked in the minimized bar. */
     fun setMaximized(maximized: Boolean)
 
-    /** Show or hide the per-tile debug readout. See [ElementCallSnapshot.isTileStatsVisible]. */
+    /** Show or hide the per-tile debug readout; only with [ElementCallOptions.isDeveloperModeEnabled]. See [ElementCallSnapshot.isTileStatsVisible]. */
     fun toggleTileStats()
+
+    /** [ElementCallOptions.isDeveloperModeEnabled], for the screen. */
+    val isDeveloperModeEnabled: Boolean
+
+    /** The user's in-call preferences. Kept across calls and restarts, so readable with no call running. */
+    val preferences: StateFlow<ElementCallPreferences>
+
+    /** Applies to reactions arriving after it; what is already showing or sounding finishes (feature-hq 037 R15). */
+    fun setReactionsPreference(preference: ElementCallReactionsPreference)
+
+    /** 0 to 1 of the call's level, applied at once to every sound effect, those playing included (037 R22). */
+    fun setSoundEffectsVolume(volume: Float)
+
+    /** One short sound at the current volume, for when the user lets go of the slider (037 R24). */
+    fun playSoundEffectsVolumeSample()
+
+    /**
+     * Each reaction as it should appear, unless the preference is off. Not replayed: one emitted while nothing collects,
+     * in picture-in-picture or minimised, is gone, and is not shown on return (037 R8).
+     */
+    val reactions: Flow<MatrixRtcReaction>
 
     /**
      * Video frames for one member's stream, or an empty flow when no call is running. Shared: however

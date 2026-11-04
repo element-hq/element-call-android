@@ -12,7 +12,15 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 ## Unreleased
 
-_Nothing yet._
+- Tile stats are in the new Preferences sheet's Developer options, shown only with
+  `ElementCallOptions.isDeveloperModeEnabled`; a long press on a tile no longer toggles them. A host passes its own
+  developer mode there.
+- `ElementCallController` gains `preferences`, `reactions`, `isDeveloperModeEnabled`, `setReactionsPreference`,
+  `setSoundEffectsVolume` and `playSoundEffectsVolumeSample`, and `MatrixRtcCallEvent` gains `Reaction`: a controller of
+  the host's own implements them, and a `when` over the events covers the new case.
+- The user's reaction and sound effects preferences are kept on the device, in the SharedPreferences file
+  `element_call_preferences`. A host whose backup rules restore onto other devices excludes it, or passes its own
+  `ElementCallPreferencesStore` to `ElementCallStack.Builder.preferencesStore`.
 
 ## 0.1.0-rc.9 - 2026-10-27
 

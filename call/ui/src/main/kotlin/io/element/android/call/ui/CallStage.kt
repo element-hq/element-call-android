@@ -464,11 +464,6 @@ internal fun CallStage(
                 onExit = onExit,
                 isArrival = tile.tileId !in knownIds && !isRingHandover,
                 stats = state.tileStats(tile, slot.rect),
-                onLongPress = if (isRinging) {
-                    NoOp
-                } else {
-                    { state.eventSink(ElementCallScreenEvent.ToggleTileStats) }
-                },
                 onTap = if (isOwnFloatingTile || isRinging) NoOp else onTap,
                 allowsFullscreen = !isOwnFloatingTile && !isRinging,
                 isLandscapeStage = metrics.isLandscape,
@@ -682,7 +677,6 @@ private fun PlacedTile(
     /** Whether this tile has just joined the call, rather than scrolled into reach: only an arrival fades in. */
     isArrival: Boolean,
     stats: TileStats?,
-    onLongPress: () -> Unit,
     onTap: () -> Unit,
     /** False for our own floating tile (019 R14): no double tap and no action to go fullscreen. */
     allowsFullscreen: Boolean,
@@ -827,12 +821,11 @@ private fun PlacedTile(
             .then(if (appearance == CallTileAppearance.Spotlight) Modifier.scrollable(rememberScrollableState { it }, Orientation.Vertical) else Modifier)
             .then(if (slot.isFullscreen) Modifier.transformable(transformable) else Modifier)
             // A double tap enters and leaves fullscreen (000 R1, R2, R4), a single tap toggles the
-            // chrome (000 R9, 014 R14), a long press the debug readout. A down during a fling stops it
+            // chrome (000 R9, 014 R14). A down during a fling stops it
             // without consuming it, so a double tap right after a scroll is two clean taps.
             .tileTapGestures(
                 onTap = onTap,
                 onDoubleTap = { if (allowsFullscreen) eventSink(ElementCallScreenEvent.ToggleFullscreen(tile.tileId)) },
-                onLongPress = onLongPress,
             )
             .then(pictureInPictureSource)
             // Our own floating tile is not in the floating window, so it is not in what shrinks into it either.
