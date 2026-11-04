@@ -17,6 +17,8 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
   reference backend's, which answers `M_UNRECOGNIZED` until the SDK bindings expose it.
 - `MatrixRtcMembershipFormat.CURRENT` is `MSC`, and `STICKY2025` is gone: a 2025 membership is still read.
 - `MatrixRtcCallEvent.Reaction` gains `sound`, the core's asset name for it.
+- The reference backend needs `sdk-android` 26.11.01-nightly, resolved from its GitHub release (see
+  `settings.gradle.kts`): `RtcTransport.LiveKit` carries `url` and `serviceUrl`, both optional.
 - Tile stats are in the new Preferences sheet's Developer options, shown only with
   `ElementCallOptions.isDeveloperModeEnabled`; a long press on a tile no longer toggles them. A host passes its own
   developer mode there.
