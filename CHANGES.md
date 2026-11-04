@@ -12,6 +12,10 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 ## Unreleased
 
+_Nothing yet._
+
+## 0.1.0-rc.10 - 2026-11-04
+
 - Core: matrix-rust-rtc `0.5.0-rc.9`; a host's Ivy repository must point at the `v0.5.0-rc.9` asset.
 - `MatrixBackend` gains `livekitToken` (MSC4195 `get_token`, for a transport with a bare SFU `url`); copy the
   reference backend's, which answers `M_UNRECOGNIZED` until the SDK bindings expose it.
@@ -28,6 +32,23 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 - The user's reaction and sound effects preferences are kept on the device, in the SharedPreferences file
   `element_call_preferences`. A host whose backup rules restore onto other devices excludes it, or passes its own
   `ElementCallPreferencesStore` to `ElementCallStack.Builder.preferencesStore`.
+
+
+
+### What's Changed
+
+✨ Features
+* A tile's missing key shows the key icon in normal tint, a decryption error in red by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/76
+* Support reading and showing call reactions, with new settings. by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/78
+
+🧱 Build
+* Translate the call screen from the element-call Localazy project by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/77
+
+Dependency upgrades
+* chore: bump matrix-rust-rtc 0.5.0-rc.9 by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/79
+
+
+**Full Changelog**: https://github.com/element-hq/element-call-android/compare/v0.1.0-rc.9...v0.1.0-rc.10
 
 ## 0.1.0-rc.9 - 2026-10-27
 
