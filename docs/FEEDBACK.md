@@ -1096,6 +1096,9 @@ the sender as confirmed (`senderCrossSigned`, item 30) unless the shield is red.
   spelling, but `m.call.member` and `org.matrix.msc3401.call.member` read the same set.
 - The top-level `redacts` of a pre-v11 redaction: `RoomMessageLikeEvent` carries the content only, so a hand lowered
   in an older room version is not seen.
+- MSC4195 `get_token`: `livekitToken` answers `M_UNRECOGNIZED`, 404, as a homeserver without it does, so a
+  transport naming a bare SFU `url` cannot be joined; one with a `livekit_service_url` still can. Once the bindings
+  expose it and the SDK pin follows Element X, call it with the request's fields and answer its `jwt`.
 - State outside sliding sync's `required_state`: `subscribeToStateEvents` reads the store. The call member type is
   in the default set; `m.rtc.slot` is not, so the sticky modes would read every room as slotless.
 

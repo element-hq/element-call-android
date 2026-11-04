@@ -9,6 +9,7 @@ package io.element.android.call.test
 
 import org.matrix.rtc.BackendSubscription
 import org.matrix.rtc.FfiEventIn
+import org.matrix.rtc.FfiLiveKitTokenRequest
 import org.matrix.rtc.FfiOpenIdToken
 import org.matrix.rtc.FfiRoomSubjects
 import org.matrix.rtc.FfiToDeviceDelivery
@@ -38,6 +39,7 @@ class FakeMatrixBackend(
     private val sendToDeviceMessageResult: (recipients: List<FfiToDeviceRecipient>, messageType: String, contentJson: String) -> List<FfiToDeviceDelivery> =
         { _, _, _ -> lambdaError() },
     private val openidTokenResult: () -> FfiOpenIdToken = { lambdaError() },
+    private val livekitTokenResult: (FfiLiveKitTokenRequest) -> String = { lambdaError() },
     private val rtcTransportsResult: () -> String = { "[]" },
 ) : MatrixBackend {
     /** The subjects of every room subscription, by room id, in order. */
@@ -91,6 +93,8 @@ class FakeMatrixBackend(
     override suspend fun relations(roomId: String, eventId: String, relType: String, eventType: String): List<FfiEventIn> = emptyList()
 
     override suspend fun openidToken(): FfiOpenIdToken = openidTokenResult()
+
+    override suspend fun livekitToken(request: FfiLiveKitTokenRequest): String = livekitTokenResult(request)
 
     override suspend fun rtcTransports(): String = rtcTransportsResult()
 

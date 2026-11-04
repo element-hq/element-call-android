@@ -12,6 +12,11 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 ## Unreleased
 
+- Core: matrix-rust-rtc `0.5.0-rc.9`; a host's Ivy repository must point at the `v0.5.0-rc.9` asset.
+- `MatrixBackend` gains `livekitToken` (MSC4195 `get_token`, for a transport with a bare SFU `url`); copy the
+  reference backend's, which answers `M_UNRECOGNIZED` until the SDK bindings expose it.
+- `MatrixRtcMembershipFormat.CURRENT` is `MSC`, and `STICKY2025` is gone: a 2025 membership is still read.
+- `MatrixRtcCallEvent.Reaction` gains `sound`, the core's asset name for it.
 - Tile stats are in the new Preferences sheet's Developer options, shown only with
   `ElementCallOptions.isDeveloperModeEnabled`; a long press on a tile no longer toggles them. A host passes its own
   developer mode there.

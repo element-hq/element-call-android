@@ -9,7 +9,6 @@ package io.element.android.call.impl
 
 import io.element.android.call.impl.audio.CallSoundEffectRenderer
 import io.element.android.call.impl.audio.FakeCallSoundEffectRenderer
-import io.element.android.call.impl.rtc.MatrixRtcReactionCatalogue
 import kotlin.time.Duration
 
 internal class FakeElementCallPlatform(
@@ -24,8 +23,6 @@ internal class FakeElementCallPlatform(
      */
     private val onStartForegroundService: (isProjecting: Boolean) -> Unit = {},
     private val isCameraSwitchAvailable: Boolean = true,
-    /** The core's catalogue as of v0.5.0-rc.8, which the native library would return. */
-    override val reactionCatalogue: MatrixRtcReactionCatalogue = MatrixRtcReactionCatalogue(CORE_CATALOGUE),
     var reactionSpread: Duration = Duration.ZERO,
 ) : ElementCallPlatform {
     /** Counted rather than flagged: the service is deliberately started twice, once per media permission. */
@@ -64,13 +61,4 @@ internal class FakeElementCallPlatform(
         FakeCallSoundEffectRenderer(volume).also { soundEffectRenderers += it }
 
     override fun reactionSpread(): Duration = reactionSpread
-
-    companion object {
-        val CORE_CATALOGUE = listOf(
-            MatrixRtcReactionCatalogue.Kind("thumbsup", "👍", null),
-            MatrixRtcReactionCatalogue.Kind("party", "🎉", "party"),
-            MatrixRtcReactionCatalogue.Kind("clapping", "👏", "clap"),
-            MatrixRtcReactionCatalogue.Kind("drum", "🥁", "baduntss"),
-        )
-    }
 }

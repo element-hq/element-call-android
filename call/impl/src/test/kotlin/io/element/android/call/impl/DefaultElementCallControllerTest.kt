@@ -2005,10 +2005,10 @@ class DefaultElementCallControllerTest {
     }
 
     @Test
-    fun `a reaction appears after its spread, with its sound, resolved as web would`() = runTest {
+    fun `a reaction appears after its spread, with its sound`() = runTest {
         val (controller, session, platform) = aCallWithReactions(platform = FakeElementCallPlatform(reactionSpread = 300.milliseconds))
         controller.reactions.test {
-            session.emit(MatrixRtcCallEvent.Reaction(A_REMOTE_MEMBER_ID, emoji = "👍", name = "thumbsup"))
+            session.emit(MatrixRtcCallEvent.Reaction(A_REMOTE_MEMBER_ID, emoji = "👍", name = "thumbsup", sound = "generic"))
             runCurrent()
             advanceTimeBy(299.milliseconds)
             expectNoEvents()
@@ -2020,7 +2020,6 @@ class DefaultElementCallControllerTest {
             assertThat(reaction.userId).isEqualTo(A_REACTING_USER_ID)
             assertThat(reaction.emoji).isEqualTo("👍")
             assertThat(reaction.spread).isEqualTo(300.milliseconds)
-            // The core calls 👍 silent; web plays its generic sound (037 R9).
             assertThat(platform.soundEffectRenderers.single().reactions).containsExactly("generic")
         }
     }
@@ -2029,7 +2028,7 @@ class DefaultElementCallControllerTest {
     fun `the spread never exceeds half a second`() = runTest {
         val (controller, session, _) = aCallWithReactions(platform = FakeElementCallPlatform(reactionSpread = 2.seconds))
         controller.reactions.test {
-            session.emit(MatrixRtcCallEvent.Reaction(A_REMOTE_MEMBER_ID, emoji = "🎉", name = "party"))
+            session.emit(MatrixRtcCallEvent.Reaction(A_REMOTE_MEMBER_ID, emoji = "🎉", name = "party", sound = "party"))
             runCurrent()
             advanceTimeBy(501.milliseconds)
             assertThat(awaitItem().spread).isEqualTo(500.milliseconds)
@@ -2041,7 +2040,7 @@ class DefaultElementCallControllerTest {
         val (controller, session, platform) = aCallWithReactions(platform = FakeElementCallPlatform(reactionSpread = 100.milliseconds))
         val renderer = platform.soundEffectRenderers.single()
         controller.reactions.test {
-            session.emit(MatrixRtcCallEvent.Reaction(A_REMOTE_MEMBER_ID, emoji = "🎉", name = "party"))
+            session.emit(MatrixRtcCallEvent.Reaction(A_REMOTE_MEMBER_ID, emoji = "🎉", name = "party", sound = "party"))
             runCurrent()
             // Changed while the first is still waiting out its spread: it keeps the preference it arrived under (037 R15).
             controller.setReactionsPreference(ElementCallReactionsPreference.WITHOUT_SOUND)
@@ -2049,13 +2048,13 @@ class DefaultElementCallControllerTest {
             awaitItem()
             assertThat(renderer.reactions).containsExactly("party")
 
-            session.emit(MatrixRtcCallEvent.Reaction(A_REMOTE_MEMBER_ID, emoji = "👏", name = "clapping"))
+            session.emit(MatrixRtcCallEvent.Reaction(A_REMOTE_MEMBER_ID, emoji = "👏", name = "clapping", sound = "clap"))
             advanceTimeBy(101.milliseconds)
             awaitItem()
             assertThat(renderer.reactions).containsExactly("party")
 
             controller.setReactionsPreference(ElementCallReactionsPreference.OFF)
-            session.emit(MatrixRtcCallEvent.Reaction(A_REMOTE_MEMBER_ID, emoji = "👏", name = "clapping"))
+            session.emit(MatrixRtcCallEvent.Reaction(A_REMOTE_MEMBER_ID, emoji = "👏", name = "clapping", sound = "clap"))
             advanceTimeBy(1.seconds)
             expectNoEvents()
             assertThat(renderer.reactions).containsExactly("party")
@@ -2067,7 +2066,7 @@ class DefaultElementCallControllerTest {
         val (controller, session, platform) = aCallWithReactions()
         platform.soundEffectRenderers.single().isReactionVoiceFree = false
         controller.reactions.test {
-            session.emit(MatrixRtcCallEvent.Reaction(A_REMOTE_MEMBER_ID, emoji = "🎉", name = "party"))
+            session.emit(MatrixRtcCallEvent.Reaction(A_REMOTE_MEMBER_ID, emoji = "🎉", name = "party", sound = "party"))
             runCurrent()
             assertThat(awaitItem().emoji).isEqualTo("🎉")
         }
@@ -2077,8 +2076,8 @@ class DefaultElementCallControllerTest {
     fun `our own reaction carries our user id, and one from a member off the roster is dropped`() = runTest {
         val (controller, session, _) = aCallWithReactions()
         controller.reactions.test {
-            session.emit(MatrixRtcCallEvent.Reaction(session.localMemberId, emoji = "🎉", name = "party"))
-            session.emit(MatrixRtcCallEvent.Reaction("aStranger", emoji = "🎉", name = "party"))
+            session.emit(MatrixRtcCallEvent.Reaction(session.localMemberId, emoji = "🎉", name = "party", sound = "party"))
+            session.emit(MatrixRtcCallEvent.Reaction("aStranger", emoji = "🎉", name = "party", sound = "party"))
             runCurrent()
             assertThat(awaitItem().userId).isEqualTo(A_USER_ID)
             expectNoEvents()
@@ -2088,7 +2087,7 @@ class DefaultElementCallControllerTest {
     @Test
     fun `a reaction nobody collected is not replayed`() = runTest {
         val (controller, session, _) = aCallWithReactions()
-        session.emit(MatrixRtcCallEvent.Reaction(A_REMOTE_MEMBER_ID, emoji = "🎉", name = "party"))
+        session.emit(MatrixRtcCallEvent.Reaction(A_REMOTE_MEMBER_ID, emoji = "🎉", name = "party", sound = "party"))
         runCurrent()
         controller.reactions.test {
             runCurrent()
@@ -2135,7 +2134,7 @@ class DefaultElementCallControllerTest {
     private fun TestScope.createController(
         rtcClient: FakeMatrixRtcClient = FakeMatrixRtcClient(),
         audioDeviceController: FakeCallAudioDeviceController = FakeCallAudioDeviceController(),
-        membershipFormat: MatrixRtcMembershipFormat = MatrixRtcMembershipFormat.CURRENT,
+        membershipFormat: MatrixRtcMembershipFormat = MatrixRtcMembershipFormat.MSC,
         platform: FakeElementCallPlatform = FakeElementCallPlatform(),
         audioFocus: FakeAudioFocus = FakeAudioFocus(requestAudioFocusResult = {}, releaseAudioFocusResult = {}),
         lifecycleListener: FakeElementCallLifecycleListener = FakeElementCallLifecycleListener(),

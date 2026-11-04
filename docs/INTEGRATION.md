@@ -146,6 +146,7 @@ one copy of its own.
 | `subscribeRoom` / `subscribeToDevice` | your client's listeners, delivering into the sink (§4) | a `BackendSubscription` |
 | `relations` | `GET /relations/{eventId}/{relType}/{eventType}`, decrypted | the related events |
 | `openidToken` | `client.getOpenIdToken()` | the token |
+| `livekitToken` | MSC4195 `get_token` on the homeserver, for a transport with a bare `url`; `M_UNRECOGNIZED`, 404, when you cannot make it | the `jwt` |
 | `rtcTransports` | MSC4143 transport discovery, as the raw `rtc_transports` JSON array | `[]` when there is none |
 
 **On the released SDK, there are no delayed events.** The Kotlin bindings do not expose them yet, so
@@ -228,15 +229,14 @@ object.)
 
 ### Membership format
 
-A **three-way choice made once per room**, not a set of flags — it fixes what the core subscribes to, the wire
-format, the member id, the SFU participant identity and the token endpoint together:
+A **two-way choice made once per room**, not a set of flags — it fixes what the core subscribes to, the wire
+format, the member id and the SFU participant identity together. The token endpoint follows the transport, not the format:
 
-- `CURRENT` — MSC4143 + MSC4354 as they stand.
-- `STICKY2025` — Element Call as of 2025: sticky events with legacy fields riding alongside.
+- `MSC` — MSC4143 + MSC4354 as they stand; a 2025 Element Call membership is still read.
 - `ROOM_STATE` — the pre-MSC4354 generation: `org.matrix.msc3401.call.member` room state, delayed *state* events as
   the dead man's switch. Visible to that generation and to nobody else.
 
-`CURRENT` and `STICKY2025` joins fail in a room with no open `m.rtc.slot`, and this library never opens one, so it
+`MSC` joins fail in a room with no open `m.rtc.slot`, and this library never opens one, so it
 pins `ROOM_STATE` (`DefaultElementCallController`).
 
 ---

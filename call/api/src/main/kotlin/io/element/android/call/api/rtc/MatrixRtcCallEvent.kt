@@ -34,9 +34,10 @@ sealed interface MatrixRtcCallEvent {
 
     /**
      * An emoji reaction, while we are in the call: never a replay, never a member's second inside three seconds.
-     * [emoji] is the first character of what was sent and [name] is verbatim, empty when none was given.
+     * [emoji] is the catalogue's for a known [name], otherwise the first character of what was sent; [name] is verbatim,
+     * empty when none was given. [sound] is the asset to play, `generic` for a name without one of its own.
      */
-    data class Reaction(val memberId: String, val emoji: String, val name: String) : MatrixRtcCallEvent
+    data class Reaction(val memberId: String, val emoji: String, val name: String, val sound: String) : MatrixRtcCallEvent
 
     data class StreamStarted(val memberId: String, val kind: MatrixRtcStreamKind) : MatrixRtcCallEvent
 

@@ -17,6 +17,7 @@ import kotlinx.coroutines.withContext
 import org.matrix.rtc.BackendSubscription
 import org.matrix.rtc.FfiBackendException
 import org.matrix.rtc.FfiEventIn
+import org.matrix.rtc.FfiLiveKitTokenRequest
 import org.matrix.rtc.FfiOpenIdToken
 import org.matrix.rtc.FfiRoomSubjects
 import org.matrix.rtc.FfiToDeviceDelivery
@@ -143,6 +144,18 @@ class SdkMatrixBackend(
             tokenType = token.tokenType,
             matrixServerName = token.matrixServerName,
             expiresInSecs = token.expiresInSeconds,
+        )
+    }
+
+    /** The SDK bindings lack MSC4195 `get_token`: answered as a homeserver without it, so only `livekit_service_url` transports join. */
+    override suspend fun livekitToken(request: FfiLiveKitTokenRequest): String {
+        Timber.i("MatrixRTC backend: livekitToken for ${request.url}, unsupported")
+        throw FfiBackendException.Failed(
+            errcode = "M_UNRECOGNIZED",
+            status = 404.toUShort(),
+            retryAfterMs = null,
+            permanent = true,
+            reason = "MSC4195 get_token is not exposed by the SDK bindings",
         )
     }
 

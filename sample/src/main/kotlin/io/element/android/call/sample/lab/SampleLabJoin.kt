@@ -50,15 +50,14 @@ data class SampleLabJoin(
 
 /** The lab's name for a format, as the page writes it in the code: `current` or `state`, room state when absent. */
 fun labFormat(name: String?): MatrixRtcMembershipFormat =
-    if (name == "current") MatrixRtcMembershipFormat.CURRENT else MatrixRtcMembershipFormat.ROOM_STATE
+    if (name == "current") MatrixRtcMembershipFormat.MSC else MatrixRtcMembershipFormat.ROOM_STATE
 
 val MatrixRtcMembershipFormat.labName: String
-    get() = if (this == MatrixRtcMembershipFormat.CURRENT) "current" else "state"
+    get() = if (this == MatrixRtcMembershipFormat.MSC) "current" else "state"
 
 /** How the Lab tab names the format, the same words as the lab page's banner. */
 val MatrixRtcMembershipFormat.label: String
     get() = when (this) {
-        MatrixRtcMembershipFormat.CURRENT -> "Current (sticky events)"
-        MatrixRtcMembershipFormat.STICKY2025 -> "Sticky 2025"
+        MatrixRtcMembershipFormat.MSC -> "MSC (sticky events)"
         MatrixRtcMembershipFormat.ROOM_STATE -> "Room state (legacy)"
     }

@@ -84,15 +84,15 @@ class SampleReactionsCall(context: Context, private val scope: CoroutineScope, p
             // 0 s to 14 s: one a second, the senders in turn, walking the catalogue from where the last loop stopped.
             for (second in 0..14) {
                 val sender = (SENDERS + OWN)[second % (SENDERS.size + 1)]
-                val (name, emoji) = CATALOGUE[next++ % CATALOGUE.size]
+                val (name, emoji, sound) = CATALOGUE[next++ % CATALOGUE.size]
                 val memberId = if (sender == OWN) session.localMemberId else SampleFixture.memberIdOf(sender)
-                session.emit(MatrixRtcCallEvent.Reaction(memberId, emoji, name))
+                session.emit(MatrixRtcCallEvent.Reaction(memberId, emoji, name, sound))
                 delay(pace)
             }
             // 15 s to 17 s: nothing, so every member is outside the core's three-second window.
             delay(pace * 3)
             // 18 s: four at the same instant, the same sound overlapping itself (R2b, R10).
-            SENDERS.forEach { session.emit(MatrixRtcCallEvent.Reaction(SampleFixture.memberIdOf(it), "👏", "clapping")) }
+            SENDERS.forEach { session.emit(MatrixRtcCallEvent.Reaction(SampleFixture.memberIdOf(it), "👏", "clapping", "clap")) }
             delay(pace * 4)
         }
     }
@@ -109,25 +109,25 @@ class SampleReactionsCall(context: Context, private val scope: CoroutineScope, p
             userId to ElementCallRoomMember(userId = userId, displayName = name, avatarUrl = null)
         }
 
-        /** Element Call web's catalogue, in its picker's order. */
+        /** Element Call web's catalogue, in its picker's order, with the sound the core names for each. */
         val CATALOGUE = listOf(
-            "thumbsup" to "👍",
-            "party" to "🎉",
-            "clapping" to "👏",
-            "dog" to "🐶",
-            "cat" to "🐱",
-            "lightbulb" to "💡",
-            "crickets" to "🦗",
-            "thumbsdown" to "👎",
-            "dizzy" to "😵‍💫",
-            "ok" to "👌",
-            "heart" to "🥰",
-            "laugh" to "😄",
-            "deer" to "🦌",
-            "rock" to "🤘",
-            "wave" to "👋",
-            "drum" to "🥁",
-            "bell" to "🛎️",
+            Triple("thumbsup", "👍", "generic"),
+            Triple("party", "🎉", "party"),
+            Triple("clapping", "👏", "clap"),
+            Triple("dog", "🐶", "dog"),
+            Triple("cat", "🐱", "cat"),
+            Triple("lightbulb", "💡", "lightbulb"),
+            Triple("crickets", "🦗", "crickets"),
+            Triple("thumbsdown", "👎", "generic"),
+            Triple("dizzy", "😵‍💫", "generic"),
+            Triple("ok", "👌", "generic"),
+            Triple("heart", "🥰", "generic"),
+            Triple("laugh", "😄", "generic"),
+            Triple("deer", "🦌", "deer"),
+            Triple("rock", "🤘", "rock"),
+            Triple("wave", "👋", "wave"),
+            Triple("drum", "🥁", "baduntss"),
+            Triple("bell", "🛎️", "bell"),
         )
 
         fun tile(memberId: String, name: String) = MatrixRtcTile(

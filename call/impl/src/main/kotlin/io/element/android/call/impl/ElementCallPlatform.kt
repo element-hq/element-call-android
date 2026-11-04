@@ -13,10 +13,8 @@ import android.hardware.camera2.CameraManager
 import android.os.SystemClock
 import io.element.android.call.impl.audio.CallSoundEffectRenderer
 import io.element.android.call.impl.audio.DefaultCallSoundEffectRenderer
-import io.element.android.call.impl.rtc.MatrixRtcReactionCatalogue
 import io.element.android.call.impl.services.ElementCallForegroundService
 import io.element.android.call.impl.util.runCatchingExceptions
-import timber.log.Timber
 import kotlin.random.Random
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -65,9 +63,6 @@ internal interface ElementCallPlatform {
     /** A renderer for one call's sound effects, released when it ends. */
     fun createCallSoundEffectRenderer(volume: Float): CallSoundEffectRenderer
 
-    /** Turns a received reaction's name into what it shows and plays (037 R9). */
-    val reactionCatalogue: MatrixRtcReactionCatalogue
-
     /** How long a received reaction waits before it appears, at random up to half a second (037 R2b). */
     fun reactionSpread(): Duration
 }
@@ -92,12 +87,6 @@ internal class DefaultElementCallPlatform(
     }
 
     override fun createCallSoundEffectRenderer(volume: Float): CallSoundEffectRenderer = DefaultCallSoundEffectRenderer(context, volume)
-
-    override val reactionCatalogue: MatrixRtcReactionCatalogue by lazy {
-        runCatchingExceptions { MatrixRtcReactionCatalogue.fromCore() }
-            .onFailure { Timber.e(it, "ElementCall: no reaction catalogue from the core, web's corrections only") }
-            .getOrElse { MatrixRtcReactionCatalogue(emptyList()) }
-    }
 
     override fun reactionSpread(): Duration = Random.nextLong(0, MAXIMUM_REACTION_SPREAD.inWholeMilliseconds + 1).milliseconds
 }
