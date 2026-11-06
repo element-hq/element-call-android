@@ -12,6 +12,9 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 ## Unreleased
 
+- `ElementCallIcons` gains `reaction`, the control bar's way into the reaction picker: a host passing its own icons maps
+  Compound's `reactionSolid`. `ElementCallColors` gains `borderInteractiveSecondary`, defaulted: a host passing its own
+  colours maps Compound's.
 - `ElementCallController` gains `reactionCatalogue` and `sendReaction`, and `MatrixRtcCall` gains `sendReaction`: a
   controller or call of the host's own implements them.
 

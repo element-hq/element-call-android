@@ -51,6 +51,8 @@ data class ElementCallIcons(
     val close: ImageVector,
     /** A raised hand, on a tile whose member has one up. */
     val handRaised: ImageVector,
+    /** The way into the reaction picker, in the control bar or the More sheet (feature-hq 009 R16). */
+    val reaction: ImageVector,
     /** Beside "Calling…" while a voice call rings; a video call shows [cameraOn]. */
     val voiceCall: ImageVector,
     /** Heads the screen of a call that failed. */
@@ -89,6 +91,7 @@ data class ElementCallIcons(
             preferences = ImageVector.vectorResource(R.drawable.ic_element_call_preferences),
             close = ImageVector.vectorResource(R.drawable.ic_element_call_close),
             handRaised = ImageVector.vectorResource(R.drawable.ic_element_call_raised_hand_solid),
+            reaction = ImageVector.vectorResource(R.drawable.ic_element_call_reaction_solid),
             voiceCall = ImageVector.vectorResource(R.drawable.ic_element_call_voice_call_solid),
             error = ImageVector.vectorResource(R.drawable.ic_element_call_error_solid),
             interruptions = ImageVector.vectorResource(R.drawable.ic_element_call_info_solid),
