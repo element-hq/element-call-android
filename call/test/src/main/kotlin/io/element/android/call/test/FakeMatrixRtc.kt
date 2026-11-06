@@ -21,6 +21,7 @@ import io.element.android.call.api.rtc.MatrixRtcLocalState
 import io.element.android.call.api.rtc.MatrixRtcMediaSession
 import io.element.android.call.api.rtc.MatrixRtcMembership
 import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
+import io.element.android.call.api.rtc.MatrixRtcReactionKind
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcRoom
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
@@ -147,6 +148,17 @@ class FakeMatrixRtcCall(
     override suspend fun lowerHand(): Result<Unit> {
         lowerHandCount++
         return lowerHandResult()
+    }
+
+    /** What [sendReaction] answers. */
+    var sendReactionResult: suspend (MatrixRtcReactionKind) -> Result<Unit> = { Result.success(Unit) }
+
+    /** Every reaction asked for, in order, refused or not. */
+    val sentReactions = mutableListOf<MatrixRtcReactionKind>()
+
+    override suspend fun sendReaction(kind: MatrixRtcReactionKind): Result<Unit> {
+        sentReactions += kind
+        return sendReactionResult(kind)
     }
 
     /** Called as media is asked for, before it connects: what a test checks has happened by then. */

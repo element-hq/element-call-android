@@ -14,6 +14,7 @@ import io.element.android.call.api.rtc.MatrixRtcCallStatus
 import io.element.android.call.api.rtc.MatrixRtcLeaveReason
 import io.element.android.call.api.rtc.MatrixRtcMediaSession
 import io.element.android.call.api.rtc.MatrixRtcMembership
+import io.element.android.call.api.rtc.MatrixRtcReactionKind
 import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.call.impl.util.childScope
 import io.element.android.call.impl.util.runCatchingExceptions
@@ -101,6 +102,12 @@ internal class RustMatrixRtcCall(
     override suspend fun lowerHand(): Result<Unit> = withContext(ffiDispatcher) {
         runCatchingExceptions { rtcCall.lowerHand() }
             .onFailure { Timber.w(it, "MatrixRTC: failed to lower our hand in $roomId/$slotId") }
+    }
+
+    override suspend fun sendReaction(kind: MatrixRtcReactionKind): Result<Unit> = withContext(ffiDispatcher) {
+        runCatchingExceptions { rtcCall.sendReaction(emoji = kind.emoji, name = kind.name) }
+            .map { }
+            .onFailure { Timber.i("MatrixRTC: reaction ${kind.name} not sent in $roomId/$slotId: ${it.message}") }
     }
 
     override suspend fun connectMedia(isSfuFallbackEnabled: Boolean): Result<MatrixRtcMediaSession> = runCatchingExceptions {

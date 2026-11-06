@@ -50,6 +50,12 @@ interface MatrixRtcCall : AutoCloseable {
     suspend fun lowerHand(): Result<Unit>
 
     /**
+     * Send a reaction on this membership. Fails inside the core's cooldown and when it has not landed within five seconds;
+     * either way nothing is shown, ours included, since ours is drawn only when the core reports it (feature-hq 009 R12, R23).
+     */
+    suspend fun sendReaction(kind: MatrixRtcReactionKind): Result<Unit>
+
+    /**
      * Connect to the media transport the call was joined on. Returns once the engine is up, without waiting for our own media
      * server, which the core connects as it would reconnect a lost one (feature-hq 034 C10).
      *
