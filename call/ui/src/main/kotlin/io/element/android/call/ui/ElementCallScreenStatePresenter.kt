@@ -24,6 +24,7 @@ import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.ElementCallVersion
 import io.element.android.call.api.rtc.MatrixRtcConnectionState
+import io.element.android.call.api.rtc.MatrixRtcReactionKind
 import io.element.android.call.api.rtc.MatrixRtcSignallingHealth
 import io.element.android.call.api.rtc.MatrixRtcTileKind
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
@@ -90,6 +91,23 @@ fun rememberElementCallScreenState(
     }
 
     val tiles = current?.callTiles() ?: persistentListOf()
+    val extraActions = extraActions(
+        showsRaiseHandControl = current?.showsRaiseHandControl == true,
+        showsReactionControl = current?.showsReactionControl == true,
+        isScreenShareAvailable = current?.isScreenShareAvailable == true,
+    )
+    // Not saved, unlike Preferences: the Activity keeps this across rotation, which closes it on purpose (009 R27).
+    var presentedSheet by remember { mutableStateOf<ElementCallSheet?>(null) }
+    val isConnected = current?.connection == ElementCallConnection.Connected
+    // Gone with the call, and with what it offered: a sheet whose rows have left is not reopened when they come back.
+    LaunchedEffect(isConnected, extraActions) {
+        val isStale = when (presentedSheet) {
+            ElementCallSheet.MORE -> extraActions.toBarSlot() != ElementCallBarSlot.More
+            ElementCallSheet.REACTIONS -> ElementCallBarAction.REACTIONS !in extraActions
+            null -> false
+        }
+        if (!isConnected || isStale) presentedSheet = null
+    }
     // While a DM call rings, the chrome stays up and a tap on the stage leaves it there (030 R19).
     val isRinging = current?.connection is ElementCallConnection.Calling || current?.connection is ElementCallConnection.RingNotSent
 
@@ -213,7 +231,11 @@ fun rememberElementCallScreenState(
                 }
             }
             is StageChromeEvent.StageAppeared -> applyStageChrome(ElementCallChromeVisibility.Event.StageAppeared(event.isLandscape))
-            is StageChromeEvent.StageRotated -> applyStageChrome(ElementCallChromeVisibility.Event.Rotated(event.isLandscape))
+            is StageChromeEvent.StageRotated -> {
+                presentedSheet = null
+                applyStageChrome(ElementCallChromeVisibility.Event.Rotated(event.isLandscape))
+            }
+            StageChromeEvent.ScreenStopped -> presentedSheet = null
             is StageChromeEvent.UserScrolled -> {
                 pendingReturn.cancel()
                 applyStageChrome(ElementCallChromeVisibility.Event.UserScrolled(event.towardEnd))
@@ -230,6 +252,7 @@ fun rememberElementCallScreenState(
             is StageChromeEvent.ScreenReaderChanged -> applyStageChrome(ElementCallChromeVisibility.Event.ScreenReader(event.isRunning))
             is SmallCallEvent.MoveOwnTile -> spotlightMemory.ownTileCorner = event.corner
             ElementCallScreenEvent.ToggleScreenShare -> {
+                presentedSheet = null
                 if (current?.isScreenSharing == true) {
                     controller.setScreenShareEnabled(token = null)
                 } else {
@@ -241,8 +264,21 @@ fun rememberElementCallScreenState(
             ElementCallScreenEvent.ToggleMicrophoneMuted -> controller.setMicrophoneMuted(current?.isMicrophoneMuted != true)
             ElementCallScreenEvent.ToggleAudioTestTone -> controller.setAudioTestToneEnabled(current?.isAudioTestToneEnabled != true)
             is ElementCallScreenEvent.SelectAudioDevice -> controller.selectAudioDevice(event.device)
-            ElementCallScreenEvent.Minimize -> navigator.minimize()
-            ElementCallScreenEvent.ToggleRaisedHand -> controller.setHandRaised(current?.ownTile?.handRaisedAtMs == null)
+            ElementCallScreenEvent.Minimize -> {
+                presentedSheet = null
+                navigator.minimize()
+            }
+            ElementCallScreenEvent.ToggleRaisedHand -> {
+                // From the sheet, closed so the banner is in view (009 R17).
+                presentedSheet = null
+                controller.setHandRaised(current?.ownTile?.handRaisedAtMs == null)
+            }
+            is ElementCallScreenEvent.Present -> presentedSheet = event.sheet
+            ElementCallScreenEvent.DismissSheet -> presentedSheet = null
+            is ElementCallScreenEvent.SendReaction -> {
+                controller.sendReaction(event.kind)
+                presentedSheet = null
+            }
             ElementCallScreenEvent.DismissHandRequestFailure -> controller.clearHandRequestFailure()
             ElementCallScreenEvent.HangUp -> controller.hangUp()
         }
@@ -265,6 +301,9 @@ fun rememberElementCallScreenState(
         isStageChromeVisible = tiles.isEmpty() || isRinging || stageChrome.isVisible,
         ownTileCorner = spotlightMemory.ownTileCorner,
         pictureInPictureTileId = pictureInPictureTileId,
+        extraActions = extraActions,
+        presentedSheet = presentedSheet,
+        reactionCatalogue = remember(controller) { controller.reactionCatalogue.toImmutableList() },
         reactions = reactions,
         isPreferencesVisible = isPreferencesVisible,
         preferences = preferences,
@@ -329,10 +368,17 @@ internal fun List<CallTileData>.showingHands(isShown: Boolean): List<CallTileDat
 
 /** From three people, ourselves included, or while our hand is up so it can come down (009 R2, R33). */
 private val ElementCallSnapshot.showsRaiseHandControl: Boolean
-    get() = ownTile != null &&
-        (ownTile?.handRaisedAtMs != null || 1 + roster.order.count { it.id.kind == MatrixRtcTileKind.PERSON } >= MIN_PEOPLE_FOR_RAISED_HAND)
+    get() = ownTile != null && (ownTile?.handRaisedAtMs != null || peopleCount >= MIN_PEOPLE_FOR_HANDS_AND_REACTIONS)
 
-private const val MIN_PEOPLE_FOR_RAISED_HAND = 3
+/** Under the hand's count with no exception: a reaction ends by itself (009 R33). */
+private val ElementCallSnapshot.showsReactionControl: Boolean
+    get() = ownTile != null && peopleCount >= MIN_PEOPLE_FOR_HANDS_AND_REACTIONS
+
+/** Ourselves and every remote person; a share is a second tile for one of them. */
+private val ElementCallSnapshot.peopleCount: Int
+    get() = 1 + roster.order.count { it.id.kind == MatrixRtcTileKind.PERSON }
+
+private const val MIN_PEOPLE_FOR_HANDS_AND_REACTIONS = 3
 
 /** Never a member id: the core mints those, and none starts this way. */
 private const val RINGING_TILE_PREFIX = "ringing:"
@@ -352,6 +398,9 @@ private fun ElementCallSnapshot?.toState(
     isStageChromeVisible: Boolean,
     ownTileCorner: ElementCallOwnTileCorner,
     pictureInPictureTileId: String?,
+    extraActions: ImmutableList<ElementCallBarAction>,
+    presentedSheet: ElementCallSheet?,
+    reactionCatalogue: ImmutableList<MatrixRtcReactionKind>,
     reactions: Flow<ElementCallReactionBubbleData>,
     isPreferencesVisible: Boolean,
     preferences: ElementCallPreferences,
@@ -388,8 +437,11 @@ private fun ElementCallSnapshot?.toState(
     isStageChromeVisible = isStageChromeVisible,
     ownTileCorner = ownTileCorner,
     isHandRaised = this?.ownTile?.handRaisedAtMs != null,
-    showsRaiseHandControl = this?.showsRaiseHandControl == true,
+    extraActions = extraActions,
+    presentedSheet = presentedSheet,
+    reactionCatalogue = reactionCatalogue,
     isRaiseHandEnabled = this?.signalling !is MatrixRtcSignallingHealth.Unreachable,
+    isReactionControlEnabled = this?.signalling !is MatrixRtcSignallingHealth.Unreachable,
     // Over a live call only: a failed one has its own screen.
     interruptions = this?.interruptions?.takeIf { connection == ElementCallConnection.Connected } ?: persistentListOf(),
     handRequestFailure = this?.handRequestFailure,

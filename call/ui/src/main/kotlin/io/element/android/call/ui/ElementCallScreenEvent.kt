@@ -11,6 +11,7 @@ import io.element.android.call.api.ElementCallReactionsPreference
 import io.element.android.call.api.ElementCallWindowRect
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
+import io.element.android.call.api.rtc.MatrixRtcReactionKind
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
@@ -112,6 +113,15 @@ sealed interface ElementCallScreenEvent {
     /** The user has read the failure of a raise or a lower. */
     data object DismissHandRequestFailure : ElementCallScreenEvent
 
+    /** Open the bar's More sheet, or the reaction picker, which takes More's place (009 R17). */
+    data class Present(val sheet: ElementCallSheet) : ElementCallScreenEvent
+
+    /** Close the open sheet, sending nothing (009 R20). */
+    data object DismissSheet : ElementCallScreenEvent
+
+    /** Send a reaction from the picker, which closes it whatever becomes of the send (009 R19, R23). */
+    data class SendReaction(val kind: MatrixRtcReactionKind) : ElementCallScreenEvent
+
     data object HangUp : ElementCallScreenEvent
 }
 
@@ -137,6 +147,9 @@ internal sealed interface StageChromeEvent : ElementCallScreenEvent {
 
     /** TalkBack started or stopped (014 R24). */
     data class ScreenReaderChanged(val isRunning: Boolean) : StageChromeEvent
+
+    /** The screen went to the background (009 R27). */
+    data object ScreenStopped : StageChromeEvent
 }
 
 /** What the small-call layout's own tile asks for (spec 019). */

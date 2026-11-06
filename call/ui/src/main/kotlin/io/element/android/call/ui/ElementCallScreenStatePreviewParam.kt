@@ -20,6 +20,7 @@ import io.element.android.call.api.rtc.MatrixRtcConnectionLossReason
 import io.element.android.call.api.rtc.MatrixRtcConnectionState
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcParticipant
+import io.element.android.call.api.rtc.MatrixRtcReactionKind
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
@@ -423,6 +424,8 @@ fun anElementCallScreenState(
     reactionsPreference: ElementCallReactionsPreference = ElementCallReactionsPreference.WITH_SOUND,
     soundEffectsVolume: Float = 0.5f,
     isDeveloperModeEnabled: Boolean = false,
+    isReactionControlEnabled: Boolean = true,
+    presentedSheet: ElementCallSheet? = null,
     eventSink: (ElementCallScreenEvent) -> Unit = {},
 ) = ElementCallScreenState(
     connection = connection,
@@ -462,10 +465,17 @@ fun anElementCallScreenState(
     isStageChromeVisible = isStageChromeVisible,
     ownTileCorner = ownTileCorner,
     isHandRaised = participants.any { it.isLocal && it.memberId in handRaisedIds },
-    // As the presenter decides it: three people, or our own hand up.
-    showsRaiseHandControl = participants.any { it.isLocal } &&
-        (participants.count() >= 3 || participants.any { it.isLocal && it.memberId in handRaisedIds }),
+    // As the presenter decides it: three people, or our own hand up; reactions from three, with no exception.
+    extraActions = extraActions(
+        showsRaiseHandControl = participants.any { it.isLocal } &&
+            (participants.count() >= 3 || participants.any { it.isLocal && it.memberId in handRaisedIds }),
+        showsReactionControl = participants.any { it.isLocal } && participants.count() >= 3,
+        isScreenShareAvailable = isScreenShareAvailable,
+    ),
+    presentedSheet = presentedSheet,
+    reactionCatalogue = A_PREVIEW_REACTION_CATALOGUE,
     isRaiseHandEnabled = isRaiseHandEnabled,
+    isReactionControlEnabled = isReactionControlEnabled,
     interruptions = interruptions.toImmutableList(),
     handRequestFailure = handRequestFailure,
     // Nothing to report where a tile is drawn to: a preview has no window to grow out of.
@@ -503,6 +513,14 @@ fun aReceiveStats(
 val AN_EARPIECE = CallAudioDevice(id = 1, type = CallAudioDeviceType.EARPIECE, productName = null)
 val A_SPEAKER = CallAudioDevice(id = 2, type = CallAudioDeviceType.SPEAKER, productName = null)
 val A_BLUETOOTH_HEADSET = CallAudioDevice(id = 3, type = CallAudioDeviceType.BLUETOOTH, productName = "WH-1000XM4")
+
+/** Ourselves and two others: the smallest call offering the hand and reactions (009 R33). */
+fun aSmallGroup() = listOf(aLocalParticipant(), aRemoteParticipant(), aCrowdParticipant(1))
+
+/** A stand-in for the core's catalogue, which is native and cannot load in a preview: eight, so a second row shows. */
+val A_PREVIEW_REACTION_CATALOGUE = listOf("👍", "🎉", "👏", "❤️", "😂", "😮", "🤔", "🙌")
+    .mapIndexed { index, emoji -> MatrixRtcReactionKind(name = "preview$index", emoji = emoji) }
+    .toImmutableList()
 
 const val A_LOCAL_MEMBER_ID = "6ffd927ac275815176463d6fee57ed62"
 const val A_REMOTE_MEMBER_ID = "2921a8e353fbc938be76f5b2f4946178"
