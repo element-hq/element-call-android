@@ -10,6 +10,7 @@ package io.element.android.call.api
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcReaction
+import io.element.android.call.api.rtc.MatrixRtcReactionKind
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTileId
@@ -159,6 +160,15 @@ interface ElementCallController {
 
     /** The user has been told about [ElementCallSnapshot.handRequestFailure]. */
     fun clearHandRequestFailure()
+
+    /** What the reaction picker offers: the core's catalogue, in its order (feature-hq 009 R11). */
+    val reactionCatalogue: List<MatrixRtcReactionKind>
+
+    /**
+     * Send a reaction. Ignored before the call has joined. A refusal or a failure shows nothing (009 R12, R23); ours appears in
+     * [reactions] once the core reports it, as everyone's does.
+     */
+    fun sendReaction(kind: MatrixRtcReactionKind)
 
     /**
      * From the host's Matrix client: it has gone offline (`false`), or a request has succeeded since it was (`true`). Report

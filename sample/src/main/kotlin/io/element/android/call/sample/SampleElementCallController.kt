@@ -19,6 +19,7 @@ import io.element.android.call.api.ElementCallWindowRect
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcReaction
+import io.element.android.call.api.rtc.MatrixRtcReactionKind
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTileId
@@ -30,16 +31,18 @@ import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import org.matrix.rtc.reactionCatalog
 import timber.log.Timber
+import kotlin.time.Duration
 
 /**
  * A controller with no call behind it, whose controls nevertheless do what they say.
@@ -138,7 +141,10 @@ class SampleElementCallController(
 
     override val isDeveloperModeEnabled = true
     override val preferences = MutableStateFlow(ElementCallPreferences.DEFAULT)
-    override val reactions = emptyFlow<MatrixRtcReaction>()
+    private val sentReactions = MutableSharedFlow<MatrixRtcReaction>(extraBufferCapacity = 8)
+
+    // Only ours: a fixture has no room, so what we send comes back as it would from the core.
+    override val reactions: Flow<MatrixRtcReaction> = sentReactions
 
     override fun setReactionsPreference(preference: ElementCallReactionsPreference) {
         preferences.value = preferences.value.copy(reactions = preference)
@@ -223,6 +229,20 @@ class SampleElementCallController(
     }
 
     override fun clearHandRequestFailure() = update { it.copy(handRequestFailure = null) }
+
+    override val reactionCatalogue: List<MatrixRtcReactionKind> by lazy {
+        reactionCatalog().map { MatrixRtcReactionKind(name = it.name, emoji = it.emoji) }
+    }
+
+    private var nextReactionId = 0L
+
+    override fun sendReaction(kind: MatrixRtcReactionKind) {
+        val own = _state.value?.ownTile ?: return
+        Timber.d("Sample: reaction ${kind.name}")
+        sentReactions.tryEmit(
+            MatrixRtcReaction(id = ++nextReactionId, memberId = own.id.memberId, userId = own.userId, emoji = kind.emoji, spread = Duration.ZERO)
+        )
+    }
 
     /** The fixtures script the homeserver's reach themselves. */
     override fun reportConnectivity(isOnline: Boolean) = Unit

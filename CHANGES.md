@@ -12,7 +12,8 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 ## Unreleased
 
-_Nothing yet._
+- `ElementCallController` gains `reactionCatalogue` and `sendReaction`, and `MatrixRtcCall` gains `sendReaction`: a
+  controller or call of the host's own implements them.
 
 ## 0.1.0-rc.10 - 2026-11-04
 

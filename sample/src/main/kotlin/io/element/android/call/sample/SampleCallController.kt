@@ -17,6 +17,7 @@ import io.element.android.call.api.ElementCallWindowRect
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcReaction
+import io.element.android.call.api.rtc.MatrixRtcReactionKind
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTileId
@@ -146,6 +147,8 @@ class SampleCallController(private val context: Context, private val scope: Coro
     override fun setRankingThreshold(tiles: Int) = target.setRankingThreshold(tiles)
     override fun setHandRaised(raised: Boolean) = target.setHandRaised(raised)
     override fun clearHandRequestFailure() = target.clearHandRequestFailure()
+    override val reactionCatalogue: List<MatrixRtcReactionKind> get() = target.reactionCatalogue
+    override fun sendReaction(kind: MatrixRtcReactionKind) = target.sendReaction(kind)
     override fun reportConnectivity(isOnline: Boolean) = target.reportConnectivity(isOnline)
     override fun hangUp() = target.hangUp()
 }

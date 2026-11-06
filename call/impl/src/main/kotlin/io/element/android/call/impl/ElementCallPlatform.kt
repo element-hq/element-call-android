@@ -11,10 +11,13 @@ import android.content.Context
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.os.SystemClock
+import io.element.android.call.api.rtc.MatrixRtcReactionKind
 import io.element.android.call.impl.audio.CallSoundEffectRenderer
 import io.element.android.call.impl.audio.DefaultCallSoundEffectRenderer
+import io.element.android.call.impl.rtc.coreReactionCatalogue
 import io.element.android.call.impl.services.ElementCallForegroundService
 import io.element.android.call.impl.util.runCatchingExceptions
+import timber.log.Timber
 import kotlin.random.Random
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -65,6 +68,9 @@ internal interface ElementCallPlatform {
 
     /** How long a received reaction waits before it appears, at random up to half a second (037 R2b). */
     fun reactionSpread(): Duration
+
+    /** The core's reaction catalogue, empty if it cannot be read: native, so not on a JVM test. */
+    fun reactionCatalogue(): List<MatrixRtcReactionKind>
 }
 
 internal class DefaultElementCallPlatform(
@@ -89,6 +95,17 @@ internal class DefaultElementCallPlatform(
     override fun createCallSoundEffectRenderer(volume: Float): CallSoundEffectRenderer = DefaultCallSoundEffectRenderer(context, volume)
 
     override fun reactionSpread(): Duration = Random.nextLong(0, MAXIMUM_REACTION_SPREAD.inWholeMilliseconds + 1).milliseconds
+
+    override fun reactionCatalogue(): List<MatrixRtcReactionKind> = try {
+        coreReactionCatalogue()
+    } catch (e: Exception) {
+        Timber.e(e, "ElementCall: no reaction catalogue from the core")
+        emptyList()
+    } catch (e: LinkageError) {
+        // No native core: a JVM test over the real stack.
+        Timber.e(e, "ElementCall: no reaction catalogue from the core")
+        emptyList()
+    }
 }
 
 /** Reactions one sync delivered together neither rise in a line nor fuse into one sound (037 R2b). */

@@ -16,6 +16,7 @@ import io.element.android.call.api.ElementCallWindowRect
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcReaction
+import io.element.android.call.api.rtc.MatrixRtcReactionKind
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
@@ -189,6 +190,15 @@ class FakeElementCallController(
 
     override fun clearHandRequestFailure() {
         clearHandRequestFailureCount++
+    }
+
+    override var reactionCatalogue: List<MatrixRtcReactionKind> = listOf(MatrixRtcReactionKind(name = "thumbsup", emoji = "👍"))
+
+    /** Every [sendReaction], in order. */
+    val sentReactions = mutableListOf<MatrixRtcReactionKind>()
+
+    override fun sendReaction(kind: MatrixRtcReactionKind) {
+        sentReactions += kind
     }
 
     /** Every [reportConnectivity], in order. */

@@ -38,6 +38,7 @@ import io.element.android.call.api.rtc.MatrixRtcJoinException
 import io.element.android.call.api.rtc.MatrixRtcLocalState
 import io.element.android.call.api.rtc.MatrixRtcMediaPhase
 import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
+import io.element.android.call.api.rtc.MatrixRtcReactionKind
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcRing
 import io.element.android.call.api.rtc.MatrixRtcRingPhase
@@ -1929,6 +1930,52 @@ class DefaultElementCallControllerTest {
         controller.reportConnectivity(isOnline = true)
 
         assertThat(rtcClient.connectivityReports).containsExactly(false, true).inOrder()
+    }
+
+    @Test
+    fun `a reaction reaches the core with its name and emoji, and the catalogue is the platform's`() = runTest {
+        val rtcClient = FakeMatrixRtcClient()
+        val party = MatrixRtcReactionKind(name = "party", emoji = "🎉")
+        val controller = createController(rtcClient = rtcClient, platform = FakeElementCallPlatform(reactionCatalogue = listOf(party)))
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+
+        controller.sendReaction(controller.reactionCatalogue.single())
+        runCurrent()
+
+        assertThat(rtcClient.lastCall!!.sentReactions).containsExactly(party)
+    }
+
+    /** 009 R12, R23: inside the cooldown or not landed in time, nothing to tell anyone. */
+    @Test
+    fun `a refused reaction shows nothing`() = runTest {
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+        val rtcCall = rtcClient.lastCall!!
+        rtcCall.sendReactionResult = { Result.failure(IllegalStateException("not sent")) }
+        val before = controller.state.value
+
+        controller.reactions.test {
+            controller.sendReaction(MatrixRtcReactionKind(name = "party", emoji = "🎉"))
+            runCurrent()
+
+            expectNoEvents()
+        }
+        assertThat(rtcCall.sentReactions).hasSize(1)
+        assertThat(controller.state.value).isEqualTo(before)
+    }
+
+    @Test
+    fun `a reaction before the join goes nowhere`() = runTest {
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient)
+
+        controller.sendReaction(MatrixRtcReactionKind(name = "party", emoji = "🎉"))
+        runCurrent()
+
+        assertThat(rtcClient.lastCall).isNull()
     }
 
     /** 034 C12: the core shows the hand at once and retries it, so a second tap is the reversal, sent at once. */
