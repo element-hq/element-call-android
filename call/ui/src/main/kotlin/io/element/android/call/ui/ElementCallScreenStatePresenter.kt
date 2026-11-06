@@ -96,6 +96,7 @@ fun rememberElementCallScreenState(
         showsReactionControl = current?.showsReactionControl == true,
         isScreenShareAvailable = current?.isScreenShareAvailable == true,
     )
+    val reactionCatalogue = remember(controller) { lazy { controller.reactionCatalogue.toImmutableList() } }
     // Not saved, unlike Preferences: the Activity keeps this across rotation, which closes it on purpose (009 R27).
     var presentedSheet by remember { mutableStateOf<ElementCallSheet?>(null) }
     val isConnected = current?.connection == ElementCallConnection.Connected
@@ -303,7 +304,8 @@ fun rememberElementCallScreenState(
         pictureInPictureTileId = pictureInPictureTileId,
         extraActions = extraActions,
         presentedSheet = presentedSheet,
-        reactionCatalogue = remember(controller) { controller.reactionCatalogue.toImmutableList() },
+        // Read once the picker opens: the call has joined by then, so the native core is already loaded, never on this thread.
+        reactionCatalogue = if (presentedSheet == ElementCallSheet.REACTIONS) reactionCatalogue.value else persistentListOf(),
         reactions = reactions,
         isPreferencesVisible = isPreferencesVisible,
         preferences = preferences,

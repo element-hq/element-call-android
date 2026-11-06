@@ -11,4 +11,7 @@ import io.element.android.call.api.rtc.MatrixRtcReactionKind
 import org.matrix.rtc.reactionCatalog
 
 /** The core's catalogue, in the order its picker shows them (feature-hq 009 R11). */
-internal fun coreReactionCatalogue(): List<MatrixRtcReactionKind> = reactionCatalog().map { MatrixRtcReactionKind(name = it.name, emoji = it.emoji) }
+internal fun coreReactionCatalogue(): List<MatrixRtcReactionKind> {
+    MatrixRtcFfi.ensureInitialized()
+    return reactionCatalog().map { MatrixRtcReactionKind(name = it.name, emoji = it.emoji) }
+}

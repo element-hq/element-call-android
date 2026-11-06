@@ -23,6 +23,7 @@ import io.element.android.call.test.FakeElementCallController
 import io.element.android.call.test.aTile
 import io.element.android.call.tests.testutils.WarmUpRule
 import io.element.android.call.tests.testutils.consumeItemsUntilPredicate
+import kotlinx.collections.immutable.persistentListOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
 import org.junit.Test
@@ -54,7 +55,7 @@ class ReactionSendingTest {
             open.eventSink(ElementCallScreenEvent.DismissSheet)
 
             val closed = consumeItemsUntilPredicate { it.presentedSheet == null }.last()
-            assertThat(closed.copy(eventSink = open.eventSink)).isEqualTo(open.copy(presentedSheet = null))
+            assertThat(closed.copy(eventSink = open.eventSink)).isEqualTo(open.copy(presentedSheet = null, reactionCatalogue = persistentListOf()))
             assertThat(controller.sentReactions).isEmpty()
         }
     }

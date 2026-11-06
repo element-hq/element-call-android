@@ -130,7 +130,7 @@ data class ElementCallScreenState(
     val extraActions: ImmutableList<ElementCallBarAction>,
     /** The bar's More sheet or the reaction picker. Closed on rotation, backgrounding, minimising and the call ending (009 R27). */
     val presentedSheet: ElementCallSheet?,
-    /** The reactions the picker offers, the core's set in its order (009 R11). */
+    /** The reactions the picker offers, the core's set in its order (009 R11); empty while it is closed. */
     val reactionCatalogue: ImmutableList<MatrixRtcReactionKind>,
     /** Off while our homeserver is unreachable: a reaction could not reach anyone (034 R15). */
     val isReactionControlEnabled: Boolean,
