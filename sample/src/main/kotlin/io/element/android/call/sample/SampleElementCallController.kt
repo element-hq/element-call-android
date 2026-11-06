@@ -239,6 +239,8 @@ class SampleElementCallController(
     override fun sendReaction(kind: MatrixRtcReactionKind) {
         val own = _state.value?.ownTile ?: return
         Timber.d("Sample: reaction ${kind.name}")
+        // As the real controller: nothing shows with reactions off (037 R13).
+        if (preferences.value.reactions == ElementCallReactionsPreference.OFF) return
         sentReactions.tryEmit(
             MatrixRtcReaction(id = ++nextReactionId, memberId = own.id.memberId, userId = own.userId, emoji = kind.emoji, spread = Duration.ZERO)
         )

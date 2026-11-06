@@ -29,6 +29,7 @@ import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -36,6 +37,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.element.android.call.api.rtc.MatrixRtcReactionKind
@@ -61,6 +63,7 @@ internal fun ElementCallReactionPicker(state: ElementCallScreenState) {
     ) {
         ElementCallReactionPickerContent(
             catalogue = state.reactionCatalogue,
+            isEnabled = state.isReactionControlEnabled,
             onSend = { state.eventSink(ElementCallScreenEvent.SendReaction(it)) },
         )
     }
@@ -69,6 +72,7 @@ internal fun ElementCallReactionPicker(state: ElementCallScreenState) {
 @Composable
 internal fun ElementCallReactionPickerContent(
     catalogue: ImmutableList<MatrixRtcReactionKind>,
+    isEnabled: Boolean,
     onSend: (MatrixRtcReactionKind) -> Unit,
 ) {
     Column(modifier = Modifier.navigationBarsPadding().padding(bottom = PICKER_PADDING)) {
@@ -87,7 +91,7 @@ internal fun ElementCallReactionPickerContent(
             ) {
                 catalogue.chunked(COLUMNS).forEach { row ->
                     Row(horizontalArrangement = Arrangement.spacedBy(REACTION_GAP)) {
-                        row.forEach { kind -> ReactionButton(kind = kind, size = size, onClick = { onSend(kind) }) }
+                        row.forEach { kind -> ReactionButton(kind = kind, size = size, isEnabled = isEnabled, onClick = { onSend(kind) }) }
                     }
                 }
             }
@@ -95,17 +99,25 @@ internal fun ElementCallReactionPickerContent(
     }
 }
 
-/** An action of its own for a screen reader, named by its emoji (009 R21). */
+/**
+ * An action of its own for a screen reader, named by its emoji (009 R21). Disabled while our homeserver is unreachable, as
+ * the control that opened the picker is (034 R15).
+ */
 @Composable
-private fun ReactionButton(kind: MatrixRtcReactionKind, size: Dp, onClick: () -> Unit) {
+private fun ReactionButton(kind: MatrixRtcReactionKind, size: Dp, isEnabled: Boolean, onClick: () -> Unit) {
     val label = stringResource(R.string.element_call_a11y_send_reaction_emoji, kind.emoji)
+    val unavailable = stringResource(R.string.element_call_a11y_unavailable)
     Box(
         modifier = Modifier
             .size(size)
+            .alpha(if (isEnabled) 1f else DISABLED_REACTION_ALPHA)
             .clip(CircleShape)
             .border(1.dp, ElementCallTheme.colors.borderInteractiveSecondary, CircleShape)
-            .clickable(onClick = onClick)
-            .semantics(mergeDescendants = true) { contentDescription = label }
+            .clickable(enabled = isEnabled, onClick = onClick)
+            .semantics(mergeDescendants = true) {
+                contentDescription = label
+                if (!isEnabled) stateDescription = unavailable
+            }
             .testTag(ElementCallTestTags.reaction(kind.name)),
         contentAlignment = Alignment.Center,
     ) {
@@ -123,12 +135,13 @@ private val REACTION_SIZE = 48.dp
 private val REACTION_GAP = 8.dp
 private val PICKER_PADDING = 16.dp
 private const val EMOJI_SCALE = 0.5f
+private const val DISABLED_REACTION_ALPHA = 0.4f
 
 // The sheet itself needs a real window, so what it holds is previewed.
 @PreviewsDayNight
 @Composable
 internal fun ElementCallReactionPickerContentPreview() = ElementCallPreview {
     Box(modifier = Modifier.background(ElementCallTheme.colors.bgSubtlePrimary)) {
-        ElementCallReactionPickerContent(catalogue = A_PREVIEW_REACTION_CATALOGUE, onSend = {})
+        ElementCallReactionPickerContent(catalogue = A_PREVIEW_REACTION_CATALOGUE, isEnabled = true, onSend = {})
     }
 }

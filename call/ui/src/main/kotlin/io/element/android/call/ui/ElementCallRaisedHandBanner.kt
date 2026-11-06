@@ -11,7 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -63,7 +63,8 @@ internal fun ElementCallRaisedHandBanner(isEnabled: Boolean, onLower: () -> Unit
             color = ElementCallTheme.colors.textPrimary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(end = 8.dp),
+            // Measured after Cancel, so a long translation or a large font cuts the text, never the button.
+            modifier = Modifier.weight(1f, fill = false).padding(end = 8.dp),
         )
         // Design's 32dp pill: Material would grow the banner round a 48dp touch area.
         CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides Dp.Unspecified) {
@@ -78,7 +79,7 @@ internal fun ElementCallRaisedHandBanner(isEnabled: Boolean, onLower: () -> Unit
             ),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
             modifier = Modifier
-                .height(32.dp)
+                .heightIn(min = 32.dp)
                 .semantics { contentDescription = lowerHand }
                 .testTag(ElementCallTestTags.LOWER_HAND),
         ) {
