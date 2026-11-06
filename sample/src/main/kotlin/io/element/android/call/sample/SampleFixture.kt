@@ -246,6 +246,22 @@ enum class SampleFixture(val key: String, val category: Category, val title: Str
             remotes = listOf(person("Carol", "v"), person("Bob", "v"), person("Dan"), person("Erin", "v")),
         )
     },
+    SHARE_ENABLED(
+        key = "share_enabled",
+        category = Category.CONNECTED,
+        title = "Screen share enabled",
+        description = "The host enables screen share: More lists it after the hand and Emoji reactions.",
+    ) {
+        override fun snapshot() = aConnected(me = "v", remotes = listOf(person("Carol", "v"), person("Bob", "v")), isScreenShareAvailable = true)
+    },
+    ONE_TO_ONE_SHARE_ENABLED(
+        key = "one_to_one_share_enabled",
+        category = Category.CONNECTED,
+        title = "One to one, screen share enabled",
+        description = "Neither the hand nor reactions one to one, so Share screen is the bar's fifth control. Starting it only lights it.",
+    ) {
+        override fun snapshot() = aConnected(me = "v", remotes = listOf(person("Bob", "v")), isDm = true, isScreenShareAvailable = true)
+    },
     ;
 
     /** Built when opened rather than once, so the duration counter starts from now. */
@@ -322,6 +338,7 @@ enum class SampleFixture(val key: String, val category: Category, val title: Str
             remotes: List<MatrixRtcTile>,
             me: String = "",
             isDm: Boolean = false,
+            isScreenShareAvailable: Boolean = false,
             connection: ElementCallConnection = ElementCallConnection.Connected,
         ): ElementCallSnapshot {
             // The remote hands first, then ours.
@@ -338,8 +355,8 @@ enum class SampleFixture(val key: String, val category: Category, val title: Str
                 isDm = isDm,
                 isMicrophonePermissionGranted = true,
                 isCameraPermissionGranted = true,
-                // The sample opts in, as its manifest does: it is where the share button is walked through by hand.
-                isScreenShareAvailable = true,
+                // Off but in the two fixtures that turn it on, as harness/fixtures.md has it.
+                isScreenShareAvailable = isScreenShareAvailable,
                 isCameraEnabled = own.hasVideo,
                 memberCount = remotes.map { it.id.memberId }.distinct().size + 1,
                 roomMembers = roomMembersOf(remotes + own),
