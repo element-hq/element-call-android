@@ -39,6 +39,7 @@ import io.element.android.call.api.rtc.MatrixRtcJoinException
 import io.element.android.call.api.rtc.MatrixRtcLeaveReason
 import io.element.android.call.api.rtc.MatrixRtcMediaSession
 import io.element.android.call.api.rtc.MatrixRtcReaction
+import io.element.android.call.api.rtc.MatrixRtcReactionKind
 import io.element.android.call.api.rtc.MatrixRtcRing
 import io.element.android.call.api.rtc.MatrixRtcRingPhase
 import io.element.android.call.api.rtc.MatrixRtcRoom
@@ -484,6 +485,14 @@ internal class DefaultElementCallController(
 
     override fun clearHandRequestFailure() {
         updateState { it.copy(handRequestFailure = null) }
+    }
+
+    override val reactionCatalogue: List<MatrixRtcReactionKind> by lazy { platform.reactionCatalogue() }
+
+    // Nothing to tell the user either way: the core logs a refusal, and ours shows only once it has landed (009 R12, R23).
+    override fun sendReaction(kind: MatrixRtcReactionKind) {
+        val rtcCall = rtcCall ?: return
+        scope.launch { rtcCall.sendReaction(kind) }
     }
 
     /**

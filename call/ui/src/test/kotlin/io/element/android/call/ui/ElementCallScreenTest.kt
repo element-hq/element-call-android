@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
@@ -83,21 +84,39 @@ class ElementCallScreenTest : RobolectricTest() {
     @Test
     fun `the hand control is labelled by what it will do`() = runAndroidComposeUiTest<ComponentActivity> {
         val events = EventsRecorder<ElementCallScreenEvent>()
-        val participants = listOf(aLocalParticipant(), aRemoteParticipant(), aCrowdParticipant(1))
         var handRaisedIds by mutableStateOf(emptySet<String>())
-        setContent { ElementCallScreen(state = anElementCallScreenState(participants = participants, handRaisedIds = handRaisedIds, eventSink = events)) }
-        waitForIdle()
-        events.clear()
+        // The More sheet's row: the sheet itself needs a window of its own.
+        setContent {
+            ElementCallMoreSheetContent(
+                state = anElementCallScreenState(participants = aSmallGroup(), handRaisedIds = handRaisedIds, eventSink = events),
+            )
+        }
 
-        clickOnContentDescription(R.string.element_call_a11y_raise_hand)
-        events.assertList(listOf(ElementCallScreenEvent.ToggleRaisedHand))
+        clickOn(R.string.element_call_raise_hand)
         handRaisedIds = setOf(A_LOCAL_MEMBER_ID)
         waitForIdle()
-        // A tile changing has the stage declare its tiles again; the hand is what is under test.
-        events.clear()
-        clickOnContentDescription(R.string.element_call_a11y_lower_hand)
+        clickOn(R.string.element_call_lower_hand)
 
-        events.assertList(listOf(ElementCallScreenEvent.ToggleRaisedHand))
+        events.assertList(listOf(ElementCallScreenEvent.ToggleRaisedHand, ElementCallScreenEvent.ToggleRaisedHand))
+    }
+
+    /** One to one with our hand still up, the hand is the bar's fifth control, and the banner lowers it too (009 R2, R33). */
+    @Test
+    fun `a hand still up one to one can come down from the bar and from the banner`() = runAndroidComposeUiTest<ComponentActivity> {
+        val events = EventsRecorder<ElementCallScreenEvent>()
+        val participants = listOf(aLocalParticipant(), aRemoteParticipant())
+        setContent {
+            ElementCallScreen(
+            state = anElementCallScreenState(participants = participants, handRaisedIds = setOf(A_LOCAL_MEMBER_ID), eventSink = events)
+        )
+        }
+        waitForIdle()
+        events.clear()
+
+        onNodeWithTag(ElementCallTestTags.RAISED_HAND).performClick()
+        onNodeWithTag(ElementCallTestTags.LOWER_HAND).assertContentDescriptionEquals(activity!!.getString(R.string.element_call_a11y_lower_hand)).performClick()
+
+        events.assertList(listOf(ElementCallScreenEvent.ToggleRaisedHand, ElementCallScreenEvent.ToggleRaisedHand))
     }
 
     @Test
@@ -139,16 +158,11 @@ class ElementCallScreenTest : RobolectricTest() {
     @Test
     fun `a disabled hand is labelled unavailable`() = runAndroidComposeUiTest<ComponentActivity> {
         setContent {
-            ElementCallScreen(
-                state = anElementCallScreenState(
-                    participants = listOf(aLocalParticipant(), aRemoteParticipant(), aCrowdParticipant(1)),
-                    isRaiseHandEnabled = false,
-                ),
-            )
+            ElementCallMoreSheetContent(state = anElementCallScreenState(participants = aSmallGroup(), isRaiseHandEnabled = false))
         }
         waitForIdle()
 
-        onNodeWithContentDescription(activity!!.getString(R.string.element_call_a11y_raise_hand))
+        onNodeWithTag(ElementCallTestTags.RAISED_HAND)
             .assert(hasStateDescription(activity!!.getString(R.string.element_call_a11y_unavailable)))
             .assertIsNotEnabled()
     }

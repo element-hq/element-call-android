@@ -69,6 +69,8 @@ data class ElementCallColors(
     val borderSpeakingAvatar: Brush = Brush.verticalGradient(listOf(Color(0xFF0BC491), Color(0xFF0467DD))),
     /** The pulses from that avatar, faded as they grow. */
     val speakingPulse: Color = Color.White,
+    /** The ring round each reaction in the picker: Compound's `border/interactive/secondary`. */
+    val borderInteractiveSecondary: Color = Color(0xFF3C3F44),
 ) {
     companion object {
         /** Compound's dark semantic tokens, as of compound-design-tokens 2026. */

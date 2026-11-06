@@ -7,6 +7,7 @@
 
 package io.element.android.call.impl
 
+import io.element.android.call.api.rtc.MatrixRtcReactionKind
 import io.element.android.call.impl.audio.CallSoundEffectRenderer
 import io.element.android.call.impl.audio.FakeCallSoundEffectRenderer
 import kotlin.time.Duration
@@ -24,6 +25,7 @@ internal class FakeElementCallPlatform(
     private val onStartForegroundService: (isProjecting: Boolean) -> Unit = {},
     private val isCameraSwitchAvailable: Boolean = true,
     var reactionSpread: Duration = Duration.ZERO,
+    private val reactionCatalogue: List<MatrixRtcReactionKind> = emptyList(),
 ) : ElementCallPlatform {
     /** Counted rather than flagged: the service is deliberately started twice, once per media permission. */
     var startForegroundServiceCount = 0
@@ -61,4 +63,6 @@ internal class FakeElementCallPlatform(
         FakeCallSoundEffectRenderer(volume).also { soundEffectRenderers += it }
 
     override fun reactionSpread(): Duration = reactionSpread
+
+    override fun reactionCatalogue(): List<MatrixRtcReactionKind> = reactionCatalogue
 }

@@ -80,6 +80,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -92,6 +93,9 @@ import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallHandRequestFailure
 import io.element.android.call.api.audio.CallAudioDeviceType
@@ -154,11 +158,23 @@ fun ElementCallScreen(
                         // Behind the floating controls, so they stay readable over a bright tile.
                         .background(Brush.verticalGradient(listOf(Color.Transparent, ElementCallTheme.colors.controlsScrim))),
                 ) {
-                    CallControlsBar(state, modifier = Modifier.windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility))
+                    Column(
+                        modifier = Modifier.windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        AnimatedVisibility(visible = state.showsRaisedHandBanner, enter = fadeIn(), exit = fadeOut()) {
+                            ElementCallRaisedHandBanner(
+                                isEnabled = state.isRaiseHandEnabled,
+                                onLower = { state.eventSink(ElementCallScreenEvent.ToggleRaisedHand) },
+                            )
+                        }
+                        CallControlsBar(state)
+                    }
                 }
             }
             val reduceMotion = rememberReduceMotion()
             ReportScreenReader(state.eventSink)
+            ReportScreenStopped(state.eventSink)
             val fullscreen = state.fullscreenTile
             // One to one, the picture is the whole screen, so upright too the top bar goes with the
             // control bar; with any other count it stays (019 R30, 014 R30).
@@ -334,6 +350,11 @@ fun ElementCallScreen(
     if (state.isPreferencesVisible) {
         ElementCallPreferencesSheet(state = state)
     }
+    when (state.presentedSheet) {
+        ElementCallSheet.MORE -> ElementCallMoreSheet(state = state)
+        ElementCallSheet.REACTIONS -> ElementCallReactionPicker(state = state)
+        null -> Unit
+    }
     state.handRequestFailure?.let { failure ->
         HandRequestFailureDialog(failure = failure, onDismiss = { state.eventSink(ElementCallScreenEvent.DismissHandRequestFailure) })
     }
@@ -390,6 +411,18 @@ private fun ReportScreenReader(eventSink: (ElementCallScreenEvent) -> Unit) {
         currentEventSink(StageChromeEvent.ScreenReaderChanged(manager?.isTouchExplorationEnabled == true))
         manager?.addTouchExplorationStateChangeListener(listener)
         onDispose { manager?.removeTouchExplorationStateChangeListener(listener) }
+    }
+}
+
+/** Tells the presenter the screen has gone to the background, which closes the bar's sheets (009 R27). */
+@Composable
+private fun ReportScreenStopped(eventSink: (ElementCallScreenEvent) -> Unit) {
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val currentEventSink by rememberUpdatedState(eventSink)
+    DisposableEffect(lifecycle) {
+        val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_STOP) currentEventSink(StageChromeEvent.ScreenStopped) }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer) }
     }
 }
 
@@ -645,19 +678,37 @@ private fun CallControlsBar(
             isActive = !state.isCameraEnabled,
         )
         AudioDeviceButton(state)
-        if (state.showsRaiseHandControl) RaiseHandButton(state)
-        // Absent rather than disabled when the host has not opted in: there is nothing the user could
-        // do to make it work, and a button that never does anything is a bug report.
-        if (state.isScreenShareAvailable) {
-            RoundCallButton(
-                onClick = { state.eventSink(ElementCallScreenEvent.ToggleScreenShare) },
-                icon = if (state.isScreenSharing) ElementCallTheme.icons.shareScreenActive else ElementCallTheme.icons.shareScreen,
-                contentDescription = stringResource(
-                    if (state.isScreenSharing) R.string.element_call_a11y_stop_screen_share else R.string.element_call_a11y_start_screen_share
-                ),
-                isActive = state.isScreenSharing,
-                enabled = state.isScreenSharing || state.isScreenShareStartEnabled,
+        when (val slot = state.barSlot) {
+            ElementCallBarSlot.More -> RoundCallButton(
+                onClick = { state.eventSink(ElementCallScreenEvent.Present(ElementCallSheet.MORE)) },
+                icon = ElementCallTheme.icons.overflow,
+                contentDescription = stringResource(R.string.element_call_more_title),
+                isActive = false,
+                modifier = Modifier.testTag(ElementCallTestTags.CONTROLS_MORE),
             )
+            is ElementCallBarSlot.Action -> when (slot.action) {
+                ElementCallBarAction.RAISED_HAND -> RaiseHandButton(state)
+                ElementCallBarAction.REACTIONS -> RoundCallButton(
+                    onClick = { state.eventSink(ElementCallScreenEvent.Present(ElementCallSheet.REACTIONS)) },
+                    icon = ElementCallTheme.icons.reaction,
+                    contentDescription = stringResource(R.string.element_call_a11y_send_reaction),
+                    isActive = false,
+                    enabled = state.isReactionControlEnabled,
+                    modifier = Modifier.testTag(ElementCallTestTags.REACTIONS),
+                )
+                ElementCallBarAction.SCREEN_SHARE -> RoundCallButton(
+                    onClick = { state.eventSink(ElementCallScreenEvent.ToggleScreenShare) },
+                    icon = if (state.isScreenSharing) ElementCallTheme.icons.shareScreenActive else ElementCallTheme.icons.shareScreen,
+                    contentDescription = stringResource(
+                        if (state.isScreenSharing) R.string.element_call_a11y_stop_screen_share else R.string.element_call_a11y_start_screen_share
+                    ),
+                    isActive = state.isScreenSharing,
+                    enabled = state.isScreenSharing || state.isScreenShareStartEnabled,
+                    modifier = Modifier.testTag(ElementCallTestTags.SCREEN_SHARE),
+                )
+            }
+            // Four controls: nothing else is offered, and an empty slot is not drawn.
+            null -> Unit
         }
         RoundCallButton(
             onClick = { state.eventSink(ElementCallScreenEvent.HangUp) },
@@ -680,7 +731,9 @@ private fun RaiseHandButton(state: ElementCallScreenState) {
         contentDescription = stringResource(if (state.isHandRaised) R.string.element_call_a11y_lower_hand else R.string.element_call_a11y_raise_hand),
         isActive = state.isHandRaised,
         enabled = state.isRaiseHandEnabled,
-        modifier = Modifier.semantics { if (state.isHandRaised) stateDescription = raisedState },
+        modifier = Modifier
+            .semantics { if (state.isHandRaised) stateDescription = raisedState }
+            .testTag(ElementCallTestTags.RAISED_HAND),
     )
 }
 
@@ -781,9 +834,8 @@ private fun RoundCallButton(
 }
 
 /**
- * As the design has it. The bar holds at most six - microphone, camera, audio output, raised hand,
- * screen share, hang up; switching camera is on our own tile - and six 48dp circles make a 344dp
- * pill, which with the bar's padding just fits a 360dp phone (009 R17).
+ * As the design has it. The bar holds at most five - microphone, camera, audio output, the slot, hang up; switching camera
+ * is on our own tile - and five 48dp circles make a 288dp pill, inside the narrowest phone either way up (009 R17).
  */
 private val BUTTON_SIZE = 48.dp
 

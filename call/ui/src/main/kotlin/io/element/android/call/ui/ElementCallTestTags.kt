@@ -31,4 +31,21 @@ object ElementCallTestTags {
     const val PREFERENCES_SOUND_EFFECTS_VOLUME = "element_call_preferences_sound_effects_volume"
     const val PREFERENCES_TILE_STATS = "element_call_preferences_tile_stats"
     const val PREFERENCES_VERSION = "element_call_preferences_version"
+
+    /** The bar's fifth control and what it opens (feature-hq 009 R17), spelt as iOS spells them for the interop rig. */
+    const val CONTROLS_MORE = "controlsMore"
+    const val MORE_SHEET = "moreSheet"
+
+    /** The hand and the share, as the bar's own control or as the More sheet's row. */
+    const val RAISED_HAND = "raisedHand"
+    const val SCREEN_SHARE = "screenShare"
+
+    /** What opens the picker, the bar's control or the More sheet's row; the picker; each reaction by its catalogue name. */
+    const val REACTIONS = "reactions"
+    const val REACTION_SHEET = "reactionSheet"
+
+    fun reaction(name: String): String = "reaction.$name"
+
+    /** The raised-hand banner's Cancel, which lowers our hand. */
+    const val LOWER_HAND = "lowerHand"
 }
