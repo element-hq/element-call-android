@@ -263,4 +263,5 @@ private fun FfiConnectionLossReason.map(): MatrixRtcConnectionLossReason = when 
     FfiConnectionLossReason.BUDGET -> MatrixRtcConnectionLossReason.BUDGET
     FfiConnectionLossReason.REFUSED -> MatrixRtcConnectionLossReason.REFUSED
     FfiConnectionLossReason.NEVER_CONNECTED -> MatrixRtcConnectionLossReason.NEVER_CONNECTED
+    FfiConnectionLossReason.TOKEN_ENDPOINT_UNSUPPORTED -> MatrixRtcConnectionLossReason.TOKEN_ENDPOINT_UNSUPPORTED
 }
