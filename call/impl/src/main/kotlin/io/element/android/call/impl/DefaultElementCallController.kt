@@ -718,8 +718,9 @@ internal class DefaultElementCallController(
         // preference has to be applied after it, not before.
         //
         // A video call is looked at, not held to an ear, so it starts on the loudspeaker; a headset
-        // still wins over both built-in outputs when one is connected.
-        audioDeviceController.start(preferLoudspeaker = !callData.isAudioCall)
+        // still wins over both built-in outputs when one is connected. Video as the join settled it, not as the host
+        // asked: joining from a room's call button asks for video whatever is going on.
+        audioDeviceController.start(preferLoudspeaker = joined.intent == MatrixRtcCallIntent.VIDEO)
 
         coroutineScope {
             val joinObservers = startJoinObservers(joined)

@@ -919,6 +919,24 @@ class DefaultElementCallControllerTest {
         }
     }
 
+    /** The route follows the call as the join settled it: a voice call joined from a video ask stays on the earpiece. */
+    @Test
+    fun `joining a voice call starts on the earpiece`() = runTest {
+        val rtcClient = FakeMatrixRtcClient(callIntent = MatrixRtcCallIntent.AUDIO)
+        val audioDevices = FakeCallAudioDeviceController(initialDevices = listOf(anEarpiece(), aSpeaker()))
+        val controller = createController(
+            rtcClient = rtcClient,
+            audioDeviceController = audioDevices,
+            isAudioCall = false,
+            isStartingCall = false,
+        )
+
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+
+        assertThat(audioDevices.lastPreferLoudspeaker).isFalse()
+    }
+
     @Test
     fun `a video call still prefers a headset over the loudspeaker`() = runTest {
         val rtcClient = FakeMatrixRtcClient()
@@ -1168,7 +1186,7 @@ class DefaultElementCallControllerTest {
     @Test
     fun `joining a voice call leaves the camera off`() = runTest {
         val rtcClient = FakeMatrixRtcClient(callIntent = MatrixRtcCallIntent.AUDIO)
-        val controller = createController(rtcClient = rtcClient, isAudioCall = false)
+        val controller = createController(rtcClient = rtcClient, isAudioCall = false, isStartingCall = false)
 
         controller.setCameraPermissionGranted(true)
         controller.setMicrophonePermissionGranted(true)
@@ -1183,7 +1201,7 @@ class DefaultElementCallControllerTest {
     @Test
     fun `the up-front camera answer landing in a voice call leaves the camera off`() = runTest {
         val rtcClient = FakeMatrixRtcClient(callIntent = MatrixRtcCallIntent.AUDIO)
-        val controller = createController(rtcClient = rtcClient, isAudioCall = false)
+        val controller = createController(rtcClient = rtcClient, isAudioCall = false, isStartingCall = false)
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
 
@@ -1198,7 +1216,7 @@ class DefaultElementCallControllerTest {
     @Test
     fun `turning the camera on while a voice call connects starts it`() = runTest {
         val rtcClient = FakeMatrixRtcClient(callIntent = MatrixRtcCallIntent.AUDIO)
-        val controller = createController(rtcClient = rtcClient, isAudioCall = false)
+        val controller = createController(rtcClient = rtcClient, isAudioCall = false, isStartingCall = false)
 
         controller.setCameraPermissionGranted(true)
         controller.setCameraEnabled(true)
