@@ -10,6 +10,7 @@ package io.element.android.call.impl.rtc
 import android.content.Context
 import io.element.android.call.api.ElementCallDispatchers
 import io.element.android.call.api.rtc.MatrixRtcCall
+import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.MatrixRtcCallStatus
 import io.element.android.call.api.rtc.MatrixRtcLeaveReason
 import io.element.android.call.api.rtc.MatrixRtcMediaSession
@@ -28,6 +29,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.matrix.rtc.FfiCallIntent
 import org.matrix.rtc.FfiLeaveReason
 import org.matrix.rtc.FfiLeaveSessionParams
 import org.matrix.rtc.MediaSessionConfig
@@ -47,6 +49,10 @@ internal class RustMatrixRtcCall(
 ) : MatrixRtcCall {
     override val slotId: String = rtcCall.slotId()
     override val memberId: String = rtcCall.memberId()
+    override val intent: MatrixRtcCallIntent = when (rtcCall.callIntent()) {
+        FfiCallIntent.AUDIO -> MatrixRtcCallIntent.AUDIO
+        FfiCallIntent.VIDEO -> MatrixRtcCallIntent.VIDEO
+    }
 
     private val _members = MutableStateFlow(emptyList<MatrixRtcMembership>())
     override val members: StateFlow<List<MatrixRtcMembership>> = _members

@@ -12,6 +12,7 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 ## Unreleased
 
+- `MatrixRtcCall` gains `intent`, voice or video as the join settled it: a call of the host's own implements it.
 - Core: matrix-rust-rtc `0.5.0-rc.11`; a host's Ivy repository must point at the `v0.5.0-rc.11` asset.
   `MatrixRtcConnectionLossReason` gains `TOKEN_ENDPOINT_UNSUPPORTED`, the homeserver offering no `get_token`.
 - The reference `SdkMatrixBackend.livekitToken` now makes the `get_token` request itself, as a workaround until the
