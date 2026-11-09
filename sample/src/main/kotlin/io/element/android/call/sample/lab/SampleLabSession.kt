@@ -185,7 +185,7 @@ class SampleLabSession private constructor(
             Saved.load(context)?.let { saved ->
                 if (saved.isAccount(join.homeserver, join.user) && isValid(trust, saved)) {
                     Timber.i("Lab: reusing the kept session ${saved.userId} / ${saved.deviceId}")
-                    return@withContext restore(context, saved, join.roomId, join.format, parentScope)
+                    return@withContext restore(context, trust, saved, join.roomId, join.format, parentScope)
                 }
                 Timber.i("Lab: the kept session ${saved.userId} is for another account or no longer valid; logging it out")
                 logOut(context, trust, saved)
@@ -211,14 +211,14 @@ class SampleLabSession private constructor(
             val (syncService, room) = startSync(client, join.roomId)
             adoptIdentity(client, join.password, join.recoveryKey)
             sayHi(room)
-            make(context, client, room, join.roomId, join.format, syncService, parentScope)
+            make(context, trust, client, room, join.roomId, join.format, syncService, parentScope)
         }
 
         /** The kept session, for rejoining without a code. */
         suspend fun restoreSaved(context: Context, parentScope: CoroutineScope): SampleLabSession = withContext(Dispatchers.IO) {
             val saved = Saved.load(context) ?: throw Failure("no lab session kept on this phone")
-            install(context, saved.homeserver)
-            restore(context, saved, saved.roomId, saved.format, parentScope)
+            val trust = install(context, saved.homeserver)
+            restore(context, trust, saved, saved.roomId, saved.format, parentScope)
         }
 
         /** The kept session logged out without a live client. A token the server no longer knows (a lab reset) is only forgotten. */
@@ -245,6 +245,7 @@ class SampleLabSession private constructor(
 
         private suspend fun restore(
             context: Context,
+            trust: SampleLabTrust,
             saved: Saved,
             roomId: String,
             format: MatrixRtcMembershipFormat,
@@ -254,7 +255,7 @@ class SampleLabSession private constructor(
             client.restoreSession(saved.session)
             if (roomId != saved.roomId || format != saved.format) saved.copy(roomId = roomId, format = format).store(context)
             val (syncService, room) = startSync(client, roomId)
-            return make(context, client, room, roomId, format, syncService, parentScope)
+            return make(context, trust, client, room, roomId, format, syncService, parentScope)
         }
 
         /**
@@ -367,6 +368,7 @@ class SampleLabSession private constructor(
 
         private fun make(
             context: Context,
+            trust: SampleLabTrust,
             client: Client,
             room: Room,
             roomId: String,
@@ -375,7 +377,7 @@ class SampleLabSession private constructor(
             parentScope: CoroutineScope,
         ): SampleLabSession {
             val scope = CoroutineScope(parentScope.coroutineContext + SupervisorJob(parentScope.coroutineContext[kotlinx.coroutines.Job]))
-            val stack = ElementCallStack.Builder(context, SdkMatrixBackend(client, scope))
+            val stack = ElementCallStack.Builder(context, SdkMatrixBackend(client, scope, open = trust::open))
                 .roomContext(SdkElementCallRoomContext(client))
                 .options(
                     ElementCallOptions(

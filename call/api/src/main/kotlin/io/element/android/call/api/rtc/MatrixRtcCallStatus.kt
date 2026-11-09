@@ -88,4 +88,7 @@ enum class MatrixRtcConnectionLossReason {
 
     /** Never established within the budget from the connect request. */
     NEVER_CONNECTED,
+
+    /** Our homeserver has no MSC4195 `get_token`, so no SFU token can be had. Never retried. */
+    TOKEN_ENDPOINT_UNSUPPORTED,
 }

@@ -14,6 +14,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import org.matrix.rtc.BackendSubscription
 import org.matrix.rtc.FfiBackendException
 import org.matrix.rtc.FfiEventIn
@@ -29,6 +30,9 @@ import org.matrix.rustcomponents.sdk.Client
 import org.matrix.rustcomponents.sdk.RequestConfigOverride
 import org.matrix.rustcomponents.sdk.Room
 import timber.log.Timber
+import java.io.IOException
+import java.net.HttpURLConnection
+import java.net.URL
 
 /**
  * The RTC core's [MatrixBackend] over a Rust SDK [Client], for a host that has an SDK client to hand to
@@ -41,11 +45,14 @@ import timber.log.Timber
  * @param sessionScope lives as long as the Matrix session; the core's subscriptions run in it until it
  * cancels them.
  * @param dispatchers where SDK calls run; the default is fine for anything but a test.
+ * @param open opens the plain HTTP requests the SDK bindings cannot make (see [livekitToken]); a host
+ * trusting a private CA passes its own.
  */
 class SdkMatrixBackend(
     private val client: Client,
     private val sessionScope: CoroutineScope,
     private val dispatchers: ElementCallDispatchers = ElementCallDispatchers.Default,
+    private val open: (String) -> HttpURLConnection = { URL(it).openConnection() as HttpURLConnection },
 ) : MatrixBackend {
     private val userId = client.userId()
     private val deviceId = client.deviceId()
@@ -147,15 +154,61 @@ class SdkMatrixBackend(
         )
     }
 
-    /** The SDK bindings lack MSC4195 `get_token`: answered as a homeserver without it, so only `livekit_service_url` transports join. */
-    override suspend fun livekitToken(request: FfiLiveKitTokenRequest): String {
-        Timber.i("MatrixRTC backend: livekitToken for ${request.url}, unsupported")
+    /**
+     * MSC4195's `get_token`, under the unstable path homeservers serve. Needed by every MSC join and by a
+     * room-state transport naming an SFU `url` alone; a transport with a `livekit_service_url` takes its
+     * token from that service and never asks.
+     *
+     * WORKAROUND: the SDK bindings have no call for it yet (matrix-org/matrix-rust-sdk#7428), so this is a
+     * plain request with the session's access token. Replace it with the bindings' call once that lands.
+     */
+    override suspend fun livekitToken(request: FfiLiveKitTokenRequest): String = withContext(dispatchers.io) {
+        Timber.i("MatrixRTC backend: livekitToken for ${request.url}")
+        val session = try {
+            client.session()
+        } catch (cancellation: CancellationException) {
+            throw cancellation
+        } catch (throwable: Throwable) {
+            throw throwable.toFfiBackendException()
+        }
+        val body = JSONObject()
+            .put("url", request.url)
+            .put("room_id", request.roomId)
+            .put("slot_id", request.slotId)
+            .put("member_id", request.memberId)
+            .apply { request.serverName?.let { put("server_name", it) } }
+        val (status, answer) = try {
+            open("${session.homeserverUrl.trimEnd('/')}/_matrix/client/unstable/io.element.msc4195/rtc/livekit/get_token").run {
+                requestMethod = "POST"
+                doOutput = true
+                setRequestProperty("Authorization", "Bearer ${session.accessToken}")
+                setRequestProperty("Content-Type", "application/json")
+                try {
+                    outputStream.use { it.write(body.toString().toByteArray()) }
+                    val code = responseCode
+                    val stream = if (code in 200..299) inputStream else errorStream
+                    code to stream?.use { it.readBytes().decodeToString() }.orEmpty()
+                } finally {
+                    disconnect()
+                }
+            }
+        } catch (exception: IOException) {
+            // No answer at all: the network, retried by the core.
+            Timber.w(exception, "MatrixRTC backend: livekitToken failed")
+            throw FfiBackendException.Failed(errcode = null, status = null, retryAfterMs = null, permanent = false, reason = "get_token: ${exception.message}")
+        }
+        val json = runCatchingExceptions { JSONObject(answer) }.getOrNull()
+        val jwt = json?.optString("jwt").orEmpty()
+        if (status == 200 && jwt.isNotEmpty()) return@withContext jwt
+        val errcode = json?.optString("errcode")?.takeIf { it.isNotEmpty() }
+        Timber.w("MatrixRTC backend: livekitToken answered $status ${errcode.orEmpty()}")
+        // A refusal is final, except a rate limit; a server error is worth another try.
         throw FfiBackendException.Failed(
-            errcode = "M_UNRECOGNIZED",
-            status = 404.toUShort(),
-            retryAfterMs = null,
-            permanent = true,
-            reason = "MSC4195 get_token is not exposed by the SDK bindings",
+            errcode = errcode,
+            status = status.toUShort(),
+            retryAfterMs = json?.optLong("retry_after_ms")?.takeIf { json.has("retry_after_ms") }?.toULong(),
+            permanent = status in 400..499 && status != 429,
+            reason = json?.optString("error")?.takeIf { it.isNotEmpty() } ?: "get_token answered $status",
         )
     }
 

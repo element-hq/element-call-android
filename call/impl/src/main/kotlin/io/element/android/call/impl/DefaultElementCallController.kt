@@ -732,6 +732,14 @@ internal class DefaultElementCallController(
         // the snapshot - see setMicrophoneMuted - so this is where that intent is spent, on a track
         // the core publishes already muted.
         connected.publishMicrophone(muted = _state.value?.isMicrophoneMuted == true).onFailure {
+            // The core may be ending the call under us: once it gives our own media server up, a
+            // publish fails at once, while the end and its reason come a moment later (034 R26). That
+            // reason is the one to show, and the status observer shows it, so wait for it briefly.
+            val ended = withTimeoutOrNull(PUBLISH_FAILURE_GRACE) { joined.status.first { status -> status is MatrixRtcCallStatus.Ended } }
+            if (ended != null) {
+                Timber.i("ElementCall: publishing the microphone failed as the call ended: ${it.message}")
+                return null
+            }
             return "Microphone failed: ${it.message}"
         }
         Timber.i("ElementCall: connected as ${connected.localMemberId}")
@@ -1036,6 +1044,12 @@ internal class DefaultElementCallController(
 
         /** How long a cause has to last before the interruptions list shows it, as on iOS. */
         val INTERRUPTION_HOLD = 2500.milliseconds
+
+        /**
+         * How long a failed microphone publish waits for the core to end the call with its own reason before failing
+         * the call as a microphone failure, as on iOS. The core reports within a few task hops.
+         */
+        val PUBLISH_FAILURE_GRACE = 2.seconds
 
         /**
          * How long a tile shows it is waiting for a member's key before saying the key is missing. Counted from the core's

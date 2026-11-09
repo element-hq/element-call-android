@@ -123,7 +123,8 @@ internal fun ElementCallFailure.title(): String = stringResource(
         is ElementCallFailure.ConnectionLost -> when (reason) {
             MatrixRtcConnectionLossReason.BUDGET -> R.string.element_call_failure_connection_lost_title
             MatrixRtcConnectionLossReason.REFUSED,
-            MatrixRtcConnectionLossReason.NEVER_CONNECTED -> R.string.element_call_failure_connection_failed_title
+            MatrixRtcConnectionLossReason.NEVER_CONNECTED,
+            MatrixRtcConnectionLossReason.TOKEN_ENDPOINT_UNSUPPORTED -> R.string.element_call_failure_connection_failed_title
         }
         ElementCallFailure.JoinTimedOut,
         ElementCallFailure.JoinRefused -> R.string.element_call_failure_join_failed_title
@@ -137,7 +138,9 @@ internal fun ElementCallFailure.text(): String = when (this) {
     is ElementCallFailure.ConnectionLost -> stringResource(
         when (reason) {
             MatrixRtcConnectionLossReason.BUDGET -> R.string.element_call_failure_connection_lost
-            MatrixRtcConnectionLossReason.REFUSED -> R.string.element_call_failure_connection_refused
+            // No string of its own yet (Localazy): the server not offering tokens reads as a refusal.
+            MatrixRtcConnectionLossReason.REFUSED,
+            MatrixRtcConnectionLossReason.TOKEN_ENDPOINT_UNSUPPORTED -> R.string.element_call_failure_connection_refused
             MatrixRtcConnectionLossReason.NEVER_CONNECTED -> R.string.element_call_failure_connection_never_established
         }
     )
