@@ -24,9 +24,15 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import kotlinx.collections.immutable.ImmutableList
 
 /**
@@ -45,10 +51,18 @@ fun SampleHomeScreen(
     onOpenRinging: (SampleRingingFixture) -> Unit,
     onOpenOutage: (SampleOutageFixture) -> Unit,
     onOpenReactions: () -> Unit,
+    onOpenPermissionProbe: () -> Unit,
     onOpenScenario: (String) -> Unit,
     modifier: Modifier = Modifier,
     launchError: String? = null,
 ) {
+    val context = LocalContext.current
+    // Re-read on every return, from the settings or a system dialog, so the row says what the next call will meet.
+    var authorization by remember { mutableStateOf(SamplePermissionProbeCall.describeAuthorization(context)) }
+    LifecycleResumeEffect(context) {
+        authorization = SamplePermissionProbeCall.describeAuthorization(context)
+        onPauseOrDispose {}
+    }
     Surface(modifier = modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.safeDrawingPadding(),
@@ -132,6 +146,20 @@ fun SampleHomeScreen(
                     launchKey = key,
                     shapes = shapes,
                 ) { onOpenReactions() }
+            }
+            section(
+                key = "permissions",
+                title = "Permissions",
+                description = "A video call with Bob on the real controller, so the system's own dialogs ask (042). " +
+                    "Reset the answers with `adb shell pm clear io.element.android.call.sample`.",
+                rows = listOf(SamplePermissionProbeCall.KEY),
+            ) { key, shapes ->
+                FixtureRow(
+                    title = SamplePermissionProbeCall.TITLE,
+                    description = authorization,
+                    launchKey = key,
+                    shapes = shapes,
+                ) { onOpenPermissionProbe() }
             }
             section(
                 key = "scenarios",

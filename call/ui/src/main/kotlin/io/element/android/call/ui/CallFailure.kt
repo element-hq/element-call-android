@@ -47,13 +47,16 @@ import io.element.android.call.ui.theme.ElementCallTheme
 /**
  * What a failed call shows until the user closes it (feature-hq 034 R27): an icon, a title, why, and the way out, the whole
  * screen and nothing else, as Element Call web does. Closing is the hang-up that ends the call.
+ * A refused microphone also offers the app's settings first (042 R7), which ends the call too: the user starts it again.
  */
 @Composable
 internal fun CallFailure(
     failed: ElementCallConnection.Failed,
     onClose: () -> Unit,
+    onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val isMicrophoneRefused = failed.failure == ElementCallFailure.MicrophoneRefused
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -75,7 +78,7 @@ internal fun CallFailure(
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    imageVector = ElementCallTheme.icons.error,
+                    imageVector = if (isMicrophoneRefused) ElementCallTheme.icons.microphoneOff else ElementCallTheme.icons.error,
                     contentDescription = null,
                     tint = ElementCallTheme.colors.iconPrimary,
                     modifier = Modifier.size(32.dp),
@@ -97,22 +100,32 @@ internal fun CallFailure(
                 )
             }
             Spacer(Modifier.weight(1f))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 48.dp)
-                    .clip(CircleShape)
-                    .background(ElementCallTheme.colors.bgActionPrimaryRest)
-                    .clickable(onClick = onClose),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(
-                    text = stringResource(R.string.element_call_action_close),
-                    style = ElementCallTheme.typography.bodyLgMedium,
-                    color = ElementCallTheme.colors.iconOnSolidPrimary,
-                )
+            if (isMicrophoneRefused) {
+                FailureButton(text = stringResource(R.string.element_call_action_open_settings), isPrimary = true, onClick = onOpenSettings)
+                FailureButton(text = stringResource(R.string.element_call_action_close), isPrimary = false, onClick = onClose)
+            } else {
+                FailureButton(text = stringResource(R.string.element_call_action_close), isPrimary = true, onClick = onClose)
             }
         }
+    }
+}
+
+@Composable
+private fun FailureButton(text: String, isPrimary: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clip(CircleShape)
+            .then(if (isPrimary) Modifier.background(ElementCallTheme.colors.bgActionPrimaryRest) else Modifier)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            style = ElementCallTheme.typography.bodyLgMedium,
+            color = if (isPrimary) ElementCallTheme.colors.iconOnSolidPrimary else ElementCallTheme.colors.textPrimary,
+        )
     }
 }
 
@@ -128,6 +141,7 @@ internal fun ElementCallFailure.title(): String = stringResource(
         }
         ElementCallFailure.JoinTimedOut,
         ElementCallFailure.JoinRefused -> R.string.element_call_failure_join_failed_title
+        ElementCallFailure.MicrophoneRefused -> R.string.element_call_permission_microphone_title
         is ElementCallFailure.Other -> R.string.element_call_call_failed
     }
 )
@@ -146,6 +160,7 @@ internal fun ElementCallFailure.text(): String = when (this) {
     )
     ElementCallFailure.JoinTimedOut -> stringResource(R.string.element_call_failure_join_timed_out)
     ElementCallFailure.JoinRefused -> stringResource(R.string.element_call_failure_join_refused)
+    ElementCallFailure.MicrophoneRefused -> stringResource(R.string.element_call_permission_microphone_description)
     is ElementCallFailure.Other -> message
 }
 
@@ -155,11 +170,12 @@ internal class ElementCallConnectionFailedPreviewParam : PreviewParameterProvide
         ElementCallFailure.ConnectionLost(MatrixRtcConnectionLossReason.NEVER_CONNECTED),
         ElementCallFailure.JoinRefused,
         ElementCallFailure.Other("Homeserver offers no LiveKit transport"),
+        ElementCallFailure.MicrophoneRefused,
     ).map(ElementCallConnection::Failed)
 }
 
 @PreviewsDayNight
 @Composable
 internal fun CallFailurePreview(@PreviewParameter(ElementCallConnectionFailedPreviewParam::class) failed: ElementCallConnection.Failed) = ElementCallPreview {
-    CallFailure(failed = failed, onClose = {})
+    CallFailure(failed = failed, onClose = {}, onOpenSettings = {})
 }

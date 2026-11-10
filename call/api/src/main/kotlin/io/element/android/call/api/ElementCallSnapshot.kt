@@ -240,6 +240,9 @@ sealed interface ElementCallFailure {
     /** The homeserver refused the join for good. */
     data object JoinRefused : ElementCallFailure
 
+    /** The microphone permission was refused, so the call never joined (042 R5). Started again by the user after a grant. */
+    data object MicrophoneRefused : ElementCallFailure
+
     /** Anything else that stopped the call from starting. Developer text, shown as it is. */
     data class Other(val message: String) : ElementCallFailure
 }

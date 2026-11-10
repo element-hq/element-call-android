@@ -127,7 +127,15 @@ fun ElementCallScreen(
         if (failed != null) {
             // The bars as the call drew them: left to the window, the status bar's icons went dark on the dark canvas.
             CallSystemBars(isStatusBarHidden = false)
-            CallFailure(failed = failed, onClose = { state.eventSink(ElementCallScreenEvent.HangUp) })
+            CallFailure(
+                failed = failed,
+                onClose = { state.eventSink(ElementCallScreenEvent.HangUp) },
+                // The call is over before the user leaves: nothing resumes on the way back (042 C3).
+                onOpenSettings = {
+                    state.eventSink(ElementCallScreenEvent.OpenAppSettings)
+                    state.eventSink(ElementCallScreenEvent.HangUp)
+                },
+            )
             return@Surface
         }
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {

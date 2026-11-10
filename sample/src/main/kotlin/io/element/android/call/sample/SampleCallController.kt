@@ -78,6 +78,8 @@ class SampleCallController(private val context: Context, private val scope: Coro
 
     fun startReactions(pace: Duration = 1.seconds) = startLive(SampleReactionsCall(context, scope, pace))
 
+    fun startPermissionProbe() = startLive(SamplePermissionProbeCall(context, scope))
+
     /** A real call in the lab (`lab/SampleLab.kt`). */
     fun startLab(call: SampleLiveCall) = startLive(call)
 

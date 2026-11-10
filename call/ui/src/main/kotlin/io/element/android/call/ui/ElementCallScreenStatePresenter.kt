@@ -185,6 +185,7 @@ fun rememberElementCallScreenState(
                     navigator.requestCameraPermission()
                 }
             }
+            ElementCallScreenEvent.OpenAppSettings -> navigator.openAppSettings()
             ElementCallScreenEvent.SwitchCamera -> controller.switchCamera()
             ElementCallScreenEvent.ToggleTileStats -> controller.toggleTileStats()
             ElementCallScreenEvent.ShowPreferences -> isPreferencesVisible = true

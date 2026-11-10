@@ -114,6 +114,10 @@ fun SampleApp(
                                 harness.stopScenario()
                                 controller.startReactions()
                             },
+                            onOpenPermissionProbe = {
+                                harness.stopScenario()
+                                controller.startPermissionProbe()
+                            },
                             onOpenScenario = { name -> harness.play(MatrixRtcScenario.load(name)) },
                             modifier = Modifier.weight(1f),
                         )

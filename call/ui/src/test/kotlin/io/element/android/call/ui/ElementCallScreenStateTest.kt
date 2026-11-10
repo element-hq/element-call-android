@@ -209,6 +209,21 @@ class ElementCallScreenStateTest {
         }
     }
 
+    @Test
+    fun `opening the app settings reaches the navigator`() = runTest {
+        val controller = FakeElementCallController(initialState = aConnectedSnapshot())
+        var openCount = 0
+
+        moleculeFlow(RecompositionMode.Immediate) {
+            rememberElementCallScreenState(controller, aNavigator(onOpenAppSettings = { openCount++ }))
+        }.test {
+            awaitItem().eventSink(ElementCallScreenEvent.OpenAppSettings)
+
+            assertThat(openCount).isEqualTo(1)
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
     /**
      * Unlike the camera there is nothing to check before sharing: the grant is spent when it is used,
      * so every share starts at the system dialog. Stopping needs no dialog and goes straight through.
@@ -873,10 +888,12 @@ class ElementCallScreenStateTest {
         onMinimize: () -> Unit = {},
         onRequestCameraPermission: () -> Unit = {},
         onRequestScreenCapture: () -> Unit = {},
+        onOpenAppSettings: () -> Unit = {},
     ) = object : ElementCallNavigator {
         override fun close() = onClose()
         override fun minimize() = onMinimize()
         override fun requestCameraPermission() = onRequestCameraPermission()
         override fun requestScreenCapture() = onRequestScreenCapture()
+        override fun openAppSettings() = onOpenAppSettings()
     }
 }

@@ -122,6 +122,7 @@ class StageDumpScenarioTest : RobolectricTest() {
                             isInPictureInPicture = false,
                             onMinimize = { controller.setMaximized(false) },
                             onClose = {},
+                            onOpenAppSettings = {},
                         )
                     }
                 }

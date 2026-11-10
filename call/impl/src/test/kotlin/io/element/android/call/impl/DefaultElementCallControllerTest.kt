@@ -136,19 +136,56 @@ class DefaultElementCallControllerTest {
     }
 
     @Test
-    fun `denying the microphone fails the call rather than joining silently`() = runTest {
+    fun `denying the microphone fails the call before anything reaches the room or the ring`() = runTest {
         val rtcClient = FakeMatrixRtcClient()
-        val controller = createController(rtcClient = rtcClient)
+        val platform = FakeElementCallPlatform()
+        var audioFocusRequests = 0
+        val controller = createController(
+            rtcClient = rtcClient,
+            platform = platform,
+            audioFocus = FakeAudioFocus(requestAudioFocusResult = { audioFocusRequests++ }, releaseAudioFocusResult = {}),
+            roomIsDm = true,
+        )
+        assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.RequestingPermission)
+        assertThat(rtcClient.roomCount).isEqualTo(0)
 
-        controller.state.filterNotNull().test {
-            awaitItem()
-            controller.setMicrophonePermissionGranted(false)
+        controller.setMicrophonePermissionGranted(false)
+        runCurrent()
 
-            val states = consumeItemsUntilPredicate { it.connection is ElementCallConnection.Failed }
-            assertThat(states.last().connection).isInstanceOf(ElementCallConnection.Failed::class.java)
-            assertThat(rtcClient.roomCount).isEqualTo(0)
-            cancelAndIgnoreRemainingEvents()
-        }
+        assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.Failed(ElementCallFailure.MicrophoneRefused))
+        assertThat(rtcClient.roomCount).isEqualTo(0)
+        assertThat(platform.startForegroundServiceCount).isEqualTo(0)
+        assertThat(audioFocusRequests).isEqualTo(0)
+    }
+
+    @Test
+    fun `a camera refused before media turns the camera off and the call carries on without it`() = runTest {
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient, isAudioCall = false)
+        assertThat(controller.state.value?.isCameraEnabled).isTrue()
+
+        controller.setMicrophonePermissionGranted(true)
+        controller.setCameraPermissionGranted(false)
+        runCurrent()
+
+        assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.Connected)
+        assertThat(controller.state.value?.isCameraEnabled).isFalse()
+        assertThat(rtcClient.lastCall?.lastMediaSession?.cameraEnabledCalls).isEmpty()
+    }
+
+    /** The voice-call tap made while joining: recorded as an intent, then granted once media is up. */
+    @Test
+    fun `a camera tapped on while a voice call joins and granted after it connects turns on`() = runTest {
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createController(rtcClient = rtcClient, isAudioCall = true)
+        controller.setMicrophonePermissionGranted(true)
+        controller.setCameraEnabled(true)
+        runCurrent()
+
+        controller.setCameraPermissionGranted(true)
+        runCurrent()
+
+        assertThat(rtcClient.lastCall?.lastMediaSession?.cameraEnabledCalls).contains(true)
     }
 
     @Test
