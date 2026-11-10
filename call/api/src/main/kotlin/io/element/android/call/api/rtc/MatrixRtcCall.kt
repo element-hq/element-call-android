@@ -27,6 +27,12 @@ interface MatrixRtcCall : AutoCloseable {
     val memberId: String
 
     /**
+     * Voice or video, as the join settled it: the intent we started the call with, else the one the members
+     * already in it agree on. Start the camera for [MatrixRtcCallIntent.VIDEO] only.
+     */
+    val intent: MatrixRtcCallIntent
+
+    /**
      * Who the RTC core currently considers joined to this slot, ourselves included.
      *
      * The core's membership projection, not the media roster, so it is populated before - and

@@ -919,6 +919,24 @@ class DefaultElementCallControllerTest {
         }
     }
 
+    /** The route follows the call as the join settled it: a voice call joined from a video ask stays on the earpiece. */
+    @Test
+    fun `joining a voice call starts on the earpiece`() = runTest {
+        val rtcClient = FakeMatrixRtcClient(callIntent = MatrixRtcCallIntent.AUDIO)
+        val audioDevices = FakeCallAudioDeviceController(initialDevices = listOf(anEarpiece(), aSpeaker()))
+        val controller = createController(
+            rtcClient = rtcClient,
+            audioDeviceController = audioDevices,
+            isAudioCall = false,
+            isStartingCall = false,
+        )
+
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+
+        assertThat(audioDevices.lastPreferLoudspeaker).isFalse()
+    }
+
     @Test
     fun `a video call still prefers a headset over the loudspeaker`() = runTest {
         val rtcClient = FakeMatrixRtcClient()
@@ -1159,6 +1177,54 @@ class DefaultElementCallControllerTest {
         assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.Connected)
         assertThat(rtcClient.lastCall?.lastMediaSession?.cameraEnabledCalls).isEmpty()
         assertThat(controller.state.value?.isCameraEnabled).isFalse()
+    }
+
+    /**
+     * Joining from a room's call button asks for video, because the button cannot know what is in progress; the core
+     * does, from the members, and a voice call has to join with the camera off.
+     */
+    @Test
+    fun `joining a voice call leaves the camera off`() = runTest {
+        val rtcClient = FakeMatrixRtcClient(callIntent = MatrixRtcCallIntent.AUDIO)
+        val controller = createController(rtcClient = rtcClient, isAudioCall = false, isStartingCall = false)
+
+        controller.setCameraPermissionGranted(true)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+
+        assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.Connected)
+        assertThat(rtcClient.lastCall?.lastMediaSession?.cameraEnabledCalls).isEmpty()
+        assertThat(controller.state.value?.isCameraEnabled).isFalse()
+    }
+
+    /** The screen's up-front camera question, answered once the voice call is up, is not a tap on the camera button. */
+    @Test
+    fun `the up-front camera answer landing in a voice call leaves the camera off`() = runTest {
+        val rtcClient = FakeMatrixRtcClient(callIntent = MatrixRtcCallIntent.AUDIO)
+        val controller = createController(rtcClient = rtcClient, isAudioCall = false, isStartingCall = false)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+
+        controller.setCameraPermissionGranted(true)
+        runCurrent()
+
+        assertThat(rtcClient.lastCall?.lastMediaSession?.cameraEnabledCalls).isEmpty()
+        assertThat(controller.state.value?.isCameraEnabled).isFalse()
+    }
+
+    /** The user's choice while joining wins over the join's intent. */
+    @Test
+    fun `turning the camera on while a voice call connects starts it`() = runTest {
+        val rtcClient = FakeMatrixRtcClient(callIntent = MatrixRtcCallIntent.AUDIO)
+        val controller = createController(rtcClient = rtcClient, isAudioCall = false, isStartingCall = false)
+
+        controller.setCameraPermissionGranted(true)
+        controller.setCameraEnabled(true)
+        runCurrent()
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+
+        assertThat(rtcClient.lastCall?.lastMediaSession?.cameraEnabledCalls).containsExactly(true)
     }
 
     @Test

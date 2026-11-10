@@ -314,6 +314,22 @@ internal class DefaultElementCallController(
 
     private var rtcRoom: MatrixRtcRoom? = null
     private var rtcCall: MatrixRtcCall? = null
+
+    /**
+     * Whether the call joins with the camera on: the host's ask, then the user's taps while joining, then the join's
+     * intent (see [adoptIntent]). Not the snapshot's `isCameraEnabled`, which follows the capturing camera once media
+     * is up.
+     */
+    private var joinsWithCamera = false
+
+    /** Whether the user has turned the camera on or off while joining. Their choice wins over the join's intent. */
+    private var isCameraChosenByUser = false
+
+    /**
+     * Whether the camera question the screen asks up front, on a call that asked for video, is still unanswered.
+     * Its answer is not a tap on the camera button, so a grant then starts the camera only if the call joins with it.
+     */
+    private var isUpFrontCameraAnswerPending = false
     private var call: MatrixRtcMediaSession? = null
     private var joinLeaveSoundPolicy: JoinLeaveSoundPolicy? = null
     private var raisedHandSoundPolicy: RaisedHandSoundPolicy? = null
@@ -352,6 +368,9 @@ internal class DefaultElementCallController(
                     isCameraEnabled = !callData.isAudioCall,
                     isCameraSwitchAvailable = platform.isCameraSwitchAvailable(),
                 )
+                joinsWithCamera = !callData.isAudioCall
+                isCameraChosenByUser = false
+                isUpFrontCameraAnswerPending = false
                 // Reported as soon as the call is requested rather than once it connects, so a host's
                 // Join button hides while we are still joining rather than blinking through an
                 // interval where the app believes we are not in the call we are joining.
@@ -420,6 +439,8 @@ internal class DefaultElementCallController(
                 // has to be idempotent or a configuration change would join the call a second time.
                 if (current.isMicrophonePermissionGranted) return@withLock
                 updateState { it.copy(isMicrophonePermissionGranted = true) }
+                // The screen asks for the camera next on a call that asked for video, unless it has it already.
+                isUpFrontCameraAnswerPending = !current.callData.isAudioCall && !current.isCameraPermissionGranted
 
                 // Both must be in place before capture starts: the service so the microphone survives
                 // backgrounding, the audio focus so other apps duck.
@@ -437,6 +458,8 @@ internal class DefaultElementCallController(
 
     override fun setCameraPermissionGranted(granted: Boolean) {
         scope.launch {
+            val isUpFrontAnswer = isUpFrontCameraAnswerPending
+            isUpFrontCameraAnswerPending = false
             updateState { it.copy(isCameraPermissionGranted = granted) }
             if (!granted) return@launch
             // Started again, not for the first time: the service is already running for the
@@ -450,7 +473,10 @@ internal class DefaultElementCallController(
             // Only once one is running, though. Before that a grant is not an ask - a host may answer
             // this up front, as the screen does for a video call, and on an audio call that would
             // start a camera nobody reached for - so what the call joins with is recorded by the
-            // button, in setCameraEnabled, and nowhere else.
+            // button, in setCameraEnabled, and nowhere else. The up-front answer can also land once
+            // the call is running, and then it starts the camera only if the call joins with it: a
+            // voice call joined from a video ask (adoptIntent) must not get one.
+            if (isUpFrontAnswer && !joinsWithCamera) return@launch
             call?.setCameraEnabled(true)
         }
     }
@@ -506,6 +532,8 @@ internal class DefaultElementCallController(
         scope.launch {
             val call = call
             if (call == null) {
+                joinsWithCamera = enabled
+                isCameraChosenByUser = true
                 updateState { it.copy(isCameraEnabled = enabled) }
             } else {
                 call.setCameraEnabled(enabled)
@@ -672,6 +700,7 @@ internal class DefaultElementCallController(
             return
         }
         rtcCall = joined
+        adoptIntent(joined.intent)
         // Whatever was ringing for this call has now been answered. Until this lands the host's
         // ringtone keeps playing over the call, its incoming UI stays up, and its missed-call timeout
         // still fires - so answering looks like it failed while actually having worked. A no-op for an
@@ -689,8 +718,9 @@ internal class DefaultElementCallController(
         // preference has to be applied after it, not before.
         //
         // A video call is looked at, not held to an ear, so it starts on the loudspeaker; a headset
-        // still wins over both built-in outputs when one is connected.
-        audioDeviceController.start(preferLoudspeaker = !callData.isAudioCall)
+        // still wins over both built-in outputs when one is connected. Video as the join settled it, not as the host
+        // asked: joining from a room's call button asks for video whatever is going on.
+        audioDeviceController.start(preferLoudspeaker = joined.intent == MatrixRtcCallIntent.VIDEO)
 
         coroutineScope {
             val joinObservers = startJoinObservers(joined)
@@ -712,6 +742,18 @@ internal class DefaultElementCallController(
         launch(start = CoroutineStart.UNDISPATCHED) {
             audioDeviceController.selectedDevice.collect { value -> updateState { it.copy(selectedAudioDevice = value) } }
         }
+    }
+
+    /**
+     * A voice call joins with the camera off, whatever the host asked: joining from a room's call button does not know
+     * what kind of call is in progress, and the core does, from its members. Only ever turns the camera off, and never
+     * over a choice the user made while joining.
+     */
+    private fun adoptIntent(intent: MatrixRtcCallIntent) {
+        if (intent != MatrixRtcCallIntent.AUDIO || !joinsWithCamera || isCameraChosenByUser) return
+        Timber.i("ElementCall: joining a voice call, the camera stays off")
+        joinsWithCamera = false
+        updateState { it.copy(isCameraEnabled = false) }
     }
 
     /** Media, the microphone, the routing and the observers. @return what failed, or null. */

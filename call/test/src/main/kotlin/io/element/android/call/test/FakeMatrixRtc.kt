@@ -11,6 +11,7 @@ import io.element.android.call.api.rtc.MatrixRtcAudioLevel
 import io.element.android.call.api.rtc.MatrixRtcCall
 import io.element.android.call.api.rtc.MatrixRtcCallEnd
 import io.element.android.call.api.rtc.MatrixRtcCallEvent
+import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.MatrixRtcCallKind
 import io.element.android.call.api.rtc.MatrixRtcCallStatus
 import io.element.android.call.api.rtc.MatrixRtcClient
@@ -47,6 +48,8 @@ class FakeMatrixRtcClient(
     private val joinResult: () -> Result<MatrixRtcCall>? = { null },
     /** Completed by a test to let a join return; a join waits on it while it is pending. */
     private val joinGate: CompletableDeferred<Unit>? = null,
+    /** What a call joined here settles on when we did not start it, as the core would from its members. */
+    private val callIntent: MatrixRtcCallIntent = MatrixRtcCallIntent.VIDEO,
 ) : MatrixRtcClient {
     var roomCount = 0
         private set
@@ -74,7 +77,7 @@ class FakeMatrixRtcClient(
         roomCount++
         lastMembershipFormat = format
         roomResult()?.let { return it }
-        return Result.success(FakeMatrixRtcRoom(roomId, joinResult, joinGate).also { lastRoom = it })
+        return Result.success(FakeMatrixRtcRoom(roomId, joinResult, joinGate, callIntent).also { lastRoom = it })
     }
 }
 
@@ -82,6 +85,7 @@ class FakeMatrixRtcRoom(
     override val roomId: RoomId,
     private val joinResult: () -> Result<MatrixRtcCall>? = { null },
     private val joinGate: CompletableDeferred<Unit>? = null,
+    private val callIntent: MatrixRtcCallIntent = MatrixRtcCallIntent.VIDEO,
 ) : MatrixRtcRoom {
     var joinCallCount = 0
         private set
@@ -97,7 +101,7 @@ class FakeMatrixRtcRoom(
         lastKind = kind
         joinGate?.await()
         joinResult()?.let { return it }
-        return Result.success(FakeMatrixRtcCall(roomId, "m.call#${applicationSlotId ?: "room"}").also { lastCall = it })
+        return Result.success(FakeMatrixRtcCall(roomId, "m.call#${applicationSlotId ?: "room"}", kind.startedIntent() ?: callIntent).also { lastCall = it })
     }
 
     override suspend fun shutdown() {
@@ -105,9 +109,16 @@ class FakeMatrixRtcRoom(
     }
 }
 
+/** The intent a call is started with; a join into a call in progress has none, and takes its members'. */
+private fun MatrixRtcCallKind.startedIntent(): MatrixRtcCallIntent? = when (this) {
+    is MatrixRtcCallKind.Group -> notify?.intent
+    is MatrixRtcCallKind.Direct -> ring?.intent
+}
+
 class FakeMatrixRtcCall(
     override val roomId: RoomId,
     override val slotId: String,
+    override val intent: MatrixRtcCallIntent = MatrixRtcCallIntent.VIDEO,
 ) : MatrixRtcCall {
     override val memberId: String = "aLocalMemberId"
     override val members = MutableStateFlow(emptyList<MatrixRtcMembership>())
