@@ -91,5 +91,7 @@ internal fun aNullNavigator(onMinimize: () -> Unit = {}) = object : ElementCallN
     override fun close() = Unit
     override fun minimize() = onMinimize()
     override fun requestCameraPermission() = Unit
+
+    override fun openAppSettings() = Unit
     override fun requestScreenCapture() = Unit
 }

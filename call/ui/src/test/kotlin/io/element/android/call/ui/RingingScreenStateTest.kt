@@ -99,6 +99,8 @@ class RingingScreenStateTest {
         override fun close() = Unit
         override fun minimize() = Unit
         override fun requestCameraPermission() = Unit
+
+        override fun openAppSettings() = Unit
         override fun requestScreenCapture() = Unit
     }
 }

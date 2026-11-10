@@ -109,7 +109,7 @@ class SampleElementCallController(
         it.copy(
             isMicrophonePermissionGranted = granted,
             connection = when {
-                !granted -> ElementCallConnection.Failed(ElementCallFailure.Other("Microphone permission denied"))
+                !granted -> ElementCallConnection.Failed(ElementCallFailure.MicrophoneRefused)
                 it.connection == ElementCallConnection.RequestingPermission -> ElementCallConnection.Connected
                 else -> it.connection
             },

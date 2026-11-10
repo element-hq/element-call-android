@@ -30,6 +30,9 @@ sealed interface ElementCallScreenEvent {
     /** Start or stop the camera, asking for the permission first if we have never had it. */
     data object ToggleCamera : ElementCallScreenEvent
 
+    /** The app's page in the system settings, where its permissions are (042 R7, R11). */
+    data object OpenAppSettings : ElementCallScreenEvent
+
     /** Swap the front and back cameras. */
     data object SwitchCamera : ElementCallScreenEvent
 

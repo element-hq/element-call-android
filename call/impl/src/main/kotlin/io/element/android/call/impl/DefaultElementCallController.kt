@@ -423,8 +423,8 @@ internal class DefaultElementCallController(
     }
 
     /**
-     * Answer the microphone permission request. Denial fails the call: it is audio first, and
-     * `AudioRecord` would fail anyway.
+     * Answer the microphone permission request. Denial fails the call with [ElementCallFailure.MicrophoneRefused]
+     * before anything reaches the room (042 R1, R5): it is audio first, and `AudioRecord` would fail anyway.
      */
     override fun setMicrophonePermissionGranted(granted: Boolean) {
         scope.launch {
@@ -432,7 +432,7 @@ internal class DefaultElementCallController(
                 val current = _state.value ?: return@withLock
                 if (!granted) {
                     Timber.i("ElementCall: microphone permission denied")
-                    updateState { it.copy(connection = ElementCallConnection.Failed(ElementCallFailure.Other("Microphone permission denied"))) }
+                    updateState { it.copy(connection = ElementCallConnection.Failed(ElementCallFailure.MicrophoneRefused)) }
                     return@withLock
                 }
                 // The host re-reports a permission it already has whenever it is recreated, so this
@@ -461,7 +461,14 @@ internal class DefaultElementCallController(
             val isUpFrontAnswer = isUpFrontCameraAnswerPending
             isUpFrontCameraAnswerPending = false
             updateState { it.copy(isCameraPermissionGranted = granted) }
-            if (!granted) return@launch
+            if (!granted) {
+                // Off from the refusal, not from when media connects (042 R10); a running call's own flow already says off.
+                if (call == null) {
+                    joinsWithCamera = false
+                    updateState { it.copy(isCameraEnabled = false) }
+                }
+                return@launch
+            }
             // Started again, not for the first time: the service is already running for the
             // microphone, and this is what lets it add the camera type it could not claim before.
             // Without it, capture stops the moment the call is backgrounded.

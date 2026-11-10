@@ -23,6 +23,9 @@ interface ElementCallNavigator {
      */
     fun requestCameraPermission()
 
+    /** Open the app's page in the system settings, where its permissions are (042 R7, R11). */
+    fun openAppSettings()
+
     /**
      * Raise the system's screen-capture dialog.
      *

@@ -12,6 +12,9 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 ## Unreleased
 
+- `ElementCallFailure` gains `MicrophoneRefused`: an exhaustive `when` over it needs the case.
+- A refused microphone now fails the call with `Failed(ElementCallFailure.MicrophoneRefused)`, no longer `Failed(Other(...))`.
+- `ElementCallNavigator` gains `openAppSettings()`: a host drawing `ElementCallScreen` with its own navigator implements it.
 - `MatrixRtcCall` gains `intent`, voice or video as the join settled it: a call of the host's own implements it.
 - Core: matrix-rust-rtc `0.5.0-rc.11`; a host's Ivy repository must point at the `v0.5.0-rc.11` asset.
   `MatrixRtcConnectionLossReason` gains `TOKEN_ENDPOINT_UNSUPPORTED`, the homeserver offering no `get_token`.

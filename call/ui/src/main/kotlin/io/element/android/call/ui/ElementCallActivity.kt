@@ -10,11 +10,14 @@ package io.element.android.call.ui
 import android.app.KeyguardManager
 import android.app.PendingIntent
 import android.app.PictureInPictureParams
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.view.Choreographer
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -130,6 +133,7 @@ class ElementCallActivity : ComponentActivity() {
                         isInPictureInPicture = isFloating,
                         onMinimize = ::minimize,
                         onClose = ::close,
+                        onOpenAppSettings = ::openAppSettings,
                         isLeavingForPictureInPicture = isLeavingForPictureInPicture,
                         onPictureInPictureShow = { pictureInPictureShown?.complete(Unit) },
                     )
@@ -171,6 +175,37 @@ class ElementCallActivity : ComponentActivity() {
             // No way to ask for the keyguard: leave the call running behind it, the bar waits in the app.
             controller.setMaximized(false)
             close()
+        }
+    }
+
+    /** Settings does not show over the keyguard, so it is dismissed first or the button would look dead (042 C7). */
+    private fun openAppSettings() {
+        val keyguardManager = getSystemService(KeyguardManager::class.java)
+        if (keyguardManager?.isKeyguardLocked == true && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            keyguardManager.requestDismissKeyguard(
+                this,
+                object : KeyguardManager.KeyguardDismissCallback() {
+                    override fun onDismissSucceeded() = openAppSettingsUnlocked()
+                },
+            )
+        } else {
+            openAppSettingsUnlocked()
+        }
+    }
+
+    private fun openAppSettingsUnlocked() {
+        // No user-leave hint, which is what arms and triggers picture-in-picture on the way out.
+        val flags = Intent.FLAG_ACTIVITY_NO_USER_ACTION
+        val appDetails = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", packageName, null)).addFlags(flags)
+        try {
+            startActivity(appDetails)
+        } catch (e: ActivityNotFoundException) {
+            Timber.w(e, "ElementCall: no app details settings, opening the settings")
+            try {
+                startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(flags))
+            } catch (e: ActivityNotFoundException) {
+                Timber.w(e, "ElementCall: no settings to open")
+            }
         }
     }
 

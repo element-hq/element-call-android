@@ -48,14 +48,17 @@ class SampleActivity : ComponentActivity() {
             val pace = intent.getStringExtra(EXTRA_REACTION_INTERVAL)?.toDoubleOrNull()?.seconds ?: 1.seconds
             controller.startReactions(pace)
         }
+        val isPermissionProbeFixture = requested == SamplePermissionProbeCall.KEY
+        if (isPermissionProbeFixture) controller.startPermissionProbe()
         val requestedScenario = intent.getStringExtra(EXTRA_SCENARIO)
         val scenario = requestedScenario?.takeIf { it in scenarios }?.let(MatrixRtcScenario::load)
         // On the home screen rather than only in the log: a test that asked for a fixture that is not
         // there otherwise fails on a missing tile, which is true and about nothing.
         val launchError = when {
-            requested != null && fixture == null && ringingFixture == null && outageFixture == null && !isReactionsFixture -> {
+            requested != null && fixture == null && ringingFixture == null && outageFixture == null && !isReactionsFixture &&
+                !isPermissionProbeFixture -> {
                 val known = SampleFixture.entries.map { it.key } + SampleRingingFixture.entries.map { it.key } +
-                    SampleOutageFixture.entries.map { it.key } + REACTIONS_FIXTURE
+                    SampleOutageFixture.entries.map { it.key } + REACTIONS_FIXTURE + SamplePermissionProbeCall.KEY
                 "Unknown fixture '$requested'. Known: ${known.joinToString()}"
             }
             requestedScenario != null && scenario == null -> "Unknown scenario '$requestedScenario'. Known: ${scenarios.joinToString()}"

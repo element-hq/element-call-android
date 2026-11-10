@@ -13,6 +13,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -30,10 +31,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -46,6 +49,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.round
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallController
@@ -68,6 +72,8 @@ internal fun ElementCallWindow(
     isInPictureInPicture: Boolean,
     onMinimize: () -> Unit,
     onClose: () -> Unit,
+    /** The app's page in the system settings (042 R7, R11). */
+    onOpenAppSettings: () -> Unit,
     /** The system is about to shrink the screen without waiting for us: Home, from Android 12. */
     isLeavingForPictureInPicture: Boolean = false,
     /** The window's content is on screen, so the system can take its picture to shrink. */
@@ -87,6 +93,7 @@ internal fun ElementCallWindow(
             isLeavingForPictureInPicture = isLeavingForPictureInPicture,
             onMinimize = onMinimize,
             onClose = onClose,
+            onOpenAppSettings = onOpenAppSettings,
         )
     }
     // One call site for the way in and the window, so the renderer that drew the way in carries on in the
@@ -186,6 +193,7 @@ private fun CallScreenWindow(
     isLeavingForPictureInPicture: Boolean,
     onMinimize: () -> Unit,
     onClose: () -> Unit,
+    onOpenAppSettings: () -> Unit,
 ) {
     val permissions = rememberCallPermissions(controller = controller, current = current)
     val navigator = remember(permissions) {
@@ -195,6 +203,8 @@ private fun CallScreenWindow(
             override fun minimize() = onMinimize()
 
             override fun requestCameraPermission() = permissions.requestCamera()
+
+            override fun openAppSettings() = onOpenAppSettings()
 
             override fun requestScreenCapture() = permissions.requestScreenCapture()
         }
@@ -221,16 +231,33 @@ private fun CallScreenWindow(
         spotlightMemory = spotlightMemory,
         isLeavingForPictureInPicture = isLeavingForPictureInPicture,
     )
+    if (permissions.isCameraRefusedDialogVisible) {
+        CameraRefusedDialog(
+            onOpenSettings = {
+                permissions.dismissCameraRefusedDialog()
+                onOpenAppSettings()
+            },
+            onDismiss = permissions.dismissCameraRefusedDialog,
+        )
+    }
 
     if (current.isMaximized) {
         BackHandler(onBack = onMinimize)
     }
 }
 
-internal data class CallPermissions(
+internal class CallPermissions(
     val requestCamera: () -> Unit,
     val requestScreenCapture: () -> Unit,
-)
+    /** A camera tap the system refused without asking: explained, since nothing else would show (042 R11). */
+    isCameraRefusedDialogVisible: State<Boolean>,
+    val dismissCameraRefusedDialog: () -> Unit,
+) {
+    val isCameraRefusedDialogVisible by isCameraRefusedDialogVisible
+}
+
+/** Whether a refusal came from the system without its dialog: the "denied, don't ask again" state (042 R11). */
+internal fun isRefusedWithoutAsking(granted: Boolean, rationaleBefore: Boolean, rationaleAfter: Boolean) = !granted && !rationaleBefore && !rationaleAfter
 
 /**
  * Asks for the microphone, and the camera on a video call, as the call needs them. Here rather than in the
@@ -245,6 +272,20 @@ internal fun rememberCallPermissions(controller: ElementCallController, current:
     }
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         controller.setCameraPermissionGranted(granted)
+    }
+    // A refusal can only be told apart from a dialog the user answered after the fact: Android does not say beforehand
+    // whether a request will show anything.
+    val activity = LocalActivity.current
+    val isCameraRefusedDialogVisible = rememberSaveable { mutableStateOf(false) }
+    var cameraRationaleBefore by remember { mutableStateOf(false) }
+    val cameraTapLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        controller.setCameraPermissionGranted(granted)
+        if (granted) {
+            // The tap is the ask: a voice call tapped while joining has no call yet to turn the camera on in (042 R3).
+            controller.setCameraEnabled(true)
+        } else if (isRefusedWithoutAsking(granted, cameraRationaleBefore, activity.shouldShowCameraRationale())) {
+            isCameraRefusedDialogVisible.value = true
+        }
     }
     // Not a permission request: the screen-capture dialog returns an Intent that *is* the grant,
     // single-use, so there is nothing to remember and nothing to check before asking. A refusal
@@ -288,7 +329,8 @@ internal fun rememberCallPermissions(controller: ElementCallController, current:
                 if (context.isGranted(Manifest.permission.CAMERA)) {
                     controller.setCameraPermissionGranted(true)
                 } else {
-                    cameraLauncher.launch(Manifest.permission.CAMERA)
+                    cameraRationaleBefore = activity.shouldShowCameraRationale()
+                    cameraTapLauncher.launch(Manifest.permission.CAMERA)
                 }
             },
             requestScreenCapture = {
@@ -299,9 +341,14 @@ internal fun rememberCallPermissions(controller: ElementCallController, current:
                     screenCaptureLauncher.launch(projectionManager.createScreenCaptureIntent())
                 }
             },
+            isCameraRefusedDialogVisible = isCameraRefusedDialogVisible,
+            dismissCameraRefusedDialog = { isCameraRefusedDialogVisible.value = false },
         )
     }
 }
+
+private fun Activity?.shouldShowCameraRationale() =
+    this != null && ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.CAMERA)
 
 private fun Context.isGranted(permission: String) = ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
 
