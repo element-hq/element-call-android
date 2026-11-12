@@ -14,6 +14,18 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 _Nothing yet._
 
+## 0.1.1 - 2026-11-12
+
+
+
+### What's Changed
+
+🧱 Build
+* Always publish a release to Maven Central, with a skip_maven_central input for recovery by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/90
+
+
+**Full Changelog**: https://github.com/element-hq/element-call-android/compare/v0.1.0...v0.1.1
+
 ## 0.1.0 - 2026-11-12
 
 - Core: matrix-rust-rtc `0.5.0`, from Maven Central. A host drops its Ivy repository over the core's GitHub release;
