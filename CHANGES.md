@@ -12,6 +12,10 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 ## Unreleased
 
+_Nothing yet._
+
+## 0.1.0-rc.11 - 2026-11-10
+
 - `ElementCallFailure` gains `MicrophoneRefused`: an exhaustive `when` over it needs the case.
 - A refused microphone now fails the call with `Failed(ElementCallFailure.MicrophoneRefused)`, no longer `Failed(Other(...))`.
 - `ElementCallNavigator` gains `openAppSettings()`: a host drawing `ElementCallScreen` with its own navigator implements it.
@@ -25,6 +29,23 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
   colours maps Compound's.
 - `ElementCallController` gains `reactionCatalogue` and `sendReaction`, and `MatrixRtcCall` gains `sendReaction`: a
   controller or call of the host's own implements them.
+
+
+
+### What's Changed
+
+✨ Features
+* Support sending reactions 🎉 by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/81
+* Gracefully handle microphone and camera permissions by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/85
+
+🐛 Bugfixes
+* Joining a voice call from the room no longer turns the camera on by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/83
+
+🧱 Build
+* Bump matrix-rust-rtc to 0.5.0-rc.11 by @BillCarsonFr in https://github.com/element-hq/element-call-android/pull/84
+
+
+**Full Changelog**: https://github.com/element-hq/element-call-android/compare/v0.1.0-rc.10...v0.1.0-rc.11
 
 ## 0.1.0-rc.10 - 2026-11-04
 
