@@ -38,16 +38,16 @@ One version for the four artifacts and the BOM, under `io.element.android`:
 
 Each is published by the `io.element.call.publish` convention plugin (`com.vanniktech.maven.publish`) as its
 release variant with a sources jar, an empty javadoc jar, Gradle module metadata, and a POM naming both licences.
-The published `element-call` POM depends on the core at `io.element.android:matrix-rtc-android`, its own
-coordinate, with an `aar` artifact selector; see [What must never be published](#what-must-never-be-published).
+The published `element-call` POM depends on the core at `io.element.android:matrix-rtc-android`, which
+`element-hq/matrix-rust-rtc` publishes to Maven Central; see [What must never be published](#what-must-never-be-published).
 
-Until Maven Central, **the GitHub release is the repository**. `scripts/release.sh` publishes the five modules to a
-Maven layout under `build/dist` and flattens it into `build/release-assets`: for each module the `.aar` or `.jar`,
-`.pom`, `.module`, `-sources.jar` and `-javadoc.jar`, named `<artifactId>-<version>…`, plus one `SHA256SUMS`. The
-workflow attaches them, with the sample APK, to the release on the tag `v<version>`. A host resolves them from
-`releases/download/v<version>/` through an Ivy repository that reads the module metadata (README, "Consuming a
-release"), so **the asset names are part of the contract**. The core is not among the assets: the same host
-resolves it from the core's own release.
+They go to **Maven Central**, and the GitHub release carries them too. `scripts/release.sh` publishes the five
+modules to a Maven layout under `build/dist` and flattens it into `build/release-assets`: for each module the `.aar`
+or `.jar`, `.pom`, `.module`, `-sources.jar` and `-javadoc.jar`, named `<artifactId>-<version>…`, plus one
+`SHA256SUMS`. The workflow attaches them, with the sample APK, to the release on the tag `v<version>`. A host, or a
+fork without a Central namespace, can resolve them from `releases/download/v<version>/` through an Ivy repository
+that reads the module metadata (README, "Consuming a release"), so **the asset names are part of the contract**.
+The core is not among the assets: it comes from Maven Central either way.
 
 ## Versioning
 
@@ -77,9 +77,9 @@ changelog reaches `main` afterwards through an ordinary reviewed pull request. T
 - **Minor** (`0.2.1` → `0.3.0`) for anything else. At `0.x` this is also where breaking changes go, which is why
   every such pull request wants the `pr-api` label: `.github/release.yml` gives it its own "⚠️ API Changes"
   heading precisely so a host reads it before bumping.
-- **A prerelease** (`0.3.0-rc.1`) when a host should try it first. The core this library pins (`MATRIX_RTC_VERSION`
-  in `gradle.properties`) is itself a prerelease; a stable version here would present that edge as settled, so
-  **the first stable release waits for the core to reach one.** Until then, release `0.1.0-rc.N`.
+- **A prerelease** (`0.3.0-rc.1`) when a host should try it first. The core this library pins (`matrix_rtc` in
+  `gradle/libs.versions.toml`) must not be a prerelease when this one is not: a stable version here would present
+  that edge as settled.
 
 ### 2. Dry run
 
@@ -120,12 +120,12 @@ disagree, so a run dispatched against the wrong branch cannot mint a tag off it.
    empty `## Unreleased` above it, and stamp `VERSION_NAME=0.2.0`;
 2. build, run the unit tests and the quality checks, publish to the runner's local Maven repository, build the
    minified consumer against it, lay out the release assets and build the consumer again against them the way a
-   host resolves the release;
+   host resolves a GitHub release;
 3. commit the two files as `Release 0.2.0`, tag `v0.2.0`, and push the commit and tag **atomically**, so the tag
    can never exist without the changelog entry and the version that describe it;
 4. create the GitHub release from the same notes, with the assets and the sample APK, marked prerelease if the
    version has a hyphen;
-5. publish to Maven Central, only if the gate below is open.
+5. publish to Maven Central, while the `MAVEN_CENTRAL_PUBLISH` variable is `true` (see below).
 
 The job summary then links the release and the pull request to open next.
 
@@ -147,7 +147,8 @@ git ls-remote --tags https://github.com/element-hq/element-call-android | grep v
 gh release view v<version>
 ```
 
-And resolve it the way a host will: in a scratch Gradle project with only the two Ivy blocks from the README and
+And resolve it the way a host will, once Central has synced it (up to half an hour): in a scratch Gradle project
+with only `google()` and `mavenCentral()` and
 `implementation(platform("io.element.android:element-call-bom:<version>"))` plus the four artifacts, run
 `./gradlew dependencies --configuration releaseRuntimeClasspath` and check that every `element-call-*` and
 `matrix-rtc-android` line resolves. Element X's `-PelementCallLocalVersion` must **not** be set: that would read
@@ -176,7 +177,7 @@ the version.
 ## If it fails halfway
 
 The mutating steps are, in order: **draft the release** with its assets, **push** (commit and tag, atomically),
-**publish the release**, then the gated Central publish. Everything before them changes nothing, so a failure there
+**publish the release**, then the Central publish. Everything before them changes nothing, so a failure there
 needs no cleanup: fix the cause and dispatch again.
 
 | What happened | What to do |
@@ -185,6 +186,7 @@ needs no cleanup: fix the cause and dispatch again.
 | Push failed | Only a draft exists, and the push is `--atomic`, so the branch and the tag move together or not at all. Fix the cause and dispatch again. |
 | Push landed, publishing failed | Dispatch again, same branch and version: both release steps are idempotent. Should an earlier check refuse first, do it by hand: `gh release edit v<version> --draft=false --verify-tag`. |
 | Published, an asset is missing or wrong | Releases are immutable, so nothing can be added or replaced: release a new patch. |
+| Published, the Central step failed | The tag and the GitHub release stand. Look at the deployment on central.sonatype.com, fix the cause, then publish from the tag by hand: `./gradlew publishAndReleaseToMavenCentral -PRELEASE_SIGNING_ENABLED=true` with the four `ORG_GRADLE_PROJECT_*` variables `release.yml` sets. Central refuses a version twice, so never re-dispatch for it. |
 
 **Never delete and re-push a tag to retry.** A host may already have resolved the assets under it, and Gradle
 caches by module and version, so a tag that changes meaning is far worse than a missing release page. Release a new
@@ -210,33 +212,21 @@ disagrees. CI has no such problem; it checks out with `fetch-depth: 0`.
 
 ## Publishing to Maven Central
 
-`release.yml` publishes only when the repository variable `MAVEN_CENTRAL_PUBLISH` is `true`, because a Central
-release is immutable and public and three things have to be in place first:
+`release.yml` publishes while the repository variable `MAVEN_CENTRAL_PUBLISH` is `true`. Setting it to anything else
+turns the step off, for instance to cut a release that only exists on GitHub. It needs:
 
-- **A Central Portal account** for the `io.element.android` namespace (Element owns it; the `element-call-embedded`
-  artifacts are already under it), as the secrets `MAVEN_CENTRAL_USERNAME` and `MAVEN_CENTRAL_PASSWORD`.
-- **A signing key**, as `MAVEN_SIGNING_KEY` (the armoured private key) and `MAVEN_SIGNING_KEY_PASSWORD`. Signing is
-  off by default so a local publish needs no key; `-PRELEASE_SIGNING_ENABLED=true` turns it on.
-- **A core artifact on Central.** The `element-call` POM depends on `io.element.android:matrix-rtc-android`, which
-  `element-hq/matrix-rust-rtc` publishes to GitHub Packages (a token even to read) and attaches to its GitHub
-  release, not yet to Maven Central. A Central release of `element-call` would resolve for a host only with the Ivy
-  repository over that release added by hand, which is what a Central release exists to avoid. Until the core is on
-  Central (`docs/FEEDBACK.md` item 29), the gate stays closed and the exit condition of the plan's L4 - "resolves
-  from Maven Central in a clean project" - is not met.
+- **A Central Portal user token** for the `io.element.android` namespace, as the secrets `MAVEN_CENTRAL_USERNAME`
+  and `MAVEN_CENTRAL_PASSWORD`: generated under *View Account* on central.sonatype.com, never the login itself.
+- **A signing key**, as `MAVEN_SIGNING_KEY` (the armoured private key) and `MAVEN_SIGNING_KEY_PASSWORD` (its
+  passphrase). Signing is off by default so a local publish needs no key; `-PRELEASE_SIGNING_ENABLED=true` turns it on.
 
-Two more things a first release should say out loud in its notes: the Element Call compatibility is pinned to the
-state-event generation while the library builds against the released SDK (`docs/FEEDBACK.md`), and the core is a
-prerelease.
+A Central release is immutable and public: a version that reached it is spent, whatever happens next.
 
 ## What must never be published
 
-`rtc/local` publishes the core AAR in place to the **local** Maven repository as
-`io.element.android:matrix-rtc-android:<MATRIX_RTC_VERSION>`, the core's own coordinate, so that `tests/consumer`
-and a host on layer 3 resolve the dependency the library's POMs name. That project has no remote repository
-configured, on purpose: the artifact is the core's to publish, and a copy of it, or a local build under its name,
-must never appear on Central from this repository, nor among this repository's release assets (the release script
-only ever publishes the modules on the `io.element.call.publish` plugin, which `rtc/local` is not). When the core
-is on Central, this publication and the Ivy repository in `settings.gradle.kts` go, and nothing else changes.
+This repository never publishes the core: the artifact is `element-hq/matrix-rust-rtc`'s, and a local build of it
+(`0.0.0-local`, `docs/local_stack.md`) lives in `~/.m2` only. The release script only ever publishes the modules on
+the `io.element.call.publish` plugin.
 
 ## Repository setup
 
@@ -265,7 +255,7 @@ LABELS
 | Secret or variable | Used for |
 | --- | --- |
 | *(none)* | The release workflow runs entirely on the built-in `GITHUB_TOKEN`. |
-| `MAVEN_CENTRAL_PUBLISH` (variable), `MAVEN_CENTRAL_*`, `MAVEN_SIGNING_*` | The gated Central publish only. |
+| `MAVEN_CENTRAL_PUBLISH` (variable), `MAVEN_CENTRAL_*`, `MAVEN_SIGNING_*` | The Central publish only. |
 
 Three settings this depends on:
 

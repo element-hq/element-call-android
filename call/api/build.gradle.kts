@@ -26,7 +26,7 @@ android {
     }
     defaultConfig {
         buildConfigField("String", "VERSION_NAME", "\"${project.property("VERSION_NAME")}\"")
-        buildConfigField("String", "MATRIX_RTC_VERSION", "\"${project.property("MATRIX_RTC_VERSION")}\"")
+        buildConfigField("String", "MATRIX_RTC_VERSION", "\"${libs.versions.matrix.rtc.get()}\"")
     }
 }
 

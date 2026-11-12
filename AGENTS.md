@@ -41,7 +41,6 @@ The host decides where the bar sits. The plan this repository follows is
 | `call/impl` | `element-call` | `ElementCallStack` (built over a `MatrixBackend`), the controller, foreground service, receiver, audio routing, and the Rust core wrapper in `…impl.rtc` | `call/api`, the RTC AAR (only in `…impl.rtc` and `ElementCallStack`), JNA. **No Compose.** |
 | `call/ui` | `element-call-ui` | the ONLY Compose module: `ElementCallActivity`, screen, tiles, bar, PiP content, `ElementCallStyle`, previews | `call/api`; libwebrtc only in `…ui.video` |
 | `call/test` | `element-call-test` | fakes for every port, the `MatrixBackend` and the RTC service, fixtures, test-pattern frames | `call/api`, the RTC AAR |
-| `rtc/local` | local Maven only | `matrixrtc-release.aar` (gitignored): the pinned core release, or a local build. An Ivy repository in `settings.gradle.kts` serves it as `io.element.android:matrix-rtc-android`, the core's own coordinate; this project publishes it to `~/.m2` under the same coordinate so the POMs resolve on layer 3 | |
 | `bom` | `element-call-bom` | one version for the four artifacts | |
 | `tests/consumer` | not published | a separate Gradle build: a minified app over the published artifacts from `mavenLocal()` | the artifacts |
 | `sample` | not published | the harness: a Compose app over the fakes, the host Activity and `ElementCallActivity.Host`, the instrumented tests, and `SdkMatrixBackend`, the reference `MatrixBackend` over the Rust SDK (compiled and unit-tested, never run: the harness has no client) | `call/ui`, `call/impl`, `call/test`, the RTC AAR; the ONLY module importing `org.matrix.rustcomponents.sdk` |
@@ -57,10 +56,10 @@ Package root: `io.element.android.call`. Distinct from Element X's packages so b
 
 ## Build and check
 
-The build needs the `matrix-rust-rtc` AAR at `rtc/local/matrixrtc-release.aar`. `./tools/rtc/fetch-rust-rtc` fetches
-the release pinned in `gradle.properties` (`MATRIX_RTC_AAR_URL`, `MATRIX_RTC_AAR_SHA256`) and checks its sha256; CI
-does the same. `./tools/rtc/build-rust-rtc` builds one from a sibling checkout instead. See [docs/local_stack.md](docs/local_stack.md)
-for the three layers (local core, library from source inside Element X, library as an AAR inside Element X).
+The `matrix-rust-rtc` core, `io.element.android:matrix-rtc-android`, comes from Maven Central at the catalog's
+`matrix_rtc`. `./tools/rtc/build-rust-rtc` publishes a local build of it to `~/.m2`, and `-PmatrixRtcLocalVersion=0.0.0-local`
+builds against that. See [docs/local_stack.md](docs/local_stack.md) for the three layers (local core, library from
+source inside Element X, library as an AAR inside Element X).
 
 - Build everything: `./gradlew assemble`
 - Unit tests: `./gradlew test`
@@ -162,12 +161,7 @@ until one does.
 ## What is temporary
 
 Anything that exists because the SDK or the core does not yet expose what the call needs has its removal recipe in
-`docs/FEEDBACK.md`. Today:
-
-- `rtc/local` and the Ivy repository over it: the core (`io.element.android:matrix-rtc-android`) is on GitHub Packages,
-  which needs a token even to read, and not yet on Maven Central, so the AAR is fetched from its pinned release asset
-  and resolved as a file; a host resolves the same asset the same way (README, "Consuming a release"). The asset is
-  checked by sha256 only; the provenance recipe is `docs/FEEDBACK.md` item 28.
+`docs/FEEDBACK.md`. Today, nothing.
 
 ## The SDK edge
 
@@ -177,15 +171,15 @@ Only the sample compiles against `org.matrix.rustcomponents:sdk-android` (the ca
 
 ## Releasing
 
-A release is a tag `v<version>` and the GitHub release on it, whose assets a host resolves through an Ivy
-repository until Maven Central (README, "Consuming a release"). Semver `0.x`, minor for an API or SDK-pin change,
-patch otherwise. **Nobody bumps a version in a pull request**: `scripts/release.sh` stamps `VERSION_NAME` and closes
+A release is a tag `v<version>`, the artifacts on Maven Central, and the GitHub release on the tag, which carries
+them too for a host that resolves a GitHub release (README, "Consuming a release"). Semver `0.x`, minor for an API
+or SDK-pin change, patch otherwise. **Nobody bumps a version in a pull request**: `scripts/release.sh` stamps `VERSION_NAME` and closes
 the `## Unreleased` section of `CHANGES.md` with notes generated from the `pr-` labels, and `release.yml`, dispatched
 by hand on a `release/<version>` branch, commits that, tags, pushes atomically and creates the release; the changelog
 reaches `main` through an ordinary pull request afterwards, merged with a merge commit. Same process as
 element-call-ios. `./scripts/release.sh <version> --skip-build` rehearses the notes locally (needs `gh auth login`);
-without the flag it also builds and lays out the assets in `build/release-assets`. Maven Central stays behind the
-`MAVEN_CENTRAL_PUBLISH` gate. Details, refusals and what must never be published: `RELEASING.md`.
+without the flag it also builds and lays out the assets in `build/release-assets`. The Central publish runs while the
+`MAVEN_CENTRAL_PUBLISH` variable is `true`. Details, refusals and what must never be published: `RELEASING.md`.
 
 ## Pull requests
 

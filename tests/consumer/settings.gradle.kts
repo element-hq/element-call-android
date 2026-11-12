@@ -26,37 +26,30 @@ pluginManagement {
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
+        val elementCallModules = listOf("element-call-bom", "element-call-api", "element-call", "element-call-ui", "element-call-test")
         val distDir = providers.gradleProperty("elementCallDistDir").orNull
         if (distDir == null) {
-            // Only the library and the locally published core come from here; everything else from the
-            // repositories a host would have anyway.
+            // Only the library comes from here, and the core when it is a local build (-PmatrixRtcLocalVersion);
+            // everything else from the repositories a host would have anyway.
             mavenLocal {
                 content {
-                    includeGroup("io.element.android")
+                    elementCallModules.forEach { includeModule("io.element.android", it) }
+                    if (providers.gradleProperty("matrixRtcLocalVersion").isPresent) {
+                        includeModule("io.element.android", "matrix-rtc-android")
+                    }
                 }
             }
         } else {
             // The release assets as scripts/release.sh lays them out - one flat directory - resolved exactly
-            // the way a host resolves a GitHub release (README, "Consuming a release"): the library through
-            // its module metadata, the core from its own release, artifact only. Proves the layout before
-            // a tag is pushed.
+            // the way a host resolves a GitHub release instead of Maven Central (README, "Consuming a release").
+            // Proves the layout before a tag is pushed.
             ivy {
                 url = File(distDir).toURI()
                 patternLayout { artifact("[artifact]-[revision](-[classifier]).[ext]") }
                 metadataSources { gradleMetadata() }
                 content {
-                    includeModule("io.element.android", "element-call-bom")
-                    includeModule("io.element.android", "element-call-api")
-                    includeModule("io.element.android", "element-call")
-                    includeModule("io.element.android", "element-call-ui")
-                    includeModule("io.element.android", "element-call-test")
+                    elementCallModules.forEach { includeModule("io.element.android", it) }
                 }
-            }
-            ivy {
-                url = uri("https://github.com/element-hq/matrix-rust-rtc/releases/download")
-                patternLayout { artifact("v[revision]/[artifact]-[revision].[ext]") }
-                metadataSources { artifact() }
-                content { includeModule("io.element.android", "matrix-rtc-android") }
             }
         }
         google()

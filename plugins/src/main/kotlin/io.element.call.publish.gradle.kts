@@ -23,9 +23,8 @@ import com.vanniktech.maven.publish.SourcesJar
  * `-PRELEASE_SIGNING_ENABLED=true` and in-memory GPG credentials.
  *
  * A second target, `dist`, is a Maven layout under the root `build/dist`, which `scripts/release.sh`
- * flattens into the GitHub release's assets: until Maven Central, that release is where a host resolves
- * the library from (README, "Consuming a release"). Only modules on this plugin reach it, so the core in
- * `rtc/local` never does.
+ * flattens into the GitHub release's assets, for a host that resolves a GitHub release instead of Maven
+ * Central (README, "Consuming a release").
  */
 plugins {
     id("com.vanniktech.maven.publish")

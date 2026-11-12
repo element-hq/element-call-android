@@ -40,7 +40,7 @@ not a call SDK. It will not touch your homeserver, open a capture device, or dra
 
 ## 1. What you are linking against
 
-The AAR (`matrixrtc-release.aar`) contains four things, and you will end up depending on all four:
+The AAR contains four things, and you will end up depending on all four:
 
 | Piece | What it is |
 | :--- | :--- |
@@ -49,26 +49,12 @@ The AAR (`matrixrtc-release.aar`) contains four things, and you will end up depe
 | `org.matrix.rtc.MatrixRtc` | the loader that runs `JNI_OnLoad` — see §2 |
 | `libs/libwebrtc.jar` | libwebrtc's Java classes: camera and screen capture, I420 conversion, GL renderer |
 
-The Maven coordinate is `io.element.android:matrix-rtc-android`, on GitHub Packages (which needs a token even to
-read) and not yet on Maven Central. So the dependency is declared with an `aar` artifact selector and the AAR is
-served by an Ivy repository - over the local file here, over the core's GitHub release in a host - with
-artifact-only metadata; JNA has to be declared by hand because there is no POM to carry it:
-
-```kotlin
-// settings.gradle.kts
-ivy {
-    url = settingsDir.resolve("rtc/local").toURI()
-    patternLayout { artifact("matrixrtc-release.[ext]") }
-    metadataSources { artifact() }
-    content { includeModule("io.element.android", "matrix-rtc-android") }
-}
-```
+The Maven coordinate is `io.element.android:matrix-rtc-android`, on Maven Central. Its metadata brings JNA, the
+uniffi bindings runtime, as an AAR:
 
 ```kotlin
 // call/impl/build.gradle.kts
-implementation(variantOf(libs.matrix.rtc.android) { artifactType("aar") })
-// uniffi bindings runtime
-implementation(variantOf(libs.jna) { artifactType("aar") })
+api(libs.matrix.rtc.android)
 ```
 
 **Confine the FFI to one package.** Nothing outside `call/impl/…/rtc` imports `org.matrix.rtc`. The

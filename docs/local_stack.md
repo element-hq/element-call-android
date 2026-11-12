@@ -20,28 +20,13 @@ matrix-rust-rtc  ──(1)──►  element-call-android  ──(2, 3)──►
 
 ## Layer 1: a locally built core in the library
 
-The `matrix-rust-rtc` core, `io.element.android:matrix-rtc-android`, is on GitHub Packages (a token even to read)
-and not yet on Maven Central, so the library consumes it as a file: `settings.gradle.kts` declares an Ivy repository
-over `rtc/local` that serves `rtc/local/matrixrtc-release.aar` (gitignored) under that coordinate, whatever version
-the catalog names, and `call/impl` and `call/ui` depend on the catalog entry with an `aar` selector. There is no
-fallback: without the file the build fails at resolution with a message pointing here.
+The `matrix-rust-rtc` core, `io.element.android:matrix-rtc-android`, comes from Maven Central at the version
+`matrix_rtc` in `gradle/libs.versions.toml`. Bumping the core is a pull request that changes that line.
 
-**Fetch the pinned release** (what CI does in every workflow, and what a developer who is not changing the core
-does). `gradle.properties` pins the release asset and its checksum, `MATRIX_RTC_AAR_URL` and
-`MATRIX_RTC_AAR_SHA256`; the script downloads it, verifies the sha256 and drops it in place. It is idempotent, and a
-mismatch leaves nothing behind:
-
-```
-./tools/rtc/fetch-rust-rtc                        # the pinned release
-./tools/rtc/fetch-rust-rtc --url URL --sha256 SUM # another build, without editing gradle.properties
-```
-
-Bumping the core is a pull request that changes those two lines; CI validates it. The asset lives on the core's
-repository (the fork's releases until the code moves to `element-hq/matrix-rust-rtc`, then that one), never here:
-a `.aar` tracked by this repository is refused by `tools/quality/check.sh`.
-
-**Or build the core and drop it in place**, to work on the core itself (from a sibling checkout of
-`matrix-rust-rtc`; prerequisites are listed in the script and in the core's `mobile/PACKAGING.md`):
+**Build the core and publish it locally**, to work on the core itself (from a sibling checkout of
+`matrix-rust-rtc`; prerequisites are listed in the script and in the core's `mobile/PACKAGING.md`). The script
+builds the AAR and publishes it to `~/.m2` as `io.element.android:matrix-rtc-android:0.0.0-local`, POM and module
+metadata included:
 
 ```
 ./tools/rtc/build-rust-rtc                 # ../matrix-rust-rtc, full media build
@@ -49,17 +34,21 @@ a `.aar` tracked by this repository is refused by `tools/quality/check.sh`.
 ./tools/rtc/build-rust-rtc --slim          # signalling only, much faster, no media
 ```
 
-The script also keeps a dated copy in `rtc/local/sdks/`, so a previous core can be restored by copying it back over
-`matrixrtc-release.aar` without rebuilding.
+Then build here with the property, on the command line or in `~/.gradle/gradle.properties`:
 
-**Check which core is live:** Gradle prints `Note: rtc/local/matrixrtc-release.aar is not the pinned matrix-rust-rtc
-release` at configuration whenever the file's sha256 differs from `MATRIX_RTC_AAR_SHA256`; otherwise
-`shasum -a 256 rtc/local/matrixrtc-release.aar` and compare with the dated copies. The unit test
-`MatrixRtcAarClasspathTest` in `call/impl` proves the AAR resolves and that its nested `libwebrtc.jar` is on the
-classpath.
+```
+./gradlew assemble -PmatrixRtcLocalVersion=0.0.0-local
+```
 
-**Switch back:** `./tools/rtc/fetch-rust-rtc` puts the pinned release back over a local build. When the core
-reaches Maven Central, `rtc/local` and the Ivy repository go away and the catalog entry resolves like any other.
+`settings.gradle.kts` turns it into a `mavenLocal()` repository filtered to the core and a version override for the
+catalog's `matrix_rtc`; without it, `mavenLocal()` is not declared at all. Republishing `0.0.0-local` is picked up by
+the next build: Gradle does not cache what it resolves from `mavenLocal()`.
+
+**Check which core is live:** Gradle prints `Note: resolving io.element.android:matrix-rtc-android 0.0.0-local from
+mavenLocal` at configuration. The unit test `MatrixRtcAarClasspathTest` in `call/impl` proves the AAR resolves and
+that its nested `libwebrtc.jar` is on the classpath.
+
+**Switch back:** drop the property.
 
 ## Layer 2: the library from source in Element X
 
@@ -79,14 +68,12 @@ or put `elementCallAndroidDir=/abs/path/element-call-android` in `~/.gradle/grad
 git. Gradle prints `Note: element-call-android from <path> (composite build)`.
 
 Layer 1 does not compose with layer 2 on its own: Element X resolves the core from its own repositories, so it gets
-the release asset named by this repository's catalog version, not the file in `rtc/local`. To run a locally built
-core, add this ahead of the core's GitHub Ivy repository in Element X's `settings.gradle.kts`, without committing it:
+the version this repository's catalog names, from Maven Central. To run a locally built core, add this ahead of
+`mavenCentral()` in Element X's `settings.gradle.kts`, without committing it, and pass
+`-PmatrixRtcLocalVersion=0.0.0-local` so that the included build asks for that version:
 
 ```kotlin
-ivy {
-    url = uri("/abs/path/element-call-android/rtc/local")
-    patternLayout { artifact("matrixrtc-release.[ext]") }
-    metadataSources { artifact() }
+mavenLocal {
     content { includeModule("io.element.android", "matrix-rtc-android") }
 }
 ```
@@ -129,21 +116,19 @@ Element X's settings turn the property into a `mavenLocal()` repository filtered
 **Switch back:** drop the property.
 
 The library side exists: `publishToMavenLocal` publishes the four artifacts and the BOM through the
-`io.element.call.publish` plugin, and, from `rtc/local`, the core file as
-`io.element.android:matrix-rtc-android:<MATRIX_RTC_VERSION>` (the coordinate the published POMs name; `RELEASING.md`
-says why it goes no further than `~/.m2`). `tests/consumer` is a minified app built this way on every change, and,
-with `-PelementCallDistDir`, against a directory of release assets the way a host resolves a release (README,
-"Consuming a release"). Element X's `-PelementCallLocalVersion` property arrives with its integration pull requests
+`io.element.call.publish` plugin; their POMs name the core at the catalog's version, which Element X resolves from
+Maven Central. `tests/consumer` is a minified app built this way on every change, and, with `-PelementCallDistDir`,
+against a directory of release assets the way a host resolves a GitHub release (README, "Consuming a release"). Element X's `-PelementCallLocalVersion` property arrives with its integration pull requests
 (plan §10, PR 2).
 
 ## Two rules
 
 Both were learned the hard way in the spike.
 
-1. **Never commit a layer switch.** Neither property, nor a local AAR, nor a local `includeBuild`. The
-   `.gitignore` covers `rtc/local/*.aar` and `checkouts/`; `tools/quality/check.sh` refuses a tracked `.aar`
-   and a tracked `elementCallAndroidDir` or `elementCallLocalVersion`.
+1. **Never commit a layer switch.** No property, no local AAR, no local `includeBuild`. The `.gitignore` covers
+   `checkouts/`; `tools/quality/check.sh` refuses a tracked `.aar`, a tracked `elementCallAndroidDir` or
+   `elementCallLocalVersion`, and a committed `matrixRtcLocalVersion`.
 2. **Confirm which layer is live before debugging.** A stale AAR that a file check silently picked up cost a day
-   once. Compare checksums (layer 1), look for the composite note in the Gradle output (layer 2), or check the
+   once. Look for the `mavenLocal` note (layer 1), look for the composite note in the Gradle output (layer 2), or check the
    resolved version with `./gradlew :app:dependencies --configuration gplayDebugRuntimeClasspath | grep element-call`
    (layer 3), before reading logcat.

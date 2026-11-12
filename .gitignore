@@ -55,9 +55,8 @@ captures/
 # Local checkouts of sibling repositories (see docs/local_stack.md)
 checkouts/**
 
-# The locally built matrix-rust-rtc AAR and its dated copies (see docs/local_stack.md, layer 1)
-rtc/local/*.aar
-rtc/local/sdks/
+# Core AARs left in rtc/ by clones older than the Maven Central core
+rtc/
 
 # What scripts/release.sh writes while rehearsing a release (see RELEASING.md)
 release-notes.md

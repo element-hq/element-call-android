@@ -19,5 +19,5 @@ android {
 dependencies {
     api(projects.call.api)
     // For FakeMatrixBackend.
-    api(variantOf(libs.matrix.rtc.android) { artifactType("aar") })
+    api(libs.matrix.rtc.android)
 }

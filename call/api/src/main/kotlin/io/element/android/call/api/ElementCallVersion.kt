@@ -18,6 +18,6 @@ object ElementCallVersion {
     /** The version the artifacts were published as: `VERSION_NAME` in the root `gradle.properties`. */
     val library: String = BuildConfig.VERSION_NAME
 
-    /** The matrix-rust-rtc release the artifacts were built against: `MATRIX_RTC_VERSION`. */
+    /** The matrix-rust-rtc release the artifacts were built against. */
     val core: String = BuildConfig.MATRIX_RTC_VERSION
 }
