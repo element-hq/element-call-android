@@ -31,10 +31,8 @@ plugins {
 }
 
 mavenPublishing {
+    // Signing is the plugin's own: RELEASE_SIGNING_ENABLED=true makes it sign every publication.
     publishToMavenCentral()
-    if (providers.gradleProperty("RELEASE_SIGNING_ENABLED").orNull == "true") {
-        signAllPublications()
-    }
 
     // An Android library publishes its release variant with a sources jar and an empty javadoc jar,
     // which Central requires; the BOM is a Java platform. The javadoc jar is explicitly empty: the
