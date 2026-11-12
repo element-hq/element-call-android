@@ -121,11 +121,13 @@ disagree, so a run dispatched against the wrong branch cannot mint a tag off it.
 2. build, run the unit tests and the quality checks, publish to the runner's local Maven repository, build the
    minified consumer against it, lay out the release assets and build the consumer again against them the way a
    host resolves a GitHub release;
-3. commit the two files as `Release 0.2.0`, tag `v0.2.0`, and push the commit and tag **atomically**, so the tag
-   can never exist without the changelog entry and the version that describe it;
-4. create the GitHub release from the same notes, with the assets and the sample APK, marked prerelease if the
+3. draft the GitHub release from the same notes, with the assets and the sample APK, marked prerelease if the
    version has a hyphen;
-5. publish to Maven Central, while the `MAVEN_CENTRAL_PUBLISH` variable is `true` (see below).
+4. publish to Maven Central, while the `MAVEN_CENTRAL_PUBLISH` variable is `true` (see below), before anything
+   else is public, so that a failure there leaves only the draft;
+5. commit the two files as `Release 0.2.0`, tag `v0.2.0`, and push the commit and tag **atomically**, so the tag
+   can never exist without the changelog entry and the version that describe it;
+6. publish the GitHub release.
 
 The job summary then links the release and the pull request to open next.
 
@@ -176,17 +178,17 @@ the version.
 
 ## If it fails halfway
 
-The mutating steps are, in order: **draft the release** with its assets, **push** (commit and tag, atomically),
-**publish the release**, then the Central publish. Everything before them changes nothing, so a failure there
+The mutating steps are, in order: **draft the release** with its assets, **publish to Maven Central**, **push**
+(commit and tag, atomically), then **publish the release**. Everything before them changes nothing, so a failure there
 needs no cleanup: fix the cause and dispatch again.
 
 | What happened | What to do |
 | --- | --- |
 | Drafting failed | Nothing is public and no tag is pushed. Dispatch again, same branch and version: the step finishes an existing draft, uploading its assets again. |
-| Push failed | Only a draft exists, and the push is `--atomic`, so the branch and the tag move together or not at all. Fix the cause and dispatch again. |
+| Central publish failed | Only a draft exists and no tag is pushed. Look at the deployment on central.sonatype.com, fix the cause, and dispatch again. |
+| Central published, push failed | The version is on Central, but no tag is pushed. Central refuses a version twice, so set `MAVEN_CENTRAL_PUBLISH` to `false`, dispatch again, same branch and version, then set it back to `true`. The push is `--atomic`, so the branch and the tag moved together or not at all. |
 | Push landed, publishing failed | Dispatch again, same branch and version: both release steps are idempotent. Should an earlier check refuse first, do it by hand: `gh release edit v<version> --draft=false --verify-tag`. |
 | Published, an asset is missing or wrong | Releases are immutable, so nothing can be added or replaced: release a new patch. |
-| Published, the Central step failed | The tag and the GitHub release stand. Look at the deployment on central.sonatype.com, fix the cause, then publish from the tag by hand: `./gradlew publishAndReleaseToMavenCentral -PRELEASE_SIGNING_ENABLED=true` with the four `ORG_GRADLE_PROJECT_*` variables `release.yml` sets. Central refuses a version twice, so never re-dispatch for it. |
 
 **Never delete and re-push a tag to retry.** A host may already have resolved the assets under it, and Gradle
 caches by module and version, so a tag that changes meaning is far worse than a missing release page. Release a new

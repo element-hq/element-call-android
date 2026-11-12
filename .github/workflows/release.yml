@@ -3,10 +3,8 @@ name: Release
 # Cuts a release from a release/<version> branch, the way element-call-ios does: scripts/release.sh
 # validates the version, generates the notes from the pull request labels, closes the changelog section,
 # stamps VERSION_NAME, builds and tests, and lays out the release assets; this workflow then drafts the GitHub
-# release with the assets, commits, tags v<version>, pushes both atomically and publishes the release, which is
-# where a host resolves the library from (README, "Consuming a release"). The changelog reaches main afterwards
-# through an ordinary pull request. See RELEASING.md, including why publishing to Maven Central is gated on a
-# repository variable.
+# release with the assets, publishes to Maven Central, commits, tags v<version>, pushes both atomically and
+# publishes the release. The changelog reaches main afterwards through an ordinary pull request. See RELEASING.md.
 on:
   workflow_dispatch:
     inputs:
@@ -159,6 +157,17 @@ jobs:
               ;;
           esac
 
+      - name: Publish to Maven Central
+        # Before the tag, so a failure here leaves only a draft and dispatching again retries it. A Central
+        # release is immutable and public. Runs while MAVEN_CENTRAL_PUBLISH is true (RELEASING.md).
+        if: ${{ !inputs.dry_run && vars.MAVEN_CENTRAL_PUBLISH == 'true' }}
+        env:
+          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.MAVEN_SIGNING_KEY }}
+          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.MAVEN_SIGNING_KEY_PASSWORD }}
+        run: ./gradlew publishAndReleaseToMavenCentral -PRELEASE_SIGNING_ENABLED=true $CI_GRADLE_ARG_PROPERTIES
+
       # One --atomic push, so the tag and the changelog entry describing it land together or not at all, and
       # the tagged tree contains its own changelog and its own version. Path-explicit add, not `git add -A`:
       # a new generated file has to be named here or it never reaches the tag.
@@ -194,16 +203,6 @@ jobs:
             echo "Release $TAG is already published; leaving it alone."
           fi
           gh release view "$TAG" --json url,isPrerelease,tagName,assets --jq '{url, isPrerelease, tagName, assets: [.assets[].name]}'
-
-      - name: Publish to Maven Central
-        # A Central release is immutable and public. Runs while MAVEN_CENTRAL_PUBLISH is true (RELEASING.md).
-        if: ${{ !inputs.dry_run && vars.MAVEN_CENTRAL_PUBLISH == 'true' }}
-        env:
-          ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
-          ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
-          ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.MAVEN_SIGNING_KEY }}
-          ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.MAVEN_SIGNING_KEY_PASSWORD }}
-        run: ./gradlew publishAndReleaseToMavenCentral -PRELEASE_SIGNING_ENABLED=true $CI_GRADLE_ARG_PROPERTIES
 
       # The tag is the release and it is already public; this pull request only carries the changelog entry
       # and the version back to main. Opened by hand, deliberately: a pull request opened with GITHUB_TOKEN
