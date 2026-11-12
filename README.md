@@ -9,9 +9,8 @@ call implementation for android: media, session, user interface and the Matrix s
 </p>
 
 
-**Status: release candidates.** Versions are `0.x` and every one of them may change the API; releases are GitHub
-releases whose assets a Gradle build resolves directly, see [Consuming a release](#consuming-a-release). Maven Central
-comes later ([RELEASING.md](RELEASING.md)).
+**Status: release candidates.** Versions are `0.x` and every one of them may change the API; releases are published
+to Maven Central, see [Consuming a release](#consuming-a-release).
 
 <!--- TOC -->
 
@@ -41,14 +40,23 @@ See [AGENTS.md](AGENTS.md) for the boundaries between them.
 
 ## Consuming a release
 
-The artifacts are not on Maven Central yet. Each [release](https://github.com/element-hq/element-call-android/releases)
-carries them as assets, laid out so that Gradle resolves them straight from the release through an Ivy repository,
-with their module metadata, POMs and sources; `SHA256SUMS` lists their checksums. The `matrix-rust-rtc` core they
-depend on, `io.element.android:matrix-rtc-android`, is resolved the same way from
-[its own releases](https://github.com/element-hq/matrix-rust-rtc/releases), which carry the bare AAR.
+The artifacts are on Maven Central, and so is the `matrix-rust-rtc` core they depend on,
+`io.element.android:matrix-rtc-android`. With `mavenCentral()` among the repositories, through the BOM so one
+version pins the four:
 
-In `settings.gradle.kts`, next to the repositories the build already has (both blocks are content-filtered, so
-nothing else is looked up there, and both go the day the artifacts are on Central):
+```kotlin
+implementation(platform("io.element.android:element-call-bom:<version>"))
+implementation("io.element.android:element-call-ui")
+implementation("io.element.android:element-call")
+testImplementation("io.element.android:element-call-test")
+```
+
+The core's version is fixed by the library's metadata; a host never names it. An unreleased build is consumed
+from the local Maven repository instead ([docs/local_stack.md](docs/local_stack.md), layer 3).
+
+**From a GitHub release instead.** Each [release](https://github.com/element-hq/element-call-android/releases) also
+carries the artifacts as assets, with their module metadata, POMs and sources, and a `SHA256SUMS`, so that a build
+can resolve them straight from the release, a fork's included. The core still comes from Maven Central:
 
 ```kotlin
 dependencyResolutionManagement {
@@ -65,41 +73,21 @@ dependencyResolutionManagement {
                 includeModule("io.element.android", "element-call-test")
             }
         }
-        ivy {
-            url = uri("https://github.com/element-hq/matrix-rust-rtc/releases/download")
-            patternLayout { artifact("v[revision]/[artifact]-[revision].[ext]") }
-            metadataSources { artifact() }
-            content { includeModule("io.element.android", "matrix-rtc-android") }
-        }
         google()
         mavenCentral()
     }
 }
 ```
 
-Then the dependencies, through the BOM so one version pins the four:
-
-```kotlin
-implementation(platform("io.element.android:element-call-bom:0.1.0-rc.1"))
-implementation("io.element.android:element-call-ui")
-implementation("io.element.android:element-call")
-testImplementation("io.element.android:element-call-test")
-```
-
-The core's version is fixed by the library's metadata; a host never names it. An unreleased build is consumed
-from the local Maven repository instead ([docs/local_stack.md](docs/local_stack.md), layer 3).
-
 ## Building
 
-The build needs the `matrix-rust-rtc` core as an Android AAR at `rtc/local/matrixrtc-release.aar` (not committed):
-
 ```
-./tools/rtc/fetch-rust-rtc            # fetches the release pinned in gradle.properties and checks its sha256
-./tools/rtc/build-rust-rtc            # or builds ../matrix-rust-rtc and drops the AAR in place, to work on the core
 ./gradlew assemble test runQualityChecks
 ```
 
-[docs/local_stack.md](docs/local_stack.md) explains how to work on the core, this library and Element X at once.
+The `matrix-rust-rtc` core comes from Maven Central, at the version in `gradle/libs.versions.toml`.
+[docs/local_stack.md](docs/local_stack.md) explains how to build against a local core, and how to work on the core,
+this library and Element X at once.
 
 ## The sample app
 

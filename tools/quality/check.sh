@@ -13,11 +13,15 @@ set -e
 
 # Refuse the two things a local-stack switch must never leave behind (see docs/local_stack.md).
 if git ls-files | grep -q '\.aar$'; then
-    echo "❌ A .aar file is tracked by git. The matrix-rust-rtc AAR is a local file, see docs/local_stack.md." >&2
+    echo "❌ A .aar file is tracked by git. The matrix-rust-rtc core comes from Maven Central, see docs/local_stack.md." >&2
     exit 1
 fi
 if git grep -n -E 'elementCallAndroidDir|elementCallLocalVersion' -- '*.properties' '*.gradle.kts' | grep -v -E '^(docs/|AGENTS.md|README.md|tools/quality/check.sh)' ; then
     echo "❌ A local-stack property is committed. Keep it in ~/.gradle/gradle.properties, see docs/local_stack.md." >&2
+    exit 1
+fi
+if git grep -n 'matrixRtcLocalVersion' -- '*.properties'; then
+    echo "❌ matrixRtcLocalVersion is committed. Pass it on the command line or keep it in ~/.gradle/gradle.properties, see docs/local_stack.md." >&2
     exit 1
 fi
 

@@ -35,10 +35,9 @@ android {
 dependencies {
     api(projects.call.api)
 
-    // The matrix-rust-rtc core: the file in rtc/local here, the release asset for a host (see docs/local_stack.md).
-    // `api`: the stack is built over its MatrixBackend.
-    api(variantOf(libs.matrix.rtc.android) { artifactType("aar") })
-    // uniffi bindings runtime.
+    // The matrix-rust-rtc core. `api`: the stack is built over its MatrixBackend.
+    api(libs.matrix.rtc.android)
+    // uniffi bindings runtime; the core brings it too, but VideoFrameMapper uses it directly.
     implementation(variantOf(libs.jna) { artifactType("aar") })
 
     implementation(libs.androidx.corektx)

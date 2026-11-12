@@ -11,8 +11,7 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.Test
 
 /**
- * Guards the way `rtc/local` exposes `matrixrtc-release.aar`: a bare Gradle project publishing the
- * file on its `default` configuration.
+ * Guards what the matrix-rust-rtc AAR puts on the classpath once Gradle resolves it.
  *
  * The Rust SDK AAR has no nested `libs/`, so this is the first time we rely on AGP unpacking one. If the
  * `libs/libwebrtc.jar` assertion fails, the AAR needs its nested jar published as a separate artifact.

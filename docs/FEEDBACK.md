@@ -131,12 +131,14 @@ between entries.
     us - but the checksum only says the bytes did not change, not where they came from, and every audio frame, video
     frame, media key and OpenID token this library handles ends up inside them. Two things would close the rest, in
     order: pin the actions in the core's `release.yml` by commit SHA the way this repository does, rather than `@v4`
-    and `@v2`; and attest the build with `actions/attest-build-provenance`, so that `tools/rtc/fetch-rust-rtc` can run
+    and `@v2`; and attest the build with `actions/attest-build-provenance`, so that a consumer can run
     `gh attestation verify` on the AAR and refuse one that was not built by that workflow from that commit. Found by
-    the security audit of this repository, 2026-09-18.
-29. **The core has a Maven coordinate, `io.element.android:matrix-rtc-android`, but nowhere a host can read it
-    without a token.** v0.3.0-rc.1 publishes to GitHub Packages, which needs a `read:packages` token even for a public
-    package - so Element X's CI, every fork and every F-Droid build would need one - and attaches the bare AAR to the
+    the security audit of this repository, 2026-09-18. Since v0.5.0 the AAR comes from Maven Central, signed with
+    Element's key, which says who published it but not what built it.
+29. **~~The core has a Maven coordinate, `io.element.android:matrix-rtc-android`, but nowhere a host can read it
+    without a token.~~ Resolved in v0.5.0, the first release on Maven Central:** the selector, the Ivy repositories
+    and the fetched file are gone, and JNA arrives through the core's metadata. v0.3.0-rc.1 published to GitHub
+    Packages, which needs a `read:packages` token even for a public package - so Element X's CI, every fork and every F-Droid build would need one - and attaches the bare AAR to the
     GitHub release, without the `.pom` and `.module` the same publication writes. This library therefore names the
     coordinate with an `aar` artifact selector and a host resolves the release asset through an Ivy repository with
     artifact-only metadata (README, "Consuming a release"): it works, but the selector is a wart every host carries,

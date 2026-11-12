@@ -12,8 +12,9 @@ set -u
 #
 # ./tools/rtc/build-rust-rtc [--rtc PATH] [--slim]
 #
-# Builds matrix-rust-rtc and drops the resulting AAR at rtc/local/matrixrtc-release.aar,
-# where rtc/local/build.gradle.kts picks it up (see docs/local_stack.md, layer 1).
+# Builds matrix-rust-rtc and publishes it to the local Maven repository as
+# io.element.android:matrix-rtc-android:0.0.0-local; build here with -PmatrixRtcLocalVersion=0.0.0-local
+# (see docs/local_stack.md, layer 1).
 #
 # Prerequisites (see mobile/PACKAGING.md in matrix-rust-rtc):
 #   cargo install uniffi_bindgen cargo-ndk
@@ -47,8 +48,6 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-repoRoot=$(cd "$(dirname "$0")/../.." && pwd)
-
 if [ ! -d "${rtcPath}" ]; then
     echo "matrix-rust-rtc not found at ${rtcPath}. Clone it or pass --rtc PATH." >&2
     exit 1
@@ -62,19 +61,11 @@ else
     ./scripts/build-android-aar.sh
 fi
 
-aar="mobile/android/matrixrtc/build/outputs/aar/matrixrtc-release.aar"
-if [ ! -f "${aar}" ]; then
-    echo "Expected AAR not found at ${rtcPath}/${aar}" >&2
-    exit 1
+publishArgs=(-PmatrixRtcVersion=0.0.0-local)
+if [ "${media}" -eq 1 ]; then
+    publishArgs+=(-PmatrixRtcMedia=true)
 fi
-
-cp "${aar}" "${repoRoot}/rtc/local/matrixrtc-release.aar"
-
+(cd mobile/android && ./gradlew :matrixrtc:publishReleasePublicationToMavenLocal "${publishArgs[@]}")
 popd > /dev/null
 
-# Keep a dated copy around so it is possible to roll back to a previous build.
-date=$(date +%Y%m%d%H%M%S)
-mkdir -p "${repoRoot}/rtc/local/sdks"
-cp "${repoRoot}/rtc/local/matrixrtc-release.aar" "${repoRoot}/rtc/local/sdks/matrixrtc-release-${date}.aar"
-
-echo "Copied matrixrtc-release.aar to rtc/local/"
+echo "Published io.element.android:matrix-rtc-android:0.0.0-local to ~/.m2. Build with -PmatrixRtcLocalVersion=0.0.0-local."

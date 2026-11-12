@@ -264,10 +264,6 @@ fi
 # come from CI_GRADLE_ARG_PROPERTIES, unquoted on purpose: it is a list of flags, or nothing.
 GRADLE_ARGS=${CI_GRADLE_ARG_PROPERTIES:-}
 
-if [ ! -f rtc/local/matrixrtc-release.aar ]; then
-    fail "No core AAR at rtc/local/matrixrtc-release.aar. Run ./tools/rtc/fetch-rust-rtc (docs/local_stack.md, layer 1)."
-fi
-
 # shellcheck disable=SC2086
 echo "Building, testing and checking $VERSION"
 ./gradlew build runQualityChecks $GRADLE_ARGS
