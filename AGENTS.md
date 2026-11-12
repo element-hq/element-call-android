@@ -178,8 +178,7 @@ the `## Unreleased` section of `CHANGES.md` with notes generated from the `pr-` 
 by hand on a `release/<version>` branch, commits that, tags, pushes atomically and creates the release; the changelog
 reaches `main` through an ordinary pull request afterwards, merged with a merge commit. Same process as
 element-call-ios. `./scripts/release.sh <version> --skip-build` rehearses the notes locally (needs `gh auth login`);
-without the flag it also builds and lays out the assets in `build/release-assets`. The Central publish runs while the
-`MAVEN_CENTRAL_PUBLISH` variable is `true`. Details, refusals and what must never be published: `RELEASING.md`.
+without the flag it also builds and lays out the assets in `build/release-assets`. Details, refusals and what must never be published: `RELEASING.md`.
 
 ## Pull requests
 

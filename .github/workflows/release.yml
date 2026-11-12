@@ -15,6 +15,10 @@ on:
         description: "Validate, build and print, change nothing"
         type: boolean
         default: true
+      skip_maven_central:
+        description: "Do not publish to Maven Central: only to finish a release Central already has (RELEASING.md)"
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -159,8 +163,8 @@ jobs:
 
       - name: Publish to Maven Central
         # Before the tag, so a failure here leaves only a draft and dispatching again retries it. A Central
-        # release is immutable and public. Runs while MAVEN_CENTRAL_PUBLISH is true (RELEASING.md).
-        if: ${{ !inputs.dry_run && vars.MAVEN_CENTRAL_PUBLISH == 'true' }}
+        # release is immutable and public.
+        if: ${{ !inputs.dry_run && !inputs.skip_maven_central }}
         env:
           ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
           ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
@@ -211,13 +215,20 @@ jobs:
         if: ${{ !inputs.dry_run }}
         env:
           TAG: ${{ steps.prepare.outputs.tag }}
+          VERSION: ${{ steps.prepare.outputs.version }}
           BRANCH: ${{ github.ref_name }}
           REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+          SKIP_CENTRAL: ${{ inputs.skip_maven_central }}
         run: |
           {
             echo "### Released $TAG"
             echo
             echo "- Tag and release: [$TAG]($REPO_URL/releases/tag/$TAG)"
+            if [ "$SKIP_CENTRAL" = "true" ]; then
+              echo "- Maven Central: **skipped** (\`skip_maven_central\`)"
+            else
+              echo "- Maven Central: [io.element.android:element-call:$VERSION](https://central.sonatype.com/artifact/io.element.android/element-call/$VERSION), searchable within half an hour"
+            fi
             echo
             echo "**Now open the pull request** that carries the changelog entry and VERSION_NAME back to \`main\`:"
             echo

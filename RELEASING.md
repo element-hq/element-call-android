@@ -123,8 +123,7 @@ disagree, so a run dispatched against the wrong branch cannot mint a tag off it.
    host resolves a GitHub release;
 3. draft the GitHub release from the same notes, with the assets and the sample APK, marked prerelease if the
    version has a hyphen;
-4. publish to Maven Central, while the `MAVEN_CENTRAL_PUBLISH` variable is `true` (see below), before anything
-   else is public, so that a failure there leaves only the draft;
+4. publish to Maven Central (see below), before anything else is public, so that a failure there leaves only the draft;
 5. commit the two files as `Release 0.2.0`, tag `v0.2.0`, and push the commit and tag **atomically**, so the tag
    can never exist without the changelog entry and the version that describe it;
 6. publish the GitHub release.
@@ -186,7 +185,7 @@ needs no cleanup: fix the cause and dispatch again.
 | --- | --- |
 | Drafting failed | Nothing is public and no tag is pushed. Dispatch again, same branch and version: the step finishes an existing draft, uploading its assets again. |
 | Central publish failed | Only a draft exists and no tag is pushed. Look at the deployment on central.sonatype.com, fix the cause, and dispatch again. |
-| Central published, push failed | The version is on Central, but no tag is pushed. Central refuses a version twice, so set `MAVEN_CENTRAL_PUBLISH` to `false`, dispatch again, same branch and version, then set it back to `true`. The push is `--atomic`, so the branch and the tag moved together or not at all. |
+| Central published, push failed | The version is on Central, but no tag is pushed. Central refuses a version twice, so dispatch again, same branch and version, with `skip_maven_central` checked. The push is `--atomic`, so the branch and the tag moved together or not at all. |
 | Push landed, publishing failed | Dispatch again, same branch and version: both release steps are idempotent. Should an earlier check refuse first, do it by hand: `gh release edit v<version> --draft=false --verify-tag`. |
 | Published, an asset is missing or wrong | Releases are immutable, so nothing can be added or replaced: release a new patch. |
 
@@ -214,8 +213,8 @@ disagrees. CI has no such problem; it checks out with `fetch-depth: 0`.
 
 ## Publishing to Maven Central
 
-`release.yml` publishes while the repository variable `MAVEN_CENTRAL_PUBLISH` is `true`. Setting it to anything else
-turns the step off, for instance to cut a release that only exists on GitHub. It needs:
+Every real release publishes to Maven Central; missing or wrong credentials fail the run before the tag. The
+`skip_maven_central` input exists only to finish a release whose push failed after Central took it. It needs:
 
 - **A Central Portal user token** for the `io.element.android` namespace, as the secrets `MAVEN_CENTRAL_USERNAME`
   and `MAVEN_CENTRAL_PASSWORD`: generated under *View Account* on central.sonatype.com, never the login itself.
@@ -257,7 +256,7 @@ LABELS
 | Secret or variable | Used for |
 | --- | --- |
 | *(none)* | The release workflow runs entirely on the built-in `GITHUB_TOKEN`. |
-| `MAVEN_CENTRAL_PUBLISH` (variable), `MAVEN_CENTRAL_*`, `MAVEN_SIGNING_*` | The Central publish only. |
+| `MAVEN_CENTRAL_*`, `MAVEN_SIGNING_*` | The Central publish. |
 
 Three settings this depends on:
 
