@@ -36,8 +36,12 @@ class SampleLab(private val context: Context, private val scope: CoroutineScope,
 
     private val formatFlow = MutableStateFlow(SampleLabSession.Saved.load(context)?.format)
 
-    /** The kept session's call format, which the lab page's code set, null when logged out. */
+    /** The kept session's call format, which the lab page's code or Developer options set, null when logged out. */
     val format: StateFlow<MatrixRtcMembershipFormat?> = formatFlow
+
+    // Held, never read: SharedPreferences keeps its listeners weakly.
+    @Suppress("UnusedPrivateProperty")
+    private val savedListener = SampleLabSession.Saved.observe(context) { formatFlow.value = SampleLabSession.Saved.load(context)?.format }
 
     private val noticeFlow = MutableStateFlow<String?>(null)
 
@@ -50,6 +54,7 @@ class SampleLab(private val context: Context, private val scope: CoroutineScope,
     fun open(join: SampleLabJoin) = start("Logging in as ${join.user}…") { current ->
         val sameAccount = SampleLabSession.Saved.load(context)?.isAccount(join.homeserver, join.user) == true
         if (current != null && sameAccount && current.serves(join)) {
+            SampleLabSession.Saved.storeFormat(context, join.format)
             current
         } else {
             if (current != null) {
@@ -101,7 +106,7 @@ class SampleLab(private val context: Context, private val scope: CoroutineScope,
                 .onSuccess {
                     session = it
                     accountFlow.value = SampleLabSession.Saved.load(context)?.userId
-                    formatFlow.value = it.format
+                    formatFlow.value = SampleLabSession.Saved.load(context)?.format
                     noticeFlow.value = null
                     controller.startLab(SampleLabCall(it))
                 }

@@ -58,7 +58,7 @@ fun SampleLabScreen(
                         onClick = onScan,
                         shapes = shapes,
                         colors = sectionColors(),
-                        supportingContent = { Text("Set by the lab page; scan its code again after switching it there.") },
+                        supportingContent = { Text("Set by the lab page's code, or in the call's Developer options. Read at the next join.") },
                         content = { Text("Call format: ${format?.label ?: "unknown"}", fontWeight = FontWeight.Bold) },
                     )
                     LabRow.SCAN -> SegmentedListItem(

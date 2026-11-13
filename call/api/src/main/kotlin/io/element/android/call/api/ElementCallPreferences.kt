@@ -7,27 +7,34 @@
 
 package io.element.android.call.api
 
-/** What the call does with the reactions it receives, as the user chose it (feature-hq 037 R13). */
-enum class ElementCallReactionsPreference {
-    /** Bubbles and sounds, Element Call web's default. "On" in the sheet. */
-    WITH_SOUND,
-
-    /** Bubbles, no sound. "Silent" in the sheet. */
-    WITHOUT_SOUND,
-
-    /** Nothing shown, nothing played. */
-    OFF,
-}
+import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
+import io.element.android.call.api.rtc.MatrixRtcVideoCodec
 
 /** The user's in-call preferences, as they stand. */
 data class ElementCallPreferences(
-    val reactions: ElementCallReactionsPreference,
+    /** Whether received reactions are shown (feature-hq 043 R6). Off, nothing is shown or played. */
+    val showsReactions: Boolean,
+    /** Whether a shown reaction plays its sound (043 R6). Kept while [showsReactions] is off, so it comes back as left (R7). */
+    val playsReactionSounds: Boolean,
     /** How loud every call sound effect plays, 0 to 1 of the call's own level (037 R22). */
     val soundEffectsVolume: Float,
+    /** The format the next join uses (043 R13). A call in progress keeps the one it joined with (R14). */
+    val membershipFormat: MatrixRtcMembershipFormat,
+    /** The codec the next join publishes video with (043 R15, R16a). */
+    val videoCodec: MatrixRtcVideoCodec,
 ) {
     companion object {
-        /** Web's defaults, so nothing changes for anyone who never opens the sheet. */
-        val DEFAULT = ElementCallPreferences(reactions = ElementCallReactionsPreference.WITH_SOUND, soundEffectsVolume = 0.5f)
+        /**
+         * What nobody has changed yet: reactions with their sound, web's sound level, room state so that native callers
+         * meet Element Call web callers (043 R13a), and the core's own codec.
+         */
+        val DEFAULT = ElementCallPreferences(
+            showsReactions = true,
+            playsReactionSounds = true,
+            soundEffectsVolume = 0.5f,
+            membershipFormat = MatrixRtcMembershipFormat.ROOM_STATE,
+            videoCodec = MatrixRtcVideoCodec.AUTO,
+        )
     }
 }
 
@@ -36,11 +43,17 @@ data class ElementCallPreferences(
  *
  * A port rather than an [ElementCallOptions] member: options are the host's, these are the user's, changed mid-call and
  * expected back next week (037 R14, R15). The default keeps them on the device; a host that wants them in its own
- * settings implements this.
+ * settings, or wants to choose the membership format itself (043 R13), implements this.
  */
 interface ElementCallPreferencesStore {
-    var reactions: ElementCallReactionsPreference
+    var showsReactions: Boolean
+
+    var playsReactionSounds: Boolean
 
     /** Clamped to 0..1 by whoever reads it. */
     var soundEffectsVolume: Float
+
+    var membershipFormat: MatrixRtcMembershipFormat
+
+    var videoCodec: MatrixRtcVideoCodec
 }

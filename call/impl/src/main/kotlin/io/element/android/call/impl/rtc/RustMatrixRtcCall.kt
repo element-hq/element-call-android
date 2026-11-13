@@ -16,6 +16,7 @@ import io.element.android.call.api.rtc.MatrixRtcLeaveReason
 import io.element.android.call.api.rtc.MatrixRtcMediaSession
 import io.element.android.call.api.rtc.MatrixRtcMembership
 import io.element.android.call.api.rtc.MatrixRtcReactionKind
+import io.element.android.call.api.rtc.MatrixRtcVideoCodec
 import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.call.impl.util.childScope
 import io.element.android.call.impl.util.runCatchingExceptions
@@ -116,7 +117,7 @@ internal class RustMatrixRtcCall(
             .onFailure { Timber.i("MatrixRTC: reaction ${kind.name} not sent in $roomId/$slotId: ${it.message}") }
     }
 
-    override suspend fun connectMedia(isSfuFallbackEnabled: Boolean): Result<MatrixRtcMediaSession> = runCatchingExceptions {
+    override suspend fun connectMedia(isSfuFallbackEnabled: Boolean, videoCodec: MatrixRtcVideoCodec): Result<MatrixRtcMediaSession> = runCatchingExceptions {
         mediaSession?.let { return@runCatchingExceptions it }
         // The core takes the focus from the join and the account and tokens from the backend.
         val ffiMediaSession =
@@ -130,6 +131,7 @@ internal class RustMatrixRtcCall(
             ffiDispatcher = ffiDispatcher,
             context = context,
             dispatchers = dispatchers,
+            videoCodec = videoCodec,
         ).also {
             mediaSession = it
             it.start()

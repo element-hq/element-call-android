@@ -9,4 +9,9 @@
       ~ Product names and versions, nothing to translate. Every other string is in localazy.xml, downloaded
       ~ from the element-call Localazy project (CONTRIBUTING.md, "Strings").
       -->
+    <!-- Video codec names, as the Developer options sheet lists them (feature-hq 043 R15). -->
+    <string name="element_call_video_codec_vp8" translatable="false">VP8</string>
+    <string name="element_call_video_codec_h264" translatable="false">H.264</string>
+    <string name="element_call_video_codec_vp9" translatable="false">VP9</string>
+    <string name="element_call_video_codec_av1" translatable="false">AV1</string>
 </resources>

@@ -36,4 +36,10 @@ sealed class MatrixRtcJoinException(message: String) : Exception(message) {
 
     /** The homeserver refused the join for good; [errcode] is its Matrix error code when it gave one. */
     class Refused(val errcode: String?, reason: String) : MatrixRtcJoinException("the join was refused: ${errcode ?: "no code"} $reason")
+
+    /** The homeserver advertises no LiveKit transport the join's membership format can use. */
+    class NoLiveKitTransport(val transportType: String) : MatrixRtcJoinException("no LiveKit transport of type $transportType")
+
+    /** The homeserver cannot hand out a media-server token the way the join's membership format asks for one (038 R44). */
+    class TokenEndpointUnsupported : MatrixRtcJoinException("the homeserver has no MSC4195 token endpoint")
 }

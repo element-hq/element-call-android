@@ -8,6 +8,7 @@
 package io.element.android.call.sample.lab
 
 import android.content.Context
+import android.content.SharedPreferences
 import io.element.android.call.api.ElementCallOptions
 import io.element.android.call.api.rtc.MatrixRtcLogLevel
 import io.element.android.call.api.rtc.MatrixRtcLoggingConfiguration
@@ -54,13 +55,12 @@ class SampleLabSession private constructor(
     val client: Client,
     val room: Room,
     val roomId: String,
-    val format: MatrixRtcMembershipFormat,
     val stack: ElementCallStack,
     private val syncService: SyncService,
     private val scope: CoroutineScope,
 ) {
-    /** Whether a code for this session's account can reuse it: the same room, in the same call format. */
-    fun serves(join: SampleLabJoin) = roomId == join.roomId && format == join.format
+    /** Whether a code for this session's account can reuse it: the same room. The format is a preference, read at each join. */
+    fun serves(join: SampleLabJoin) = roomId == join.roomId
 
     /** The host's connectivity report (034 R11) from the sync's state: offline on `OFFLINE` or `ERROR`, online on the `RUNNING` after one. */
     fun observeConnectivity(report: (Boolean) -> Unit): TaskHandle {
@@ -159,6 +159,16 @@ class SampleLabSession private constructor(
                 prefs(context).edit().remove(KEY).apply()
                 storeDirectory(context).deleteRecursively()
             }
+
+            /** The code's format, kept as the call's format preference until a later code or Developer options changes it. */
+            fun storeFormat(context: Context, format: MatrixRtcMembershipFormat) {
+                load(context)?.takeIf { it.format != format }?.copy(format = format)?.store(context)
+            }
+
+            /** Calls [onChange] whenever the kept session changes. Held weakly by SharedPreferences: keep the listener. */
+            fun observe(context: Context, onChange: () -> Unit): SharedPreferences.OnSharedPreferenceChangeListener =
+                SharedPreferences.OnSharedPreferenceChangeListener { _, key -> if (key == KEY) onChange() }
+                    .also { prefs(context).registerOnSharedPreferenceChangeListener(it) }
         }
     }
 
@@ -211,7 +221,7 @@ class SampleLabSession private constructor(
             val (syncService, room) = startSync(client, join.roomId)
             adoptIdentity(client, join.password, join.recoveryKey)
             sayHi(room)
-            make(context, trust, client, room, join.roomId, join.format, syncService, parentScope)
+            make(context, trust, client, room, join.roomId, syncService, parentScope)
         }
 
         /** The kept session, for rejoining without a code. */
@@ -255,7 +265,7 @@ class SampleLabSession private constructor(
             client.restoreSession(saved.session)
             if (roomId != saved.roomId || format != saved.format) saved.copy(roomId = roomId, format = format).store(context)
             val (syncService, room) = startSync(client, roomId)
-            return make(context, trust, client, room, roomId, format, syncService, parentScope)
+            return make(context, trust, client, room, roomId, syncService, parentScope)
         }
 
         /**
@@ -372,22 +382,24 @@ class SampleLabSession private constructor(
             client: Client,
             room: Room,
             roomId: String,
-            format: MatrixRtcMembershipFormat,
             syncService: SyncService,
             parentScope: CoroutineScope,
         ): SampleLabSession {
             val scope = CoroutineScope(parentScope.coroutineContext + SupervisorJob(parentScope.coroutineContext[kotlinx.coroutines.Job]))
             val stack = ElementCallStack.Builder(context, SdkMatrixBackend(client, scope, open = trust::open))
                 .roomContext(SdkElementCallRoomContext(client))
+                // The host that wants control of the format (feature-hq 043 R13): the code's, or what Developer options set.
+                .preferencesStore(SampleLabPreferencesStore(context))
                 .options(
                     ElementCallOptions(
-                        membershipFormat = format,
                         logging = MatrixRtcLoggingConfiguration(logLevel = MatrixRtcLogLevel.INFO, writesToLogcat = true),
+                        // Developer options is where the codec is chosen, and the lab page is where it can be checked on the wire.
+                        isDeveloperModeEnabled = true,
                     )
                 )
                 .build(scope)
-            Timber.i("Lab: logged in as ${client.userId()}, room $roomId synced, call format $format")
-            return SampleLabSession(client, room, roomId, format, stack, syncService, scope)
+            Timber.i("Lab: logged in as ${client.userId()}, room $roomId synced, call format ${Saved.load(context)?.format}")
+            return SampleLabSession(client, room, roomId, stack, syncService, scope)
         }
     }
 }

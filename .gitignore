@@ -56,7 +56,7 @@ captures/
 checkouts/**
 
 # Core AARs left in rtc/ by clones older than the Maven Central core
-rtc/
+/rtc/
 
 # What scripts/release.sh writes while rehearsing a release (see RELEASING.md)
 release-notes.md

@@ -10,13 +10,14 @@ package io.element.android.call.ui
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallHandRequestFailure
 import io.element.android.call.api.ElementCallInterruption
-import io.element.android.call.api.ElementCallReactionsPreference
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
+import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 import io.element.android.call.api.rtc.MatrixRtcReactionKind
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
+import io.element.android.call.api.rtc.MatrixRtcVideoCodec
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.ImmutableMap
@@ -162,15 +163,35 @@ data class ElementCallScreenState(
      * whole screen, stage included, with every one (feature-hq 037 R5). Stable for the screen's life.
      */
     val reactions: Flow<ElementCallReactionBubbleData>,
-    /** Whether the Preferences sheet is up: saved across rotation, gone with the screen in PiP or minimised (037 R12a). */
-    val isPreferencesVisible: Boolean,
-    val reactionsPreference: ElementCallReactionsPreference,
+    /**
+     * The settings sheet that is up, if any: saved across rotation, gone with the screen in PiP or minimised (037 R12a,
+     * 043 R5). Drawn only while [isSettingsSheetDrawn].
+     */
+    val settingsSheet: ElementCallSettingsSheet?,
+    /** Received reactions are shown (043 R6). */
+    val showsReactions: Boolean,
+    /** Shown reactions play their sound (043 R6); kept, and greyed, while [showsReactions] is off (R7). */
+    val playsReactionSounds: Boolean,
     val soundEffectsVolume: Float,
-    /** Whether the sheet offers Developer options (037 R16). */
+    /** The format the next join uses (043 R11, R14). */
+    val membershipFormat: MatrixRtcMembershipFormat,
+    /** The codec the next join publishes with (043 R15, R16a). */
+    val videoCodec: MatrixRtcVideoCodec,
+    /** What the codec choice offers, Auto first (043 R15); empty while Developer options is closed. */
+    val videoCodecs: ImmutableList<MatrixRtcVideoCodec>,
+    /** The format this call joined with, which a failure is judged by (043 R18). */
+    val joiningFormat: MatrixRtcMembershipFormat?,
+    /** Whether the settings menu offers Developer options (043 R4). */
     val isDeveloperModeEnabled: Boolean,
     val eventSink: (ElementCallScreenEvent) -> Unit,
 ) {
     val spotlightTileId: String? get() = spotlight.tileId
+
+    /**
+     * Whether [settingsSheet] is drawn. Not over a failed call, whose screen is the whole screen, Use Room state included
+     * (043 R18a). The spec is silent here: open-questions Q3. Flip this line to leave the sheet up instead.
+     */
+    val isSettingsSheetDrawn: Boolean get() = connection !is ElementCallConnection.Failed
 
     val showsRaiseHandControl: Boolean get() = ElementCallBarAction.RAISED_HAND in extraActions
 

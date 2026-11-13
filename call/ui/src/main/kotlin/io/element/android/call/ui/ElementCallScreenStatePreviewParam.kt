@@ -12,19 +12,20 @@ import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallFailure
 import io.element.android.call.api.ElementCallHandRequestFailure
 import io.element.android.call.api.ElementCallInterruption
-import io.element.android.call.api.ElementCallReactionsPreference
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.audio.CallAudioDeviceType
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
 import io.element.android.call.api.rtc.MatrixRtcConnectionLossReason
 import io.element.android.call.api.rtc.MatrixRtcConnectionState
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
+import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcReactionKind
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcStreamState
+import io.element.android.call.api.rtc.MatrixRtcVideoCodec
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.api.rtc.id.UserId
 import kotlinx.collections.immutable.persistentListOf
@@ -420,9 +421,14 @@ fun anElementCallScreenState(
     isScreenShareStartEnabled: Boolean = true,
     interruptions: List<ElementCallInterruption> = emptyList(),
     reactions: Flow<ElementCallReactionBubbleData> = emptyFlow(),
-    isPreferencesVisible: Boolean = false,
-    reactionsPreference: ElementCallReactionsPreference = ElementCallReactionsPreference.WITH_SOUND,
+    settingsSheet: ElementCallSettingsSheet? = null,
+    showsReactions: Boolean = true,
+    playsReactionSounds: Boolean = true,
     soundEffectsVolume: Float = 0.5f,
+    membershipFormat: MatrixRtcMembershipFormat = MatrixRtcMembershipFormat.ROOM_STATE,
+    videoCodec: MatrixRtcVideoCodec = MatrixRtcVideoCodec.AUTO,
+    videoCodecs: List<MatrixRtcVideoCodec> = listOf(MatrixRtcVideoCodec.AUTO, MatrixRtcVideoCodec.VP8, MatrixRtcVideoCodec.H264, MatrixRtcVideoCodec.VP9),
+    joiningFormat: MatrixRtcMembershipFormat? = MatrixRtcMembershipFormat.ROOM_STATE,
     isDeveloperModeEnabled: Boolean = false,
     isReactionControlEnabled: Boolean = true,
     presentedSheet: ElementCallSheet? = null,
@@ -484,9 +490,14 @@ fun anElementCallScreenState(
     libraryVersion = libraryVersion,
     coreVersion = coreVersion,
     reactions = reactions,
-    isPreferencesVisible = isPreferencesVisible,
-    reactionsPreference = reactionsPreference,
+    settingsSheet = settingsSheet,
+    showsReactions = showsReactions,
+    playsReactionSounds = playsReactionSounds,
     soundEffectsVolume = soundEffectsVolume,
+    membershipFormat = membershipFormat,
+    videoCodec = videoCodec,
+    videoCodecs = videoCodecs.toImmutableList(),
+    joiningFormat = joiningFormat,
     isDeveloperModeEnabled = isDeveloperModeEnabled,
     eventSink = eventSink,
 )

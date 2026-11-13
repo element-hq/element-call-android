@@ -11,16 +11,17 @@ import android.content.Context
 import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallPreferences
-import io.element.android.call.api.ElementCallReactionsPreference
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.ElementCallWindowRect
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
+import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 import io.element.android.call.api.rtc.MatrixRtcReaction
 import io.element.android.call.api.rtc.MatrixRtcReactionKind
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTileId
+import io.element.android.call.api.rtc.MatrixRtcVideoCodec
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import kotlinx.coroutines.CoroutineScope
@@ -137,7 +138,11 @@ class SampleCallController(private val context: Context, private val scope: Coro
     override val preferences: StateFlow<ElementCallPreferences> =
         current.flatMapLatest { it.preferences }.stateIn(scope, SharingStarted.Eagerly, ElementCallPreferences.DEFAULT)
     override val reactions: Flow<MatrixRtcReaction> = current.flatMapLatest { it.reactions }
-    override fun setReactionsPreference(preference: ElementCallReactionsPreference) = target.setReactionsPreference(preference)
+    override fun setShowsReactions(shows: Boolean) = target.setShowsReactions(shows)
+    override fun setPlaysReactionSounds(plays: Boolean) = target.setPlaysReactionSounds(plays)
+    override fun setMembershipFormat(format: MatrixRtcMembershipFormat) = target.setMembershipFormat(format)
+    override fun setVideoCodec(codec: MatrixRtcVideoCodec) = target.setVideoCodec(codec)
+    override val videoCodecs: List<MatrixRtcVideoCodec> get() = target.videoCodecs
     override fun setSoundEffectsVolume(volume: Float) = target.setSoundEffectsVolume(volume)
     override fun playSoundEffectsVolumeSample() = target.playSoundEffectsVolumeSample()
     override fun videoFrames(memberId: String, kind: MatrixRtcStreamKind): Flow<MatrixRtcVideoFrame> = target.videoFrames(memberId, kind)

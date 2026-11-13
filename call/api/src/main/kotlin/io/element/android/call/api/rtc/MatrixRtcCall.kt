@@ -66,8 +66,12 @@ interface MatrixRtcCall : AutoCloseable {
      * server, which the core connects as it would reconnect a lost one (feature-hq 034 C10).
      *
      * @param isSfuFallbackEnabled see [io.element.android.call.api.ElementCallOptions.isSfuFallbackEnabled].
+     * @param videoCodec what the camera and every screen share of this session publish with (feature-hq 043 C2).
      */
-    suspend fun connectMedia(isSfuFallbackEnabled: Boolean = false): Result<MatrixRtcMediaSession>
+    suspend fun connectMedia(
+        isSfuFallbackEnabled: Boolean = false,
+        videoCodec: MatrixRtcVideoCodec = MatrixRtcVideoCodec.AUTO,
+    ): Result<MatrixRtcMediaSession>
 
     /**
      * Leave the call, publishing a leave membership event. Returns without waiting for it to be sent: one attempt, and if it

@@ -10,7 +10,6 @@ package io.element.android.call.sample
 import app.cash.turbine.test
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallData
-import io.element.android.call.api.ElementCallReactionsPreference
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.rtc.MatrixRtcReactionKind
 import io.element.android.call.api.rtc.id.RoomId
@@ -36,7 +35,7 @@ class SampleElementCallControllerTest {
             controller.sendReaction(party)
             awaitItem()
 
-            controller.setReactionsPreference(ElementCallReactionsPreference.OFF)
+            controller.setShowsReactions(false)
             controller.sendReaction(party)
             expectNoEvents()
         }

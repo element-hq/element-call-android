@@ -23,6 +23,9 @@ import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.click
 import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.hasContentDescription
@@ -33,14 +36,19 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
 import androidx.compose.ui.test.swipeUp
 import androidx.compose.ui.test.v2.runAndroidComposeUiTest
 import com.google.common.truth.Truth.assertThat
 import io.element.android.call.api.ElementCallConnection
+import io.element.android.call.api.ElementCallFailure
 import io.element.android.call.api.ElementCallHandRequestFailure
 import io.element.android.call.api.ElementCallInterruption
+import io.element.android.call.api.rtc.MatrixRtcConnectionLossReason
+import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
+import io.element.android.call.api.rtc.MatrixRtcVideoCodec
 import io.element.android.call.api.rtc.id.UserId
 import io.element.android.call.tests.testutils.EventsRecorder
 import io.element.android.call.tests.testutils.assertNodeWithTextIsDisplayed
@@ -239,18 +247,186 @@ class ElementCallScreenTest : RobolectricTest() {
         onNodeWithContentDescription(activity!!.getString(R.string.element_call_a11y_stop_screen_share)).assertDoesNotExist()
     }
 
-    /** The overflow menu's one item opens the Preferences sheet (037 R12). */
+    /** The top bar's button is a settings button (043 R1, R2); its menu holds Preferences alone without developer mode (R3, R4). */
     @Test
-    fun `the overflow menu opens the preferences`() = runAndroidComposeUiTest<ComponentActivity> {
+    fun `the settings menu holds preferences alone without developer mode`() = runAndroidComposeUiTest<ComponentActivity> {
         val events = EventsRecorder<ElementCallScreenEvent>()
-        setContent { ElementCallScreen(state = anElementCallScreenState(eventSink = events)) }
+        setContent { ElementCallScreen(state = anElementCallScreenState(isDeveloperModeEnabled = false, eventSink = events)) }
         waitForIdle()
         events.clear()
 
-        clickOnContentDescription(R.string.element_call_a11y_more_options)
-        onNodeWithText(activity!!.getString(R.string.element_call_preferences_title)).performClick()
+        onNodeWithContentDescription(activity!!.getString(R.string.element_call_a11y_more_options)).assertDoesNotExist()
+        clickOnContentDescription(R.string.element_call_a11y_settings)
+        onNodeWithTag(ElementCallTestTags.PREFERENCES).assertIsDisplayed()
+        onNodeWithTag(ElementCallTestTags.DEVELOPER_OPTIONS).assertDoesNotExist()
+        onNodeWithTag(ElementCallTestTags.PREFERENCES).performClick()
 
-        events.assertSingle(ElementCallScreenEvent.ShowPreferences)
+        events.assertSingle(ElementCallScreenEvent.ShowSettingsSheet(ElementCallSettingsSheet.PREFERENCES))
+        // Choosing an entry closes the menu (R5).
+        onNodeWithTag(ElementCallTestTags.PREFERENCES).assertDoesNotExist()
+    }
+
+    /** In developer mode the menu ends with Developer options, after Preferences, and it opens its own sheet (043 R3, R5). */
+    @Test
+    fun `the settings menu ends with developer options in developer mode`() = runAndroidComposeUiTest<ComponentActivity> {
+        val events = EventsRecorder<ElementCallScreenEvent>()
+        setContent { ElementCallScreen(state = anElementCallScreenState(isDeveloperModeEnabled = true, eventSink = events)) }
+        waitForIdle()
+        events.clear()
+
+        onNodeWithTag(ElementCallTestTags.SETTINGS).performClick()
+        val preferences = onNodeWithTag(ElementCallTestTags.PREFERENCES).fetchSemanticsNode().boundsInRoot
+        val developerOptions = onNodeWithTag(ElementCallTestTags.DEVELOPER_OPTIONS).fetchSemanticsNode().boundsInRoot
+        assertThat(developerOptions.top).isAtLeast(preferences.bottom)
+        onNodeWithTag(ElementCallTestTags.DEVELOPER_OPTIONS).performClick()
+
+        events.assertSingle(ElementCallScreenEvent.ShowSettingsSheet(ElementCallSettingsSheet.DEVELOPER_OPTIONS))
+        onNodeWithTag(ElementCallTestTags.DEVELOPER_OPTIONS).assertDoesNotExist()
+    }
+
+    @Test
+    fun `each settings sheet is drawn for its entry, and none over a failed call`() = runAndroidComposeUiTest<ComponentActivity> {
+        var state by mutableStateOf(anElementCallScreenState(isDeveloperModeEnabled = true, settingsSheet = ElementCallSettingsSheet.PREFERENCES))
+        setContent { ElementCallScreen(state = state) }
+
+        onNodeWithTag(ElementCallTestTags.PREFERENCES_SHEET).assertExists()
+        onNodeWithTag(ElementCallTestTags.DEVELOPER_OPTIONS_SHEET).assertDoesNotExist()
+
+        state = anElementCallScreenState(isDeveloperModeEnabled = true, settingsSheet = ElementCallSettingsSheet.DEVELOPER_OPTIONS)
+        onNodeWithTag(ElementCallTestTags.DEVELOPER_OPTIONS_SHEET).assertExists()
+        onNodeWithTag(ElementCallTestTags.PREFERENCES_SHEET).assertDoesNotExist()
+
+        state = anElementCallScreenState(
+            connection = ElementCallConnection.Failed(ElementCallFailure.JoinRefused),
+            isDeveloperModeEnabled = true,
+            settingsSheet = ElementCallSettingsSheet.DEVELOPER_OPTIONS,
+        )
+        onNodeWithTag(ElementCallTestTags.DEVELOPER_OPTIONS_SHEET).assertDoesNotExist()
+    }
+
+    /** Preferences no longer holds Tile stats (043 R9, R10); Developer options does. */
+    @Test
+    fun `tile stats are in developer options, not in preferences`() = runAndroidComposeUiTest<ComponentActivity> {
+        val events = EventsRecorder<ElementCallScreenEvent>()
+        var showsDeveloperOptions by mutableStateOf(false)
+        setContent {
+            val state = anElementCallScreenState(isDeveloperModeEnabled = true, eventSink = events)
+            if (showsDeveloperOptions) {
+                ElementCallDeveloperOptionsContent(
+                    state = state,
+                    onClose = {}
+                )
+            } else {
+                ElementCallPreferencesContent(state = state, onClose = {})
+            }
+        }
+
+        onNodeWithText(activity!!.getString(R.string.element_call_preferences_tile_stats)).assertDoesNotExist()
+        onNodeWithText(activity!!.getString(R.string.element_call_preferences_developer_options)).assertDoesNotExist()
+
+        showsDeveloperOptions = true
+        onNodeWithTag(ElementCallTestTags.DEVELOPER_OPTIONS_TILE_STATS).performClick()
+        events.assertSingle(ElementCallScreenEvent.ToggleTileStats)
+    }
+
+    /** Hidden reactions grey the sound switch, which keeps the user's choice and cannot be changed (043 R7). */
+    @Test
+    fun `with reactions hidden the sound switch is greyed and keeps its value`() = runAndroidComposeUiTest<ComponentActivity> {
+        val events = EventsRecorder<ElementCallScreenEvent>()
+        setContent {
+            ElementCallPreferencesContent(
+                state = anElementCallScreenState(showsReactions = false, playsReactionSounds = true, eventSink = events),
+                onClose = {},
+            )
+        }
+        waitForIdle()
+        events.clear()
+
+        val sounds = onNodeWithTag(ElementCallTestTags.PREFERENCES_PLAY_REACTION_SOUNDS)
+        sounds.assertIsNotEnabled()
+        sounds.assertIsOn()
+        sounds.performClick()
+        events.assertEmpty()
+
+        onNodeWithTag(ElementCallTestTags.PREFERENCES_SHOW_REACTIONS).assertIsOff().performClick()
+        events.assertSingle(ElementCallScreenEvent.SetShowsReactions(true))
+    }
+
+    /** Auto names its codec; each choice sends its value; the stored codec this device cannot encode shows Auto chosen. */
+    @Test
+    fun `developer options choose the format and the codec`() = runAndroidComposeUiTest<ComponentActivity> {
+        val events = EventsRecorder<ElementCallScreenEvent>()
+        setContent {
+            ElementCallDeveloperOptionsContent(
+                state = anElementCallScreenState(
+                    isDeveloperModeEnabled = true,
+                    videoCodec = MatrixRtcVideoCodec.AV1,
+                    videoCodecs = listOf(MatrixRtcVideoCodec.AUTO, MatrixRtcVideoCodec.VP8, MatrixRtcVideoCodec.H264),
+                    eventSink = events,
+                ),
+                onClose = {},
+            )
+        }
+        waitForIdle()
+        events.clear()
+
+        onNodeWithText("Auto (VP8)").assertExists()
+        onNodeWithTag(ElementCallTestTags.developerOptionsVideoCodec(MatrixRtcVideoCodec.AUTO)).assertIsSelected()
+        onNodeWithTag(ElementCallTestTags.developerOptionsVideoCodec(MatrixRtcVideoCodec.AV1)).assertDoesNotExist()
+        onNodeWithTag(ElementCallTestTags.developerOptionsMembershipFormat(MatrixRtcMembershipFormat.ROOM_STATE)).assertIsSelected()
+
+        onNodeWithTag(ElementCallTestTags.developerOptionsMembershipFormat(MatrixRtcMembershipFormat.MSC)).performClick()
+        onNodeWithTag(ElementCallTestTags.developerOptionsVideoCodec(MatrixRtcVideoCodec.H264)).performScrollTo().performClick()
+        events.assertList(
+            listOf(
+                ElementCallScreenEvent.SetMembershipFormat(MatrixRtcMembershipFormat.MSC),
+                ElementCallScreenEvent.SetVideoCodec(MatrixRtcVideoCodec.H264),
+            )
+        )
+    }
+
+    /** A failed join in MSC names the format and offers Room state first (043 R18, R18a); in Room state, neither. */
+    @Test
+    fun `a failed MSC join names the format and offers room state`() = runAndroidComposeUiTest<ComponentActivity> {
+        val events = EventsRecorder<ElementCallScreenEvent>()
+        var joiningFormat by mutableStateOf(MatrixRtcMembershipFormat.MSC)
+        setContent {
+            ElementCallScreen(
+                state = anElementCallScreenState(
+                    connection = ElementCallConnection.Failed(ElementCallFailure.JoinRefused),
+                    joiningFormat = joiningFormat,
+                    eventSink = events,
+                )
+            )
+        }
+        waitForIdle()
+        events.clear()
+
+        assertNodeWithTextIsDisplayed(R.string.element_call_failure_join_refused)
+        assertNodeWithTextIsDisplayed(R.string.element_call_failure_join_membership_format)
+        onNodeWithTag(ElementCallTestTags.FAILURE_USE_ROOM_STATE).performClick()
+        events.assertSingle(ElementCallScreenEvent.UseRoomStateAndClose)
+
+        joiningFormat = MatrixRtcMembershipFormat.ROOM_STATE
+        onNodeWithText(activity!!.getString(R.string.element_call_failure_join_membership_format)).assertDoesNotExist()
+        onNodeWithTag(ElementCallTestTags.FAILURE_USE_ROOM_STATE).assertDoesNotExist()
+    }
+
+    /** After the join, the lost token endpoint in MSC says the format, in place of blaming the media server (R18). */
+    @Test
+    fun `a token endpoint lost in MSC names the format instead of the media server`() = runAndroidComposeUiTest<ComponentActivity> {
+        setContent {
+            ElementCallScreen(
+                state = anElementCallScreenState(
+                    connection = ElementCallConnection.Failed(ElementCallFailure.ConnectionLost(MatrixRtcConnectionLossReason.TOKEN_ENDPOINT_UNSUPPORTED)),
+                    joiningFormat = MatrixRtcMembershipFormat.MSC,
+                )
+            )
+        }
+
+        assertNodeWithTextIsDisplayed(R.string.element_call_failure_join_membership_format)
+        onNodeWithText(activity!!.getString(R.string.element_call_failure_connection_refused)).assertDoesNotExist()
+        onNodeWithTag(ElementCallTestTags.FAILURE_USE_ROOM_STATE).assertIsDisplayed()
     }
 
     /** The versions are in the sheet's About, for everyone (037 R17). */
