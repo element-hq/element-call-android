@@ -11,6 +11,7 @@ import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
 import io.element.android.call.api.rtc.MatrixRtcConnectionLossReason
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
+import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 import io.element.android.call.api.rtc.MatrixRtcReceiveStats
 import io.element.android.call.api.rtc.MatrixRtcSignallingHealth
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
@@ -153,12 +154,17 @@ data class ElementCallSnapshot(
     /** Whether the call is showing full screen, as opposed to docked in the minimized bar. */
     val isMaximized: Boolean = true,
     /**
-     * Whether tiles are showing their debug readout, toggled from the Preferences sheet in developer mode.
+     * Whether tiles are showing their debug readout, toggled from the Developer options sheet (feature-hq 043 R10).
      *
      * Deliberately per call rather than persisted: it is answering a question about *this* call, and
      * a developer who left it on last week should not be handed a screen full of numbers today.
      */
     val isTileStatsVisible: Boolean = false,
+    /**
+     * The membership format this call joined with, null until the join starts. The store's value may have changed since
+     * (043 R14); a failure is judged by this one (R18).
+     */
+    val joiningFormat: MatrixRtcMembershipFormat? = null,
     /** The last raise or lower the homeserver refused for good, until the user has been told or asks again. */
     val handRequestFailure: ElementCallHandRequestFailure? = null,
     /** Whether our homeserver answers, from the join on (feature-hq 034 C4): the controls are live before media is. */

@@ -31,6 +31,7 @@ import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcTileRoster
+import io.element.android.call.api.rtc.MatrixRtcVideoCodec
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.api.rtc.id.RoomId
@@ -50,6 +51,8 @@ class FakeMatrixRtcClient(
     private val joinGate: CompletableDeferred<Unit>? = null,
     /** What a call joined here settles on when we did not start it, as the core would from its members. */
     private val callIntent: MatrixRtcCallIntent = MatrixRtcCallIntent.VIDEO,
+    /** What [supportedVideoCodecs] answers: the codecs "this device" can encode. */
+    var videoCodecs: List<MatrixRtcVideoCodec> = listOf(MatrixRtcVideoCodec.VP8, MatrixRtcVideoCodec.H264, MatrixRtcVideoCodec.VP9),
 ) : MatrixRtcClient {
     var roomCount = 0
         private set
@@ -72,6 +75,8 @@ class FakeMatrixRtcClient(
     override fun reportConnectivity(isOnline: Boolean) {
         connectivityReports += isOnline
     }
+
+    override fun supportedVideoCodecs(): List<MatrixRtcVideoCodec> = videoCodecs
 
     override suspend fun room(roomId: RoomId, format: MatrixRtcMembershipFormat): Result<MatrixRtcRoom> {
         roomCount++
@@ -181,9 +186,12 @@ class FakeMatrixRtcCall(
     /** What the last [connectMedia] asked for. */
     var lastIsSfuFallbackEnabled: Boolean? = null
         private set
+    var lastVideoCodec: MatrixRtcVideoCodec? = null
+        private set
 
-    override suspend fun connectMedia(isSfuFallbackEnabled: Boolean): Result<MatrixRtcMediaSession> {
+    override suspend fun connectMedia(isSfuFallbackEnabled: Boolean, videoCodec: MatrixRtcVideoCodec): Result<MatrixRtcMediaSession> {
         lastIsSfuFallbackEnabled = isSfuFallbackEnabled
+        lastVideoCodec = videoCodec
         connectMediaCount++
         onConnectMedia()
         return Result.success(newMediaSession().also { lastMediaSession = it }).also {

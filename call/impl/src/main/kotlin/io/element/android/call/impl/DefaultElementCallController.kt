@@ -18,7 +18,6 @@ import io.element.android.call.api.ElementCallLifecycleListener
 import io.element.android.call.api.ElementCallOptions
 import io.element.android.call.api.ElementCallPreferences
 import io.element.android.call.api.ElementCallPreferencesStore
-import io.element.android.call.api.ElementCallReactionsPreference
 import io.element.android.call.api.ElementCallRoomContextProvider
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.ElementCallWindowRect
@@ -38,6 +37,7 @@ import io.element.android.call.api.rtc.MatrixRtcInterruptions
 import io.element.android.call.api.rtc.MatrixRtcJoinException
 import io.element.android.call.api.rtc.MatrixRtcLeaveReason
 import io.element.android.call.api.rtc.MatrixRtcMediaSession
+import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 import io.element.android.call.api.rtc.MatrixRtcReaction
 import io.element.android.call.api.rtc.MatrixRtcReactionKind
 import io.element.android.call.api.rtc.MatrixRtcRing
@@ -47,6 +47,7 @@ import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcSignallingHealth
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTileId
+import io.element.android.call.api.rtc.MatrixRtcVideoCodec
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.api.rtc.id.UserId
@@ -129,11 +130,9 @@ internal class DefaultElementCallController(
 
     override val isDeveloperModeEnabled: Boolean get() = options.isDeveloperModeEnabled
 
-    private val _preferences = MutableStateFlow(
-        ElementCallPreferences(reactions = preferencesStore.reactions, soundEffectsVolume = preferencesStore.soundEffectsVolume.coerceIn(0f, 1f))
-    )
+    private val storedPreferences = StoredElementCallPreferences(preferencesStore)
 
-    override val preferences: StateFlow<ElementCallPreferences> = _preferences.asStateFlow()
+    override val preferences: StateFlow<ElementCallPreferences> = storedPreferences.value
 
     // Not replayed: a reaction nobody is drawing, in picture-in-picture or minimised, is gone (037 R8).
     private val _reactions = MutableSharedFlow<MatrixRtcReaction>(extraBufferCapacity = 64, onBufferOverflow = BufferOverflow.DROP_OLDEST)
@@ -569,21 +568,23 @@ internal class DefaultElementCallController(
         updateState { it.copy(isTileStatsVisible = !it.isTileStatsVisible) }
     }
 
-    override fun setReactionsPreference(preference: ElementCallReactionsPreference) {
-        Timber.i("ElementCall: reactions $preference")
-        preferencesStore.reactions = preference
-        _preferences.update { it.copy(reactions = preference) }
-    }
+    override fun setShowsReactions(shows: Boolean) = storedPreferences.setShowsReactions(shows)
+
+    override fun setPlaysReactionSounds(plays: Boolean) = storedPreferences.setPlaysReactionSounds(plays)
+
+    override fun setMembershipFormat(format: MatrixRtcMembershipFormat) = storedPreferences.setMembershipFormat(format)
+
+    override fun setVideoCodec(codec: MatrixRtcVideoCodec) = storedPreferences.setVideoCodec(codec)
+
+    override val videoCodecs: List<MatrixRtcVideoCodec>
+        get() = listOf(MatrixRtcVideoCodec.AUTO) + rtcClient.supportedVideoCodecs()
 
     override fun setSoundEffectsVolume(volume: Float) {
-        val clamped = volume.coerceIn(0f, 1f)
-        preferencesStore.soundEffectsVolume = clamped
-        _preferences.update { it.copy(soundEffectsVolume = clamped) }
-        soundEffectRenderer?.setVolume(clamped)
+        soundEffectRenderer?.setVolume(storedPreferences.setSoundEffectsVolume(volume))
     }
 
     override fun playSoundEffectsVolumeSample() {
-        Timber.i("ElementCall: sound effects volume ${(_preferences.value.soundEffectsVolume * 100).roundToInt()} %")
+        Timber.i("ElementCall: sound effects volume ${(preferences.value.soundEffectsVolume * 100).roundToInt()} %")
         soundEffectRenderer?.playReaction(GENERIC_REACTION_SOUND)
     }
 
@@ -683,10 +684,14 @@ internal class DefaultElementCallController(
 
         // Read once, here, rather than observed: the format is fixed for the lifetime of a room -
         // it decides the member id, the SFU identity and the token endpoint as well as the wire
-        // format - so changing it mid-call is not something the core could act on.
-        // The default is the room-state format; a host asks for another when its peers speak it.
-        val membershipFormat = options.membershipFormat
-        Timber.i("ElementCall: joining with membership format $membershipFormat")
+        // format - so changing it mid-call is not something the core could act on (043 R14).
+        // The codec is read with it, so that both take effect from the next join and no earlier (043 C1).
+        // Reloaded rather than read on the side, so a format the host wrote since is also what the sheets show.
+        val joinPreferences = storedPreferences.reload()
+        val membershipFormat = joinPreferences.membershipFormat
+        val storedVideoCodec = joinPreferences.videoCodec
+        Timber.i("ElementCall: joining with membership format $membershipFormat, video codec $storedVideoCodec if this device encodes it")
+        updateState { it.copy(joiningFormat = membershipFormat) }
 
         val room = rtcClient.room(callData.roomId, membershipFormat).getOrElse {
             fail("Join failed: ${it.message}")
@@ -719,7 +724,7 @@ internal class DefaultElementCallController(
         // ringback plays through the call's audio (030 R24), on whatever output the picker shows.
         joinLeaveSoundPolicy = JoinLeaveSoundPolicy(options.participantCapForJoinLeaveSounds)
         raisedHandSoundPolicy = RaisedHandSoundPolicy()
-        soundEffectRenderer = platform.createCallSoundEffectRenderer(_preferences.value.soundEffectsVolume)
+        soundEffectRenderer = platform.createCallSoundEffectRenderer(preferences.value.soundEffectsVolume)
         // Communication mode is device-wide state we borrow, held for as long as the call runs and
         // handed back in endCall(). Routing choices do not stick outside that mode, so the speaker
         // preference has to be applied after it, not before.
@@ -731,7 +736,7 @@ internal class DefaultElementCallController(
 
         coroutineScope {
             val joinObservers = startJoinObservers(joined)
-            connectMediaAndObserve(joined)?.let { failure ->
+            connectMediaAndObserve(joined, storedVideoCodec)?.let { failure ->
                 joinObservers.cancel()
                 fail(failure)
             }
@@ -764,8 +769,11 @@ internal class DefaultElementCallController(
     }
 
     /** Media, the microphone, the routing and the observers. @return what failed, or null. */
-    private suspend fun CoroutineScope.connectMediaAndObserve(joined: MatrixRtcCall): String? {
-        val connected = joined.connectMedia(isSfuFallbackEnabled = options.isSfuFallbackEnabled).getOrElse {
+    private suspend fun CoroutineScope.connectMediaAndObserve(joined: MatrixRtcCall, storedVideoCodec: MatrixRtcVideoCodec): String? {
+        // Asked here rather than at the start of the join: the room is open, so the core is loaded. A stored codec the
+        // device cannot encode, from a restored backup or another device, publishes as Auto and stays stored (043 C2).
+        val videoCodec = storedVideoCodec.takeIf { it in videoCodecs } ?: MatrixRtcVideoCodec.AUTO
+        val connected = joined.connectMedia(isSfuFallbackEnabled = options.isSfuFallbackEnabled, videoCodec = videoCodec).getOrElse {
             return "Media failed: ${it.message}"
         }
         call = connected
@@ -958,9 +966,11 @@ internal class DefaultElementCallController(
      */
     private fun CoroutineScope.receiveReaction(event: MatrixRtcCallEvent.Reaction, localMemberId: String) {
         // Read on arrival: a change applies to the next reaction and leaves those already scheduled alone (037 R15).
-        val preference = _preferences.value.reactions
-        Timber.i("ElementCall: ${event.memberId} reacted ${event.name.ifEmpty { "(no name)" }}: $preference")
-        if (preference == ElementCallReactionsPreference.OFF) return
+        // Hidden reactions play no sound, whatever the sound switch holds (043 R7).
+        val shows = preferences.value.showsReactions
+        val playsSound = shows && preferences.value.playsReactionSounds
+        Timber.i("ElementCall: ${event.memberId} reacted ${event.name.ifEmpty { "(no name)" }}: shown $shows, sound $playsSound")
+        if (!shows) return
         val snapshot = _state.value ?: return
         val userId = snapshot.userIdOf(event.memberId, localMemberId) ?: run {
             Timber.w("ElementCall: reaction from ${event.memberId}, who is not on the roster")
@@ -977,7 +987,7 @@ internal class DefaultElementCallController(
         launch {
             delay(spread)
             // With its bubble, not on arrival (037 R2b).
-            if (preference == ElementCallReactionsPreference.WITH_SOUND && soundEffectRenderer?.playReaction(event.sound) == false) {
+            if (playsSound && soundEffectRenderer?.playReaction(event.sound) == false) {
                 Timber.i("ElementCall: reaction sound ${event.sound} not played, eight already are")
             }
             _reactions.emit(reaction)

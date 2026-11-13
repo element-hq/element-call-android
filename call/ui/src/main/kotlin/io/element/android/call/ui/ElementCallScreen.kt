@@ -129,7 +129,9 @@ fun ElementCallScreen(
             CallSystemBars(isStatusBarHidden = false)
             CallFailure(
                 failed = failed,
+                joiningFormat = state.joiningFormat,
                 onClose = { state.eventSink(ElementCallScreenEvent.HangUp) },
+                onUseRoomState = { state.eventSink(ElementCallScreenEvent.UseRoomStateAndClose) },
                 // The call is over before the user leaves: nothing resumes on the way back (042 C3).
                 onOpenSettings = {
                     state.eventSink(ElementCallScreenEvent.OpenAppSettings)
@@ -355,8 +357,12 @@ fun ElementCallScreen(
             }
         }
     }
-    if (state.isPreferencesVisible) {
-        ElementCallPreferencesSheet(state = state)
+    if (state.isSettingsSheetDrawn) {
+        when (state.settingsSheet) {
+            ElementCallSettingsSheet.PREFERENCES -> ElementCallPreferencesSheet(state = state)
+            ElementCallSettingsSheet.DEVELOPER_OPTIONS -> ElementCallDeveloperOptionsSheet(state = state)
+            null -> Unit
+        }
     }
     when (state.presentedSheet) {
         ElementCallSheet.MORE -> ElementCallMoreSheet(state = state)
@@ -507,7 +513,7 @@ private fun CallTopBar(state: ElementCallScreenState, modifier: Modifier = Modif
                 tint = ElementCallTheme.colors.iconPrimary,
             )
         }
-        CallOverflowMenu(state = state, modifier = Modifier.align(Alignment.CenterEnd))
+        CallSettingsMenu(state = state, modifier = Modifier.align(Alignment.CenterEnd))
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = Modifier

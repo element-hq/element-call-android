@@ -12,7 +12,17 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 ## Unreleased
 
-_Nothing yet._
+- The call settings (feature-hq 043). `ElementCallOptions.membershipFormat` is removed: the format is a device preference,
+  `ElementCallPreferencesStore.membershipFormat`, Room state until the user changes it in Developer options. A host
+  that chose the format passes its own store to `ElementCallStack.Builder.preferencesStore`.
+- `ElementCallPreferencesStore` replaces `reactions` with `showsReactions` and `playsReactionSounds`, and gains
+  `membershipFormat` and `videoCodec`; `ElementCallReactionsPreference` is removed. A store of the host's own implements
+  them. The old On / Silent / Off value is not carried over: everyone starts with reactions shown with their sound.
+- `ElementCallController` replaces `setReactionsPreference` with `setShowsReactions` and `setPlaysReactionSounds`, and
+  gains `setMembershipFormat`, `setVideoCodec` and `videoCodecs`. `MatrixRtcClient` gains `supportedVideoCodecs()` and
+  `MatrixRtcCall.connectMedia` a `videoCodec`, for a host with its own RTC client.
+- `ElementCallIcons` gains `settings` (Compound's settings-solid) and `developerOptions` (Compound's advanced-settings),
+  with no defaults: a host constructing it passes both, Element X from `CompoundIcons`.
 
 ## 0.1.1 - 2026-11-12
 

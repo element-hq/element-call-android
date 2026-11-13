@@ -18,7 +18,6 @@ import io.element.android.call.api.ElementCallHandRequestFailure
 import io.element.android.call.api.ElementCallInterruption
 import io.element.android.call.api.ElementCallOptions
 import io.element.android.call.api.ElementCallPreferences
-import io.element.android.call.api.ElementCallReactionsPreference
 import io.element.android.call.api.ElementCallRoomContext
 import io.element.android.call.api.ElementCallWindowRect
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
@@ -49,6 +48,7 @@ import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcTileKind
 import io.element.android.call.api.rtc.MatrixRtcUnableToDecrypt
+import io.element.android.call.api.rtc.MatrixRtcVideoCodec
 import io.element.android.call.api.rtc.id.UserId
 import io.element.android.call.impl.audio.CallSoundEffect
 import io.element.android.call.test.A_ROOM_ID
@@ -266,7 +266,7 @@ class DefaultElementCallControllerTest {
     }
 
     @Test
-    fun `a call opens its room in the membership format the option asks for`() = runTest {
+    fun `a call opens its room in the membership format the store holds`() = runTest {
         MatrixRtcMembershipFormat.entries.forEach { preferred ->
             val rtcClient = FakeMatrixRtcClient()
             val controller = createController(rtcClient = rtcClient, membershipFormat = preferred)
@@ -2186,14 +2186,14 @@ class DefaultElementCallControllerTest {
     }
 
     @Test
-    fun `silent shows without a sound, off shows and plays nothing, and each applies from the next reaction`() = runTest {
+    fun `sounds off shows without a sound, hidden shows and plays nothing, and each applies from the next reaction`() = runTest {
         val (controller, session, platform) = aCallWithReactions(platform = FakeElementCallPlatform(reactionSpread = 100.milliseconds))
         val renderer = platform.soundEffectRenderers.single()
         controller.reactions.test {
             session.emit(MatrixRtcCallEvent.Reaction(A_REMOTE_MEMBER_ID, emoji = "🎉", name = "party", sound = "party"))
             runCurrent()
             // Changed while the first is still waiting out its spread: it keeps the preference it arrived under (037 R15).
-            controller.setReactionsPreference(ElementCallReactionsPreference.WITHOUT_SOUND)
+            controller.setPlaysReactionSounds(false)
             advanceTimeBy(101.milliseconds)
             awaitItem()
             assertThat(renderer.reactions).containsExactly("party")
@@ -2203,7 +2203,9 @@ class DefaultElementCallControllerTest {
             awaitItem()
             assertThat(renderer.reactions).containsExactly("party")
 
-            controller.setReactionsPreference(ElementCallReactionsPreference.OFF)
+            // Hidden plays nothing, whatever the sound switch holds (043 R7).
+            controller.setPlaysReactionSounds(true)
+            controller.setShowsReactions(false)
             session.emit(MatrixRtcCallEvent.Reaction(A_REMOTE_MEMBER_ID, emoji = "👏", name = "clapping", sound = "clap"))
             advanceTimeBy(1.seconds)
             expectNoEvents()
@@ -2247,17 +2249,45 @@ class DefaultElementCallControllerTest {
 
     @Test
     fun `the preferences come from the store and go back to it`() = runTest {
-        val store = FakeElementCallPreferencesStore(reactions = ElementCallReactionsPreference.WITHOUT_SOUND, soundEffectsVolume = 0.2f)
+        val store = FakeElementCallPreferencesStore(
+            showsReactions = true,
+            playsReactionSounds = false,
+            soundEffectsVolume = 0.2f,
+            membershipFormat = MatrixRtcMembershipFormat.MSC,
+            videoCodec = MatrixRtcVideoCodec.VP9,
+        )
         val (controller, _, platform) = aCallWithReactions(preferencesStore = store)
-        assertThat(controller.preferences.value).isEqualTo(ElementCallPreferences(ElementCallReactionsPreference.WITHOUT_SOUND, 0.2f))
+        assertThat(controller.preferences.value).isEqualTo(
+            ElementCallPreferences(
+                showsReactions = true,
+                playsReactionSounds = false,
+                soundEffectsVolume = 0.2f,
+                membershipFormat = MatrixRtcMembershipFormat.MSC,
+                videoCodec = MatrixRtcVideoCodec.VP9,
+            )
+        )
         assertThat(platform.soundEffectRenderers.single().volume).isEqualTo(0.2f)
 
-        controller.setReactionsPreference(ElementCallReactionsPreference.OFF)
+        controller.setShowsReactions(false)
+        controller.setPlaysReactionSounds(true)
         controller.setSoundEffectsVolume(1.5f)
+        controller.setMembershipFormat(MatrixRtcMembershipFormat.ROOM_STATE)
+        controller.setVideoCodec(MatrixRtcVideoCodec.H264)
 
-        assertThat(store.reactions).isEqualTo(ElementCallReactionsPreference.OFF)
+        assertThat(store.showsReactions).isFalse()
+        assertThat(store.playsReactionSounds).isTrue()
         assertThat(store.soundEffectsVolume).isEqualTo(1f)
-        assertThat(controller.preferences.value).isEqualTo(ElementCallPreferences(ElementCallReactionsPreference.OFF, 1f))
+        assertThat(store.membershipFormat).isEqualTo(MatrixRtcMembershipFormat.ROOM_STATE)
+        assertThat(store.videoCodec).isEqualTo(MatrixRtcVideoCodec.H264)
+        assertThat(controller.preferences.value).isEqualTo(
+            ElementCallPreferences(
+                showsReactions = false,
+                playsReactionSounds = true,
+                soundEffectsVolume = 1f,
+                membershipFormat = MatrixRtcMembershipFormat.ROOM_STATE,
+                videoCodec = MatrixRtcVideoCodec.H264,
+            )
+        )
         // Applied to the running call's sounds at once, those playing included (037 R22).
         assertThat(platform.soundEffectRenderers.single().volume).isEqualTo(1f)
     }
@@ -2299,7 +2329,7 @@ class DefaultElementCallControllerTest {
         participantCapForJoinLeaveSounds: Int = ElementCallOptions.DEFAULT_PARTICIPANT_CAP_FOR_JOIN_LEAVE_SOUNDS,
         isSfuFallbackEnabled: Boolean = false,
         isDeveloperModeEnabled: Boolean = true,
-        preferencesStore: FakeElementCallPreferencesStore = FakeElementCallPreferencesStore(),
+        preferencesStore: FakeElementCallPreferencesStore = FakeElementCallPreferencesStore(membershipFormat = membershipFormat),
     ): DefaultElementCallController {
         val controller = DefaultElementCallController(
             scope = backgroundScope,
@@ -2310,7 +2340,6 @@ class DefaultElementCallControllerTest {
             lifecycleListener = lifecycleListener,
             roomContextProvider = roomContextProvider,
             options = ElementCallOptions(
-                membershipFormat = membershipFormat,
                 isScreenSharingEnabled = isScreenSharingEnabled,
                 participantCapForJoinLeaveSounds = participantCapForJoinLeaveSounds,
                 ringLifetime = ringLifetime,

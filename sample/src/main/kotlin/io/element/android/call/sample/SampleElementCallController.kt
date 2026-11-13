@@ -12,18 +12,19 @@ import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallFailure
 import io.element.android.call.api.ElementCallPreferences
-import io.element.android.call.api.ElementCallReactionsPreference
 import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.ElementCallWindowRect
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
+import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 import io.element.android.call.api.rtc.MatrixRtcReaction
 import io.element.android.call.api.rtc.MatrixRtcReactionKind
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTileId
 import io.element.android.call.api.rtc.MatrixRtcTileRoster
+import io.element.android.call.api.rtc.MatrixRtcVideoCodec
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.test.ElementCallTestPattern
@@ -146,9 +147,24 @@ class SampleElementCallController(
     // Only ours: a fixture has no room, so what we send comes back as it would from the core.
     override val reactions: Flow<MatrixRtcReaction> = sentReactions
 
-    override fun setReactionsPreference(preference: ElementCallReactionsPreference) {
-        preferences.value = preferences.value.copy(reactions = preference)
+    override fun setShowsReactions(shows: Boolean) {
+        preferences.value = preferences.value.copy(showsReactions = shows)
     }
+
+    override fun setPlaysReactionSounds(plays: Boolean) {
+        preferences.value = preferences.value.copy(playsReactionSounds = plays)
+    }
+
+    override fun setMembershipFormat(format: MatrixRtcMembershipFormat) {
+        preferences.value = preferences.value.copy(membershipFormat = format)
+    }
+
+    override fun setVideoCodec(codec: MatrixRtcVideoCodec) {
+        preferences.value = preferences.value.copy(videoCodec = codec)
+    }
+
+    // A fixture has no core to ask: a plausible device's list.
+    override val videoCodecs = listOf(MatrixRtcVideoCodec.AUTO, MatrixRtcVideoCodec.VP8, MatrixRtcVideoCodec.H264, MatrixRtcVideoCodec.VP9)
 
     override fun setSoundEffectsVolume(volume: Float) {
         preferences.value = preferences.value.copy(soundEffectsVolume = volume)
@@ -239,8 +255,8 @@ class SampleElementCallController(
     override fun sendReaction(kind: MatrixRtcReactionKind) {
         val own = _state.value?.ownTile ?: return
         Timber.d("Sample: reaction ${kind.name}")
-        // As the real controller: nothing shows with reactions off (037 R13).
-        if (preferences.value.reactions == ElementCallReactionsPreference.OFF) return
+        // As the real controller: nothing shows with reactions hidden (043 R6).
+        if (!preferences.value.showsReactions) return
         sentReactions.tryEmit(
             MatrixRtcReaction(id = ++nextReactionId, memberId = own.id.memberId, userId = own.userId, emoji = kind.emoji, spread = Duration.ZERO)
         )

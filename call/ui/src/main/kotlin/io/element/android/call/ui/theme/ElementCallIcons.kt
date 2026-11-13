@@ -43,10 +43,14 @@ data class ElementCallIcons(
     val selected: ImageVector,
     /** The member-count pill. */
     val participants: ImageVector,
-    /** The top bar's more-options button, which opens the overflow menu. */
+    /** The control bar's More button, which opens the More sheet. */
     val overflow: ImageVector,
-    /** The overflow menu's way into the Preferences sheet. */
+    /** The top bar's settings button, which opens the settings menu (feature-hq 043 R1). Compound's settings-solid. */
+    val settings: ImageVector,
+    /** The settings menu's way into the Preferences sheet. */
     val preferences: ImageVector,
+    /** The settings menu's way into the Developer options sheet (043 R3). Compound's advanced-settings. */
+    val developerOptions: ImageVector,
     /** Closes a sheet. */
     val close: ImageVector,
     /** A raised hand, on a tile whose member has one up. */
@@ -88,7 +92,9 @@ data class ElementCallIcons(
             selected = ImageVector.vectorResource(R.drawable.ic_element_call_check),
             participants = ImageVector.vectorResource(R.drawable.ic_element_call_user_profile),
             overflow = ImageVector.vectorResource(R.drawable.ic_element_call_overflow_vertical),
+            settings = ImageVector.vectorResource(R.drawable.ic_element_call_settings_solid),
             preferences = ImageVector.vectorResource(R.drawable.ic_element_call_preferences),
+            developerOptions = ImageVector.vectorResource(R.drawable.ic_element_call_advanced_settings),
             close = ImageVector.vectorResource(R.drawable.ic_element_call_close),
             handRaised = ImageVector.vectorResource(R.drawable.ic_element_call_raised_hand_solid),
             reaction = ImageVector.vectorResource(R.drawable.ic_element_call_reaction_solid),

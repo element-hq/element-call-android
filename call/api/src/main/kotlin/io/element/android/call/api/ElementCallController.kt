@@ -9,11 +9,13 @@ package io.element.android.call.api
 
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
+import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 import io.element.android.call.api.rtc.MatrixRtcReaction
 import io.element.android.call.api.rtc.MatrixRtcReactionKind
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTileId
+import io.element.android.call.api.rtc.MatrixRtcVideoCodec
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import kotlinx.coroutines.flow.Flow
@@ -103,8 +105,26 @@ interface ElementCallController {
     /** The user's in-call preferences. Kept across calls and restarts, so readable with no call running. */
     val preferences: StateFlow<ElementCallPreferences>
 
-    /** Applies to reactions arriving after it; what is already showing or sounding finishes (feature-hq 037 R15). */
-    fun setReactionsPreference(preference: ElementCallReactionsPreference)
+    /** Applies to reactions arriving after it; what is already showing or sounding finishes (feature-hq 037 R15, 043 R8). */
+    fun setShowsReactions(shows: Boolean)
+
+    /** Kept while reactions are hidden, which play no sound then, so turning them back on brings the choice back (043 R7). */
+    fun setPlaysReactionSounds(plays: Boolean)
+
+    /**
+     * The format the next join uses; a call in progress keeps its own (043 R14). Not limited to developer mode: a failed MSC
+     * join offers Room state to everyone (R18a).
+     */
+    fun setMembershipFormat(format: MatrixRtcMembershipFormat)
+
+    /** The codec the next join publishes video with (043 R16a). One of [videoCodecs]. */
+    fun setVideoCodec(codec: MatrixRtcVideoCodec)
+
+    /**
+     * What the Developer options sheet offers: [MatrixRtcVideoCodec.AUTO], then each codec this device can encode, in the core's
+     * order (043 R15). Loads the native core on first read, so read it off the main thread or once a call has joined.
+     */
+    val videoCodecs: List<MatrixRtcVideoCodec>
 
     /** 0 to 1 of the call's level, applied at once to every sound effect, those playing included (037 R22). */
     fun setSoundEffectsVolume(volume: Float)
@@ -113,7 +133,7 @@ interface ElementCallController {
     fun playSoundEffectsVolumeSample()
 
     /**
-     * Each reaction as it should appear, unless the preference is off. Not replayed: one emitted while nothing collects,
+     * Each reaction as it should appear, unless reactions are hidden. Not replayed: one emitted while nothing collects,
      * in picture-in-picture or minimised, is gone, and is not shown on return (037 R8).
      */
     val reactions: Flow<MatrixRtcReaction>

@@ -24,9 +24,11 @@ import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.ElementCallVersion
 import io.element.android.call.api.rtc.MatrixRtcConnectionState
+import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 import io.element.android.call.api.rtc.MatrixRtcReactionKind
 import io.element.android.call.api.rtc.MatrixRtcSignallingHealth
 import io.element.android.call.api.rtc.MatrixRtcTileKind
+import io.element.android.call.api.rtc.MatrixRtcVideoCodec
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.api.rtc.id.UserId
 import kotlinx.collections.immutable.ImmutableList
@@ -72,8 +74,8 @@ fun rememberElementCallScreenState(
     val current = snapshot
 
     // Saved across rotation and backgrounding; picture-in-picture and minimising dispose this presenter, so the sheet
-    // is closed when the screen comes back (037 R12a).
-    var isPreferencesVisible by rememberSaveable { mutableStateOf(false) }
+    // is closed when the screen comes back (037 R12a). One slot for every settings sheet, so each behaves alike (043 R5).
+    var settingsSheet by rememberSaveable { mutableStateOf<ElementCallSettingsSheet?>(null) }
     val preferences by controller.preferences.collectAsState()
     val latestSnapshot by rememberUpdatedState(current)
     // Named once, as the reaction appears, and kept for its flight whatever the sender does next (037 R7, R7a).
@@ -97,6 +99,7 @@ fun rememberElementCallScreenState(
         isScreenShareAvailable = current?.isScreenShareAvailable == true,
     )
     val reactionCatalogue = remember(controller) { lazy { controller.reactionCatalogue.toImmutableList() } }
+    val videoCodecs = remember(controller) { lazy { controller.videoCodecs.toImmutableList() } }
     // Not saved, unlike Preferences: the Activity keeps this across rotation, which closes it on purpose (009 R27).
     var presentedSheet by remember { mutableStateOf<ElementCallSheet?>(null) }
     val isConnected = current?.connection == ElementCallConnection.Connected
@@ -188,9 +191,20 @@ fun rememberElementCallScreenState(
             ElementCallScreenEvent.OpenAppSettings -> navigator.openAppSettings()
             ElementCallScreenEvent.SwitchCamera -> controller.switchCamera()
             ElementCallScreenEvent.ToggleTileStats -> controller.toggleTileStats()
-            ElementCallScreenEvent.ShowPreferences -> isPreferencesVisible = true
-            ElementCallScreenEvent.DismissPreferences -> isPreferencesVisible = false
-            is ElementCallScreenEvent.SetReactionsPreference -> controller.setReactionsPreference(event.preference)
+            // Refused here, not only hidden in the menu, so nothing opens Developer options without developer mode (043 C6).
+            is ElementCallScreenEvent.ShowSettingsSheet -> if (event.sheet != ElementCallSettingsSheet.DEVELOPER_OPTIONS || controller.isDeveloperModeEnabled) {
+                settingsSheet = event.sheet
+            }
+            ElementCallScreenEvent.DismissSettingsSheet -> settingsSheet = null
+            is ElementCallScreenEvent.SetShowsReactions -> controller.setShowsReactions(event.shows)
+            is ElementCallScreenEvent.SetPlaysReactionSounds -> controller.setPlaysReactionSounds(event.plays)
+            is ElementCallScreenEvent.SetMembershipFormat -> controller.setMembershipFormat(event.format)
+            is ElementCallScreenEvent.SetVideoCodec -> controller.setVideoCodec(event.codec)
+            // Saved before the close, which is the failure screen's Close (043 R18a).
+            ElementCallScreenEvent.UseRoomStateAndClose -> {
+                controller.setMembershipFormat(MatrixRtcMembershipFormat.ROOM_STATE)
+                controller.hangUp()
+            }
             is ElementCallScreenEvent.SetSoundEffectsVolume -> controller.setSoundEffectsVolume(event.volume)
             ElementCallScreenEvent.PlaySoundEffectsVolumeSample -> controller.playSoundEffectsVolumeSample()
             is ElementCallScreenEvent.SetVideoConstraints ->
@@ -308,8 +322,10 @@ fun rememberElementCallScreenState(
         // Read once the picker opens: the call has joined by then, so the native core is already loaded, never on this thread.
         reactionCatalogue = if (presentedSheet == ElementCallSheet.REACTIONS) reactionCatalogue.value else persistentListOf(),
         reactions = reactions,
-        isPreferencesVisible = isPreferencesVisible,
+        settingsSheet = settingsSheet,
         preferences = preferences,
+        // Read once the sheet opens: on a call that has joined the native core is already loaded.
+        videoCodecs = if (settingsSheet == ElementCallSettingsSheet.DEVELOPER_OPTIONS) videoCodecs.value else persistentListOf(),
         isDeveloperModeEnabled = controller.isDeveloperModeEnabled,
         eventSink = ::handleEvent,
     )
@@ -405,8 +421,9 @@ private fun ElementCallSnapshot?.toState(
     presentedSheet: ElementCallSheet?,
     reactionCatalogue: ImmutableList<MatrixRtcReactionKind>,
     reactions: Flow<ElementCallReactionBubbleData>,
-    isPreferencesVisible: Boolean,
+    settingsSheet: ElementCallSettingsSheet?,
     preferences: ElementCallPreferences,
+    videoCodecs: ImmutableList<MatrixRtcVideoCodec>,
     isDeveloperModeEnabled: Boolean,
     eventSink: (ElementCallScreenEvent) -> Unit,
 ) = ElementCallScreenState(
@@ -454,9 +471,14 @@ private fun ElementCallSnapshot?.toState(
     libraryVersion = ElementCallVersion.library,
     coreVersion = ElementCallVersion.core,
     reactions = reactions,
-    isPreferencesVisible = isPreferencesVisible,
-    reactionsPreference = preferences.reactions,
+    settingsSheet = settingsSheet,
+    showsReactions = preferences.showsReactions,
+    playsReactionSounds = preferences.playsReactionSounds,
     soundEffectsVolume = preferences.soundEffectsVolume,
+    membershipFormat = preferences.membershipFormat,
+    videoCodec = preferences.videoCodec,
+    videoCodecs = videoCodecs,
+    joiningFormat = this?.joiningFormat,
     isDeveloperModeEnabled = isDeveloperModeEnabled,
     eventSink = eventSink,
 )

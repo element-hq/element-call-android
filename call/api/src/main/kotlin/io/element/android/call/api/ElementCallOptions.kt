@@ -8,20 +8,14 @@
 package io.element.android.call.api
 
 import io.element.android.call.api.rtc.MatrixRtcLoggingConfiguration
-import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 import kotlin.time.Duration
 
 /**
  * The knobs a host may turn. Everything has a default; the sample app passes none.
+ *
+ * The membership format is not one of them: it is a device preference, [ElementCallPreferencesStore.membershipFormat].
  */
 data class ElementCallOptions(
-    /**
-     * Which generation of Element Call a call should be reachable by. See [MatrixRtcMembershipFormat].
-     *
-     * Room state by default, the format the deployed Element Call rooms use. The sticky formats (MSC4354) need
-     * an open `m.rtc.slot` in the room, which nothing in Element Call opens yet.
-     */
-    val membershipFormat: MatrixRtcMembershipFormat = MatrixRtcMembershipFormat.ROOM_STATE,
     /**
      * How the RTC core logs, or null to leave the core silent. Applied when the native library is first
      * loaded; only the first configuration in a process takes effect.
@@ -55,7 +49,10 @@ data class ElementCallOptions(
      * something only the host can know, since the SDK keeps nothing of a LiveKit transport but its URL. Read when media connects.
      */
     val isSfuFallbackEnabled: Boolean = false,
-    /** Whether the host is in developer mode: the Preferences sheet then offers Developer options, the only way to tile stats (feature-hq 037 R16). */
+    /**
+     * Whether the host is in developer mode: the settings menu then offers Developer options, with tile stats, the membership
+     * format and the video codec (feature-hq 043 R4). Off, the choices already made still apply.
+     */
     val isDeveloperModeEnabled: Boolean = false,
 ) {
     companion object {

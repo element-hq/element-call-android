@@ -30,4 +30,10 @@ interface MatrixRtcClient {
      * started, which would retry every send for nothing (feature-hq 034 C3). Online retries every pending send at once.
      */
     fun reportConnectivity(isOnline: Boolean)
+
+    /**
+     * The video codecs this device can publish with, in the core's order, [MatrixRtcVideoCodec.AUTO] excluded
+     * (feature-hq 043 R15). The core's answer, not the platform's media codec list: the core encodes with its own encoders.
+     */
+    fun supportedVideoCodecs(): List<MatrixRtcVideoCodec>
 }

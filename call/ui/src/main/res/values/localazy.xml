@@ -37,6 +37,7 @@
   <string name="element_call_a11y_selected">"Selected"</string>
   <string name="element_call_a11y_send_reaction">"Send a reaction"</string>
   <string name="element_call_a11y_send_reaction_emoji">"Send reaction %1$s"</string>
+  <string name="element_call_a11y_settings">"Settings"</string>
   <string name="element_call_a11y_sharing_screen">"Sharing their screen"</string>
   <string name="element_call_a11y_speaking">"Speaking"</string>
   <string name="element_call_a11y_start_screen_share">"Share screen"</string>
@@ -63,6 +64,13 @@
   <string name="element_call_call_in_progress">"Call in progress"</string>
   <string name="element_call_calling">"Calling…"</string>
   <string name="element_call_connecting">"Connecting…"</string>
+  <string name="element_call_developer_options_membership_format">"Membership format"</string>
+  <string name="element_call_developer_options_membership_format_msc">"MSC"</string>
+  <string name="element_call_developer_options_membership_format_room_state">"Room state"</string>
+  <string name="element_call_developer_options_next_join">"Takes effect the next time you join a call."</string>
+  <string name="element_call_developer_options_video_codec">"Video codec"</string>
+  <string name="element_call_developer_options_video_codec_auto">"Auto (%1$s)"</string>
+  <string name="element_call_developer_options_video_codec_description">"Takes effect the next time you join a call. Anyone whose app can’t decode it won’t see your video."</string>
   <string name="element_call_emoji_reactions">"Emoji reactions"</string>
   <string name="element_call_error">"Error"</string>
   <string name="element_call_failure_connection_failed_title">"Couldn’t connect"</string>
@@ -71,8 +79,10 @@
   <string name="element_call_failure_connection_never_established">"The call’s media server couldn’t be reached."</string>
   <string name="element_call_failure_connection_refused">"The call’s media server refused the connection."</string>
   <string name="element_call_failure_join_failed_title">"Couldn’t join the call"</string>
+  <string name="element_call_failure_join_membership_format">"This call used the MSC membership format, which your server may not support."</string>
   <string name="element_call_failure_join_refused">"Your server refused to let you join."</string>
   <string name="element_call_failure_join_timed_out">"Your server didn’t respond in time."</string>
+  <string name="element_call_failure_use_room_state">"Use Room state"</string>
   <string name="element_call_hand_lower_failed">"Your hand could not be lowered."</string>
   <string name="element_call_hand_raise_failed">"Your hand could not be raised."</string>
   <string name="element_call_hand_raised_banner">"Your hand is raised"</string>
@@ -98,7 +108,10 @@
   <string name="element_call_preferences_reactions_off">"Off"</string>
   <string name="element_call_preferences_reactions_on">"On"</string>
   <string name="element_call_preferences_reactions_show">"Show reactions"</string>
+  <string name="element_call_preferences_reactions_show_description">"Show an animation when anyone sends a reaction."</string>
   <string name="element_call_preferences_reactions_silent">"Silent"</string>
+  <string name="element_call_preferences_reactions_sounds">"Play reaction sounds"</string>
+  <string name="element_call_preferences_reactions_sounds_description">"Play a sound effect when anyone sends a reaction."</string>
   <string name="element_call_preferences_reactions_title">"Reactions"</string>
   <string name="element_call_preferences_sound_effects">"Sound effects"</string>
   <string name="element_call_preferences_sound_effects_volume">"Sound effects volume"</string>

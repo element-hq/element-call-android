@@ -13,6 +13,7 @@ import io.element.android.call.api.rtc.MatrixRtcClient
 import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 import io.element.android.call.api.rtc.MatrixRtcRoom
 import io.element.android.call.api.rtc.MatrixRtcSignallingHealth
+import io.element.android.call.api.rtc.MatrixRtcVideoCodec
 import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.call.impl.util.runCatchingExceptions
 import kotlinx.coroutines.CoroutineScope
@@ -28,6 +29,7 @@ import org.matrix.rtc.FfiRoomOptions
 import org.matrix.rtc.MatrixBackend
 import org.matrix.rtc.RtcClient
 import timber.log.Timber
+import org.matrix.rtc.supportedVideoCodecs as ffiSupportedVideoCodecs
 
 /**
  * The RTC core for one Matrix session, over the host's [backend].
@@ -90,6 +92,15 @@ internal class RustMatrixRtcClient(
         Timber.i("MatrixRTC: the host reports the homeserver ${if (isOnline) "online" else "offline"}")
         sessionCoroutineScope.launch(ffiDispatcher) { rtcClient().reportConnectivity(isOnline) }
     }
+
+    /** Read once: what the device can encode does not change while the app runs. */
+    private val videoCodecs: List<MatrixRtcVideoCodec> by lazy {
+        MatrixRtcFfi.ensureInitialized()
+        ffiSupportedVideoCodecs().map { it.toApi() }.filter { it != MatrixRtcVideoCodec.AUTO }.distinct()
+            .also { Timber.i("MatrixRTC: video codecs this device can publish: $it") }
+    }
+
+    override fun supportedVideoCodecs(): List<MatrixRtcVideoCodec> = videoCodecs
 
     private fun MatrixRtcMembershipFormat.toFfi(): FfiMembershipFormat = when (this) {
         MatrixRtcMembershipFormat.MSC -> FfiMembershipFormat.MSC

@@ -7,13 +7,14 @@
 
 package io.element.android.call.ui
 
-import io.element.android.call.api.ElementCallReactionsPreference
 import io.element.android.call.api.ElementCallWindowRect
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
+import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 import io.element.android.call.api.rtc.MatrixRtcReactionKind
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcTileId
+import io.element.android.call.api.rtc.MatrixRtcVideoCodec
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 
 sealed interface ElementCallScreenEvent {
@@ -36,14 +37,26 @@ sealed interface ElementCallScreenEvent {
     /** Swap the front and back cameras. */
     data object SwitchCamera : ElementCallScreenEvent
 
-    /** Show or hide the per-tile debug readout, from the Preferences sheet's Developer options (037 R16). */
+    /** Show or hide the per-tile debug readout, from the Developer options sheet (feature-hq 043 R10). */
     data object ToggleTileStats : ElementCallScreenEvent
 
-    data object ShowPreferences : ElementCallScreenEvent
+    /** Open one of the settings menu's sheets (043 R5). Developer options is refused without developer mode (R4). */
+    data class ShowSettingsSheet(val sheet: ElementCallSettingsSheet) : ElementCallScreenEvent
 
-    data object DismissPreferences : ElementCallScreenEvent
+    data object DismissSettingsSheet : ElementCallScreenEvent
 
-    data class SetReactionsPreference(val preference: ElementCallReactionsPreference) : ElementCallScreenEvent
+    data class SetShowsReactions(val shows: Boolean) : ElementCallScreenEvent
+
+    data class SetPlaysReactionSounds(val plays: Boolean) : ElementCallScreenEvent
+
+    /** From the next join (043 R14). */
+    data class SetMembershipFormat(val format: MatrixRtcMembershipFormat) : ElementCallScreenEvent
+
+    /** From the next join (043 R16a). */
+    data class SetVideoCodec(val codec: MatrixRtcVideoCodec) : ElementCallScreenEvent
+
+    /** A failed MSC join's way back: save Room state, then close the call (043 R18a). It does not rejoin. */
+    data object UseRoomStateAndClose : ElementCallScreenEvent
 
     /** As the slider moves: applied at once, to sounds already playing too (037 R22). */
     data class SetSoundEffectsVolume(val volume: Float) : ElementCallScreenEvent

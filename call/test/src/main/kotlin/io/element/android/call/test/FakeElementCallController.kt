@@ -10,17 +10,18 @@ package io.element.android.call.test
 import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallPreferences
-import io.element.android.call.api.ElementCallReactionsPreference
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.ElementCallWindowRect
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
+import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 import io.element.android.call.api.rtc.MatrixRtcReaction
 import io.element.android.call.api.rtc.MatrixRtcReactionKind
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.api.rtc.MatrixRtcStreamKind
 import io.element.android.call.api.rtc.MatrixRtcStreamRef
 import io.element.android.call.api.rtc.MatrixRtcTileId
+import io.element.android.call.api.rtc.MatrixRtcVideoCodec
 import io.element.android.call.api.rtc.MatrixRtcVideoConstraints
 import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import kotlinx.coroutines.awaitCancellation
@@ -39,6 +40,13 @@ import kotlinx.coroutines.flow.flow
 class FakeElementCallController(
     initialState: ElementCallSnapshot? = null,
     override val isDeveloperModeEnabled: Boolean = true,
+    /** What the Developer options sheet offers, Auto first. */
+    override val videoCodecs: List<MatrixRtcVideoCodec> = listOf(
+        MatrixRtcVideoCodec.AUTO,
+        MatrixRtcVideoCodec.VP8,
+        MatrixRtcVideoCodec.H264,
+        MatrixRtcVideoCodec.VP9,
+    ),
 ) : ElementCallController {
     override val state = MutableStateFlow(initialState)
     override val shouldEnterPictureInPicture = MutableStateFlow(false)
@@ -67,6 +75,9 @@ class FakeElementCallController(
     val videoConstraints = mutableListOf<Pair<MatrixRtcStreamRef, MatrixRtcVideoConstraints>>()
     var hangUpCount = 0
         private set
+
+    /** The stored membership format at each [hangUp], to show what was saved before the call closed. */
+    val membershipFormatsAtHangUp = mutableListOf<MatrixRtcMembershipFormat>()
     val handRaisedCalls = mutableListOf<Boolean>()
     var clearHandRequestFailureCount = 0
         private set
@@ -133,8 +144,20 @@ class FakeElementCallController(
 
     var soundEffectsVolumeSampleCount = 0
 
-    override fun setReactionsPreference(preference: ElementCallReactionsPreference) {
-        preferences.value = preferences.value.copy(reactions = preference)
+    override fun setShowsReactions(shows: Boolean) {
+        preferences.value = preferences.value.copy(showsReactions = shows)
+    }
+
+    override fun setPlaysReactionSounds(plays: Boolean) {
+        preferences.value = preferences.value.copy(playsReactionSounds = plays)
+    }
+
+    override fun setMembershipFormat(format: MatrixRtcMembershipFormat) {
+        preferences.value = preferences.value.copy(membershipFormat = format)
+    }
+
+    override fun setVideoCodec(codec: MatrixRtcVideoCodec) {
+        preferences.value = preferences.value.copy(videoCodec = codec)
     }
 
     override fun setSoundEffectsVolume(volume: Float) {
@@ -210,5 +233,6 @@ class FakeElementCallController(
 
     override fun hangUp() {
         hangUpCount++
+        membershipFormatsAtHangUp += preferences.value.membershipFormat
     }
 }
