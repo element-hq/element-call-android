@@ -218,6 +218,26 @@ class CallSettingsTest {
         assertThat(controller.state.value?.isTileStatsVisible).isFalse()
     }
 
+    @Test
+    fun `a format the host writes to its store is what the next join uses and the sheet shows`() = runTest {
+        val rtcClient = FakeMatrixRtcClient()
+        val store = FakeElementCallPreferencesStore()
+        val controller = createController(rtcClient = rtcClient, preferencesStore = store)
+        joinFully(controller)
+        controller.hangUp()
+        runCurrent()
+
+        // The sample's Lab writes a scanned code's format straight to its store, not through the controller.
+        store.membershipFormat = MatrixRtcMembershipFormat.MSC
+        store.videoCodec = MatrixRtcVideoCodec.VP8
+        controller.startCall(ElementCallData(roomId = A_ROOM_ID, isAudioCall = true, isStartingCall = true))
+        joinFully(controller)
+
+        assertThat(rtcClient.lastMembershipFormat).isEqualTo(MatrixRtcMembershipFormat.MSC)
+        assertThat(controller.preferences.value.membershipFormat).isEqualTo(MatrixRtcMembershipFormat.MSC)
+        assertThat(controller.preferences.value.videoCodec).isEqualTo(MatrixRtcVideoCodec.VP8)
+    }
+
     private fun TestScope.joinFully(controller: DefaultElementCallController) {
         controller.setMicrophonePermissionGranted(true)
         runCurrent()

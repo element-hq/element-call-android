@@ -17,19 +17,26 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import timber.log.Timber
 
-/** The user's preferences as the controller shows them: read from [store] once, and every change written back to it. */
+/**
+ * The user's preferences as the controller shows them: read from [store], and every change written back to it. A host
+ * with its own store may write it behind our back (the sample's Lab writes a scanned code's format), so [reload] reads it
+ * again at each join, and the sheets then show what that join used.
+ */
 internal class StoredElementCallPreferences(private val store: ElementCallPreferencesStore) {
-    private val _value = MutableStateFlow(
-        ElementCallPreferences(
-            showsReactions = store.showsReactions,
-            playsReactionSounds = store.playsReactionSounds,
-            soundEffectsVolume = store.soundEffectsVolume.coerceIn(0f, 1f),
-            membershipFormat = store.membershipFormat,
-            videoCodec = store.videoCodec,
-        )
-    )
+    private val _value = MutableStateFlow(read())
 
     val value: StateFlow<ElementCallPreferences> = _value.asStateFlow()
+
+    /** Reads the store again, and returns what it now holds. */
+    fun reload(): ElementCallPreferences = read().also { _value.value = it }
+
+    private fun read() = ElementCallPreferences(
+        showsReactions = store.showsReactions,
+        playsReactionSounds = store.playsReactionSounds,
+        soundEffectsVolume = store.soundEffectsVolume.coerceIn(0f, 1f),
+        membershipFormat = store.membershipFormat,
+        videoCodec = store.videoCodec,
+    )
 
     fun setShowsReactions(shows: Boolean) {
         Timber.i("ElementCall: reactions ${if (shows) "shown" else "hidden"}")

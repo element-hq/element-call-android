@@ -686,8 +686,10 @@ internal class DefaultElementCallController(
         // it decides the member id, the SFU identity and the token endpoint as well as the wire
         // format - so changing it mid-call is not something the core could act on (043 R14).
         // The codec is read with it, so that both take effect from the next join and no earlier (043 C1).
-        val membershipFormat = preferencesStore.membershipFormat
-        val storedVideoCodec = preferencesStore.videoCodec
+        // Reloaded rather than read on the side, so a format the host wrote since is also what the sheets show.
+        val joinPreferences = storedPreferences.reload()
+        val membershipFormat = joinPreferences.membershipFormat
+        val storedVideoCodec = joinPreferences.videoCodec
         Timber.i("ElementCall: joining with membership format $membershipFormat, video codec $storedVideoCodec if this device encodes it")
         updateState { it.copy(joiningFormat = membershipFormat) }
 
