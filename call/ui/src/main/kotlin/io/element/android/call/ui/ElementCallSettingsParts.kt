@@ -9,7 +9,6 @@ package io.element.android.call.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -27,7 +26,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Switch
@@ -38,8 +36,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.element.android.call.ui.theme.ElementCallTheme
 import kotlinx.collections.immutable.ImmutableList
@@ -50,8 +49,9 @@ private const val DISABLED_ALPHA = 0.38f
 /**
  * A settings sheet over the lower part of the call screen, which carries on behind it (feature-hq 037 R12, 043 R5).
  *
- * Modal: the scrim takes every touch, and a tap on it only closes the sheet, as do a swipe down and the close button
- * (037 R12a).
+ * Modal: the scrim takes every touch, and a tap on it only closes the sheet, as do a swipe down and Back (037 R12a).
+ * Android's design has a drag handle and no close button (043 R5): the handle is `ModalBottomSheet`'s own, which also
+ * gives TalkBack its dismiss action.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -68,12 +68,10 @@ internal fun ElementCallSettingsModalSheet(onDismiss: () -> Unit, testTag: Strin
     }
 }
 
-/** A sheet's scrolling page: its title with the close button, then its sections. */
+/** A sheet's scrolling page: its title, at the start as Android's design draws it, then its sections. */
 @Composable
 internal fun ElementCallSettingsPage(
     title: String,
-    closeTestTag: String,
-    onClose: () -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -84,21 +82,12 @@ internal fun ElementCallSettingsPage(
             .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Box(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                text = title,
-                style = ElementCallTheme.typography.headingMdBold,
-                color = ElementCallTheme.colors.textPrimary,
-                modifier = Modifier.align(Alignment.Center),
-            )
-            IconButton(onClick = onClose, modifier = Modifier.align(Alignment.CenterEnd).testTag(closeTestTag)) {
-                Icon(
-                    imageVector = ElementCallTheme.icons.close,
-                    contentDescription = stringResource(R.string.element_call_action_close),
-                    tint = ElementCallTheme.colors.iconPrimary,
-                )
-            }
-        }
+        Text(
+            text = title,
+            style = ElementCallTheme.typography.headingMdBold,
+            color = ElementCallTheme.colors.textPrimary,
+            modifier = Modifier.fillMaxWidth().semantics { heading() },
+        )
         content()
     }
 }

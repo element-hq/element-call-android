@@ -32,7 +32,6 @@ object ElementCallTestTags {
     /** The settings menu's Preferences item and the sheet it opens (feature-hq 037, 043), named as iOS names them. */
     const val PREFERENCES = "element_call_preferences"
     const val PREFERENCES_SHEET = "element_call_preferences_sheet"
-    const val PREFERENCES_CLOSE = "element_call_preferences_close"
     const val PREFERENCES_SHOW_REACTIONS = "element_call_preferences_show_reactions"
     const val PREFERENCES_PLAY_REACTION_SOUNDS = "element_call_preferences_play_reaction_sounds"
     const val PREFERENCES_SOUND_EFFECTS_VOLUME = "element_call_preferences_sound_effects_volume"
@@ -41,7 +40,6 @@ object ElementCallTestTags {
     /** The settings menu's Developer options item and the sheet it opens, in developer mode only (043 R3, R4). */
     const val DEVELOPER_OPTIONS = "element_call_developer_options"
     const val DEVELOPER_OPTIONS_SHEET = "element_call_developer_options_sheet"
-    const val DEVELOPER_OPTIONS_CLOSE = "element_call_developer_options_close"
     const val DEVELOPER_OPTIONS_TILE_STATS = "element_call_developer_options_tile_stats"
 
     /** One membership format's row (043 R11). */

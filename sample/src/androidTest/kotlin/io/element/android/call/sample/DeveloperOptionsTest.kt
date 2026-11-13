@@ -13,6 +13,7 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.test.espresso.Espresso
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.element.android.call.ui.ElementCallTestTags
 import org.junit.Rule
@@ -51,7 +52,8 @@ class DeveloperOptionsTest {
             }
             composeRule.waitForTag(ElementCallTestTags.DEVELOPER_OPTIONS_SHEET) { it }
 
-            composeRule.onNodeWithTag(ElementCallTestTags.DEVELOPER_OPTIONS_CLOSE).performClick()
+            // No close button on Android (043 R5): Back closes the sheet, as a swipe or a tap outside would.
+            Espresso.pressBack()
             composeRule.waitForTag(ElementCallTestTags.DEVELOPER_OPTIONS_SHEET) { !it }
             scenario.controller().hangUp()
         }

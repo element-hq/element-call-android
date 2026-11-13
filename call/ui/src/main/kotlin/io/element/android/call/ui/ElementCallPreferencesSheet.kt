@@ -40,16 +40,14 @@ import io.element.android.call.ui.theme.ElementCallTheme
 internal fun ElementCallPreferencesSheet(state: ElementCallScreenState) {
     val dismiss = { state.eventSink(ElementCallScreenEvent.DismissSettingsSheet) }
     ElementCallSettingsModalSheet(onDismiss = dismiss, testTag = ElementCallTestTags.PREFERENCES_SHEET) {
-        ElementCallPreferencesContent(state = state, onClose = dismiss)
+        ElementCallPreferencesContent(state = state)
     }
 }
 
 @Composable
-internal fun ElementCallPreferencesContent(state: ElementCallScreenState, onClose: () -> Unit, modifier: Modifier = Modifier) {
+internal fun ElementCallPreferencesContent(state: ElementCallScreenState, modifier: Modifier = Modifier) {
     ElementCallSettingsPage(
         title = stringResource(R.string.element_call_preferences_title),
-        closeTestTag = ElementCallTestTags.PREFERENCES_CLOSE,
-        onClose = onClose,
         modifier = modifier,
     ) {
         ElementCallSettingsSection(stringResource(R.string.element_call_preferences_reactions_title)) {
@@ -124,7 +122,7 @@ private fun SoundEffectsVolumeRow(volume: Float, onChange: (Float) -> Unit, onRe
 @Composable
 internal fun ElementCallPreferencesContentPreview(@PreviewParameter(PreferencesElementCallScreenStatePreviewParam::class) state: ElementCallScreenState) =
     ElementCallPreview {
-        ElementCallPreferencesContent(state = state, onClose = {}, modifier = Modifier.background(ElementCallTheme.colors.bgSubtlePrimary))
+        ElementCallPreferencesContent(state = state, modifier = Modifier.background(ElementCallTheme.colors.bgSubtlePrimary))
     }
 
 open class PreferencesElementCallScreenStatePreviewParam : PreviewParameterProvider<ElementCallScreenState> {

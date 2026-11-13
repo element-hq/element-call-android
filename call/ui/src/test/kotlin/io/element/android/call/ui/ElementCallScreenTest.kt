@@ -312,12 +312,9 @@ class ElementCallScreenTest : RobolectricTest() {
         setContent {
             val state = anElementCallScreenState(isDeveloperModeEnabled = true, eventSink = events)
             if (showsDeveloperOptions) {
-                ElementCallDeveloperOptionsContent(
-                    state = state,
-                    onClose = {}
-                )
+                ElementCallDeveloperOptionsContent(state = state)
             } else {
-                ElementCallPreferencesContent(state = state, onClose = {})
+                ElementCallPreferencesContent(state = state)
             }
         }
 
@@ -336,7 +333,6 @@ class ElementCallScreenTest : RobolectricTest() {
         setContent {
             ElementCallPreferencesContent(
                 state = anElementCallScreenState(showsReactions = false, playsReactionSounds = true, eventSink = events),
-                onClose = {},
             )
         }
         waitForIdle()
@@ -364,7 +360,6 @@ class ElementCallScreenTest : RobolectricTest() {
                     videoCodecs = listOf(MatrixRtcVideoCodec.AUTO, MatrixRtcVideoCodec.VP8, MatrixRtcVideoCodec.H264),
                     eventSink = events,
                 ),
-                onClose = {},
             )
         }
         waitForIdle()
@@ -433,7 +428,7 @@ class ElementCallScreenTest : RobolectricTest() {
     @Test
     fun `the preferences show the versions`() = runAndroidComposeUiTest<ComponentActivity> {
         setContent {
-            ElementCallPreferencesContent(state = anElementCallScreenState(libraryVersion = "1.2.3", coreVersion = "4.5.6"), onClose = {})
+            ElementCallPreferencesContent(state = anElementCallScreenState(libraryVersion = "1.2.3", coreVersion = "4.5.6"))
         }
 
         onNodeWithText(activity!!.getString(R.string.element_call_preferences_version, "1.2.3")).assertExists()

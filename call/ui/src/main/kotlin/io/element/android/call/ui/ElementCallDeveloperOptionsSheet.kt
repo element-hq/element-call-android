@@ -28,16 +28,14 @@ import kotlinx.collections.immutable.toImmutableList
 internal fun ElementCallDeveloperOptionsSheet(state: ElementCallScreenState) {
     val dismiss = { state.eventSink(ElementCallScreenEvent.DismissSettingsSheet) }
     ElementCallSettingsModalSheet(onDismiss = dismiss, testTag = ElementCallTestTags.DEVELOPER_OPTIONS_SHEET) {
-        ElementCallDeveloperOptionsContent(state = state, onClose = dismiss)
+        ElementCallDeveloperOptionsContent(state = state)
     }
 }
 
 @Composable
-internal fun ElementCallDeveloperOptionsContent(state: ElementCallScreenState, onClose: () -> Unit, modifier: Modifier = Modifier) {
+internal fun ElementCallDeveloperOptionsContent(state: ElementCallScreenState, modifier: Modifier = Modifier) {
     ElementCallSettingsPage(
         title = stringResource(R.string.element_call_preferences_developer_options),
-        closeTestTag = ElementCallTestTags.DEVELOPER_OPTIONS_CLOSE,
-        onClose = onClose,
         modifier = modifier,
     ) {
         // Untitled: under a sheet called Developer options, a section of the same name reads twice.
@@ -100,7 +98,7 @@ private fun MatrixRtcVideoCodec.label(): String = when (this) {
 internal fun ElementCallDeveloperOptionsContentPreview(
     @PreviewParameter(DeveloperOptionsElementCallScreenStatePreviewParam::class) state: ElementCallScreenState,
 ) = ElementCallPreview {
-    ElementCallDeveloperOptionsContent(state = state, onClose = {}, modifier = Modifier.background(ElementCallTheme.colors.bgSubtlePrimary))
+    ElementCallDeveloperOptionsContent(state = state, modifier = Modifier.background(ElementCallTheme.colors.bgSubtlePrimary))
 }
 
 open class DeveloperOptionsElementCallScreenStatePreviewParam : PreviewParameterProvider<ElementCallScreenState> {
