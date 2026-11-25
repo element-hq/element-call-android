@@ -714,10 +714,12 @@ private fun CallControlsBar(
     ) {
         // While the lobby loads nothing is known to show: settings and Close alone work (045 R59).
         val isLoading = state.lobby is ElementCallLobbyState.Loading
+        // Refused in the lobby, there is no microphone to mute: off and disabled, the preview says why (045 R27).
+        val isMicrophoneRefused = (state.lobby as? ElementCallLobbyState.Ready)?.joinUnavailableReason == ElementCallLobbyJoinBlock.MICROPHONE_REFUSED
         RoundCallButton(
-            enabled = !isLoading,
+            enabled = !isLoading && !isMicrophoneRefused,
             onClick = { state.eventSink(ElementCallScreenEvent.ToggleMicrophoneMuted) },
-            icon = if (state.isMicrophoneMuted) ElementCallTheme.icons.microphoneOff else ElementCallTheme.icons.microphoneOn,
+            icon = if (state.isMicrophoneMuted || isMicrophoneRefused) ElementCallTheme.icons.microphoneOff else ElementCallTheme.icons.microphoneOn,
             contentDescription = stringResource(
                 if (state.isMicrophoneMuted) R.string.element_call_a11y_unmute_microphone else R.string.element_call_a11y_mute_microphone
             ),

@@ -97,7 +97,7 @@ fun aLobbyScreenState(
         userId = UserId("@alice:example.org"),
         roomMember = null,
         isLocal = true,
-        isMuted = false,
+        isMuted = ready?.joinUnavailableReason == ElementCallLobbyJoinBlock.MICROPHONE_REFUSED,
         isActiveSpeaker = false,
         hasVideo = isCameraOn,
         isVideoMirrored = true,

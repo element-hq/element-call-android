@@ -386,7 +386,8 @@ private fun ElementCallSnapshot.provisionalOwnTile(): CallTileData? {
         userId = userId,
         roomMember = roomMembers[userId],
         isLocal = true,
-        isMuted = isMicrophoneMuted,
+        // A refused microphone cannot be heard either (045 R27).
+        isMuted = isMicrophoneMuted || isMicrophonePermissionRefused,
         isActiveSpeaker = false,
         hasVideo = isCameraEnabled && isCameraPermissionGranted,
         isVideoMirrored = isFrontCamera,
