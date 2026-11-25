@@ -60,7 +60,7 @@ import io.element.android.call.ui.theme.ElementCallTheme
 internal val ElementCallLobbyState?.showsSummary: Boolean
     get() = this is ElementCallLobbyState.Ready && memberCount > 0
 
-/** The summary's height, fixed so the stage under it is placed right from the first frame. */
+/** The summary's height, kept for the whole lobby so the preview under it never moves. */
 internal val LOBBY_SUMMARY_HEIGHT = 64.dp
 
 /** Under the control bar: the Join line's height, which the preview frame stays clear of. Fixed, so the frame never moves (R9). */
