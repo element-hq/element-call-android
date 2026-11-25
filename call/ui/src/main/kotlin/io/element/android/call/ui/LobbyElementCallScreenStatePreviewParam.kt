@@ -60,11 +60,6 @@ open class LobbyElementCallScreenStatePreviewParam : PreviewParameterProvider<El
                 lobby = aReadyLobby(label = ElementCallLobbyJoinLabel.JOIN, memberCount = 2, camera = ElementCallLobbyCamera.NOT_ALLOWED),
                 camera = ElementCallLobbyCamera.NOT_ALLOWED,
             ),
-            // A Bluetooth headset, the default output (R54).
-            aLobbyScreenState(
-                lobby = aReadyLobby(label = ElementCallLobbyJoinLabel.JOIN, memberCount = 2),
-                selectedAudioDevice = A_BLUETOOTH_HEADSET,
-            ),
         )
 }
 

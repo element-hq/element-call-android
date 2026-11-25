@@ -766,10 +766,10 @@ private fun CallControlsBar(
             isActive = !state.isCameraEnabled,
             stateDescription = if (isCameraRefused) stringResource(R.string.element_call_a11y_camera_not_allowed) else null,
         )
-        AudioDeviceButton(state, enabled = !isLoading)
-        // Absent in the lobby, grown in place at the tap (045 R24).
+        // Absent in the lobby, the output included (design, 2026-11-25), grown in place at the tap (045 R24).
         AnimatedVisibility(visible = state.lobby == null, enter = expandHorizontally() + fadeIn(), exit = shrinkHorizontally() + fadeOut()) {
             Row(horizontalArrangement = Arrangement.spacedBy(BUTTON_GAP), verticalAlignment = Alignment.CenterVertically) {
+                AudioDeviceButton(state)
                 CallBarSlotAndHangUp(state)
             }
         }
@@ -863,7 +863,7 @@ private fun HandRequestFailureDialog(failure: ElementCallHandRequestFailure, onD
 }
 
 @Composable
-private fun AudioDeviceButton(state: ElementCallScreenState, enabled: Boolean) {
+private fun AudioDeviceButton(state: ElementCallScreenState) {
     var isPickerVisible by remember { mutableStateOf(false) }
     val selectedType = state.selectedAudioDevice?.type ?: CallAudioDeviceType.EARPIECE
     RoundCallButton(
@@ -881,7 +881,7 @@ private fun AudioDeviceButton(state: ElementCallScreenState, enabled: Boolean) {
         // Highlighted when audio goes anywhere but the earpiece - loudspeaker, headset, Bluetooth -
         // as the design has it: the earpiece is the quiet, private default.
         isActive = selectedType != CallAudioDeviceType.EARPIECE,
-        enabled = enabled && state.audioDevices.isNotEmpty(),
+        enabled = state.audioDevices.isNotEmpty(),
     )
     if (isPickerVisible) {
         AudioDevicePicker(
