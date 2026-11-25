@@ -82,7 +82,7 @@ internal fun CallLobbyPreviewOverlay(lobby: ElementCallLobbyState, eventSink: (E
             is ElementCallLobbyState.Ready -> Column(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(start = 16.dp, end = 16.dp, bottom = 48.dp),
+                    .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {

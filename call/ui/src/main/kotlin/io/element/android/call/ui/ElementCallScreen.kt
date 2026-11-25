@@ -725,8 +725,11 @@ private fun CallControlsBar(
             ),
             isActive = state.isMicrophoneMuted,
         )
+        // Refused in the lobby, it looks unavailable but still answers a tap, which asks or explains (045 R28, 042 C5).
+        val isCameraRefused = (state.lobby as? ElementCallLobbyState.Ready)?.camera == ElementCallLobbyCamera.NOT_ALLOWED
         RoundCallButton(
             enabled = !isLoading,
+            looksDisabled = isCameraRefused,
             onClick = { state.eventSink(ElementCallScreenEvent.ToggleCamera) },
             icon = if (state.isCameraEnabled) ElementCallTheme.icons.cameraOn else ElementCallTheme.icons.cameraOff,
             contentDescription = stringResource(
@@ -734,6 +737,7 @@ private fun CallControlsBar(
             ),
             // Same reading as the mic: the highlighted button is the one that is switched off.
             isActive = !state.isCameraEnabled,
+            stateDescription = if (isCameraRefused) stringResource(R.string.element_call_a11y_camera_not_allowed) else null,
         )
         AudioDeviceButton(state, enabled = !isLoading)
         // Absent in the lobby, grown in place at the tap (045 R24).
@@ -870,16 +874,19 @@ private fun RoundCallButton(
     isActive: Boolean,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    /** Drawn as [enabled] false draws it, while still taking a tap. */
+    looksDisabled: Boolean = false,
     background: Color? = null,
     tint: Color? = null,
     stateDescription: String? = null,
 ) {
+    val looksEnabled = enabled && !looksDisabled
     val resolvedBackground = background
         // Darker than the pill it sits in, which is bgSubtleSecondary.
-        ?: if (isActive && enabled) ElementCallTheme.colors.controlActiveBackground else ElementCallTheme.colors.bgCanvas
+        ?: if (isActive && looksEnabled) ElementCallTheme.colors.controlActiveBackground else ElementCallTheme.colors.bgCanvas
     val resolvedTint = when {
         // Resting, with a faint glyph: the theme has no disabled colour, and adding one would change a port every host fills.
-        !enabled -> ElementCallTheme.colors.iconSecondary.copy(alpha = DISABLED_ALPHA)
+        !looksEnabled -> ElementCallTheme.colors.iconSecondary.copy(alpha = DISABLED_ALPHA)
         tint != null -> tint
         isActive -> ElementCallTheme.colors.controlActiveContent
         else -> ElementCallTheme.colors.iconPrimary
@@ -887,7 +894,7 @@ private fun RoundCallButton(
     val unavailable = stringResource(R.string.element_call_a11y_unavailable)
     // A dark button over a dark tile would be only its icon; the ring tells it apart from what it
     // floats over, as the design draws it. The light and the coloured ones stand out on their own.
-    val hasRing = background == null && !(isActive && enabled)
+    val hasRing = background == null && !(isActive && looksEnabled)
     IconButton(
         onClick = onClick,
         enabled = enabled,
