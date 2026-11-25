@@ -23,6 +23,7 @@
     <string name="element_call_lobby_join_anyway" translatable="false">Join anyway</string>
     <string name="element_call_lobby_call_ended" translatable="false">The call has ended</string>
     <string name="element_call_lobby_loading" translatable="false">Loading call</string>
+    <string name="element_call_lobby_call_in_progress" translatable="false">Group call in progress…</string>
     <plurals name="element_call_lobby_member_count" translatable="false">
         <item quantity="one">%1$d person in the call</item>
         <item quantity="other">%1$d people in the call</item>

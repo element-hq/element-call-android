@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -54,6 +55,13 @@ import io.element.android.call.ui.theme.ElementCallTheme
  * Where the lobby's pieces sit is design's to settle (feature-hq 045 Q5, Q8): the count, the call-ended notice, the
  * refused microphone's message and the loading Join are placed here and in [JOIN_SECTION_HEIGHT] alone.
  */
+
+/** Whether [CallLobbySummary] is drawn: while somebody is in the call. */
+internal val ElementCallLobbyState?.showsSummary: Boolean
+    get() = this is ElementCallLobbyState.Ready && memberCount > 0
+
+/** The summary's height, fixed so the stage under it is placed right from the first frame. */
+internal val LOBBY_SUMMARY_HEIGHT = 64.dp
 
 /** Under the control bar: the Join line's height, which the preview frame stays clear of. Fixed, so the frame never moves (R9). */
 internal val JOIN_SECTION_HEIGHT = 72.dp
@@ -115,20 +123,58 @@ private fun CameraNotAllowed(onOpenSettings: () -> Unit) {
     }
 }
 
-/** Under the control bar: the count beside Start or Join (R21, R41). Join is where a screen reader starts (R35). */
+/** Under the control bar: Start or Join, centred. Join is where a screen reader starts (R35). */
 @Composable
 internal fun CallLobbyJoinSection(lobby: ElementCallLobbyState, eventSink: (ElementCallScreenEvent) -> Unit, modifier: Modifier = Modifier) {
-    val ready = lobby as? ElementCallLobbyState.Ready
-    Row(
+    Box(
         modifier = modifier
             .fillMaxWidth()
             .height(JOIN_SECTION_HEIGHT)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(horizontal = 24.dp, vertical = 12.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        if (ready != null && ready.memberCount > 0) MemberCountPill(count = ready.memberCount)
-        JoinButton(lobby = lobby, onJoin = { eventSink(ElementCallScreenEvent.Join) }, modifier = Modifier.weight(1f))
+        JoinButton(lobby = lobby, onJoin = { eventSink(ElementCallScreenEvent.Join) }, modifier = Modifier.fillMaxWidth())
+    }
+}
+
+/** Under the top bar, while somebody is in the call: that it is in progress, and how many (R41). */
+@Composable
+internal fun CallLobbySummary(lobby: ElementCallLobbyState?, isAudioCall: Boolean, modifier: Modifier = Modifier) {
+    if (!lobby.showsSummary) return
+    val ready = lobby as ElementCallLobbyState.Ready
+    Column(
+        modifier = modifier.height(LOBBY_SUMMARY_HEIGHT),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(
+                imageVector = if (isAudioCall) ElementCallTheme.icons.voiceCall else ElementCallTheme.icons.cameraOn,
+                contentDescription = null,
+                tint = ElementCallTheme.colors.iconSecondary,
+                modifier = Modifier.size(20.dp),
+            )
+            Text(
+                text = stringResource(R.string.element_call_lobby_call_in_progress),
+                style = ElementCallTheme.typography.bodyLgMedium,
+                color = ElementCallTheme.colors.textPrimary,
+            )
+        }
+        // The core counts the call; it does not say who is in it before Join (R43), so no faces here.
+        val count = pluralStringResource(R.plurals.element_call_lobby_member_count, ready.memberCount, ready.memberCount)
+        Row(
+            modifier = Modifier.clearAndSetSemantics { contentDescription = count },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Icon(
+                imageVector = ElementCallTheme.icons.participants,
+                contentDescription = null,
+                tint = ElementCallTheme.colors.iconSecondary,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(text = ready.memberCount.toString(), style = ElementCallTheme.typography.bodyMdMedium, color = ElementCallTheme.colors.textPrimary)
+        }
     }
 }
 

@@ -162,7 +162,8 @@ fun ElementCallScreen(
             val statusBarTop = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
             // Kept while the bar is not drawn, so the grid does not move under a fullscreen tile.
             var bannerHeight by remember { mutableStateOf(0.dp) }
-            val topClearance = if (isLandscape) 0.dp else statusBarTop + TOP_BAR_HEIGHT + bannerHeight
+            val lobbySummaryHeight = if (state.lobby.showsSummary) LOBBY_SUMMARY_HEIGHT else 0.dp
+            val topClearance = if (isLandscape) 0.dp else statusBarTop + TOP_BAR_HEIGHT + bannerHeight + lobbySummaryHeight
             val density = LocalDensity.current
             val controls = @Composable { controlsModifier: Modifier ->
                 Box(
@@ -265,6 +266,8 @@ fun ElementCallScreen(
                                         .align(Alignment.CenterHorizontally)
                                         .onSizeChanged { bannerHeight = with(density) { it.height.toDp() } },
                                 )
+                                // Above the preview, which moves down to make room while somebody is in the call (045 R41, Q8).
+                                CallLobbySummary(lobby = state.lobby, isAudioCall = state.isAudioCall, modifier = Modifier.align(Alignment.CenterHorizontally))
                             }
                         }
                     }
@@ -315,6 +318,7 @@ fun ElementCallScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             ScreenShareBanner(state = state)
+                            CallLobbySummary(lobby = state.lobby, isAudioCall = state.isAudioCall)
                             AnimatedVisibility(
                                 visible = state.isStageChromeVisible,
                                 enter = fadeIn(tween(CHROME_SLIDE_MS)),
