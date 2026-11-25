@@ -54,7 +54,7 @@ class DefaultCallAudioDeviceController(
     /** The mode before we touched it. Non-null exactly while we are the ones holding the device. */
     private var modeBeforeCall: Int? = null
 
-    /** Whether the loudspeaker outranks the earpiece for this call: see [start]. */
+    /** Whether the loudspeaker outranks the earpiece for this call: see [start] and [setPreferLoudspeaker]. */
     private var preferLoudspeaker = false
 
     private var hasRegisteredCallbacks = false
@@ -117,11 +117,8 @@ class DefaultCallAudioDeviceController(
     }
 
     override fun start(preferLoudspeaker: Boolean) {
-        // Re-entrant on purpose: losing the original mode to a second start would mean handing back
-        // MODE_IN_COMMUNICATION for good.
-        if (modeBeforeCall != null) return
-        modeBeforeCall = audioManager.mode
-        audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+        // Re-entrant: a second start would register the callbacks twice.
+        if (hasRegisteredCallbacks) return
 
         // Set before the first refresh, since it decides the order the devices come out in.
         this.preferLoudspeaker = preferLoudspeaker
@@ -136,6 +133,24 @@ class DefaultCallAudioDeviceController(
         // and a voice call that starts on the loudspeaker is startling in a way the reverse is not.
         // The list is already in this call's order, so its head is the answer for either kind.
         _devices.value.firstOrNull()?.let(::select)
+    }
+
+    override fun setPreferLoudspeaker(preferLoudspeaker: Boolean) {
+        if (this.preferLoudspeaker == preferLoudspeaker) return
+        this.preferLoudspeaker = preferLoudspeaker
+        refreshDevices()
+        // A headset stays: only the two built-in outputs swap places (feature-hq 045 R54).
+        if (_selectedDevice.value?.type?.isBuiltIn != false) _devices.value.firstOrNull()?.let(::select)
+    }
+
+    override fun startCommunication() {
+        // Re-entrant on purpose: losing the original mode to a second call would mean handing back
+        // MODE_IN_COMMUNICATION for good.
+        if (modeBeforeCall != null) return
+        modeBeforeCall = audioManager.mode
+        audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+        // Applied again: setting the mode can reset the route the lobby took (feature-hq 045 C10).
+        _selectedDevice.value?.let(::select)
     }
 
     override fun select(device: CallAudioDevice) {

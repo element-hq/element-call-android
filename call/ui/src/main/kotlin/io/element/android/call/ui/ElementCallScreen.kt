@@ -870,6 +870,7 @@ private val BAR_VERTICAL_PADDING = 14.dp
 /** What the placeholder says about the connection while there is nobody to show. */
 @Composable
 private fun ElementCallConnection.label(): String = when (this) {
+    is ElementCallConnection.Lobby,
     ElementCallConnection.RequestingPermission,
     ElementCallConnection.Joining,
     ElementCallConnection.ConnectingMedia -> stringResource(R.string.element_call_connecting)

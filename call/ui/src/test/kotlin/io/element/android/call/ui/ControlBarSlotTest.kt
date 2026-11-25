@@ -14,6 +14,7 @@ import com.google.common.truth.Truth.assertThat
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallSnapshot
+import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.MatrixRtcTile
 import io.element.android.call.api.rtc.MatrixRtcTileKind
 import io.element.android.call.test.A_ROOM_ID
@@ -77,7 +78,7 @@ class ControlBarSlotTest {
     }
 
     private fun aSlotSnapshot(own: MatrixRtcTile, vararg remotes: MatrixRtcTile) = ElementCallSnapshot(
-        callData = ElementCallData(roomId = A_ROOM_ID, isAudioCall = true, isStartingCall = true),
+        callData = ElementCallData(roomId = A_ROOM_ID, intent = MatrixRtcCallIntent.AUDIO, isStartingCall = true, isDm = false, skipsLobby = true),
         connection = ElementCallConnection.Connected,
         isMicrophonePermissionGranted = true,
         roster = remotes.toList().previewRoster(),

@@ -13,6 +13,7 @@ import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallRoomContext
 import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.rtc.MatrixRtcCallEnd
+import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.MatrixRtcCallStatus
 import io.element.android.call.api.rtc.MatrixRtcConnectionLossReason
 import io.element.android.call.api.rtc.MatrixRtcConnectionState
@@ -128,7 +129,7 @@ class SampleOutageCall(context: Context, private val scope: CoroutineScope, priv
     override val controller: ElementCallController get() = stack.controller
 
     override fun start() {
-        controller.startCall(ElementCallData(roomId = ROOM_ID, isAudioCall = false, isStartingCall = true))
+        controller.startCall(ElementCallData(roomId = ROOM_ID, intent = MatrixRtcCallIntent.VIDEO, isStartingCall = true, isDm = false, skipsLobby = true))
         scope.launch { play() }
     }
 

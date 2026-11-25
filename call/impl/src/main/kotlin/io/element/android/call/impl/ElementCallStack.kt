@@ -21,6 +21,7 @@ import io.element.android.call.api.analytics.NoOpElementCallAnalytics
 import io.element.android.call.api.audio.AudioFocus
 import io.element.android.call.api.audio.CallAudioDeviceController
 import io.element.android.call.api.rtc.MatrixRtcClient
+import io.element.android.call.api.rtc.id.UserId
 import io.element.android.call.impl.audio.DefaultAudioFocus
 import io.element.android.call.impl.audio.DefaultCallAudioDeviceController
 import io.element.android.call.impl.rtc.MatrixRtcFfi
@@ -122,6 +123,7 @@ class ElementCallStack private constructor(
                 options = options,
                 preferencesStore = preferencesStore ?: DefaultElementCallPreferencesStore(context),
                 analytics = analytics,
+                ownUserId = UserId(backend.ownUserId()),
             )
             return ElementCallStack(controller, options).also { ElementCallStackRegistry.register(it) }
         }

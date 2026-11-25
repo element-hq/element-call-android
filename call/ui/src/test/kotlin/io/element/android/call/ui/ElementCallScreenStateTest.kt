@@ -18,6 +18,7 @@ import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.ElementCallVersion
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
+import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcReaction
@@ -934,7 +935,7 @@ class ElementCallScreenStateTest {
         roster: MatrixRtcTileRoster = tiles.previewRoster(),
         isDm: Boolean = false,
     ) = ElementCallSnapshot(
-        callData = ElementCallData(roomId = A_ROOM_ID, isAudioCall = true, isStartingCall = true),
+        callData = ElementCallData(roomId = A_ROOM_ID, intent = MatrixRtcCallIntent.AUDIO, isStartingCall = true, isDm = false, skipsLobby = true),
         connection = ElementCallConnection.Connected,
         isMicrophonePermissionGranted = true,
         roster = roster,

@@ -15,6 +15,7 @@ import com.google.common.truth.Truth.assertThat
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallSnapshot
+import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.MatrixRtcReactionKind
 import io.element.android.call.api.rtc.MatrixRtcSignallingHealth
 import io.element.android.call.api.rtc.MatrixRtcTile
@@ -168,7 +169,7 @@ class ReactionSendingTest {
     private fun aGroupSnapshot(own: MatrixRtcTile = aTile(A_LOCAL_MEMBER_ID)) = aSnapshot(own, aTile(A_REMOTE_MEMBER_ID), aTile(ANOTHER_MEMBER_ID))
 
     private fun aSnapshot(own: MatrixRtcTile, vararg remotes: MatrixRtcTile) = ElementCallSnapshot(
-        callData = ElementCallData(roomId = A_ROOM_ID, isAudioCall = true, isStartingCall = true),
+        callData = ElementCallData(roomId = A_ROOM_ID, intent = MatrixRtcCallIntent.AUDIO, isStartingCall = true, isDm = false, skipsLobby = true),
         connection = ElementCallConnection.Connected,
         isMicrophonePermissionGranted = true,
         roster = remotes.toList().previewRoster(),

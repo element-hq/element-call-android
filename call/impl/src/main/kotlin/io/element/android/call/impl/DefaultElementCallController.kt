@@ -15,6 +15,7 @@ import io.element.android.call.api.ElementCallFailure
 import io.element.android.call.api.ElementCallHandRequestFailure
 import io.element.android.call.api.ElementCallInterruption
 import io.element.android.call.api.ElementCallLifecycleListener
+import io.element.android.call.api.ElementCallLobbyJoinLabel
 import io.element.android.call.api.ElementCallOptions
 import io.element.android.call.api.ElementCallPreferences
 import io.element.android.call.api.ElementCallPreferencesStore
@@ -37,6 +38,7 @@ import io.element.android.call.api.rtc.MatrixRtcGroupNotify
 import io.element.android.call.api.rtc.MatrixRtcInterruptions
 import io.element.android.call.api.rtc.MatrixRtcJoinException
 import io.element.android.call.api.rtc.MatrixRtcLeaveReason
+import io.element.android.call.api.rtc.MatrixRtcLocalCamera
 import io.element.android.call.api.rtc.MatrixRtcMediaSession
 import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 import io.element.android.call.api.rtc.MatrixRtcReaction
@@ -60,19 +62,25 @@ import io.element.android.call.impl.audio.CallSoundEffectRenderer
 import io.element.android.call.impl.audio.GENERIC_REACTION_SOUND
 import io.element.android.call.impl.audio.JoinLeaveSoundPolicy
 import io.element.android.call.impl.audio.RaisedHandSoundPolicy
+import io.element.android.call.impl.util.runCatchingExceptions
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toImmutableMap
 import kotlinx.collections.immutable.toImmutableSet
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -80,10 +88,12 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.flow.stateIn
@@ -91,6 +101,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 import java.util.concurrent.ConcurrentHashMap
@@ -115,6 +126,7 @@ import kotlin.time.Duration.Companion.seconds
  * Everything that mutates goes through [mutex] on [scope], so callers can fire and forget from any
  * thread and the UI only ever sees whole snapshots.
  */
+@Suppress("LargeClass") // The lobby is a phase of this one call, not a second object (feature-hq 045 C3).
 internal class DefaultElementCallController(
     private val scope: CoroutineScope,
     private val platform: ElementCallPlatform,
@@ -126,6 +138,8 @@ internal class DefaultElementCallController(
     private val options: ElementCallOptions,
     private val preferencesStore: ElementCallPreferencesStore,
     private val analytics: ElementCallAnalytics,
+    /** Us, for our avatar before the core reports our tile (feature-hq 045 R9). */
+    private val ownUserId: UserId,
 ) : ElementCallController {
     private val mutex = Mutex()
 
@@ -152,10 +166,10 @@ internal class DefaultElementCallController(
      * over our own app, so leaving the app should hand that tile to the system rather than making it
      * vanish. A minimized *audio* call is deliberately excluded - a floating window showing an avatar
      * over someone's launcher earns nothing, and the ongoing-call notification is the right
-     * affordance for it.
+     * affordance for it. Never the lobby, which is not a call (feature-hq 045 R33).
      */
     override val shouldEnterPictureInPicture: StateFlow<Boolean> = _state
-        .map { it != null && it.isMaximized }
+        .map { it != null && it.isMaximized && it.connection !is ElementCallConnection.Lobby }
         .stateIn(scope, SharingStarted.Eagerly, false)
 
     private val _isInPictureInPicture = MutableStateFlow(false)
@@ -183,8 +197,8 @@ internal class DefaultElementCallController(
         // Three conditions, all necessary. **Maximized**, because a minimized call means the user is
         // reading something else. **No video**, because a picture is something you look at rather
         // than hold to your face - and that covers a screen share too. **Foreground**, because
-        // blanking another app's screen is never ours to do. The earpiece condition is the audio
-        // layer's own and is checked there.
+        // blanking another app's screen is never ours to do. Never in the lobby, which nobody holds to an ear (045 C2).
+        // The earpiece condition is the audio layer's own and is checked there.
         //
         // In init rather than per call: this lives as long as the session, and a null call resolves
         // to false, which is the right answer between calls.
@@ -194,7 +208,7 @@ internal class DefaultElementCallController(
                 _isInPictureInPicture,
                 lifecycleListener.isAppInForeground,
             ) { call, isInPip, isForeground ->
-                call != null && call.isMaximized && !call.hasVideo && !isInPip && isForeground
+                call != null && call.connection !is ElementCallConnection.Lobby && call.isMaximized && !call.hasVideo && !isInPip && isForeground
             }
                 .distinctUntilChanged()
                 .collect { audioDeviceController.setProximityBlankingAllowed(it) }
@@ -314,6 +328,8 @@ internal class DefaultElementCallController(
      */
     private val sharedVideoFlows = ConcurrentHashMap<VideoStreamKey, Flow<MatrixRtcVideoFrame>>()
 
+    private var audioDevicesJob: Job? = null
+
     /** Hosts the sharing above. Tied to the media connection, since that is what the flows read. */
     private var videoSharingScope: CoroutineScope? = null
 
@@ -321,13 +337,12 @@ internal class DefaultElementCallController(
     private var rtcCall: MatrixRtcCall? = null
 
     /**
-     * Whether the call joins with the camera on: the host's ask, then the user's taps while joining, then the join's
-     * intent (see [adoptIntent]). Not the snapshot's `isCameraEnabled`, which follows the capturing camera once media
-     * is up.
+     * Whether the call joins with the camera on: the settled intent, or the user's taps before media (045 R15, R17). Not
+     * the snapshot's `isCameraEnabled`, which follows the capturing camera once media is up.
      */
     private var joinsWithCamera = false
 
-    /** Whether the user has turned the camera on or off while joining. Their choice wins over the join's intent. */
+    /** Whether the user has turned the camera on or off before media. Their choice wins over the settled intent (045 C24). */
     private var isCameraChosenByUser = false
 
     /**
@@ -345,68 +360,363 @@ internal class DefaultElementCallController(
     /** Not cleared with the call: it is the layout's, set once for the controller. */
     private var rankingThreshold: Int? = null
 
+    /** The attempt's camera, from the lobby into the call (045 R49): created at [startCall], stopped in [endCall] and in [fail]. */
+    private var camera: MatrixRtcLocalCamera? = null
+    private val attemptCamera = MutableStateFlow<MatrixRtcLocalCamera?>(null)
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override val ownCameraFrames: Flow<MatrixRtcVideoFrame> = attemptCamera.flatMapLatest { it?.frames ?: emptyFlow() }
+
+    /** Starts and stops the camera before media, one change at a time. */
+    private val cameraMutex = Mutex()
+
+    /** The facing, the outputs: what the attempt reports before media as well as in it. Cancelled in [endCall]. */
+    private var attemptJob: Job? = null
+
+    /** The lobby's room, intent and count, reloaded on a format change (045 C23). Cancelled at Join and in [endCall]. */
+    private var lobbyJob: Job? = null
+
+    /** Whether this attempt opened on the lobby, which keeps its camera running into the call (045 R49). */
+    private var isFromLobby = false
+
+    /** Reported by the screen; not cleared with the call, since the screen outlives no call but may precede one. */
+    @Volatile
+    private var isCallScreenVisible = false
+
+    /** Whether a focus request of ours is outstanding, granted or not. */
+    private var hasRequestedAudioFocus = false
+
+    /** Whether the lobby holds the audio now: its camera runs only then (045 R48, C27). */
+    @Volatile
+    private var holdsAudioFocus = false
+    private var hasStartedAudioDevices = false
+    private var hasStartedForegroundService = false
+
+    /** Whether the host was told [ElementCallLifecycleListener.onCallStarted]: a lobby closed without Join was not (045 R46). */
+    private var hasReportedCallStarted = false
+
     /**
-     * Begin a call. Does nothing if one is already running, including for the same room: rejoining
-     * would mint a new member id and leave the old membership behind as a ghost.
+     * Begin a call, on the lobby in a group room that has not asked to skip it (feature-hq 045 R1-R5). Does nothing if
+     * one is already running, including for the same room: rejoining would mint a new member id and leave the old
+     * membership behind as a ghost. A lobby is not a call, so a start over one closes it first (R48).
      *
-     * Returns immediately. Nothing happens beyond entering [ElementCallConnection.RequestingPermission]
-     * until the host answers with [setMicrophonePermissionGranted] - only an Activity can ask for a
-     * permission, and this is not one.
+     * Returns immediately. Without a lobby, nothing happens beyond [ElementCallConnection.RequestingPermission]
+     * until the host answers with [setMicrophonePermissionGranted] - only an Activity can ask for a permission.
      */
     override fun startCall(callData: ElementCallData) {
         scope.launch {
+            if (_state.value?.connection is ElementCallConnection.Lobby) {
+                Timber.i("ElementCall: a call was requested for ${callData.roomId} over a lobby, closing the lobby")
+                // Awaited: the core frees a room only once it is shut, and the new call may be in the same room (045 C23).
+                endCall(leave = false)
+            }
             mutex.withLock {
                 if (_state.value != null) {
                     Timber.w("ElementCall: a call is already running, ignoring start for ${callData.roomId}")
                     return@withLock
                 }
-                Timber.i("ElementCall: call requested for ${callData.roomId}")
+                val showsLobby = callData.showsLobby
+                Timber.i("ElementCall: call requested for ${callData.roomId}, ${if (showsLobby) "in a lobby" else "without a lobby"}")
+                val camera = rtcClient.camera()
+                this@DefaultElementCallController.camera = camera
+                attemptCamera.value = camera
+                isFromLobby = showsLobby
                 _state.value = ElementCallSnapshot(
                     callData = callData,
-                    connection = ElementCallConnection.RequestingPermission,
+                    connection = if (showsLobby) {
+                        ElementCallConnection.Lobby(
+                            memberCount = null,
+                            hasSeenMembers = false
+                        )
+                    } else {
+                        ElementCallConnection.RequestingPermission
+                    },
+                    isDm = callData.isDm,
+                    ownUserId = ownUserId,
                     isScreenShareAvailable = options.isScreenSharingEnabled,
-                    // What the call will join with, not what is capturing - nothing is, yet. The
-                    // control bar is on screen from this moment, so a video call whose button read
-                    // "off" until the media connected would announce the wrong call and then flip
-                    // under the user's finger. From here on this is the camera's desired state, and
-                    // the tap that changes it is the answer runCall joins on.
-                    isCameraEnabled = !callData.isAudioCall,
+                    // Off until the core has settled the intent, never the host's guess (045 R59, C24). From then on this
+                    // is the camera's desired state, and the tap that changes it is what the call joins on.
+                    isCameraEnabled = false,
                     isCameraSwitchAvailable = platform.isCameraSwitchAvailable(),
                 )
-                joinsWithCamera = !callData.isAudioCall
+                joinsWithCamera = false
                 isCameraChosenByUser = false
                 isUpFrontCameraAnswerPending = false
-                // Reported as soon as the call is requested rather than once it connects, so a host's
-                // Join button hides while we are still joining rather than blinking through an
-                // interval where the app believes we are not in the call we are joining.
-                lifecycleListener.onCallStarted(callData)
                 // Started here rather than after joining, because the bar is on screen from this
                 // moment and a call labelled with a room id would be worse than one labelled late.
                 roomJob = scope.launch { observeRoom(callData) }
-                // At the request, not the grant: a refused microphone is an outcome of this attempt (044 R10).
-                // An attempt that ends before the join decides DM or group takes what the room is known to be (044 R25).
-                reporter = ElementCallAnalyticsReporter(analytics, platform::elapsedRealtimeMs, undecidedCallKind = { callKindOf(_state.value?.isDm == true) })
+                attemptJob = scope.launch { camera.isFrontFacing.collect { value -> updateState { it.copy(isFrontCamera = value) } } }
+                if (showsLobby) {
+                    // The lobby takes the call's audio at open, as Join does, and lists the call's outputs from it (045 R45, C27).
+                    syncLobbyAudioFocus()
+                    startAudioDevices(preferLoudspeaker = callData.intent != MatrixRtcCallIntent.AUDIO)
+                    lobbyJob = scope.launch { followLobby(callData) }
+                } else {
+                    // Reported as soon as the call is requested rather than once it connects, so a host's
+                    // Join button hides while we are still joining rather than blinking through an
+                    // interval where the app believes we are not in the call we are joining.
+                    reportCallStarted(callData)
+                    // At the request, not the grant: a refused microphone is an outcome of this attempt (044 R10).
+                    reporter = ElementCallAnalyticsReporter(analytics, platform::elapsedRealtimeMs, undecidedCallKind = { callKindOf(callData.isDm) })
+                }
             }
+        }
+    }
+
+    private fun reportCallStarted(callData: ElementCallData) {
+        hasReportedCallStarted = true
+        lifecycleListener.onCallStarted(callData)
+    }
+
+    /** The outputs, listed and routed, into the snapshot until the attempt ends (045 C10). */
+    private fun startAudioDevices(preferLoudspeaker: Boolean) {
+        if (hasStartedAudioDevices) return
+        hasStartedAudioDevices = true
+        audioDeviceController.start(preferLoudspeaker = preferLoudspeaker)
+        // Observed rather than echoed back from selectAudioDevice, because the route also changes
+        // without us asking: a headset is unplugged, or the platform overrides the choice.
+        audioDevicesJob = scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            launch(start = CoroutineStart.UNDISPATCHED) {
+                audioDeviceController.devices.collect { value -> updateState { it.copy(audioDevices = value.toImmutableList()) } }
+            }
+            audioDeviceController.selectedDevice.collect { value -> updateState { it.copy(selectedAudioDevice = value) } }
+        }
+    }
+
+    /**
+     * The lobby's room, from open to Join (045 R59, R60, C7, C22, C23): opened in the stored format, and opened again,
+     * back in loading, whenever the format changes. The previous load is cancelled and waited for first, so its room is
+     * shut before the next one opens.
+     */
+    private suspend fun followLobby(callData: ElementCallData) {
+        storedPreferences.reload()
+        storedPreferences.value
+            .map { it.membershipFormat }
+            .distinctUntilChanged()
+            .collectLatest { format -> loadLobby(callData, format) }
+    }
+
+    private suspend fun loadLobby(callData: ElementCallData, format: MatrixRtcMembershipFormat) = coroutineScope {
+        val previous = mutex.withLock {
+            if (_state.value?.connection !is ElementCallConnection.Lobby) return@coroutineScope
+            // Back to loading: the count cleared, the intent settled again, the label gone (C23).
+            updateState {
+                it.copy(
+                    connection = ElementCallConnection.Lobby(memberCount = null, hasSeenMembers = false),
+                    settledIntent = null,
+                    joiningFormat = format,
+                )
+            }
+            rtcRoom.also { rtcRoom = null }
+        }
+        syncCamera()
+        previous?.shutdown()
+        Timber.i("ElementCall: the lobby is reading ${callData.roomId} in $format")
+        val lobbyScope = this
+        val counts = Channel<Int>(Channel.CONFLATED)
+        // One timeout over the three reads, so an intent or a first count that never answers is bounded too (C22).
+        val loaded = withTimeoutOrNull(LOBBY_LOADING_TIMEOUT) {
+            runCatchingExceptions {
+                val room = openLobbyRoom(callData, format)
+                val intent = room.callIntent(requested = callData.intent).getOrThrow()
+                lobbyScope.launch {
+                    room.memberCountUpdates().collect { counts.send(it) }
+                    counts.close()
+                }
+                intent to counts.receive()
+            }
+        }
+        val (intent, count) = when {
+            loaded == null -> return@coroutineScope failLobby("the call was not read within $LOBBY_LOADING_TIMEOUT")
+            loaded.isFailure -> return@coroutineScope failLobby(loaded.exceptionOrNull()?.message ?: "unknown")
+            else -> loaded.getOrThrow()
+        }
+        Timber.i("ElementCall: the lobby has read the call: $intent, $count in it")
+        val isVideo = intent == MatrixRtcCallIntent.VIDEO
+        // Before the snapshot, so the output appears with the label, the count and the camera (R54, R59).
+        audioDeviceController.setPreferLoudspeaker(isVideo)
+        mutex.withLock {
+            val current = _state.value ?: return@withLock
+            if (current.connection !is ElementCallConnection.Lobby) return@withLock
+            // A choice made before a format change stands; after a refused microphone the camera is off (R26).
+            val joinsWithCamera = if (isCameraChosenByUser) {
+                current.isCameraEnabled
+            } else {
+                isVideo && !current.isMicrophonePermissionRefused &&
+                !current.isCameraPermissionRefused
+            }
+            this@DefaultElementCallController.joinsWithCamera = joinsWithCamera
+            _state.value = current.copy(
+                connection = ElementCallConnection.Lobby(memberCount = count, hasSeenMembers = count > 0),
+                settledIntent = intent,
+                isCameraEnabled = joinsWithCamera,
+                audioDevices = audioDeviceController.devices.value.toImmutableList(),
+                selectedAudioDevice = audioDeviceController.selectedDevice.value,
+            )
+        }
+        syncCamera()
+        // Live until Join (R42). A subscription that stops keeps the last count (R60).
+        for (next in counts) {
+            updateState {
+                val lobby = it.connection as? ElementCallConnection.Lobby ?: return@updateState it
+                it.copy(connection = ElementCallConnection.Lobby(memberCount = next, hasSeenMembers = lobby.hasSeenMembers || next > 0))
+            }
+        }
+    }
+
+    /** Opened whatever happens to this coroutine, and shut again if the lobby no longer wants it: a dropped open would hold the room (C23). */
+    private suspend fun openLobbyRoom(callData: ElementCallData, format: MatrixRtcMembershipFormat): MatrixRtcRoom {
+        val room = withContext(NonCancellable) {
+            val room = rtcClient.room(callData.roomId, format).getOrThrow()
+            val isKept = mutex.withLock {
+                (_state.value?.connection is ElementCallConnection.Lobby).also { if (it) rtcRoom = room }
+            }
+            if (!isKept) room.shutdown()
+            room.takeIf { isKept }
+        }
+        currentCoroutineContext().ensureActive()
+        return room ?: error("the lobby closed while its room opened")
+    }
+
+    /** The call could not be read: the failure screen, as a join that cannot open the room (045 R60, C16). */
+    private suspend fun failLobby(reason: String) {
+        mutex.withLock {
+            if (_state.value?.connection !is ElementCallConnection.Lobby) return
+            val attempt = ElementCallAnalyticsReporter(analytics, platform::elapsedRealtimeMs, undecidedCallKind = { callKindOf(isDm = false) })
+            reporter = attempt
+            attempt.attempted(callKindOf(isDm = false))
+            fail(attempt, FailureReport.ROOM_NOT_OPENED, ElementCallFailure.Other("Room not opened: $reason", isJoinFailure = true))
+            // Nothing left to hear or see: the audio goes back now, not at Close (C27).
+            releaseLobbyAudio()
+        }
+    }
+
+    /** Give back the focus and the outputs the lobby took, if it did (045 R37). */
+    private fun releaseLobbyAudio() {
+        if (hasRequestedAudioFocus) {
+            audioFocus.releaseAudioFocus()
+            hasRequestedAudioFocus = false
+            holdsAudioFocus = false
+        }
+        if (hasStartedAudioDevices) {
+            audioDevicesJob?.cancel()
+            audioDevicesJob = null
+            audioDeviceController.stop()
+            hasStartedAudioDevices = false
+        }
+    }
+
+    /** In the lobby the audio is held exactly while the screen is visible (045 C27). Under [mutex]. */
+    private fun syncLobbyAudioFocus() {
+        if (_state.value?.connection !is ElementCallConnection.Lobby) return
+        if (isCallScreenVisible && !hasRequestedAudioFocus) {
+            hasRequestedAudioFocus = true
+            holdsAudioFocus = audioFocus.requestAudioFocus(
+                onFocusLost = { onLobbyFocusChanged(held = false) },
+                onFocusGained = { onLobbyFocusChanged(held = true) },
+            )
+            Timber.i("ElementCall: the lobby ${if (holdsAudioFocus) "holds" else "waits for"} the audio")
+        } else if (!isCallScreenVisible && hasRequestedAudioFocus) {
+            audioFocus.releaseAudioFocus()
+            hasRequestedAudioFocus = false
+            holdsAudioFocus = false
+            Timber.i("ElementCall: the lobby gave the audio back for the background")
+        }
+    }
+
+    /** A call taking the audio stops the lobby's camera; getting it back restarts it as the user left it (045 R48). */
+    private fun onLobbyFocusChanged(held: Boolean) {
+        scope.launch {
+            mutex.withLock {
+                if (!hasRequestedAudioFocus) return@launch
+                holdsAudioFocus = held
+            }
+            Timber.i("ElementCall: the lobby ${if (held) "has the audio back" else "lost the audio"}")
+            syncCamera()
+        }
+    }
+
+    /**
+     * Start or stop the camera before media: in the lobby, exactly while it is on, allowed, loaded, visible and holding the
+     * audio (045 R31, R48, C15); after its Join, kept running only while on and allowed, so the call takes it over (R49).
+     * Once media is up the media session drives it. Without a lobby the media session starts it, as before.
+     */
+    private suspend fun syncCamera() = cameraMutex.withLock {
+        val camera = camera ?: return@withLock
+        if (call != null) return@withLock
+        val current = _state.value ?: return@withLock
+        val lobby = current.connection as? ElementCallConnection.Lobby
+        val isAllowed = current.isCameraEnabled && current.isCameraPermissionGranted
+        val runs = when {
+            lobby != null -> isAllowed && !lobby.isLoading && isCallScreenVisible && holdsAudioFocus
+            isFromLobby -> isAllowed && camera.isCapturing.value
+            else -> return@withLock
+        }
+        if (runs && !camera.isCapturing.value) {
+            Timber.i("ElementCall: starting the lobby's camera")
+            camera.start()
+        } else if (!runs && camera.isCapturing.value) {
+            Timber.i("ElementCall: stopping the camera before media")
+            camera.stop()
+        }
+    }
+
+    override fun join() {
+        scope.launch {
+            mutex.withLock {
+                val current = _state.value ?: return@launch
+                val lobby = current.connection as? ElementCallConnection.Lobby ?: return@launch
+                val label = lobby.joinLabel ?: return@launch
+                if (!current.isMicrophonePermissionGranted) {
+                    Timber.i("ElementCall: Join refused, the microphone is not allowed")
+                    return@launch
+                }
+                // The button at the tap, never the host's flag: only Start notifies (R21, R57, C9).
+                val callData = current.callData.copy(isStartingCall = label == ElementCallLobbyJoinLabel.START)
+                Timber.i("ElementCall: $label from the lobby")
+                lobbyJob?.cancel()
+                lobbyJob = null
+                _state.value = current.copy(callData = callData, connection = ElementCallConnection.Joining)
+                reportCallStarted(callData)
+                val attempt = ElementCallAnalyticsReporter(analytics, platform::elapsedRealtimeMs, undecidedCallKind = { callKindOf(callData.isDm) })
+                reporter = attempt
+                hasStartedForegroundService = true
+                platform.startForegroundService()
+                // The lobby's focus is kept, never released and taken again (C27); taken here only if it had none.
+                if (!hasRequestedAudioFocus) {
+                    hasRequestedAudioFocus = true
+                    audioFocus.requestAudioFocus {}
+                }
+                callJob = scope.launch {
+                    launch { followInterruptions() }
+                    runCall(callData, attempt)
+                }
+            }
+        }
+    }
+
+    override fun setCallScreenVisible(visible: Boolean) {
+        scope.launch {
+            mutex.withLock {
+                if (isCallScreenVisible == visible) return@launch
+                isCallScreenVisible = visible
+                // The audio before the camera, which waits for it (C27).
+                syncLobbyAudioFocus()
+            }
+            syncCamera()
         }
     }
 
     /**
      * What kind of call this join is (feature-hq 030 C1): a DM call, which rings only when the user chose to
      * call, or a group call, which only ever shows the others a notification, and only when we start it.
+     * The DM flag is the host's, given when the call opened (045 R40); [intent] is the settled one (C6).
      */
-    private suspend fun callKindFor(callData: ElementCallData): MatrixRtcCallKind {
-        // Defaults to a group call rather than a ring if the room cannot be read in time: an unwanted
-        // ring wakes people up, a missing one only makes the call quieter than it should have been.
-        val isDm = withTimeoutOrNull(ROOM_CONTEXT_TIMEOUT_MS) {
-            roomContextProvider.roomContext(callData.roomId).first()
-        }?.isDm == true
-        val intent = if (callData.isAudioCall) MatrixRtcCallIntent.AUDIO else MatrixRtcCallIntent.VIDEO
-        return when {
-            isDm && callData.isStartingCall -> MatrixRtcCallKind.Direct(MatrixRtcRing(intent, options.ringLifetime?.inWholeMilliseconds?.toULong()))
-            isDm -> MatrixRtcCallKind.Direct(ring = null)
-            callData.isStartingCall -> MatrixRtcCallKind.Group(MatrixRtcGroupNotify(intent))
-            else -> MatrixRtcCallKind.Group(notify = null)
-        }
+    private fun callKindFor(callData: ElementCallData, intent: MatrixRtcCallIntent): MatrixRtcCallKind = when {
+        callData.isDm && callData.isStartingCall -> MatrixRtcCallKind.Direct(MatrixRtcRing(intent, options.ringLifetime?.inWholeMilliseconds?.toULong()))
+        callData.isDm -> MatrixRtcCallKind.Direct(ring = null)
+        callData.isStartingCall -> MatrixRtcCallKind.Group(MatrixRtcGroupNotify(intent))
+        else -> MatrixRtcCallKind.Group(notify = null)
     }
 
     /**
@@ -423,7 +733,6 @@ internal class DefaultElementCallController(
             updateState {
                 it.copy(
                     roomName = context.displayName,
-                    isDm = context.isDm,
                     roomMembers = context.members.toImmutableMap(),
                 )
             }
@@ -431,13 +740,27 @@ internal class DefaultElementCallController(
     }
 
     /**
-     * Answer the microphone permission request. Denial fails the call with [ElementCallFailure.MicrophoneRefused]
-     * before anything reaches the room (042 R1, R5): it is audio first, and `AudioRecord` would fail anyway.
+     * Answer the microphone permission request. Without a lobby, denial fails the call with
+     * [ElementCallFailure.MicrophoneRefused] before anything reaches the room (042 R1, R5): it is audio first, and
+     * `AudioRecord` would fail anyway. In the lobby the answer is only recorded: a refusal disables Join (045 R27).
      */
     override fun setMicrophonePermissionGranted(granted: Boolean) {
         scope.launch {
             mutex.withLock {
                 val current = _state.value ?: return@withLock
+                if (current.connection is ElementCallConnection.Lobby) {
+                    Timber.i("ElementCall: microphone ${if (granted) "granted" else "refused"} in the lobby")
+                    // After a refused microphone the camera is off, and a tap on it asks (R26).
+                    updateState {
+                        it.copy(
+                            isMicrophonePermissionGranted = granted,
+                            isMicrophonePermissionRefused = !granted,
+                            isCameraEnabled = it.isCameraEnabled && granted,
+                        )
+                    }
+                    if (!granted) joinsWithCamera = false
+                    return@withLock
+                }
                 if (!granted) {
                     Timber.i("ElementCall: microphone permission denied")
                     updateState { it.copy(connection = ElementCallConnection.Failed(ElementCallFailure.MicrophoneRefused)) }
@@ -447,13 +770,13 @@ internal class DefaultElementCallController(
                 // The host re-reports a permission it already has whenever it is recreated, so this
                 // has to be idempotent or a configuration change would join the call a second time.
                 if (current.isMicrophonePermissionGranted) return@withLock
-                updateState { it.copy(isMicrophonePermissionGranted = true) }
-                // The screen asks for the camera next on a call that asked for video, unless it has it already.
-                isUpFrontCameraAnswerPending = !current.callData.isAudioCall && !current.isCameraPermissionGranted
+                updateState { it.copy(isMicrophonePermissionGranted = true, isMicrophonePermissionRefused = false) }
 
                 // Both must be in place before capture starts: the service so the microphone survives
                 // backgrounding, the audio focus so other apps duck.
+                hasStartedForegroundService = true
                 platform.startForegroundService()
+                hasRequestedAudioFocus = true
                 audioFocus.requestAudioFocus {}
 
                 // Read under the lock: endCall clears the field, and the launched body may run after it has.
@@ -471,18 +794,26 @@ internal class DefaultElementCallController(
         scope.launch {
             val isUpFrontAnswer = isUpFrontCameraAnswerPending
             isUpFrontCameraAnswerPending = false
-            updateState { it.copy(isCameraPermissionGranted = granted) }
+            updateState { it.copy(isCameraPermissionGranted = granted, isCameraPermissionRefused = !granted) }
             if (!granted) {
                 // Off from the refusal, not from when media connects (042 R10); a running call's own flow already says off.
                 if (call == null) {
                     joinsWithCamera = false
                     updateState { it.copy(isCameraEnabled = false) }
+                    syncCamera()
                 }
+                return@launch
+            }
+            // Only recorded in the lobby: the service would post an ongoing call that does not exist (045 R46), and the tap
+            // that asked turns the camera on itself.
+            if (_state.value?.connection is ElementCallConnection.Lobby) {
+                syncCamera()
                 return@launch
             }
             // Started again, not for the first time: the service is already running for the
             // microphone, and this is what lets it add the camera type it could not claim before.
             // Without it, capture stops the moment the call is backgrounded.
+            hasStartedForegroundService = true
             platform.startForegroundService()
             // Turned on as soon as it is granted: once a call is running, the only way to reach this
             // is having just tapped the camera button, and making the user tap it again would be an
@@ -492,8 +823,7 @@ internal class DefaultElementCallController(
             // this up front, as the screen does for a video call, and on an audio call that would
             // start a camera nobody reached for - so what the call joins with is recorded by the
             // button, in setCameraEnabled, and nowhere else. The up-front answer can also land once
-            // the call is running, and then it starts the camera only if the call joins with it: a
-            // voice call joined from a video ask (adoptIntent) must not get one.
+            // the call is running, and then it starts the camera only if the call joins with it.
             if (isUpFrontAnswer && !joinsWithCamera) return@launch
             call?.setCameraEnabled(true)
         }
@@ -553,6 +883,7 @@ internal class DefaultElementCallController(
                 joinsWithCamera = enabled
                 isCameraChosenByUser = true
                 updateState { it.copy(isCameraEnabled = enabled) }
+                syncCamera()
             } else {
                 call.setCameraEnabled(enabled)
             }
@@ -560,7 +891,10 @@ internal class DefaultElementCallController(
     }
 
     override fun switchCamera() {
-        scope.launch { call?.switchCamera() }
+        scope.launch {
+            val call = call
+            if (call != null) call.switchCamera() else camera?.switchCamera()
+        }
     }
 
     override fun setAudioTestToneEnabled(enabled: Boolean) {
@@ -572,7 +906,8 @@ internal class DefaultElementCallController(
     }
 
     override fun setMaximized(maximized: Boolean) {
-        updateState { it.copy(isMaximized = maximized) }
+        // The lobby never minimises: not to the host's bar, not to Picture in Picture (045 R20, R33).
+        updateState { if (it.connection is ElementCallConnection.Lobby) it else it.copy(isMaximized = maximized) }
     }
 
     override fun toggleTileStats() {
@@ -700,24 +1035,32 @@ internal class DefaultElementCallController(
         // The codec is read with it, so that both take effect from the next join and no earlier (043 C1).
         // Reloaded rather than read on the side, so a format the host wrote since is also what the sheets show.
         val joinPreferences = storedPreferences.reload()
-        val membershipFormat = joinPreferences.membershipFormat
         val storedVideoCodec = joinPreferences.videoCodec
+        // The lobby's room, opened in the format it shows, is the one joined (045 C13, C23).
+        val lobbyRoom = rtcRoom
+        val membershipFormat = _state.value?.joiningFormat?.takeIf { lobbyRoom != null } ?: joinPreferences.membershipFormat
         Timber.i("ElementCall: joining with membership format $membershipFormat, video codec $storedVideoCodec if this device encodes it")
         updateState { it.copy(joiningFormat = membershipFormat) }
 
-        val room = rtcClient.room(callData.roomId, membershipFormat).getOrElse {
+        val room = lobbyRoom ?: rtcClient.room(callData.roomId, membershipFormat).getOrElse {
             fail(attempt, FailureReport.ROOM_NOT_OPENED, ElementCallFailure.Other("Join failed: ${it.message}", isJoinFailure = true))
             return
         }
         rtcRoom = room
-        val kind = callKindFor(callData)
-        // The join's own decision, fallback included, before anything is joined (044 R6, R25, C10).
+        // Settled once per attempt: in the lobby while it loaded, otherwise here, before anything is joined (045 C6).
+        val intent = _state.value?.settledIntent ?: room.callIntent(requested = callData.intent).getOrElse {
+            fail(attempt, FailureReport.ROOM_NOT_OPENED, ElementCallFailure.Other("Join failed: the call's intent: ${it.message}", isJoinFailure = true))
+            return
+        }
+        if (lobbyRoom == null) adoptSettledIntent(intent)
+        val kind = callKindFor(callData, intent)
+        // The join's own decision, before anything is joined (044 R6, R25, C10).
         attempt.attempted(callKindOf(isDm = kind is MatrixRtcCallKind.Direct))
         // A DM call we start shows that it is calling from here, before the join returns (030 C3).
         if (kind is MatrixRtcCallKind.Direct && kind.ring != null) {
             updateState { it.copy(connection = ElementCallConnection.Calling(callee = null, isRinging = false)) }
         }
-        val joined = room.joinCall(kind = kind).getOrElse {
+        val joined = room.joinCall(kind = kind, intent = intent).getOrElse {
             val report = FailureReport.joinFailed(it)
             when (it) {
                 is MatrixRtcJoinException.TimedOut -> fail(attempt, report, ElementCallFailure.JoinTimedOut, "Join failed: ${it.message}")
@@ -727,7 +1070,6 @@ internal class DefaultElementCallController(
             return
         }
         rtcCall = joined
-        adoptIntent(joined.intent)
         // Whatever was ringing for this call has now been answered. Until this lands the host's
         // ringtone keeps playing over the call, its incoming UI stays up, and its missed-call timeout
         // still fires - so answering looks like it failed while actually having worked. A no-op for an
@@ -740,14 +1082,14 @@ internal class DefaultElementCallController(
         joinLeaveSoundPolicy = JoinLeaveSoundPolicy(options.participantCapForJoinLeaveSounds)
         raisedHandSoundPolicy = RaisedHandSoundPolicy()
         soundEffectRenderer = platform.createCallSoundEffectRenderer(preferences.value.soundEffectsVolume)
-        // Communication mode is device-wide state we borrow, held for as long as the call runs and
-        // handed back in endCall(). Routing choices do not stick outside that mode, so the speaker
-        // preference has to be applied after it, not before.
-        //
-        // A video call is looked at, not held to an ear, so it starts on the loudspeaker; a headset
-        // still wins over both built-in outputs when one is connected. Video as the join settled it, not as the host
-        // asked: joining from a room's call button asks for video whatever is going on.
-        audioDeviceController.start(preferLoudspeaker = joined.intent == MatrixRtcCallIntent.VIDEO)
+        // A video call is looked at, not held to an ear, so it starts on the loudspeaker; a headset still wins over both
+        // built-in outputs when one is connected. Video as settled, never the camera's state (045 R54). The lobby has
+        // already started the outputs and the user may have picked one.
+        startAudioDevices(preferLoudspeaker = intent == MatrixRtcCallIntent.VIDEO)
+        // Communication mode is device-wide state we borrow, held for as long as the call runs and handed back in endCall().
+        // Taken here and not in the lobby, which Android resets after a few seconds with no audio (045 C27); the route
+        // is applied again after it.
+        audioDeviceController.startCommunication()
 
         coroutineScope {
             val joinObservers = startJoinObservers(joined, attempt)
@@ -758,29 +1100,26 @@ internal class DefaultElementCallController(
         }
     }
 
-    /** What the call reports from the join on, media or not: its status and the audio route. */
+    /** What the call reports from the join on, media or not: its status. */
     private fun CoroutineScope.startJoinObservers(rtcCall: MatrixRtcCall, attempt: ElementCallAnalyticsReporter) = launch(start = CoroutineStart.UNDISPATCHED) {
         observeStatus(rtcCall, attempt)
-        // Observed rather than echoed back from selectAudioDevice, because the route also changes
-        // without us asking: a headset is unplugged, or the platform overrides the choice.
-        launch(start = CoroutineStart.UNDISPATCHED) {
-            audioDeviceController.devices.collect { value -> updateState { it.copy(audioDevices = value.toImmutableList()) } }
-        }
-        launch(start = CoroutineStart.UNDISPATCHED) {
-            audioDeviceController.selectedDevice.collect { value -> updateState { it.copy(selectedAudioDevice = value) } }
-        }
     }
 
     /**
-     * A voice call joins with the camera off, whatever the host asked: joining from a room's call button does not know
-     * what kind of call is in progress, and the core does, from its members. Only ever turns the camera off, and never
-     * over a choice the user made while joining.
+     * Without a lobby the camera starts off and follows the intent once the core has settled it, unless the user chose
+     * meanwhile (045 C24). The screen asks for the camera up front only then, on a video call.
      */
-    private fun adoptIntent(intent: MatrixRtcCallIntent) {
-        if (intent != MatrixRtcCallIntent.AUDIO || !joinsWithCamera || isCameraChosenByUser) return
-        Timber.i("ElementCall: joining a voice call, the camera stays off")
-        joinsWithCamera = false
-        updateState { it.copy(isCameraEnabled = false) }
+    private suspend fun adoptSettledIntent(intent: MatrixRtcCallIntent) {
+        mutex.withLock {
+            val current = _state.value ?: return
+            val isVideo = intent == MatrixRtcCallIntent.VIDEO
+            // A refusal already in is the user's answer too (042 R10).
+            val camera = if (isCameraChosenByUser) current.isCameraEnabled else isVideo && !current.isCameraPermissionRefused
+            joinsWithCamera = camera
+            isUpFrontCameraAnswerPending = camera && !current.isCameraPermissionGranted
+            Timber.i("ElementCall: the call is ${if (isVideo) "video" else "voice"}, the camera ${if (camera) "on" else "off"}")
+            _state.value = current.copy(settledIntent = intent, isCameraEnabled = camera)
+        }
     }
 
     /** Media, the microphone, the routing and the observers. @return what failed, with what it is for analytics, or null. */
@@ -792,10 +1131,12 @@ internal class DefaultElementCallController(
         // Asked here rather than at the start of the join: the room is open, so the core is loaded. A stored codec the
         // device cannot encode, from a restored backup or another device, publishes as Auto and stays stored (043 C2).
         val videoCodec = storedVideoCodec.takeIf { it in videoCodecs } ?: MatrixRtcVideoCodec.AUTO
-        val connected = joined.connectMedia(isSfuFallbackEnabled = options.isSfuFallbackEnabled, videoCodec = videoCodec).getOrElse {
+        val camera = checkNotNull(camera) { "no camera for this attempt" }
+        val connected = joined.connectMedia(camera = camera, isSfuFallbackEnabled = options.isSfuFallbackEnabled, videoCodec = videoCodec).getOrElse {
             return ElementCallFailure.Other("Media failed: ${it.message}", isJoinFailure = true) to FailureReport.MEDIA_NOT_ATTACHED
         }
-        call = connected
+        // Under the camera's lock: from here the media session drives the camera, and a lobby start in flight finishes first.
+        cameraMutex.withLock { call = connected }
         connected.setComposedTiles(composedTiles)
         detailWindow?.let { connected.setDetailWindow(it) }
         rankingThreshold?.let { connected.setRankingThreshold(it) }
@@ -941,9 +1282,6 @@ internal class DefaultElementCallController(
         // cast notification without the app being involved at all - so this flag has a source of
         // truth outside anything we called.
         observe { call.isScreenSharing.collect { value -> updateState { it.copy(isScreenSharing = value) } } }
-        // Observed rather than set when we ask for a switch: the camera has to close and another
-        // open, so the answer arrives well after switchCamera() has returned.
-        observe { call.isFrontCamera.collect { value -> updateState { it.copy(isFrontCamera = value) } } }
         observe {
             call.events.collect { event ->
                 Timber.d("ElementCall: $event")
@@ -1016,6 +1354,8 @@ internal class DefaultElementCallController(
         Timber.w("ElementCall: $message")
         _state.update { it?.copy(connection = ElementCallConnection.Failed(failure)) }
         attempt.failed(report)
+        // The failure screen draws no camera: its light goes off now, not at Close (045 C4).
+        camera?.stop()
         // Not torn down here: the message is the whole point of the failed state, and clearing the
         // snapshot would take it off screen before it could be read. The host dismisses the call.
     }
@@ -1032,6 +1372,11 @@ internal class DefaultElementCallController(
         val leavingCall: MatrixRtcMediaSession?
         val endedCallData: ElementCallData?
         val endingSoundEffectRenderer: CallSoundEffectRenderer?
+        val endingCamera: MatrixRtcLocalCamera?
+        val wasCallStartedReported: Boolean
+        val heldAudioFocus: Boolean
+        val startedAudioDevices: Boolean
+        val startedForegroundService: Boolean
         mutex.withLock {
             if (_state.value == null && callJob == null) return
             Timber.i("ElementCall: ending call (leave=$leave)")
@@ -1047,6 +1392,25 @@ internal class DefaultElementCallController(
             callJob = null
             roomJob?.cancel()
             roomJob = null
+            lobbyJob?.cancel()
+            lobbyJob = null
+            attemptJob?.cancel()
+            attemptJob = null
+            audioDevicesJob?.cancel()
+            audioDevicesJob = null
+            endingCamera = camera
+            camera = null
+            attemptCamera.value = null
+            isFromLobby = false
+            wasCallStartedReported = hasReportedCallStarted
+            hasReportedCallStarted = false
+            heldAudioFocus = hasRequestedAudioFocus
+            hasRequestedAudioFocus = false
+            holdsAudioFocus = false
+            startedAudioDevices = hasStartedAudioDevices
+            hasStartedAudioDevices = false
+            startedForegroundService = hasStartedForegroundService
+            hasStartedForegroundService = false
             // Before the call handle goes: the shared flows read through it, and a surviving
             // subscriber would otherwise be left collecting from a disconnected session.
             videoSharingScope?.cancel()
@@ -1072,6 +1436,8 @@ internal class DefaultElementCallController(
             _state.value = null
         }
 
+        // Not left to the GC: a camera torn down from recents would otherwise stay open, light on, until the process died.
+        endingCamera?.stop()
         // Outside the lock: leaving talks to the homeserver, and holding the lock across it would
         // block a start for the next call behind a network round trip.
         leavingCall?.disconnect()
@@ -1090,14 +1456,15 @@ internal class DefaultElementCallController(
         endingSoundEffectRenderer?.release()
         val isNextCallRunning = mutex.withLock { _state.value != null }
         // A call started while the sound played holds the route, the focus and the service now.
+        // Only what this attempt took: a lobby closed before Join started no service and told the host nothing (045 R46).
         if (!isNextCallRunning) {
-            audioDeviceController.stop()
-            audioFocus.releaseAudioFocus()
-            platform.stopForegroundService()
+            if (startedAudioDevices) audioDeviceController.stop()
+            if (heldAudioFocus) audioFocus.releaseAudioFocus()
+            if (startedForegroundService) platform.stopForegroundService()
         }
         // Clears the host's active call, and stops a ring that never got answered - hanging up from
         // the call screen while the far end is still ringing us is a real sequence, not a hypothetical.
-        lifecycleListener.onCallEnded(endedCallData, coreEnd?.toEndReason() ?: ElementCallEndReason.LEFT)
+        if (wasCallStartedReported) lifecycleListener.onCallEnded(endedCallData, coreEnd?.toEndReason() ?: ElementCallEndReason.LEFT)
     }
 
     internal companion object {
@@ -1140,10 +1507,10 @@ internal class DefaultElementCallController(
         const val AUDIO_LEVEL_SAMPLE_MS = 100L
 
         /**
-         * How long to wait for the room context before deciding whether the far end rings. The
-         * turnkey provider answers from the room info, which is immediate; a host's cache is too.
+         * One bound over the lobby's three reads, the room seeded, the intent and the first count (feature-hq 045 C22): the
+         * seeding timeout's own value, so a stalled seed hits both at once.
          */
-        const val ROOM_CONTEXT_TIMEOUT_MS = 1_500L
+        val LOBBY_LOADING_TIMEOUT = 30.seconds
     }
 }
 

@@ -13,6 +13,7 @@ import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallFailure
 import io.element.android.call.api.ElementCallInterruption
 import io.element.android.call.api.ElementCallSnapshot
+import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.MatrixRtcConnectionLossReason
 import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.id.RoomId
@@ -48,8 +49,9 @@ fun aCallSnapshot(
 ) = ElementCallSnapshot(
     callData = ElementCallData(
         roomId = RoomId("!aRoom:example.org"),
-        isAudioCall = true,
+        intent = MatrixRtcCallIntent.AUDIO,
         isStartingCall = true,
+        isDm = false,
     ),
     connection = connection,
     roomName = roomName,

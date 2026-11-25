@@ -55,6 +55,7 @@ import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.ElementCallWindowRect
+import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.ui.util.KeepScreenOn
@@ -313,8 +314,9 @@ internal fun rememberCallPermissions(controller: ElementCallController, current:
     // A video call needs the camera from the moment it connects, so it is asked for up front, after
     // the microphone so the user answers one dialog at a time. A denial is final: the keys do not
     // change, so this does not ask again for the rest of the call.
-    LaunchedEffect(current.callData.isAudioCall, current.isMicrophonePermissionGranted) {
-        if (current.callData.isAudioCall || !current.isMicrophonePermissionGranted) return@LaunchedEffect
+    // The intent the core settled, which a call opened without a choice waits for (045 R17).
+    LaunchedEffect(current.settledIntent, current.isMicrophonePermissionGranted) {
+        if (current.settledIntent != MatrixRtcCallIntent.VIDEO || !current.isMicrophonePermissionGranted) return@LaunchedEffect
         if (current.isCameraPermissionGranted) return@LaunchedEffect
         if (context.isGranted(Manifest.permission.CAMERA)) {
             controller.setCameraPermissionGranted(true)

@@ -44,6 +44,37 @@ class DefaultAudioFocusTest : RobolectricTest() {
         assertThat(losesFocusOn(AudioManager.AUDIOFOCUS_GAIN)).isFalse()
     }
 
+    @Test
+    fun `the lobby's request accepts a delayed grant and reports the gain`() {
+        val context = RuntimeEnvironment.getApplication()
+        val audioManager = requireNotNull(context.getSystemService<AudioManager>())
+        var gains = 0
+
+        DefaultAudioFocus(context).requestAudioFocus(onFocusLost = {}, onFocusGained = { gains++ })
+        val request = requireNotNull(shadowOf(audioManager).lastAudioFocusRequest)
+        request.listener.onAudioFocusChange(AudioManager.AUDIOFOCUS_GAIN)
+
+        assertThat(requireNotNull(request.audioFocusRequest).acceptsDelayedFocusGain()).isTrue()
+        assertThat(gains).isEqualTo(1)
+    }
+
+    @Test
+    fun `the lobby's request reports a loss or a transient loss, never a duck`() {
+        mapOf(
+            AudioManager.AUDIOFOCUS_LOSS to true,
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT to true,
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK to false,
+            AudioManager.AUDIOFOCUS_GAIN to false,
+        ).forEach { (focusChange, isLoss) ->
+            val context = RuntimeEnvironment.getApplication()
+            val audioManager = requireNotNull(context.getSystemService<AudioManager>())
+            var focusLost = false
+            DefaultAudioFocus(context).requestAudioFocus(onFocusLost = { focusLost = true }, onFocusGained = {})
+            requireNotNull(shadowOf(audioManager).lastAudioFocusRequest).listener.onAudioFocusChange(focusChange)
+            assertThat(focusLost).isEqualTo(isLoss)
+        }
+    }
+
     private fun losesFocusOn(focusChange: Int): Boolean {
         val context = RuntimeEnvironment.getApplication()
         val audioManager = requireNotNull(context.getSystemService<AudioManager>())

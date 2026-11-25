@@ -68,18 +68,45 @@ interface ElementCallController {
     fun setPictureInPictureEntry(entry: ElementCallWindowRect?)
 
     /**
-     * Begin a call. Does nothing if one is already running, including for the same room.
+     * Begin a call. In a group room that has not asked to skip it, the call opens on the lobby (feature-hq 045): nothing
+     * reaches the room until [join]. Otherwise it waits in [ElementCallConnection.RequestingPermission] until the host
+     * answers with [setMicrophonePermissionGranted]: only an Activity can ask for a permission, and this is not one.
      *
-     * Nothing happens beyond [ElementCallConnection.RequestingPermission] until the host answers with
-     * [setMicrophonePermissionGranted]: only an Activity can ask for a permission, and this is not one.
+     * Does nothing if a call is already running, including for the same room, except over a lobby, which it closes
+     * before starting the new call (045 R48).
      */
     fun startCall(callData: ElementCallData)
 
-    /** Answer the microphone permission request. Denial fails the call. Idempotent. */
+    /**
+     * Start or join from the lobby, as its button says at the tap: only "Start group call" notifies the room (045 R21,
+     * R57). Ignored outside a lobby that has loaded, or with the microphone refused (R27).
+     */
+    fun join()
+
+    /**
+     * Answer the microphone permission request. Idempotent. A grant joins a call opened without a lobby and only enables
+     * Join in one; a denial fails a call opened without a lobby and only disables Join in one (045 R27).
+     */
     fun setMicrophonePermissionGranted(granted: Boolean)
 
-    /** Answer the camera permission request. A grant turns the camera on, since asking is what the user just did. */
+    /**
+     * Answer the camera permission request. In a running call a grant turns the camera on, since asking is what the user
+     * just did; in the lobby it is only recorded, and the tap that asked turns the camera on.
+     */
     fun setCameraPermissionGranted(granted: Boolean)
+
+    /**
+     * Whether the call screen is on screen: from `onStart` to `onStop`, a configuration change excepted.
+     * `ElementCallActivity` reports it; a host drawing the screen elsewhere does. In the lobby the camera and the audio
+     * focus are held only while it is (045 R31, R48).
+     */
+    fun setCallScreenVisible(visible: Boolean)
+
+    /**
+     * Our camera's frames for the attempt, from the lobby into the call (045 R49): the same flow whatever the phase, so a
+     * self view drawing it never restarts. Empty while the camera is off.
+     */
+    val ownCameraFrames: Flow<MatrixRtcVideoFrame>
 
     fun setMicrophoneMuted(muted: Boolean)
 
@@ -93,7 +120,7 @@ interface ElementCallController {
     /** Send call audio to [device]. The list to choose from is [ElementCallSnapshot.audioDevices]. */
     fun selectAudioDevice(device: CallAudioDevice)
 
-    /** Full screen or docked in the minimized bar. */
+    /** Full screen or docked in the minimized bar. Ignored in the lobby, which never minimizes (045 R33). */
     fun setMaximized(maximized: Boolean)
 
     /** Show or hide the per-tile debug readout; only with [ElementCallOptions.isDeveloperModeEnabled]. See [ElementCallSnapshot.isTileStatsVisible]. */
@@ -197,6 +224,6 @@ interface ElementCallController {
      */
     fun reportConnectivity(isOnline: Boolean)
 
-    /** End the call and publish a leave membership. */
+    /** End the call and publish a leave membership. In the lobby, close it: it joined nothing, so it leaves nothing (045 R20). */
     fun hangUp()
 }

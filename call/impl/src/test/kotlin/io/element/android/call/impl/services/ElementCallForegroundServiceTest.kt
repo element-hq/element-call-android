@@ -12,6 +12,7 @@ import com.google.common.truth.Truth.assertThat
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallSnapshot
+import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.test.A_ROOM_ID
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
@@ -69,7 +70,7 @@ class ElementCallForegroundServiceTest {
         isMicrophoneMuted: Boolean = false,
         connection: ElementCallConnection = ElementCallConnection.Connected,
     ) = ElementCallSnapshot(
-        callData = ElementCallData(roomId = A_ROOM_ID, isAudioCall = false, isStartingCall = true),
+        callData = ElementCallData(roomId = A_ROOM_ID, intent = MatrixRtcCallIntent.VIDEO, isStartingCall = true, isDm = false, skipsLobby = true),
         connection = connection,
         roomName = roomName,
         isMicrophoneMuted = isMicrophoneMuted,

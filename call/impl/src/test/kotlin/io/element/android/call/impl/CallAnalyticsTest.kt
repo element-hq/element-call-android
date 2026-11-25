@@ -34,6 +34,7 @@ import io.element.android.call.api.analytics.ElementCallAnalyticsOutcome
 import io.element.android.call.api.analytics.NoOpElementCallAnalytics
 import io.element.android.call.api.rtc.MatrixRtcCallEnd
 import io.element.android.call.api.rtc.MatrixRtcCallEvent
+import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.MatrixRtcCallKind
 import io.element.android.call.api.rtc.MatrixRtcCallStatus
 import io.element.android.call.api.rtc.MatrixRtcConnectionLossReason
@@ -119,29 +120,26 @@ class CallAnalyticsTest {
     }
 
     @Test
-    fun `a room the provider says nothing about is a group call, decided when the join's own read times out`() = runTest {
+    fun `the DM flag is the host's, so a provider that never answers holds nothing back`() = runTest {
         val provider = FakeElementCallRoomContextProvider(roomContext = null)
         val rtcClient = FakeMatrixRtcClient()
         val controller = createController(rtcClient = rtcClient, roomContextProvider = provider)
         controller.setMicrophonePermissionGranted(true)
         runCurrent()
-        advanceTimeBy(DefaultElementCallController.ROOM_CONTEXT_TIMEOUT_MS - 1)
-        assertThat(analytics.events).isEmpty()
-        assertThat(rtcClient.lastRoom?.joinCallCount).isEqualTo(0)
 
-        advanceTimeBy(2)
         assertThat(analytics.anonymous().first()).isEqualTo(attempted(GROUP))
         assertThat(rtcClient.lastRoom?.lastKind).isInstanceOf(MatrixRtcCallKind.Group::class.java)
     }
 
     @Test
-    fun `a DM answer arriving after the join fell back to a group call changes nothing`() = runTest {
+    fun `a room context that disagrees with the host's DM flag changes nothing`() = runTest {
         val provider = FakeElementCallRoomContextProvider(roomContext = null)
         val controller = createController(roomContextProvider = provider)
         controller.setMicrophonePermissionGranted(true)
-        advanceTimeBy(2.seconds)
+        runCurrent()
         provider.roomContext.value = aRoomContext(isDm = true)
         runCurrent()
+        assertThat(controller.state.value?.isDm).isFalse()
         controller.hangUp()
         runCurrent()
 
@@ -199,24 +197,6 @@ class CallAnalyticsTest {
         controller.setMicrophonePermissionGranted(false)
         runCurrent()
         assertThat(analytics.anonymous()).containsExactly(attempted(GROUP), outcome(ElementCallAnalyticsOutcome.PERMISSION_REFUSED)).inOrder()
-    }
-
-    @Test
-    fun `the join's decision wins over the snapshot once it exists`() = runTest {
-        val joinGate = CompletableDeferred<Unit>()
-        val provider = FakeElementCallRoomContextProvider(roomContext = null)
-        val controller = createController(rtcClient = FakeMatrixRtcClient(joinGate = joinGate), roomContextProvider = provider)
-        controller.setMicrophonePermissionGranted(true)
-        advanceTimeBy(2.seconds)
-        // The join has fallen back to a group call; the room turns out to be a DM before the join returns.
-        provider.roomContext.value = aRoomContext(isDm = true)
-        runCurrent()
-        assertThat(controller.state.value?.isDm).isTrue()
-        controller.hangUp()
-        runCurrent()
-
-        assertThat(analytics.anonymous()).containsExactly(attempted(GROUP), outcome(ElementCallAnalyticsOutcome.ABANDONED)).inOrder()
-        joinGate.complete(Unit)
     }
 
     @Test
@@ -576,7 +556,7 @@ class CallAnalyticsTest {
 
         val granted = FakeElementCallAnalytics()
         val controller = createController(analytics = granted, start = false)
-        val callData = ElementCallData(roomId = A_ROOM_ID, isAudioCall = true, isStartingCall = true)
+        val callData = ElementCallData(roomId = A_ROOM_ID, intent = MatrixRtcCallIntent.AUDIO, isStartingCall = true, isDm = false, skipsLobby = true)
         controller.startCall(callData)
         controller.startCall(callData)
         runCurrent()
@@ -621,7 +601,9 @@ class CallAnalyticsTest {
             val rtcClient = FakeMatrixRtcClient()
             val controller = createController(rtcClient = rtcClient, analytics = analytics, start = false)
             val job = backgroundScope.launch { controller.state.collect { seen += it } }
-            controller.startCall(ElementCallData(roomId = A_ROOM_ID, isAudioCall = true, isStartingCall = true))
+            controller.startCall(
+                ElementCallData(roomId = A_ROOM_ID, intent = MatrixRtcCallIntent.AUDIO, isStartingCall = true, isDm = false, skipsLobby = true)
+            )
             runCurrent()
             controller.setMicrophonePermissionGranted(true)
             runCurrent()
@@ -691,9 +673,10 @@ class CallAnalyticsTest {
             options = ElementCallOptions(),
             preferencesStore = FakeElementCallPreferencesStore(),
             analytics = analytics,
+            ownUserId = A_USER_ID,
         )
         if (start) {
-            controller.startCall(ElementCallData(roomId = A_ROOM_ID, isAudioCall = true, isStartingCall = true))
+            controller.startCall(ElementCallData(roomId = A_ROOM_ID, intent = MatrixRtcCallIntent.AUDIO, isStartingCall = true, isDm = isDm, skipsLobby = true))
             runCurrent()
         }
         return controller

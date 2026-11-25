@@ -51,12 +51,12 @@ internal class VideoFramePublisher(
     val publishedFrameCount: Long get() = frameCount
 
     /**
-     * Convert [frame] and publish it to [track].
+     * Convert [frame] and publish it to [track], or with no track only hand the copy to the self view.
      *
      * The frame is not ours to release - the capturer's session releases it once the callback
      * returns, and a consumer that wants to keep it must retain it. We copy instead, so we never do.
      */
-    fun publish(track: FfiLocalTrack, frame: VideoFrame) {
+    fun publish(track: FfiLocalTrack?, frame: VideoFrame) {
         val i420 = frame.buffer.toI420()
         if (i420 == null) {
             // Once. A conversion that fails once fails every frame, and at capture rate this would
@@ -74,7 +74,7 @@ internal class VideoFramePublisher(
         }
     }
 
-    private fun publish(track: FfiLocalTrack, i420: VideoFrame.I420Buffer, rotationDegrees: Int, timestampNs: Long) {
+    private fun publish(track: FfiLocalTrack?, i420: VideoFrame.I420Buffer, rotationDegrees: Int, timestampNs: Long) {
         val width = i420.width
         val height = i420.height
         val chromaWidth = I420Buffers.chromaWidth(width)
@@ -89,7 +89,8 @@ internal class VideoFramePublisher(
         // single-threaded FFI dispatcher. captureVideo does not suspend, and AudioCapture already
         // pushes frames the same way: putting 30 frames a second through that one thread would
         // queue them behind membership and stats calls for no benefit.
-        runCatchingExceptions {
+        if (track != null) {
+            runCatchingExceptions {
             track.captureVideo(
                 FfiVideoFrameData(
                     width = width.toUInt(),
@@ -113,6 +114,7 @@ internal class VideoFramePublisher(
                 hasWarnedAboutPublishing = true
                 Timber.w(it, "MatrixRTC: cannot publish a captured $label frame, no video will reach the call")
             }
+        }
         }
 
         // After publishing, and outside the failure branch above: a preview that keeps working while

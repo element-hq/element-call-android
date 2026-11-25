@@ -23,6 +23,7 @@ import io.element.android.call.api.ElementCallPreferences
 import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.ElementCallVersion
+import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.MatrixRtcConnectionState
 import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 import io.element.android.call.api.rtc.MatrixRtcReactionKind
@@ -428,7 +429,7 @@ private fun ElementCallSnapshot?.toState(
     eventSink: (ElementCallScreenEvent) -> Unit,
 ) = ElementCallScreenState(
     connection = this?.connection ?: ElementCallConnection.RequestingPermission,
-    isAudioCall = this?.callData?.isAudioCall == true,
+    isAudioCall = this?.settledIntent == MatrixRtcCallIntent.AUDIO,
     memberCount = this?.memberCount ?: 0,
     audioLevels = this?.audioLevels ?: persistentMapOf(),
     receiveStats = this?.receiveStats ?: persistentMapOf(),

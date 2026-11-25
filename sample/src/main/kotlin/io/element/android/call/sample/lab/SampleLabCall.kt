@@ -28,8 +28,8 @@ class SampleLabCall(private val session: SampleLabSession) : SampleLiveCall {
             Timber.i("Lab: the sync is ${if (isOnline) "running again" else "offline"}; reporting it")
             controller.reportConnectivity(isOnline)
         }
-        // Joining the call the lab already has, quietly: starting one would ring the room.
-        controller.startCall(ElementCallData(roomId = RoomId(session.roomId), isAudioCall = false, isStartingCall = false))
+        // The lab's group room shows the lobby, and joins without choosing: the call's own intent applies (045 R18).
+        controller.startCall(ElementCallData(roomId = RoomId(session.roomId), intent = null, isStartingCall = false, isDm = false))
     }
 
     override fun close() {

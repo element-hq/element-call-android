@@ -22,6 +22,20 @@ interface AudioFocus {
      */
     fun requestAudioFocus(onFocusLost: () -> Unit)
 
+    /**
+     * Request audio focus for the call, and say when it is lost and when it comes back: the lobby's camera runs only
+     * while it holds the audio (feature-hq 045 R48, C27). A request refused for now, during a phone call, is granted
+     * later through [onFocusGained].
+     *
+     * @param onFocusLost invoked when focus is lost for good or transiently, not when only ducked.
+     * @param onFocusGained invoked when focus is granted after this returned, or comes back after a loss.
+     * @return whether focus is held now.
+     */
+    fun requestAudioFocus(onFocusLost: () -> Unit, onFocusGained: () -> Unit): Boolean {
+        requestAudioFocus(onFocusLost)
+        return true
+    }
+
     /** Release the audio focus. */
     fun releaseAudioFocus()
 }

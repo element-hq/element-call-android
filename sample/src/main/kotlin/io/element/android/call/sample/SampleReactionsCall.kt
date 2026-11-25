@@ -14,6 +14,7 @@ import io.element.android.call.api.ElementCallOptions
 import io.element.android.call.api.ElementCallRoomContext
 import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.rtc.MatrixRtcCallEvent
+import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.MatrixRtcCallStatus
 import io.element.android.call.api.rtc.MatrixRtcConnectionState
 import io.element.android.call.api.rtc.MatrixRtcLocalState
@@ -64,7 +65,7 @@ class SampleReactionsCall(context: Context, private val scope: CoroutineScope, p
     override val controller: ElementCallController get() = stack.controller
 
     override fun start() {
-        controller.startCall(ElementCallData(roomId = ROOM_ID, isAudioCall = false, isStartingCall = true))
+        controller.startCall(ElementCallData(roomId = ROOM_ID, intent = MatrixRtcCallIntent.VIDEO, isStartingCall = true, isDm = false, skipsLobby = true))
         scope.launch { play() }
     }
 

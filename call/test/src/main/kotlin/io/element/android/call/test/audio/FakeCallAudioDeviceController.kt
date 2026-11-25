@@ -41,6 +41,33 @@ class FakeCallAudioDeviceController(
         best?.let(::select)
     }
 
+    /** Every [setPreferLoudspeaker], in order. */
+    val preferLoudspeakerChanges = mutableListOf<Boolean>()
+
+    override fun setPreferLoudspeaker(preferLoudspeaker: Boolean) {
+        preferLoudspeakerChanges += preferLoudspeaker
+        if (lastPreferLoudspeaker == preferLoudspeaker) return
+        lastPreferLoudspeaker = preferLoudspeaker
+        // A headset stays; only the built-in two follow the call.
+        if (selectedDevice.value?.type?.isBuiltIn == false) return
+        val best = if (preferLoudspeaker) devices.value.firstOrNull { it.type != CallAudioDeviceType.EARPIECE } else devices.value.firstOrNull()
+        best?.let(::select)
+    }
+
+    /** How many times the communication mode was taken: at Join, never in the lobby (045 C27). */
+    var startCommunicationCount = 0
+        private set
+
+    /** What was selected when the mode was taken, which it applies again. */
+    var selectedAtCommunication: CallAudioDevice? = null
+        private set
+
+    override fun startCommunication() {
+        startCommunicationCount++
+        selectedAtCommunication = selectedDevice.value
+        selectedDevice.value?.let(::select)
+    }
+
     override fun select(device: CallAudioDevice) {
         selections += device
         selectedDevice.value = device

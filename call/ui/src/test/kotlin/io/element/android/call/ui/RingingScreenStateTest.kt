@@ -14,6 +14,7 @@ import com.google.common.truth.Truth.assertThat
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallSnapshot
+import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.MatrixRtcTile
 import io.element.android.call.api.rtc.id.UserId
 import io.element.android.call.test.A_ROOM_ID
@@ -87,7 +88,7 @@ class RingingScreenStateTest {
         connection: ElementCallConnection = ElementCallConnection.Calling(callee, isRinging = true),
         vararg remotes: MatrixRtcTile,
     ) = ElementCallSnapshot(
-        callData = ElementCallData(roomId = A_ROOM_ID, isAudioCall = true, isStartingCall = true),
+        callData = ElementCallData(roomId = A_ROOM_ID, intent = MatrixRtcCallIntent.AUDIO, isStartingCall = true, isDm = false, skipsLobby = true),
         connection = connection,
         isDm = true,
         isMicrophonePermissionGranted = true,

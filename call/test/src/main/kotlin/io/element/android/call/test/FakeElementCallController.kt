@@ -105,6 +105,25 @@ class FakeElementCallController(
         startedCalls += callData
     }
 
+    var joinCount = 0
+        private set
+
+    override fun join() {
+        joinCount++
+    }
+
+    /** Every [setCallScreenVisible], in order. */
+    val callScreenVisibility = mutableListOf<Boolean>()
+
+    override fun setCallScreenVisible(visible: Boolean) {
+        callScreenVisibility += visible
+    }
+
+    /** What [ownCameraFrames] carries; one flow for the controller's life, as the real one. */
+    val ownCameraFrameSource = MutableSharedFlow<MatrixRtcVideoFrame>(extraBufferCapacity = 1)
+
+    override val ownCameraFrames: Flow<MatrixRtcVideoFrame> = ownCameraFrameSource
+
     override fun setMicrophonePermissionGranted(granted: Boolean) {
         microphonePermissionAnswers += granted
     }

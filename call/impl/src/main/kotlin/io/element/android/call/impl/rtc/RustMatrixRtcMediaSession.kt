@@ -31,14 +31,12 @@ import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.impl.rtc.media.AudioCapture
 import io.element.android.call.impl.rtc.media.AudioFormat
 import io.element.android.call.impl.rtc.media.AudioPlayback
-import io.element.android.call.impl.rtc.media.CameraVideoCapture
 import io.element.android.call.impl.rtc.media.ScreenVideoCapture
 import io.element.android.call.impl.rtc.media.VideoFormat
 import io.element.android.call.impl.util.runCatchingExceptions
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -74,8 +72,10 @@ internal class RustMatrixRtcMediaSession(
     private val mediaSession: MediaSession,
     private val callScope: CoroutineScope,
     private val ffiDispatcher: CoroutineDispatcher,
-    /** Needed to open the camera, which is the only part of media that takes one. */
+    /** Needed for the screen capture. */
     private val context: Context,
+    /** Our camera, already running from the lobby or started here; its owner stops it, not this session (feature-hq 045 R49). */
+    private val camera: RustMatrixRtcLocalCamera,
     /**
      * For the remote video flows, which are collected by the UI: without moving them off the
      * collector's thread every decoded frame would be copied on the main one, thirty times a second.
@@ -96,8 +96,7 @@ internal class RustMatrixRtcMediaSession(
     private val _isCameraEnabled = MutableStateFlow(false)
     override val isCameraEnabled: StateFlow<Boolean> = _isCameraEnabled
 
-    private val _isFrontCamera = MutableStateFlow(true)
-    override val isFrontCamera: StateFlow<Boolean> = _isFrontCamera
+    override val isFrontCamera: StateFlow<Boolean> = camera.isFrontFacing
 
     private val _tiles = MutableStateFlow(MatrixRtcTileRoster.EMPTY)
     override val tiles: StateFlow<MatrixRtcTileRoster> = _tiles
@@ -116,16 +115,6 @@ internal class RustMatrixRtcMediaSession(
 
     // What we last asked for, so a second stop - ours racing the projection's own - is a no-op.
     private var isCapturingScreen = false
-
-    /**
-     * One frame of slack and drop the oldest, because the camera must never wait for a renderer. A
-     * dropped frame costs a stale self view for a thirtieth of a second; blocking here would stall
-     * the camera thread and, with it, publishing to the call.
-     */
-    private val localVideoFrames = MutableSharedFlow<MatrixRtcVideoFrame>(
-        extraBufferCapacity = 1,
-        onBufferOverflow = BufferOverflow.DROP_OLDEST,
-    )
 
     /**
      * The flow object for one of a member's video streams, built once. Cheap to keep - a cold flow
@@ -152,7 +141,7 @@ internal class RustMatrixRtcMediaSession(
      */
     override fun videoFrames(memberId: String, kind: MatrixRtcStreamKind): Flow<MatrixRtcVideoFrame> =
         if (memberId == localMemberId && kind == MatrixRtcStreamKind.CAMERA) {
-            localVideoFrames
+            camera.frames
         } else {
             remoteVideoFlows.getOrPut(MatrixRtcStreamRef(memberId, kind)) { remoteVideoFrames(memberId, kind) }
         }
@@ -247,8 +236,6 @@ internal class RustMatrixRtcMediaSession(
     private val audioCapture = AudioCapture(callScope, onLevel = { publishAudioLevel(localMemberId, it) })
     private val audioPlayback = AudioPlayback(callScope, onLevel = ::publishAudioLevel)
     private var microphoneTrack: FfiLocalTrack? = null
-
-    private val videoCapture = CameraVideoCapture(context, onFrame = { localVideoFrames.tryEmit(it) })
 
     /**
      * Published on the first [setCameraEnabled] and kept for the rest of the call, even while the
@@ -652,7 +639,9 @@ internal class RustMatrixRtcMediaSession(
         if (_isCameraEnabled.value == enabled) return@runCatchingExceptions
 
         if (enabled) {
-            val camera = videoCapture.prepare() ?: return@runCatchingExceptions
+            // A no-op when the lobby left it running: the device opens once from the lobby into the call (R49).
+            camera.start().getOrThrow()
+            val prepared = checkNotNull(camera.prepared) { "the camera stopped as it was published" }
             val track = cameraTrack ?: withContext(ffiDispatcher) {
                 mediaSession.publish(
                     FfiPublishOptions(
@@ -660,8 +649,8 @@ internal class RustMatrixRtcMediaSession(
                         audio = null,
                         // What LiveKit derives the layers from, so the frames are scaled to exactly this.
                         video = FfiVideoSourceConfig(
-                            width = camera.format.output.width.toUInt(),
-                            height = camera.format.output.height.toUInt(),
+                            width = prepared.format.output.width.toUInt(),
+                            height = prepared.format.output.height.toUInt(),
                         ),
                         // Not optional, whatever it looks like. LiveKit's dynacast pauses any
                         // encoding the SFU reports nobody subscribed to, and a peer rendering us in
@@ -685,9 +674,7 @@ internal class RustMatrixRtcMediaSession(
                     )
                 )
             }.also { cameraTrack = it }
-            videoCapture.start(track, camera)
-            // Read back rather than assumed: a device with no front camera starts on the back one.
-            _isFrontCamera.value = videoCapture.isFrontFacing
+            camera.attach(track)
             // Both ends, for the same reason as the microphone: unmuting the transport is what tells
             // a peer to expect frames again, and starting capture is what produces them.
             setTransportMuted(muted = false)
@@ -695,7 +682,8 @@ internal class RustMatrixRtcMediaSession(
             // The transport first. Capture stops within a frame or two either way, but a peer that
             // learns about it afterwards has already been shown a frozen picture.
             setTransportMuted(muted = true)
-            videoCapture.stop()
+            camera.detach()
+            camera.stop()
         }
         _isCameraEnabled.value = enabled
         Timber.i("MatrixRTC: camera ${if (enabled) "enabled" else "disabled"} for $localMemberId")
@@ -813,7 +801,7 @@ internal class RustMatrixRtcMediaSession(
     override suspend fun switchCamera(): Result<Unit> = runCatchingExceptions {
         // Asynchronous by nature - the camera has to close and another open - so the state lands in
         // the callback rather than when this returns.
-        videoCapture.switchCamera { isFrontCamera -> _isFrontCamera.value = isFrontCamera }
+        camera.switchCamera().getOrThrow()
     }.onFailure {
         Timber.w(it, "MatrixRTC: failed to switch camera")
     }
@@ -826,7 +814,7 @@ internal class RustMatrixRtcMediaSession(
 
     override suspend fun disconnect(): Result<Unit> = runCatchingExceptions {
         audioCapture.stop()
-        videoCapture.stop()
+        camera.detach()
         screenCapture.stop()
         audioPlayback.stopAll()
         withContext(ffiDispatcher) { mediaSession.disconnect() }
@@ -836,10 +824,8 @@ internal class RustMatrixRtcMediaSession(
 
     override fun close() {
         audioCapture.stop()
-        // Before the scope is cancelled, and not left to the GC: this is what closes the camera
-        // device, and a call torn down from recents would otherwise hold it - light on - until the
-        // process died.
-        videoCapture.stop()
+        // The camera is the controller's to stop, with the attempt (feature-hq 045 C4); only the track goes here.
+        camera.detach()
         // Same reasoning, and more visible: an abandoned MediaProjection leaves the system's screen
         // recording indicator up for a call that has ended.
         screenCapture.stop()

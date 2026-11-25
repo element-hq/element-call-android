@@ -11,6 +11,7 @@ import app.cash.turbine.test
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallSnapshot
+import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.MatrixRtcReactionKind
 import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.call.test.aTile
@@ -24,7 +25,13 @@ class SampleElementCallControllerTest {
         val controller = SampleElementCallController(backgroundScope)
         controller.start(
             ElementCallSnapshot(
-                callData = ElementCallData(roomId = RoomId("!room:example.org"), isAudioCall = false, isStartingCall = false),
+                callData = ElementCallData(
+                    roomId = RoomId("!room:example.org"),
+                    intent = MatrixRtcCallIntent.VIDEO,
+                    isStartingCall = false,
+                    isDm = false,
+                    skipsLobby = true
+                ),
                 connection = ElementCallConnection.Connected,
                 ownTile = aTile("ourMemberId"),
             ),

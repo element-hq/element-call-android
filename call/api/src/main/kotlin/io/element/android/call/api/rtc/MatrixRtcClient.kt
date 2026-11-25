@@ -22,6 +22,12 @@ interface MatrixRtcClient {
      */
     suspend fun room(roomId: RoomId, format: MatrixRtcMembershipFormat): Result<MatrixRtcRoom>
 
+    /**
+     * A camera for one call attempt, from the lobby into the call (feature-hq 045 R49). Opens nothing until
+     * [MatrixRtcLocalCamera.start]; hand it to [MatrixRtcCall.connectMedia] so the call publishes the capture already running.
+     */
+    fun camera(): MatrixRtcLocalCamera
+
     /** Whether the homeserver answers: the current value, then every change. Live from the client, before any call. */
     fun signallingHealth(): Flow<MatrixRtcSignallingHealth>
 
