@@ -50,6 +50,7 @@ fun SampleHomeScreen(
     onOpen: (SampleFixture) -> Unit,
     onOpenRinging: (SampleRingingFixture) -> Unit,
     onOpenOutage: (SampleOutageFixture) -> Unit,
+    onOpenLobby: (SampleLobbyFixture) -> Unit,
     onOpenReactions: () -> Unit,
     onOpenPermissionProbe: () -> Unit,
     onOpenScenario: (String) -> Unit,
@@ -125,6 +126,14 @@ fun SampleHomeScreen(
                 rows = SampleRingingFixture.entries,
             ) { fixture, shapes ->
                 FixtureRow(title = fixture.title, description = fixture.description, launchKey = fixture.key, shapes = shapes) { onOpenRinging(fixture) }
+            }
+            section(
+                key = "lobby",
+                title = "Lobby",
+                description = "A group call opened on the lobby, on the real controller over a scripted core: nothing reaches the room until Join (045).",
+                rows = SampleLobbyFixture.entries,
+            ) { fixture, shapes ->
+                FixtureRow(title = fixture.title, description = fixture.description, launchKey = fixture.key, shapes = shapes) { onOpenLobby(fixture) }
             }
             section(
                 key = "outages",

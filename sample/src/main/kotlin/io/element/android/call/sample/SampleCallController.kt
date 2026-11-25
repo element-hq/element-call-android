@@ -77,6 +77,8 @@ class SampleCallController(private val context: Context, private val scope: Coro
 
     fun startOutage(fixture: SampleOutageFixture) = startLive(SampleOutageCall(context, scope, fixture))
 
+    fun startLobby(fixture: SampleLobbyFixture) = startLive(SampleLobbyCall(context, scope, fixture))
+
     fun startReactions(pace: Duration = 1.seconds) = startLive(SampleReactionsCall(context, scope, pace))
 
     fun startPermissionProbe() = startLive(SamplePermissionProbeCall(context, scope))

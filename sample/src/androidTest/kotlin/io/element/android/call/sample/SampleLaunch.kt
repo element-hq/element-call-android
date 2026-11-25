@@ -39,6 +39,9 @@ internal fun launchSample(fixture: SampleFixture, composeRule: ComposeTestRule? 
 internal fun launchSample(fixture: SampleRingingFixture, composeRule: ComposeTestRule? = null): ActivityScenario<SampleActivity> =
     launchSample(fixture.key, isMaximized = true, composeRule = composeRule)
 
+internal fun launchSample(fixture: SampleLobbyFixture, composeRule: ComposeTestRule? = null): ActivityScenario<SampleActivity> =
+    launchSample(fixture.key, isMaximized = true, composeRule = composeRule)
+
 private fun launchSample(key: String, isMaximized: Boolean, composeRule: ComposeTestRule?): ActivityScenario<SampleActivity> {
     // The call is app-scoped and outlives a test: the last one is ended first, as a real call ends before the next,
     // or its call screen would close under this one and its memory carry over.

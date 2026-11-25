@@ -37,6 +37,7 @@ import io.element.android.call.test.audio.aSpeaker
 import io.element.android.call.test.audio.anEarpiece
 import io.element.android.call.tests.testutils.WarmUpRule
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.launch
@@ -52,6 +53,7 @@ import kotlin.time.Duration.Companion.milliseconds
  * The lobby (feature-hq 045), on the real controller over fakes: where "nothing reaches the room" can be counted call by
  * call, which no screen test can see. What the screen draws of it is `ElementCallScreenStateTest`'s.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class CallLobbyTest {
     @get:Rule val warmUpRule = WarmUpRule()
 
@@ -399,6 +401,25 @@ class CallLobbyTest {
         controller.hangUp()
         runCurrent()
         assertThat(camera.isCapturing.value).isFalse()
+    }
+
+    @Test
+    fun `our camera never reads off between the tap and the call`() = runTest {
+        val rtcClient = FakeMatrixRtcClient()
+        val controller = createLobby(rtcClient = rtcClient)
+        controller.setMicrophonePermissionGranted(true)
+        controller.setCameraPermissionGranted(true)
+        runCurrent()
+        val seen = mutableListOf<Boolean>()
+        backgroundScope.launch { controller.state.collect { it?.let { snapshot -> seen += snapshot.isCameraEnabled } } }
+        runCurrent()
+
+        controller.join()
+        runCurrent()
+
+        // A moment off would drop our tile's renderer at the join: the black frame R49 rules out.
+        assertThat(controller.state.value?.connection).isEqualTo(ElementCallConnection.Connected)
+        assertThat(seen).doesNotContain(false)
     }
 
     @Test

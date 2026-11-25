@@ -12,7 +12,25 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 
 ## Unreleased
 
-_Nothing yet._
+- The call lobby (feature-hq 045): a group call opens on a lobby, and nothing reaches the room until the user taps Start
+  or Join. `ElementCallData.isAudioCall` is replaced by `intent: MatrixRtcCallIntent?`: the user's choice, or null when
+  they join a call in progress without choosing, and the call's own intent then applies. Never pass video as a default.
+- `ElementCallData.isDm` is required: whether the room is a DM, from the host's own room. It decides the lobby and the
+  ring; the room context's `isDm` no longer does. `ElementCallData.skipsLobby` (default false) goes straight in, after
+  a pre-call screen of the host's own. A DM never shows the lobby.
+- A lobby does not report `onCallStarted`: it is reported at Join, and a lobby closed without one reports neither it
+  nor `onCallEnded`. `ElementCallConnection.Lobby` is a new state: an exhaustive `when` over the connection gains it.
+- `ElementCallController` gains `join()`, `ownCameraFrames` and `setCallScreenVisible`. `ElementCallActivity` reports
+  the last; a host drawing the call screen elsewhere calls it from its `onStart` and `onStop`. A host's bar or
+  notification that read `callData.isAudioCall` reads `ElementCallSnapshot.settledIntent`.
+- `AudioFocus` gains `requestAudioFocus(onFocusLost, onFocusGained)`, which the lobby uses to stop its camera while a
+  phone call holds the audio. Its default calls the one-argument request and reports nothing back, so a host's own
+  `AudioFocus` should implement it, or the lobby's camera stays off until the screen is left and reopened.
+- `CallAudioDeviceController.start` no longer takes the communication mode: `startCommunication()` does, at Join, and
+  `setPreferLoudspeaker` re-ranks the outputs once the lobby knows the call's intent. A host's own controller that set
+  the mode in `start` keeps working, and sets it at lobby open.
+- For a host with its own RTC client: `MatrixRtcClient.camera()`, `MatrixRtcLocalCamera`, `MatrixRtcRoom.callIntent`,
+  `memberCountUpdates` and `joinCall(intent = …)`, and `MatrixRtcCall.connectMedia(camera = …)`.
 
 ## 0.1.2 - 2026-11-18
 

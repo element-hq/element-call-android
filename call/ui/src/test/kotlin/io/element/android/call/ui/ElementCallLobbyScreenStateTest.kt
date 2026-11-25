@@ -21,6 +21,7 @@ import io.element.android.call.test.A_USER_ID
 import io.element.android.call.test.FakeElementCallController
 import io.element.android.call.test.aCameraParticipant
 import io.element.android.call.tests.testutils.WarmUpRule
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 import org.junit.Rule
@@ -28,6 +29,7 @@ import org.junit.Test
 import kotlin.time.Duration.Companion.seconds
 
 /** What the screen makes of the lobby's snapshot (feature-hq 045). The lobby itself is `CallLobbyTest`'s, in call/impl. */
+@OptIn(ExperimentalCoroutinesApi::class)
 class ElementCallLobbyScreenStateTest {
     @get:Rule val warmUpRule = WarmUpRule()
 
