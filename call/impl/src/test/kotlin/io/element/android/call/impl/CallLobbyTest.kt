@@ -60,8 +60,9 @@ class CallLobbyTest {
     private val lifecycleListener = FakeElementCallLifecycleListener()
     private val analytics = FakeElementCallAnalytics()
     private val platform = FakeElementCallPlatform()
+    private var focusRequests = 0
     private var focusReleases = 0
-    private val audioFocus = FakeAudioFocus(requestAudioFocusResult = {}, releaseAudioFocusResult = { focusReleases++ })
+    private val audioFocus = FakeAudioFocus(requestAudioFocusResult = { focusRequests++ }, releaseAudioFocusResult = { focusReleases++ })
     private val audioDevices = FakeCallAudioDeviceController(initialDevices = listOf(anEarpiece(), aSpeaker()))
 
     @Test
@@ -76,7 +77,7 @@ class CallLobbyTest {
     }
 
     @Test
-    fun `loading leaves in one update, with the intent, the camera, the output and the count together`() = runTest {
+    fun `loading leaves in one update, with the intent, the camera and the count together`() = runTest {
         val roomGate = CompletableDeferred<Unit>()
         val rtcClient = FakeMatrixRtcClient(roomGate = roomGate, onRoomOpened = { it.memberCount.value = 2 })
         val controller = createLobby(rtcClient = rtcClient)
@@ -90,7 +91,6 @@ class CallLobbyTest {
         assertThat(loading.connection).isEqualTo(ElementCallConnection.Lobby(memberCount = null, hasSeenMembers = false))
         assertThat(loading.settledIntent).isNull()
         assertThat(loading.isCameraEnabled).isFalse()
-        assertThat(audioDevices.preferLoudspeakerChanges).isEmpty()
         controller.join()
         runCurrent()
         assertThat(controller.state.value?.connection).isInstanceOf(ElementCallConnection.Lobby::class.java)
@@ -103,7 +103,6 @@ class CallLobbyTest {
         assertThat(loaded.connection).isEqualTo(ElementCallConnection.Lobby(memberCount = 2, hasSeenMembers = true))
         assertThat(loaded.settledIntent).isEqualTo(MatrixRtcCallIntent.VIDEO)
         assertThat(loaded.isCameraEnabled).isTrue()
-        assertThat(loaded.selectedAudioDevice).isEqualTo(aSpeaker())
         // Never a label, a camera or an intent from before the core had read the call.
         seen.filter { (it.connection as? ElementCallConnection.Lobby)?.isLoading == true }.forEach {
             assertThat(it.settledIntent).isNull()
@@ -156,13 +155,12 @@ class CallLobbyTest {
         assertThat(failed.joiningFormat).isEqualTo(ElementCallPreferences.DEFAULT.membershipFormat)
         // As a join that cannot open the room reports it (044 C7).
         assertThat(analytics.names).containsExactly("CallJoinAttempted", "CallJoinOutcome", "CallFailure").inOrder()
-        val releasesBefore = focusReleases
         controller.hangUp()
         runCurrent()
         assertThat(controller.state.value).isNull()
-        // Closed as a lobby: nothing was started, so nothing is ended, and the audio went back at the failure.
+        // Closed as a lobby: nothing was started, so nothing is ended.
         assertThat(lifecycleListener.endedCalls).isEmpty()
-        assertThat(focusReleases).isEqualTo(releasesBefore)
+        assertThat(focusReleases).isEqualTo(0)
         assertThat(analytics.names).hasSize(3)
     }
 
@@ -214,18 +212,16 @@ class CallLobbyTest {
         controller.setCameraEnabled(true)
         controller.setMicrophoneMuted(true)
         controller.switchCamera()
-        controller.selectAudioDevice(anEarpiece())
         controller.setMembershipFormat(MatrixRtcMembershipFormat.ROOM_STATE)
         runCurrent()
 
         assertThat(rtcClient.rooms.sumOf { it.joinCallCount }).isEqualTo(0)
         assertThat(platform.startForegroundServiceCount).isEqualTo(0)
-        assertThat(audioDevices.startCommunicationCount).isEqualTo(0)
         assertThat(lifecycleListener.startedCalls).isEmpty()
         assertThat(analytics.events).isEmpty()
-        // The audio is the one thing taken, at open (R45, C27).
-        assertThat(audioFocus.lobbyRequestCount).isEqualTo(1)
-        assertThat(audioDevices.startCount).isEqualTo(1)
+        // Other apps' audio keeps playing (R45).
+        assertThat(focusRequests).isEqualTo(0)
+        assertThat(audioDevices.startCount).isEqualTo(0)
         assertThat(audioDevices.proximityBlankingAllowed).isFalse()
     }
 
@@ -267,12 +263,11 @@ class CallLobbyTest {
         assertThat(platform.startForegroundServiceCount).isEqualTo(1)
         assertThat(rtcClient.roomCount).isEqualTo(1)
         assertThat(rtcClient.lastRoom?.joinCallCount).isEqualTo(1)
-        // The lobby's focus is kept, never given up and taken again (C27).
-        assertThat(focusReleases).isEqualTo(0)
-        assertThat(audioFocus.lobbyRequestCount).isEqualTo(1)
+        // The audio is taken at the tap (R45), and routed once joined.
+        assertThat(focusRequests).isEqualTo(1)
         joinGate.complete(Unit)
         runCurrent()
-        assertThat(audioDevices.startCommunicationCount).isEqualTo(1)
+        assertThat(audioDevices.startCount).isEqualTo(1)
         assertThat(analytics.names.first()).isEqualTo("CallJoinAttempted")
     }
 
@@ -353,20 +348,16 @@ class CallLobbyTest {
 
     @Test
     fun `what the user chose in the lobby is what the call joins with`() = runTest {
-        val devices = FakeCallAudioDeviceController(initialDevices = listOf(aBluetoothHeadset(), anEarpiece(), aSpeaker()))
         val rtcClient = FakeMatrixRtcClient()
-        val controller = createLobby(rtcClient = rtcClient, audioDeviceController = devices)
+        val controller = createLobby(rtcClient = rtcClient)
         controller.setMicrophonePermissionGranted(true)
         controller.setCameraPermissionGranted(true)
         runCurrent()
         val camera = rtcClient.cameras.single()
         controller.switchCamera()
         controller.setMicrophoneMuted(true)
-        controller.selectAudioDevice(aSpeaker())
         controller.setCameraEnabled(false)
         runCurrent()
-        // The camera toggle never moves the output (R54).
-        assertThat(controller.state.value?.selectedAudioDevice).isEqualTo(aSpeaker())
         assertThat(camera.isFrontFacing.value).isFalse()
 
         controller.join()
@@ -376,7 +367,22 @@ class CallLobbyTest {
         assertThat(session.publishMicrophoneCalls).containsExactly(true)
         assertThat(session.cameraEnabledCalls).isEmpty()
         assertThat(controller.state.value?.isFrontCamera).isFalse()
-        assertThat(devices.selectedAtCommunication).isEqualTo(aSpeaker())
+        // The output follows the settled intent, never the camera turned off (R54).
+        assertThat(audioDevices.lastPreferLoudspeaker).isTrue()
+        assertThat(audioDevices.selectedDevice.value).isEqualTo(aSpeaker())
+    }
+
+    @Test
+    fun `a headset is the output a lobby joins on, even on a video call`() = runTest {
+        val devices = FakeCallAudioDeviceController(initialDevices = listOf(aBluetoothHeadset(), anEarpiece(), aSpeaker()))
+        val controller = createLobby(audioDeviceController = devices)
+        controller.setMicrophonePermissionGranted(true)
+        runCurrent()
+
+        controller.join()
+        runCurrent()
+
+        assertThat(devices.selectedDevice.value).isEqualTo(aBluetoothHeadset())
     }
 
     @Test
@@ -423,7 +429,7 @@ class CallLobbyTest {
     }
 
     @Test
-    fun `the lobby's camera and audio follow the screen, until Join`() = runTest {
+    fun `the lobby's camera follows the screen, until Join`() = runTest {
         val rtcClient = FakeMatrixRtcClient()
         val controller = createLobby(rtcClient = rtcClient)
         controller.setMicrophonePermissionGranted(true)
@@ -434,12 +440,10 @@ class CallLobbyTest {
         controller.setCallScreenVisible(false)
         runCurrent()
         assertThat(camera.isCapturing.value).isFalse()
-        assertThat(focusReleases).isEqualTo(1)
 
         controller.setCallScreenVisible(true)
         runCurrent()
         assertThat(camera.isCapturing.value).isTrue()
-        assertThat(audioFocus.lobbyRequestCount).isEqualTo(2)
         assertThat(controller.state.value?.isCameraEnabled).isTrue()
 
         controller.join()
@@ -447,11 +451,11 @@ class CallLobbyTest {
         controller.setCallScreenVisible(false)
         runCurrent()
         assertThat(camera.isCapturing.value).isTrue()
-        assertThat(focusReleases).isEqualTo(1)
+        assertThat(focusReleases).isEqualTo(0)
     }
 
     @Test
-    fun `a call that takes the audio stops the camera until the lobby has it back`() = runTest {
+    fun `another call holding the audio stops the camera until it ends`() = runTest {
         val rtcClient = FakeMatrixRtcClient()
         val controller = createLobby(rtcClient = rtcClient)
         controller.setMicrophonePermissionGranted(true)
@@ -459,19 +463,19 @@ class CallLobbyTest {
         runCurrent()
         val camera = rtcClient.cameras.single()
 
-        audioFocus.onFocusLost!!.invoke()
+        platform.isAnotherCallHoldingAudio.value = true
         runCurrent()
         assertThat(camera.isCapturing.value).isFalse()
         assertThat(controller.state.value?.isCameraEnabled).isTrue()
 
-        audioFocus.onFocusGained!!.invoke()
+        platform.isAnotherCallHoldingAudio.value = false
         runCurrent()
         assertThat(camera.isCapturing.value).isTrue()
     }
 
     @Test
-    fun `a lobby opened during a phone call waits for the audio before its camera`() = runTest {
-        audioFocus.grantsFocus = false
+    fun `a lobby opened during a phone call waits for it to end before its camera`() = runTest {
+        platform.isAnotherCallHoldingAudio.value = true
         val rtcClient = FakeMatrixRtcClient()
         val controller = createLobby(rtcClient = rtcClient)
         controller.setMicrophonePermissionGranted(true)
@@ -480,7 +484,7 @@ class CallLobbyTest {
         val camera = rtcClient.cameras.single()
         assertThat(camera.isCapturing.value).isFalse()
 
-        audioFocus.onFocusGained!!.invoke()
+        platform.isAnotherCallHoldingAudio.value = false
         runCurrent()
         assertThat(camera.isCapturing.value).isTrue()
     }
@@ -519,8 +523,8 @@ class CallLobbyTest {
         assertThat(camera.isCapturing.value).isFalse()
         assertThat(lifecycleListener.endedCalls).isEmpty()
         assertThat(analytics.events).isEmpty()
-        assertThat(focusReleases).isEqualTo(1)
-        assertThat(audioDevices.stopCount).isEqualTo(1)
+        assertThat(focusReleases).isEqualTo(0)
+        assertThat(audioDevices.stopCount).isEqualTo(0)
         assertThat(platform.stopForegroundServiceCount).isEqualTo(0)
     }
 

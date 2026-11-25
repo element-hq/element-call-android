@@ -12,9 +12,8 @@ import kotlinx.coroutines.flow.StateFlow
 /**
  * Where call audio goes, and what else it could go to.
  *
- * [start] and [stop] bracket the whole thing. The lobby starts it before Join, to list and pick the outputs
- * (feature-hq 045 C10); [startCommunication] takes the communication mode at Join, which Android drops after a few
- * seconds with no audio flowing (C27).
+ * Routing choices only stick while something holds the device in communication mode, so [start] and
+ * [stop] bracket the whole thing and nothing else here means anything outside that bracket.
  *
  * The list is live: a Bluetooth headset switched on mid-call appears in [devices] without anyone
  * asking, which is the case that makes a static list feel broken.
@@ -32,8 +31,8 @@ interface CallAudioDeviceController {
     val selectedDevice: StateFlow<CallAudioDevice?>
 
     /**
-     * Start watching for devices appearing and disappearing, and route to the best available candidate. Does not take the
-     * communication mode: see [startCommunication].
+     * Take the device into communication mode, start watching for devices appearing and
+     * disappearing, and route to the best available candidate.
      *
      * @param preferLoudspeaker which of the phone's own two outputs counts as best when nothing is
      * plugged in or paired. False is a voice call held to the head, so the earpiece; true is a call
@@ -41,18 +40,6 @@ interface CallAudioDeviceController {
      * way, because reaching for one is itself the instruction.
      */
     fun start(preferLoudspeaker: Boolean)
-
-    /**
-     * Rank the phone's own two outputs for a call settled after [start], and route to the new best unless a headset
-     * is in use. For the lobby, whose intent is settled once it has loaded (feature-hq 045 R54).
-     */
-    fun setPreferLoudspeaker(preferLoudspeaker: Boolean) {}
-
-    /**
-     * Take the device into communication mode for the call, then apply the selected output again, since a route can be
-     * reset by the mode (feature-hq 045 C10, C27). Between [start] and [stop]; re-entrant.
-     */
-    fun startCommunication() {}
 
     /** Send call audio to [device]. No effect if it is no longer connected. */
     fun select(device: CallAudioDevice)

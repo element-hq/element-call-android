@@ -102,14 +102,14 @@ enum class SampleLobbyFixture(
     MIC_REFUSED(
         key = "lobby_mic_refused",
         title = "Lobby, microphone refused",
-        description = "The microphone answers refused, whatever the device says: Join disabled, the lobby says why (R27).",
+        description = "The microphone answers refused, whatever the device says: a tap on Join or the microphone says why (R27).",
         intent = MatrixRtcCallIntent.VIDEO,
         count = 1,
     ),
     CAMERA_REFUSED(
         key = "lobby_camera_refused",
         title = "Lobby, camera refused",
-        description = "The camera answers refused, whatever the device says: the preview says why and offers settings, Join stays on (R28).",
+        description = "The camera answers refused, whatever the device says: the camera control shows unavailable, Join joins (R28).",
         intent = MatrixRtcCallIntent.VIDEO,
         count = 2,
     ),

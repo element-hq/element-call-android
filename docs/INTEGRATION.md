@@ -847,15 +847,15 @@ instance, so this is cheap and idempotent.
 `RequestingPermission` state, let the host answer, and make the answer idempotent — a host re-reports a permission
 it already has whenever it is recreated, and a configuration change would otherwise join the call twice.
 
-**Audio focus and communication mode**: request focus so other apps duck. The lobby takes focus and starts the device
-controller when it opens, to list and route the call's outputs, but enters communication mode only at Join
-(`startCommunication()`, which applies the route again): Android drops the mode a few seconds after it is set with no
-audio flowing (feature-hq 045 C27).
+**Audio focus and communication mode**: request focus so other apps duck; start the device controller *after*
+entering communication mode, because routing choices do not stick outside it. Both happen at Join, never in a lobby:
+other apps' audio keeps playing until the user joins (feature-hq 045 R45).
 
 **Choose the built-in output by call kind.** A voice call is held to the head, so the earpiece; a video call is
 looked at, so the loudspeaker. Anything the user plugged in or paired outranks both either way — reaching for a
-headset is itself the instruction. Decide it from the intent the core settled, never the camera's state
-(`setPreferLoudspeaker(settledIntent == VIDEO)`, ranked in `DefaultCallAudioDeviceController.priorityOf`), because that
+headset is itself the instruction. Decide it when the device controller starts, from the intent the core settled and
+never the camera's state (`start(preferLoudspeaker = intent == VIDEO)`, ranked in
+`DefaultCallAudioDeviceController.priorityOf`), because that
 fixes the order the device list comes out in and the head of that list is what gets selected. Do not copy a
 meeting-style order that ranks the loudspeaker first unconditionally — `WebViewAudioManager` does, which is right
 for a meeting laid on a desk and startling for a phone call.

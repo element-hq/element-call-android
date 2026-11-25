@@ -71,41 +71,6 @@ class DefaultAudioFocus(
     }
 
     @Suppress("DEPRECATION")
-    override fun requestAudioFocus(onFocusLost: () -> Unit, onFocusGained: () -> Unit): Boolean {
-        val listener = AudioManager.OnAudioFocusChangeListener {
-            when (it) {
-                AudioManager.AUDIOFOCUS_GAIN -> {
-                    Timber.d("AudioFocus: AUDIOFOCUS_GAIN")
-                    onFocusGained()
-                }
-                AudioManager.AUDIOFOCUS_LOSS,
-                AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-                    Timber.d("AudioFocus: loss ($it)")
-                    onFocusLost()
-                }
-                // A notification sound, not a call: nothing of ours stops for it.
-                AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> Timber.d("AudioFocus: ducked")
-            }
-        }
-        val result = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
-                .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION).build())
-                .setOnAudioFocusChangeListener(listener)
-                // Refused during a phone call, then granted by a GAIN once it ends (feature-hq 045 C27).
-                .setAcceptsDelayedFocusGain(true)
-                .setWillPauseWhenDucked(true)
-                .build()
-            audioFocusRequest = request
-            audioManager.requestAudioFocus(request)
-        } else {
-            audioFocusChangeListener = listener
-            audioManager.requestAudioFocus(listener, AudioManager.STREAM_VOICE_CALL, AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_EXCLUSIVE)
-        }
-        Timber.d("AudioFocus: requested, result $result")
-        return result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
-    }
-
-    @Suppress("DEPRECATION")
     override fun releaseAudioFocus() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             audioFocusRequest?.let { audioManager.abandonAudioFocusRequest(it) }

@@ -876,8 +876,6 @@ private fun AudioDeviceButton(state: ElementCallScreenState) {
         },
         icon = selectedType.icon(),
         contentDescription = stringResource(R.string.element_call_audio_output_title),
-        // The output by name too, so a screen reader hears it without opening the picker (045 R53).
-        stateDescription = state.selectedAudioDevice?.label(),
         // Highlighted when audio goes anywhere but the earpiece - loudspeaker, headset, Bluetooth -
         // as the design has it: the earpiece is the quiet, private default.
         isActive = selectedType != CallAudioDeviceType.EARPIECE,

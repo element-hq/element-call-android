@@ -10,6 +10,8 @@ package io.element.android.call.impl
 import io.element.android.call.api.rtc.MatrixRtcReactionKind
 import io.element.android.call.impl.audio.CallSoundEffectRenderer
 import io.element.android.call.impl.audio.FakeCallSoundEffectRenderer
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.time.Duration
 
 internal class FakeElementCallPlatform(
@@ -65,4 +67,9 @@ internal class FakeElementCallPlatform(
     override fun reactionSpread(): Duration = reactionSpread
 
     override fun reactionCatalogue(): List<MatrixRtcReactionKind> = reactionCatalogue
+
+    /** Set to play a phone call taking the audio and giving it back. */
+    val isAnotherCallHoldingAudio = MutableStateFlow(false)
+
+    override fun anotherCallHoldsAudio(): Flow<Boolean> = isAnotherCallHoldingAudio
 }

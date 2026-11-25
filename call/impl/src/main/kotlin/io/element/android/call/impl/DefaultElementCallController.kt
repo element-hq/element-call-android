@@ -383,12 +383,11 @@ internal class DefaultElementCallController(
     @Volatile
     private var isCallScreenVisible = false
 
-    /** Whether a focus request of ours is outstanding, granted or not. */
     private var hasRequestedAudioFocus = false
 
-    /** Whether the lobby holds the audio now: its camera runs only then (045 R48, C27). */
+    /** Whether another call, ringing or answered, holds the phone's audio: the lobby's camera stops for it (045 R48). */
     @Volatile
-    private var holdsAudioFocus = false
+    private var isAnotherCallHoldingAudio = false
     private var hasStartedAudioDevices = false
     private var hasStartedForegroundService = false
 
@@ -447,10 +446,11 @@ internal class DefaultElementCallController(
                 roomJob = scope.launch { observeRoom(callData) }
                 attemptJob = scope.launch { camera.isFrontFacing.collect { value -> updateState { it.copy(isFrontCamera = value) } } }
                 if (showsLobby) {
-                    // The lobby takes the call's audio at open, as Join does, and lists the call's outputs from it (045 R45, C27).
-                    syncLobbyAudioFocus()
-                    startAudioDevices(preferLoudspeaker = callData.intent != MatrixRtcCallIntent.AUDIO)
-                    lobbyJob = scope.launch { followLobby(callData) }
+                    // No audio focus and no route until Join: other apps' audio keeps playing (045 R45).
+                    lobbyJob = scope.launch {
+                        launch { followOtherCalls() }
+                        followLobby(callData)
+                    }
                 } else {
                     // Reported as soon as the call is requested rather than once it connects, so a host's
                     // Join button hides while we are still joining rather than blinking through an
@@ -468,7 +468,7 @@ internal class DefaultElementCallController(
         lifecycleListener.onCallStarted(callData)
     }
 
-    /** The outputs, listed and routed, into the snapshot until the attempt ends (045 C10). */
+    /** The outputs, listed and routed, into the snapshot until the call ends. */
     private fun startAudioDevices(preferLoudspeaker: Boolean) {
         if (hasStartedAudioDevices) return
         hasStartedAudioDevices = true
@@ -533,8 +533,6 @@ internal class DefaultElementCallController(
         }
         Timber.i("ElementCall: the lobby has read the call: $intent, $count in it")
         val isVideo = intent == MatrixRtcCallIntent.VIDEO
-        // Before the snapshot, so the output appears with the label, the count and the camera (R54, R59).
-        audioDeviceController.setPreferLoudspeaker(isVideo)
         mutex.withLock {
             val current = _state.value ?: return@withLock
             if (current.connection !is ElementCallConnection.Lobby) return@withLock
@@ -550,8 +548,6 @@ internal class DefaultElementCallController(
                 connection = ElementCallConnection.Lobby(memberCount = count, hasSeenMembers = count > 0),
                 settledIntent = intent,
                 isCameraEnabled = joinsWithCamera,
-                audioDevices = audioDeviceController.devices.value.toImmutableList(),
-                selectedAudioDevice = audioDeviceController.selectedDevice.value,
             )
         }
         syncCamera()
@@ -586,59 +582,25 @@ internal class DefaultElementCallController(
             reporter = attempt
             attempt.attempted(callKindOf(isDm = false))
             fail(attempt, FailureReport.ROOM_NOT_OPENED, ElementCallFailure.Other("Room not opened: $reason", isJoinFailure = true))
-            // Nothing left to hear or see: the audio goes back now, not at Close (C27).
-            releaseLobbyAudio()
         }
     }
 
-    /** Give back the focus and the outputs the lobby took, if it did (045 R37). */
-    private fun releaseLobbyAudio() {
-        if (hasRequestedAudioFocus) {
-            audioFocus.releaseAudioFocus()
-            hasRequestedAudioFocus = false
-            holdsAudioFocus = false
-        }
-        if (hasStartedAudioDevices) {
-            audioDevicesJob?.cancel()
-            audioDevicesJob = null
-            audioDeviceController.stop()
-            hasStartedAudioDevices = false
-        }
-    }
-
-    /** In the lobby the audio is held exactly while the screen is visible (045 C27). Under [mutex]. */
-    private fun syncLobbyAudioFocus() {
-        if (_state.value?.connection !is ElementCallConnection.Lobby) return
-        if (isCallScreenVisible && !hasRequestedAudioFocus) {
-            hasRequestedAudioFocus = true
-            holdsAudioFocus = audioFocus.requestAudioFocus(
-                onFocusLost = { onLobbyFocusChanged(held = false) },
-                onFocusGained = { onLobbyFocusChanged(held = true) },
-            )
-            Timber.i("ElementCall: the lobby ${if (holdsAudioFocus) "holds" else "waits for"} the audio")
-        } else if (!isCallScreenVisible && hasRequestedAudioFocus) {
-            audioFocus.releaseAudioFocus()
-            hasRequestedAudioFocus = false
-            holdsAudioFocus = false
-            Timber.i("ElementCall: the lobby gave the audio back for the background")
-        }
-    }
-
-    /** A call taking the audio stops the lobby's camera; getting it back restarts it as the user left it (045 R48). */
-    private fun onLobbyFocusChanged(held: Boolean) {
-        scope.launch {
-            mutex.withLock {
-                if (!hasRequestedAudioFocus) return@launch
-                holdsAudioFocus = held
-            }
-            Timber.i("ElementCall: the lobby ${if (held) "has the audio back" else "lost the audio"}")
+    /**
+     * Another call holding the phone's audio stops the lobby's camera, and its end restarts it as the user left it (045 R48).
+     * Read from the audio mode, since the lobby holds no audio focus to lose (R45).
+     */
+    private suspend fun followOtherCalls() {
+        platform.anotherCallHoldsAudio().collect { held ->
+            if (isAnotherCallHoldingAudio == held) return@collect
+            isAnotherCallHoldingAudio = held
+            Timber.i("ElementCall: ${if (held) "another call holds the audio" else "the audio is free again"}")
             syncCamera()
         }
     }
 
     /**
-     * Start or stop the camera before media: in the lobby, exactly while it is on, allowed, loaded, visible and holding the
-     * audio (045 R31, R48, C15); after its Join, kept running only while on and allowed, so the call takes it over (R49).
+     * Start or stop the camera before media: in the lobby, exactly while it is on, allowed, loaded, visible and no other
+     * call holds the audio (045 R31, R48, C15); after its Join, kept running only while on and allowed, so the call takes it over (R49).
      * Once media is up the media session drives it. Without a lobby the media session starts it, as before.
      */
     private suspend fun syncCamera() = cameraMutex.withLock {
@@ -648,7 +610,7 @@ internal class DefaultElementCallController(
         val lobby = current.connection as? ElementCallConnection.Lobby
         val isAllowed = current.isCameraEnabled && current.isCameraPermissionGranted
         val runs = when {
-            lobby != null -> isAllowed && !lobby.isLoading && isCallScreenVisible && holdsAudioFocus
+            lobby != null -> isAllowed && !lobby.isLoading && isCallScreenVisible && !isAnotherCallHoldingAudio
             isFromLobby -> isAllowed && camera.isCapturing.value
             else -> return@withLock
         }
@@ -682,11 +644,9 @@ internal class DefaultElementCallController(
                 reporter = attempt
                 hasStartedForegroundService = true
                 platform.startForegroundService()
-                // The lobby's focus is kept, never released and taken again (C27); taken here only if it had none.
-                if (!hasRequestedAudioFocus) {
-                    hasRequestedAudioFocus = true
-                    audioFocus.requestAudioFocus {}
-                }
+                // The audio is taken at the tap, as the skipped path takes it at the grant (R45).
+                hasRequestedAudioFocus = true
+                audioFocus.requestAudioFocus {}
                 callJob = scope.launch {
                     launch { followInterruptions() }
                     runCall(callData, attempt)
@@ -700,8 +660,6 @@ internal class DefaultElementCallController(
             mutex.withLock {
                 if (isCallScreenVisible == visible) return@launch
                 isCallScreenVisible = visible
-                // The audio before the camera, which waits for it (C27).
-                syncLobbyAudioFocus()
             }
             syncCamera()
         }
@@ -1083,13 +1041,8 @@ internal class DefaultElementCallController(
         raisedHandSoundPolicy = RaisedHandSoundPolicy()
         soundEffectRenderer = platform.createCallSoundEffectRenderer(preferences.value.soundEffectsVolume)
         // A video call is looked at, not held to an ear, so it starts on the loudspeaker; a headset still wins over both
-        // built-in outputs when one is connected. Video as settled, never the camera's state (045 R54). The lobby has
-        // already started the outputs and the user may have picked one.
+        // built-in outputs when one is connected. Video as settled, never the camera's state (045 R54).
         startAudioDevices(preferLoudspeaker = intent == MatrixRtcCallIntent.VIDEO)
-        // Communication mode is device-wide state we borrow, held for as long as the call runs and handed back in endCall().
-        // Taken here and not in the lobby, which Android resets after a few seconds with no audio (045 C27); the route
-        // is applied again after it.
-        audioDeviceController.startCommunication()
 
         coroutineScope {
             val joinObservers = startJoinObservers(joined, attempt)
@@ -1409,7 +1362,7 @@ internal class DefaultElementCallController(
             hasReportedCallStarted = false
             heldAudioFocus = hasRequestedAudioFocus
             hasRequestedAudioFocus = false
-            holdsAudioFocus = false
+            isAnotherCallHoldingAudio = false
             startedAudioDevices = hasStartedAudioDevices
             hasStartedAudioDevices = false
             startedForegroundService = hasStartedForegroundService
