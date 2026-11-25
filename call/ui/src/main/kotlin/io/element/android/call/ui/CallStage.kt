@@ -29,6 +29,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -60,8 +63,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -77,6 +82,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.traversalIndex
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -500,6 +506,9 @@ internal fun CallStage(
             scrim.animateTo(if (isIn) 1f else 0f, tween(if (isIn) FULLSCREEN_SCRIM_IN_MS else FULLSCREEN_SCRIM_OUT_MS))
         }
         Box(modifier = Modifier.fillMaxSize().graphicsLayer { translationY = gridTop - scrollOffset.floatValue }) {
+        // The design's glow, at the end of the content: always there in a stage that does not scroll, and reached at the
+        // bottom of one that does. Behind every tile.
+        StageGlow(contentBottom = layout.contentHeight)
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -1120,3 +1129,24 @@ private val STICKY_SPEC = spring(
 
 /** Short: this is an acknowledgement that someone arrived, not an event in its own right. */
 private val APPEARANCE_SPEC = tween<Float>(durationMillis = 220)
+
+/** The glow under the controls, ending at [contentBottom] in content coordinates and fading into the canvas upwards. */
+@Composable
+private fun StageGlow(contentBottom: Float) {
+    val glow = ElementCallTheme.colors.stageGlow
+    val canvas = ElementCallTheme.colors.bgCanvas
+    val height = with(LocalDensity.current) { STAGE_GLOW_HEIGHT.toPx() }
+    Box(
+        modifier = Modifier
+            .offset { IntOffset(0, (contentBottom - height).roundToInt()) }
+            .fillMaxWidth()
+            .height(STAGE_GLOW_HEIGHT)
+            .drawBehind {
+                drawRect(glow)
+                drawRect(Brush.verticalGradient(listOf(canvas, canvas.copy(alpha = 0f))))
+            },
+    )
+}
+
+/** About the controls and the Join line, as the design draws it. */
+private val STAGE_GLOW_HEIGHT = 280.dp

@@ -29,6 +29,8 @@ actually read it. The matrix-rust-rtc core's own history is the core's:
 - `CallAudioDeviceController.start` no longer takes the communication mode: `startCommunication()` does, at Join, and
   `setPreferLoudspeaker` re-ranks the outputs once the lobby knows the call's intent. A host's own controller that set
   the mode in `start` keeps working, and sets it at lobby open.
+- `ElementCallColors` gains `stageGlow`, the teal-to-blue glow at the end of the stage. It is defaulted; a host theming the
+  call passes its own brush.
 - For a host with its own RTC client: `MatrixRtcClient.camera()`, `MatrixRtcLocalCamera`, `MatrixRtcRoom.callIntent`,
   `memberCountUpdates` and `joinCall(intent = …)`, and `MatrixRtcCall.connectMedia(camera = …)`.
 
