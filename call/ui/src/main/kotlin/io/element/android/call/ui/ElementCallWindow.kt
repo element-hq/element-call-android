@@ -321,8 +321,11 @@ internal fun rememberCallPermissions(controller: ElementCallController, current:
     // not ask again on every recomposition of a call that is already connected.
     // The lobby asks once it has loaded, never while it loads, in 042's order (045 R26, R59).
     val isLobbyLoaded = (current.connection as? ElementCallConnection.Lobby)?.isLoading == false
+    // Once per lobby: a format change loads it again, and is not a reason to ask again (C23).
+    var hasLobbyAsked by remember { mutableStateOf(false) }
     LaunchedEffect(isLobbyLoaded) {
-        if (!isLobbyLoaded) return@LaunchedEffect
+        if (!isLobbyLoaded || hasLobbyAsked) return@LaunchedEffect
+        hasLobbyAsked = true
         if (context.isGranted(Manifest.permission.RECORD_AUDIO)) {
             controller.setMicrophonePermissionGranted(true)
         } else {
