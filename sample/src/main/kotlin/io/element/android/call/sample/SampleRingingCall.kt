@@ -97,7 +97,12 @@ class SampleRingingCall(context: Context, private val scope: CoroutineScope, pri
         }
     }
     private val stack = ElementCallStack.Builder(context, FakeMatrixBackend())
-        .rtcClient(FakeMatrixRtcClient(joinResult = { Result.success(call).also { joined.complete(Unit) } }))
+        .rtcClient(
+            FakeMatrixRtcClient(
+                joinResult = { Result.success(call).also { joined.complete(Unit) } },
+                cameraFrames = { ElementCallTestPattern.portrait().frames() }
+            )
+        )
         .roomContext(FakeElementCallRoomContextProvider(ElementCallRoomContext(displayName = "Bob", isDm = true, members = MEMBERS)))
         .options(ElementCallOptions(ringLifetime = RING_LIFETIME))
         .analytics(SampleAnalytics)

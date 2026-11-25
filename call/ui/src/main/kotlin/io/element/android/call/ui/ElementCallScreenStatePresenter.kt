@@ -19,6 +19,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallController
+import io.element.android.call.api.ElementCallLobbyJoinLabel
 import io.element.android.call.api.ElementCallPreferences
 import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.ElementCallSnapshot
@@ -173,7 +174,11 @@ fun rememberElementCallScreenState(
     val videoFrames = tiles
         // A remote tile whose media is interrupted draws its avatar, not its last frame (034 R34).
         .filter { it.hasVideo && (it.isLocal || !it.isMediaInterrupted) }
-        .associate { it.tileId to controller.videoFrames(it.memberId, it.streamKind) }
+        .associate {
+            // Ours from the camera itself, one flow from the lobby into the call, so its renderer never restarts (045 R49).
+            val frames = if (it.tileId == OWN_CAMERA_TILE_ID) controller.ownCameraFrames else controller.videoFrames(it.memberId, it.streamKind)
+            it.tileId to frames
+        }
         .toImmutableMap()
 
     fun handleEvent(event: ElementCallScreenEvent) {
@@ -231,7 +236,8 @@ fun rememberElementCallScreenState(
                 applyStageChrome(ElementCallChromeVisibility.Event.FullscreenEnded(byDeparture = false))
             }
             StageChromeEvent.TapStage -> {
-                if (isRinging) return
+                // The lobby's chrome is pinned, and its preview takes no taps (045 R36, C17).
+                if (isRinging || current?.connection is ElementCallConnection.Lobby) return
                 pendingReturn.cancel()
                 // A second tap inside the wait is the other half of a double tap.
                 if (pendingTap.isActive) {
@@ -298,6 +304,9 @@ fun rememberElementCallScreenState(
             }
             ElementCallScreenEvent.DismissHandRequestFailure -> controller.clearHandRequestFailure()
             ElementCallScreenEvent.HangUp -> controller.hangUp()
+            // Not yet answered, the tap asks: the controller would otherwise refuse it without a word (045 R27).
+            ElementCallScreenEvent.Join -> if (current?.isMicrophonePermissionGranted == true) controller.join() else navigator.requestMicrophonePermission()
+            ElementCallScreenEvent.RequestMicrophonePermission -> navigator.requestMicrophonePermission()
         }
     }
 
@@ -315,7 +324,8 @@ fun rememberElementCallScreenState(
         spotlight = spotlight,
         fullscreenTileId = fullscreenTileId,
         isFullscreenChromeVisible = isFullscreenChromeVisible,
-        isStageChromeVisible = tiles.isEmpty() || isRinging || stageChrome.isVisible,
+        // Up until the call is on the stage: our own tile is there from the lobby on, so an empty stage no longer says so (014 R13).
+        isStageChromeVisible = tiles.isEmpty() || isRinging || current?.connection != ElementCallConnection.Connected || stageChrome.isVisible,
         ownTileCorner = spotlightMemory.ownTileCorner,
         pictureInPictureTileId = pictureInPictureTileId,
         extraActions = extraActions,
@@ -328,6 +338,7 @@ fun rememberElementCallScreenState(
         // Read once the sheet opens: on a call that has joined the native core is already loaded.
         videoCodecs = if (settingsSheet == ElementCallSettingsSheet.DEVELOPER_OPTIONS) videoCodecs.value else persistentListOf(),
         isDeveloperModeEnabled = controller.isDeveloperModeEnabled,
+        canRequestMicrophonePermission = navigator.canRequestMicrophonePermission,
         eventSink = ::handleEvent,
     )
 }
@@ -354,11 +365,61 @@ internal fun ElementCallSnapshot.callTiles(): ImmutableList<CallTileData> {
     val own = ownTile?.let {
         it.copy(isHero = false, isMicrophoneMuted = isMicrophoneMuted, hasVideo = isCameraEnabled)
             .toCallTileData(roomMembers, isLocal = true, isFrontCamera = isFrontCamera)
-    }
+    } ?: provisionalOwnTile()
     val ranked = roster.order.map { ref ->
         ref.toCallTileData(roster.detail[ref.id], roomMembers, isFrontCamera = isFrontCamera, isMissingKeys = ref.id.memberId in membersMissingKeys)
     }
     return (listOfNotNull(own, connection.ringingCallee(roomMembers)) + ranked).showingHands(!isOneToOne).toImmutableList()
+}
+
+/**
+ * Our tile before the core reports it, for a call opened on the lobby: from the lobby on there is always one, the same
+ * tile, so the preview becomes our tile in the call (feature-hq 045 R24, R49, C5). Built from our profile and the
+ * lobby's choices; the camera drawn only once it is allowed.
+ */
+private fun ElementCallSnapshot.provisionalOwnTile(): CallTileData? {
+    if (!callData.showsLobby) return null
+    val userId = ownUserId ?: return null
+    val isLobby = connection is ElementCallConnection.Lobby
+    return CallTileData(
+        memberId = OWN_CAMERA_TILE_ID,
+        userId = userId,
+        roomMember = roomMembers[userId],
+        isLocal = true,
+        isMuted = isMicrophoneMuted,
+        isActiveSpeaker = false,
+        hasVideo = isCameraEnabled && isCameraPermissionGranted,
+        isVideoMirrored = isFrontCamera,
+        // The lobby reaches no media server; after its Join ours is being connected, as the core will report it.
+        mediaState = if (isLobby) CallTileMediaState.LIVE else CallTileMediaState.CONNECTING,
+        lobbyCamera = if (isLobby) lobbyCamera() else null,
+    )
+}
+
+private fun ElementCallSnapshot.lobbyCamera(): ElementCallLobbyCamera = when {
+    isCameraPermissionRefused -> ElementCallLobbyCamera.NOT_ALLOWED
+    isCameraEnabled -> ElementCallLobbyCamera.ON
+    else -> ElementCallLobbyCamera.OFF
+}
+
+/** What the lobby draws, or null outside it (045). Loading until the core has read the call, whatever else is known (R59). */
+internal fun ElementCallSnapshot.lobbyState(canRequestMicrophonePermission: Boolean): ElementCallLobbyState? {
+    val lobby = connection as? ElementCallConnection.Lobby ?: return null
+    val memberCount = lobby.memberCount ?: return ElementCallLobbyState.Loading
+    val label = lobby.joinLabel ?: return ElementCallLobbyState.Loading
+    return ElementCallLobbyState.Ready(
+        joinLabel = label,
+        memberCount = memberCount,
+        isCallEndedNoticeShown = label == ElementCallLobbyJoinLabel.JOIN_ANYWAY,
+        // Refused, never muted: a muted microphone still joins (R30).
+        joinUnavailableReason = ElementCallLobbyJoinBlock.MICROPHONE_REFUSED.takeIf { isMicrophonePermissionRefused },
+        camera = lobbyCamera(),
+        microphoneAction = when {
+            !isMicrophonePermissionRefused -> null
+            canRequestMicrophonePermission -> ElementCallLobbyMicrophoneAction.ALLOW
+            else -> ElementCallLobbyMicrophoneAction.OPEN_SETTINGS
+        },
+    )
 }
 
 /** The callee a DM call is ringing, in the slot their tile will take at pickup (030 R15, R21). */
@@ -426,9 +487,11 @@ private fun ElementCallSnapshot?.toState(
     preferences: ElementCallPreferences,
     videoCodecs: ImmutableList<MatrixRtcVideoCodec>,
     isDeveloperModeEnabled: Boolean,
+    canRequestMicrophonePermission: Boolean,
     eventSink: (ElementCallScreenEvent) -> Unit,
 ) = ElementCallScreenState(
     connection = this?.connection ?: ElementCallConnection.RequestingPermission,
+    lobby = this?.lobbyState(canRequestMicrophonePermission),
     isAudioCall = this?.settledIntent == MatrixRtcCallIntent.AUDIO,
     memberCount = this?.memberCount ?: 0,
     audioLevels = this?.audioLevels ?: persistentMapOf(),

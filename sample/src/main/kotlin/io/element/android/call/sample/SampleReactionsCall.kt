@@ -49,7 +49,11 @@ import kotlin.time.Duration.Companion.seconds
  */
 class SampleReactionsCall(context: Context, private val scope: CoroutineScope, private val pace: Duration = 1.seconds) : SampleLiveCall {
     private val joined = CompletableDeferred<Unit>()
-    private val client = FakeMatrixRtcClient(joinResult = { Result.success(call).also { joined.complete(Unit) } })
+    private val client =
+        FakeMatrixRtcClient(
+            joinResult = { Result.success(call).also { joined.complete(Unit) } },
+            cameraFrames = { ElementCallTestPattern.landscape().frames() }
+        )
     private val call: FakeMatrixRtcCall = FakeMatrixRtcCall(ROOM_ID, "m.call#room").apply {
         status.value = MatrixRtcCallStatus.Connected(sinceMs = System.currentTimeMillis(), degraded = false)
         newMediaSession = { FakeMatrixRtcMediaSession(frames = ::pattern) }

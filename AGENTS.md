@@ -161,7 +161,8 @@ until one does.
 ## What is temporary
 
 Anything that exists because the SDK or the core does not yet expose what the call needs has its removal recipe in
-`docs/FEEDBACK.md`. Today, nothing.
+`docs/FEEDBACK.md`. Today, one thing, and not from the SDK or the core: the call lobby's strings are in `call/ui`'s
+`strings.xml` until their keys are in Localazy (FEEDBACK.md, "Not yet in Localazy").
 
 ## The SDK edge
 

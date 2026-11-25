@@ -130,7 +130,7 @@ class RaisedHandScreenStateTest {
         moleculeFlow(RecompositionMode.Immediate) { rememberElementCallScreenState(controller, aNavigator()) }.test {
             val state = awaitItem()
 
-            assertThat(state.videoFrames.keys).containsExactly(A_LOCAL_MEMBER_ID, ANOTHER_REMOTE_MEMBER_ID)
+            assertThat(state.videoFrames.keys).containsExactly(OWN_CAMERA_TILE_ID, ANOTHER_REMOTE_MEMBER_ID)
             assertThat(state.tiles.map { it.mediaState })
                 .containsExactly(CallTileMediaState.RECONNECTING, CallTileMediaState.KEYS_MISSING, CallTileMediaState.LIVE)
                 .inOrder()

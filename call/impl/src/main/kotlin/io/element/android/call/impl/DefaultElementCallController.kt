@@ -1167,8 +1167,6 @@ internal class DefaultElementCallController(
         // it has not been asked to capture yet - over the state the call is joining with.
         val wantsCamera = _state.value?.isCameraEnabled == true
 
-        startObservers(joined, connected, attempt)
-
         // A video call starts with the camera on. The caller asked for video and the callee
         // answered a notification that said video, so making them find the camera button is
         // asking a question they already answered - unless they answered it again by turning the
@@ -1178,10 +1176,15 @@ internal class DefaultElementCallController(
         // setCameraPermissionGranted turns the camera on itself, which covers the other
         // ordering. Nothing here waits for it - a video call whose camera is refused is still a
         // working call.
+        //
+        // Before the observers: the session's camera flow would otherwise publish "off" for a moment over a camera
+        // running since the lobby, and our tile would drop its renderer at the join (045 R49).
         if (wantsCamera && _state.value?.isCameraPermissionGranted == true) {
             connected.setCameraEnabled(true)
                 .onFailure { Timber.w(it, "ElementCall: could not start the camera the call joins with") }
         }
+
+        startObservers(joined, connected, attempt)
         return null
     }
 

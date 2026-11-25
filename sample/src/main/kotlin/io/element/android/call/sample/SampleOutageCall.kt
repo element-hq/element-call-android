@@ -116,7 +116,11 @@ enum class SampleOutageFixture(val key: String, val title: String, val descripti
  */
 class SampleOutageCall(context: Context, private val scope: CoroutineScope, private val fixture: SampleOutageFixture) : SampleLiveCall {
     private val joined = CompletableDeferred<Unit>()
-    private val client = FakeMatrixRtcClient(joinResult = { Result.success(call).also { joined.complete(Unit) } })
+    private val client =
+        FakeMatrixRtcClient(
+            joinResult = { Result.success(call).also { joined.complete(Unit) } },
+            cameraFrames = { ElementCallTestPattern.landscape().frames() }
+        )
     private val call: FakeMatrixRtcCall = FakeMatrixRtcCall(ROOM_ID, "m.call#room").apply {
         status.value = MatrixRtcCallStatus.Connected(sinceMs = System.currentTimeMillis(), degraded = false)
         newMediaSession = { FakeMatrixRtcMediaSession(frames = ::pattern) }

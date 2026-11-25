@@ -62,6 +62,8 @@ class FakeMatrixRtcClient(
     private val roomGate: CompletableDeferred<Unit>? = null,
     /** Called on each room as it opens, before anyone has read it: what a test scripts the lobby's reads with. */
     private val onRoomOpened: (FakeMatrixRtcRoom) -> Unit = {},
+    /** What our camera shows while it runs: a harness gives it a pattern; none for a test, which counts. */
+    private val cameraFrames: () -> Flow<MatrixRtcVideoFrame> = { emptyFlow() },
     /** What [supportedVideoCodecs] answers: the codecs "this device" can encode. */
     var videoCodecs: List<MatrixRtcVideoCodec> = listOf(MatrixRtcVideoCodec.VP8, MatrixRtcVideoCodec.H264, MatrixRtcVideoCodec.VP9),
 ) : MatrixRtcClient {
@@ -82,7 +84,7 @@ class FakeMatrixRtcClient(
     val cameras = mutableListOf<FakeMatrixRtcLocalCamera>()
 
     /** What [camera] hands out; a harness gives it pictures. */
-    var newCamera: () -> FakeMatrixRtcLocalCamera = { FakeMatrixRtcLocalCamera() }
+    var newCamera: () -> FakeMatrixRtcLocalCamera = { FakeMatrixRtcLocalCamera(pictures = cameraFrames()) }
 
     override fun camera(): MatrixRtcLocalCamera = newCamera().also { cameras += it }
 

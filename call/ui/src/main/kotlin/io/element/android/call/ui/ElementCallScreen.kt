@@ -19,9 +19,11 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -146,7 +148,8 @@ fun ElementCallScreen(
             // R43), so the stage is told how much of its bottom the bar covers and scrolls its last
             // row clear of it (R44).
             val bottomInset = LocalCallStageTestHooks.current?.bottomInset ?: WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
-            val controlsClearance = CONTROLS_HEIGHT + bottomInset
+            // The lobby's Join line sits under the bar, and the preview's frame stays clear of both (045 R9).
+            val controlsClearance = CONTROLS_HEIGHT + bottomInset + if (state.lobby != null) JOIN_SECTION_HEIGHT else 0.dp
             // The stage has the same bounds in every arrangement, fullscreen included, and the chrome
             // floats over it: a stage that moved or resized when a tile went fullscreen would take the
             // whole grid with it on the first frame of the move (spec 000 R7). Held upright, the top
@@ -179,6 +182,12 @@ fun ElementCallScreen(
                             )
                         }
                         CallControlsBar(state)
+                        // Fades at the tap, with the bar growing its other buttons in place (045 R24).
+                        var lastLobby by remember { mutableStateOf(state.lobby) }
+                        state.lobby?.let { lastLobby = it }
+                        AnimatedVisibility(visible = state.lobby != null, enter = fadeIn(), exit = fadeOut() + shrinkVertically()) {
+                            lastLobby?.let { CallLobbyJoinSection(lobby = it, eventSink = state.eventSink) }
+                        }
                     }
                 }
             }
@@ -503,15 +512,31 @@ private fun CallTopBar(state: ElementCallScreenState, modifier: Modifier = Modif
             .fillMaxWidth()
             .padding(horizontal = 4.dp, vertical = 4.dp),
     ) {
-        IconButton(
-            onClick = { state.eventSink(ElementCallScreenEvent.Minimize) },
-            modifier = Modifier.align(Alignment.CenterStart),
-        ) {
-            Icon(
-                imageVector = ElementCallTheme.icons.minimize,
-                contentDescription = stringResource(R.string.element_call_a11y_minimize_call),
-                tint = ElementCallTheme.colors.iconPrimary,
-            )
+        if (state.lobby != null) {
+            // "Close", never minimise: the lobby is not a call to come back to (045 R20).
+            TextButton(
+                onClick = { state.eventSink(ElementCallScreenEvent.HangUp) },
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .testTag(ElementCallTestTags.LOBBY_CLOSE),
+            ) {
+                Text(
+                    text = stringResource(R.string.element_call_action_close),
+                    style = ElementCallTheme.typography.bodyLgMedium,
+                    color = ElementCallTheme.colors.textPrimary,
+                )
+            }
+        } else {
+            IconButton(
+                onClick = { state.eventSink(ElementCallScreenEvent.Minimize) },
+                modifier = Modifier.align(Alignment.CenterStart),
+            ) {
+                Icon(
+                    imageVector = ElementCallTheme.icons.minimize,
+                    contentDescription = stringResource(R.string.element_call_a11y_minimize_call),
+                    tint = ElementCallTheme.colors.iconPrimary,
+                )
+            }
         }
         CallSettingsMenu(state = state, modifier = Modifier.align(Alignment.CenterEnd))
         Column(
@@ -531,6 +556,14 @@ private fun CallTopBar(state: ElementCallScreenState, modifier: Modifier = Modif
                 overflow = TextOverflow.Ellipsis,
             )
             if (state.connection is ElementCallConnection.Calling) CallingLabel(isAudioCall = state.isAudioCall)
+            // From the lobby our tile is already on the stage, so the joining state is said here, not by a placeholder (045 R23).
+            if (state.isJoiningFromLobby) {
+                Text(
+                    text = state.connection.label(),
+                    style = ElementCallTheme.typography.bodySmRegular,
+                    color = ElementCallTheme.colors.textSecondary,
+                )
+            }
         }
     }
 }
@@ -674,7 +707,10 @@ private fun CallControlsBar(
         horizontalArrangement = Arrangement.spacedBy(BUTTON_GAP),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // While the lobby loads nothing is known to show: settings and Close alone work (045 R59).
+        val isLoading = state.lobby is ElementCallLobbyState.Loading
         RoundCallButton(
+            enabled = !isLoading,
             onClick = { state.eventSink(ElementCallScreenEvent.ToggleMicrophoneMuted) },
             icon = if (state.isMicrophoneMuted) ElementCallTheme.icons.microphoneOff else ElementCallTheme.icons.microphoneOn,
             contentDescription = stringResource(
@@ -683,6 +719,7 @@ private fun CallControlsBar(
             isActive = state.isMicrophoneMuted,
         )
         RoundCallButton(
+            enabled = !isLoading,
             onClick = { state.eventSink(ElementCallScreenEvent.ToggleCamera) },
             icon = if (state.isCameraEnabled) ElementCallTheme.icons.cameraOn else ElementCallTheme.icons.cameraOff,
             contentDescription = stringResource(
@@ -691,7 +728,20 @@ private fun CallControlsBar(
             // Same reading as the mic: the highlighted button is the one that is switched off.
             isActive = !state.isCameraEnabled,
         )
-        AudioDeviceButton(state)
+        AudioDeviceButton(state, enabled = !isLoading)
+        // Absent in the lobby, grown in place at the tap (045 R24).
+        AnimatedVisibility(visible = state.lobby == null, enter = expandHorizontally() + fadeIn(), exit = shrinkHorizontally() + fadeOut()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(BUTTON_GAP), verticalAlignment = Alignment.CenterVertically) {
+                CallBarSlotAndHangUp(state)
+            }
+        }
+    }
+}
+
+/** The bar's last two places: the slot, then hang up. */
+@Composable
+private fun CallBarSlotAndHangUp(state: ElementCallScreenState) {
+    run {
         when (val slot = state.barSlot) {
             ElementCallBarSlot.More -> RoundCallButton(
                 onClick = { state.eventSink(ElementCallScreenEvent.Present(ElementCallSheet.MORE)) },
@@ -775,7 +825,7 @@ private fun HandRequestFailureDialog(failure: ElementCallHandRequestFailure, onD
 }
 
 @Composable
-private fun AudioDeviceButton(state: ElementCallScreenState) {
+private fun AudioDeviceButton(state: ElementCallScreenState, enabled: Boolean) {
     var isPickerVisible by remember { mutableStateOf(false) }
     val selectedType = state.selectedAudioDevice?.type ?: CallAudioDeviceType.EARPIECE
     RoundCallButton(
@@ -788,10 +838,12 @@ private fun AudioDeviceButton(state: ElementCallScreenState) {
         },
         icon = selectedType.icon(),
         contentDescription = stringResource(R.string.element_call_audio_output_title),
+        // The output by name too, so a screen reader hears it without opening the picker (045 R53).
+        stateDescription = state.selectedAudioDevice?.label(),
         // Highlighted when audio goes anywhere but the earpiece - loudspeaker, headset, Bluetooth -
         // as the design has it: the earpiece is the quiet, private default.
         isActive = selectedType != CallAudioDeviceType.EARPIECE,
-        enabled = state.audioDevices.isNotEmpty(),
+        enabled = enabled && state.audioDevices.isNotEmpty(),
     )
     if (isPickerVisible) {
         AudioDevicePicker(
@@ -813,6 +865,7 @@ private fun RoundCallButton(
     enabled: Boolean = true,
     background: Color? = null,
     tint: Color? = null,
+    stateDescription: String? = null,
 ) {
     val resolvedBackground = background
         // Darker than the pill it sits in, which is bgSubtleSecondary.
@@ -833,7 +886,13 @@ private fun RoundCallButton(
         enabled = enabled,
         modifier = modifier
             // Said rather than only drawn: a screen reader user needs to know why the tap does nothing (034 R15).
-            .semantics { if (!enabled) stateDescription = unavailable }
+            .semantics {
+                if (!enabled) {
+                    this.stateDescription = unavailable
+                } else if (stateDescription != null) {
+                    this.stateDescription = stateDescription
+                }
+            }
             .size(BUTTON_SIZE)
             .clip(CircleShape)
             .background(resolvedBackground)

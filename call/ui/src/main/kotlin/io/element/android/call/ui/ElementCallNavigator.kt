@@ -26,6 +26,15 @@ interface ElementCallNavigator {
     /** Open the app's page in the system settings, where its permissions are (042 R7, R11). */
     fun openAppSettings()
 
+    /** Ask the system for the microphone again, from the lobby's refused-microphone button (feature-hq 045 R27). */
+    fun requestMicrophonePermission() {}
+
+    /**
+     * Whether the system will still show its microphone request, read after each answer and on return to the app: the
+     * lobby's button then asks again rather than opening the settings (045 R27).
+     */
+    val canRequestMicrophonePermission: Boolean get() = false
+
     /**
      * Raise the system's screen-capture dialog.
      *

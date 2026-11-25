@@ -127,7 +127,7 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
                 participants = listOf(aLocalParticipant(), aRemoteParticipant()),
                 isCameraEnabled = true,
                 isCameraPermissionGranted = true,
-                videoFrames = mapOf(A_LOCAL_MEMBER_ID to emptyFlow()),
+                videoFrames = mapOf(OWN_CAMERA_TILE_ID to emptyFlow()),
             ),
             // Both sides on video, which is the case the list layout has to survive: two tiles plus
             // two cards' worth of diagnostics is what pushes the hang-up button off a short screen.
@@ -138,7 +138,7 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
                 isCameraEnabled = true,
                 isCameraPermissionGranted = true,
                 videoFrames = mapOf(
-                    A_LOCAL_MEMBER_ID to emptyFlow(),
+                    OWN_CAMERA_TILE_ID to emptyFlow(),
                     A_REMOTE_MEMBER_ID to emptyFlow(),
                 ),
             ),
@@ -222,7 +222,7 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
                 isCameraEnabled = true,
                 isCameraPermissionGranted = true,
                 videoFrames = mapOf(
-                    A_LOCAL_MEMBER_ID to emptyFlow(),
+                    OWN_CAMERA_TILE_ID to emptyFlow(),
                     A_REMOTE_MEMBER_ID to emptyFlow(),
                 ),
             ),
@@ -234,7 +234,7 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
                 isDm = true,
                 isCameraEnabled = true,
                 isCameraPermissionGranted = true,
-                videoFrames = mapOf(A_LOCAL_MEMBER_ID to emptyFlow()),
+                videoFrames = mapOf(OWN_CAMERA_TILE_ID to emptyFlow()),
             ),
             // A DM with our camera off and the other side muted: two avatars, the mute on their pill.
             anElementCallScreenState(
@@ -379,6 +379,7 @@ open class ElementCallScreenStatePreviewParam : PreviewParameterProvider<Element
 
 fun anElementCallScreenState(
     connection: ElementCallConnection = ElementCallConnection.Connected,
+    lobby: ElementCallLobbyState? = null,
     isAudioCall: Boolean = false,
     memberCount: Int = 0,
     participants: List<MatrixRtcParticipant> = emptyList(),
@@ -435,6 +436,7 @@ fun anElementCallScreenState(
     eventSink: (ElementCallScreenEvent) -> Unit = {},
 ) = ElementCallScreenState(
     connection = connection,
+    lobby = lobby,
     isAudioCall = isAudioCall,
     memberCount = memberCount,
     audioLevels = audioLevels.toImmutableMap(),

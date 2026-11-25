@@ -1108,6 +1108,18 @@ the sender as confirmed (`senderCrossSigned`, item 30) unless the shield is red.
 by default, chosen in Developer options (feature-hq 043). A sticky mode needs
 the slot state above, so a host that asks for one reads it from the homeserver itself, as the sample does.
 
+## Not yet in Localazy
+
+The call lobby's strings (feature-hq 045) are in `call/ui/src/main/res/values/strings.xml`, marked `translatable="false"`,
+because their keys were not in the element-call Localazy project when the lobby was built. Until they are, the lobby is
+English in every language. To remove them:
+
+1. Add each key under the comment in `strings.xml` to Localazy's `mobile.json`, with its English text (the plural with
+   its `one` and `other` forms). iOS reads the same keys.
+2. Run `./tools/localazy/download-strings.sh`: the keys arrive in `call/ui/src/main/res/values/localazy.xml`.
+3. Delete them, and their comment, from `strings.xml`; the build fails on a key in both files, which is the check.
+4. Remove this section, and the pointer in `AGENTS.md`'s "What is temporary".
+
 ## Host-side log lines worth keeping
 
 Each of these was added because a failure was indistinguishable from a different failure without it. Most now have

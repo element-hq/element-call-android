@@ -58,6 +58,9 @@ internal fun interface CallStageArrangement {
 
         /** Spec 019: at most five tiles, nothing scrolling, ours floating with one or two. */
         val SmallCall: CallStageArrangement = CallStageArrangement(SmallCallLayout::compute)
+
+        /** Spec 045: the lobby's preview, our tile alone in a frame that never follows the picture (R9). */
+        val Lobby: CallStageArrangement = CallStageArrangement(::computeLobby)
     }
 }
 
@@ -194,6 +197,28 @@ private fun computeRankedGrid(input: CallStageLayout.Input): CallStageLayout {
         contentHeight = placed.contentHeight,
         hiddenTileIds = hidden,
         heroStack = heroStack,
+    )
+}
+
+/**
+ * The space the chrome leaves, inset by the margin: from the stage and the bars only, never from our video's aspect or
+ * whether there is one, so the frame stays put when the camera turns on, off or is refused (045 R9, C3).
+ */
+private fun computeLobby(input: CallStageLayout.Input): CallStageLayout {
+    val metrics = input.metrics
+    if (metrics.width <= 0f || metrics.height <= 0f) return CallStageLayout.Empty
+    val tileId = input.own?.tileId ?: input.gridTileIds.firstOrNull() ?: return CallStageLayout.Empty
+    val area = input.floatingArea ?: Rect(0f, 0f, metrics.width, metrics.height - metrics.controlsClearance)
+    val frame = Rect(area.left + metrics.margin, area.top + metrics.margin, area.right - metrics.margin, area.bottom - metrics.margin)
+    return CallStageLayout(
+        tiles = mapOf(tileId to frame),
+        gridPositions = mapOf(tileId to CallStageLayout.GridPosition(row = 0, column = 0)),
+        spotlight = null,
+        spotlightTileId = null,
+        contentHeight = metrics.height,
+        hiddenTileIds = emptySet(),
+        heroStack = null,
+        isStatic = true,
     )
 }
 

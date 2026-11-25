@@ -385,6 +385,15 @@ internal fun ElementCallRaisedHandBadge(position: Int, modifier: Modifier = Modi
 /** The name and the states a screen reader has to say, since none of the badges say them (R69). */
 @Composable
 private fun CallTileData.accessibilityDescription(hasPicture: Boolean, floatingCorner: ElementCallOwnTileCorner?): String {
+    // The preview is our camera, not a person's tile (feature-hq 045 R50).
+    lobbyCamera?.let { camera ->
+        val state = when (camera) {
+            ElementCallLobbyCamera.ON -> R.string.element_call_a11y_camera_on
+            ElementCallLobbyCamera.OFF -> R.string.element_call_a11y_camera_off
+            ElementCallLobbyCamera.NOT_ALLOWED -> R.string.element_call_a11y_camera_not_allowed
+        }
+        return listOf(stringResource(R.string.element_call_a11y_lobby_camera), stringResource(state)).joinToString(", ")
+    }
     val states = buildList {
         // Ours says its camera, which no badge on it shows, and its corner while it floats (019 R26).
         if (isLocal) add(stringResource(if (hasPicture) R.string.element_call_a11y_camera_on else R.string.element_call_a11y_camera_off))

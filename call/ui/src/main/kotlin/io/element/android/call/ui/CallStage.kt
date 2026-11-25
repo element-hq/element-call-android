@@ -126,9 +126,14 @@ internal fun CallStage(
     /** Null to choose by the call: the small-call layout up to five tiles, the ranked grid beyond (019 R1, R8). */
     arrangement: CallStageArrangement? = null,
 ) {
-    val chosen = arrangement ?: if (SmallCallLayout.applies(state.tiles)) CallStageArrangement.SmallCall else CallStageArrangement.RankedGrid
-    // Nothing scrolls in a small call (019 R30), and a drag on the stage is then nobody's.
-    val isStatic = chosen == CallStageArrangement.SmallCall
+    val isLobby = state.lobby != null
+    val chosen = arrangement ?: when {
+        isLobby -> CallStageArrangement.Lobby
+        SmallCallLayout.applies(state.tiles) -> CallStageArrangement.SmallCall
+        else -> CallStageArrangement.RankedGrid
+    }
+    // Nothing scrolls in a small call (019 R30) or the lobby, and a drag on the stage is then nobody's.
+    val isStatic = chosen == CallStageArrangement.SmallCall || chosen == CallStageArrangement.Lobby
     val scrollOffset = remember { mutableFloatStateOf(0f) }
     val currentLayout = remember { LayoutRef() }
     val userScroll = remember { UserScrollTracker() }
@@ -155,8 +160,9 @@ internal fun CallStage(
     // Whether the touch that began the current gesture landed on a moving grid: that touch stops the
     // fling and does nothing else (014 R17).
     val downStoppedScroll = remember { BooleanRef(false) }
+    // The lobby's preview takes no tap, double tap or pinch: only its camera switch (045 R36).
     val onTap = {
-        if (!downStoppedScroll.value) state.eventSink(StageChromeEvent.TapStage)
+        if (!downStoppedScroll.value && !isLobby) state.eventSink(StageChromeEvent.TapStage)
     }
     // The stage clips to its bounds so a grid tile passing under the spotlight is still drawn up to
     // the edge (R27). Screen readers read the spotlight first, then the grid in order (R69).
@@ -464,8 +470,8 @@ internal fun CallStage(
                 onExit = onExit,
                 isArrival = tile.tileId !in knownIds && !isRingHandover,
                 stats = state.tileStats(tile, slot.rect),
-                onTap = if (isOwnFloatingTile || isRinging) NoOp else onTap,
-                allowsFullscreen = !isOwnFloatingTile && !isRinging,
+                onTap = if (isOwnFloatingTile || isRinging || isLobby) NoOp else onTap,
+                allowsFullscreen = !isOwnFloatingTile && !isRinging && !isLobby,
                 isLandscapeStage = metrics.isLandscape,
                 drag = ownDrag.takeIf { slot.appearance == CallTileAppearance.Floating },
                 floatingCorner = layout.floating?.corner?.takeIf { slot.appearance == CallTileAppearance.Floating },
@@ -549,7 +555,8 @@ internal fun CallStage(
         val currentOwnRect by rememberUpdatedState(ownSlot?.rect ?: Rect.Zero)
         val currentStage by rememberUpdatedState(Rect(0f, -gridTop, width, height))
         val currentArea by rememberUpdatedState(floatingArea)
-        val hasOverlay = isFloating || showsSwitch
+        val lobby = state.lobby
+        val hasOverlay = isFloating || showsSwitch || lobby != null
         if (ownSlot != null && fullscreenId == null && hasOverlay) {
             Box(
                 modifier = Modifier
@@ -569,6 +576,9 @@ internal fun CallStage(
                         }
                     ),
             ) {
+                if (lobby != null) {
+                    CallLobbyPreviewOverlay(lobby = lobby, eventSink = state.eventSink)
+                }
                 if (showsSwitch) {
                     SwitchCameraButton(
                         onClick = { state.eventSink(ElementCallScreenEvent.SwitchCamera) },
@@ -864,7 +874,7 @@ private fun SwitchCameraButton(onClick: () -> Unit, modifier: Modifier = Modifie
 
 /** How many the core counts in the slot, which is not always how many tiles there are. */
 @Composable
-private fun MemberCountPill(count: Int, modifier: Modifier = Modifier) {
+internal fun MemberCountPill(count: Int, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(percent = 50))
