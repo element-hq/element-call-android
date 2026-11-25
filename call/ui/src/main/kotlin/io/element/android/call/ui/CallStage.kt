@@ -586,7 +586,7 @@ internal fun CallStage(
                     ),
             ) {
                 if (lobby != null) {
-                    CallLobbyPreviewOverlay(lobby = lobby, eventSink = state.eventSink)
+                    CallLobbyPreviewOverlay(lobby = lobby)
                 }
                 if (showsSwitch) {
                     SwitchCameraButton(

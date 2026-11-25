@@ -61,65 +61,32 @@ internal val LOBBY_SUMMARY_HEIGHT = 64.dp
 /** Under the control bar: the Join line's height, which the preview frame stays clear of. Fixed, so the frame never moves (R9). */
 internal val JOIN_SECTION_HEIGHT = 72.dp
 
-/**
- * Over the preview, in its frame, so the bar under it never moves: the loading indicator (R59), the call-ended notice (R57),
- * the refused microphone's message and button (R27), and the refused camera's reason with the way to settings (R28).
- */
+/** Over the preview while the lobby loads: the progress indicator in its frame (R59). A refusal says nothing here: a tap does. */
 @Composable
-internal fun CallLobbyPreviewOverlay(lobby: ElementCallLobbyState, eventSink: (ElementCallScreenEvent) -> Unit, modifier: Modifier = Modifier) {
+internal fun CallLobbyPreviewOverlay(lobby: ElementCallLobbyState, modifier: Modifier = Modifier) {
+    if (lobby != ElementCallLobbyState.Loading) return
     Box(modifier = modifier.fillMaxSize()) {
-        when (lobby) {
-            ElementCallLobbyState.Loading -> CircularProgressIndicator(
-                color = ElementCallTheme.colors.iconPrimary,
-                strokeWidth = 3.dp,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 32.dp)
-                    .size(28.dp)
-                    // The Join button says it is loading; one announcement is enough.
-                    .clearAndSetSemantics {},
-            )
-            is ElementCallLobbyState.Ready -> Column(
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                lobby.microphoneAction?.let { action -> MicrophoneRefused(action = action, eventSink = eventSink) }
-                if (lobby.camera == ElementCallLobbyCamera.NOT_ALLOWED) CameraNotAllowed(onOpenSettings = { eventSink(ElementCallScreenEvent.OpenAppSettings) })
-            }
-        }
-    }
-}
-
-@Composable
-private fun CameraNotAllowed(onOpenSettings: () -> Unit) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            text = stringResource(R.string.element_call_permission_camera_title),
-            style = ElementCallTheme.typography.bodyLgMedium,
-            color = ElementCallTheme.colors.textPrimary,
-            textAlign = TextAlign.Center,
-        )
-        Text(
-            text = stringResource(R.string.element_call_permission_camera_description),
-            style = ElementCallTheme.typography.bodyMdRegular,
-            color = ElementCallTheme.colors.textSecondary,
-            textAlign = TextAlign.Center,
-        )
-        LobbyButton(
-            text = stringResource(R.string.element_call_action_open_settings),
-            isPrimary = false,
-            onClick = onOpenSettings,
-            modifier = Modifier.testTag(ElementCallTestTags.LOBBY_CAMERA_SETTINGS),
+        CircularProgressIndicator(
+            color = ElementCallTheme.colors.iconPrimary,
+            strokeWidth = 3.dp,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 32.dp)
+                .size(28.dp)
+                // The Join button says it is loading; one announcement is enough.
+                .clearAndSetSemantics {},
         )
     }
 }
 
 /** Under the control bar: Start or Join, centred. Join is where a screen reader starts (R35). */
 @Composable
-internal fun CallLobbyJoinSection(lobby: ElementCallLobbyState, eventSink: (ElementCallScreenEvent) -> Unit, modifier: Modifier = Modifier) {
+internal fun CallLobbyJoinSection(
+    lobby: ElementCallLobbyState,
+    eventSink: (ElementCallScreenEvent) -> Unit,
+    onExplainMicrophone: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Box(
         modifier = modifier
             .fillMaxWidth()
@@ -127,7 +94,12 @@ internal fun CallLobbyJoinSection(lobby: ElementCallLobbyState, eventSink: (Elem
             .padding(horizontal = 24.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
-        JoinButton(lobby = lobby, onJoin = { eventSink(ElementCallScreenEvent.Join) }, modifier = Modifier.fillMaxWidth())
+        JoinButton(
+            lobby = lobby,
+            onJoin = { eventSink(ElementCallScreenEvent.Join) },
+            onExplainMicrophone = onExplainMicrophone,
+            modifier = Modifier.fillMaxWidth()
+        )
     }
 }
 
@@ -194,52 +166,16 @@ private fun CallEndedNotice() {
     )
 }
 
-/** 042's title, the lobby's description, and a button that asks again where the system still does (R27). */
-@Composable
-private fun MicrophoneRefused(action: ElementCallLobbyMicrophoneAction, eventSink: (ElementCallScreenEvent) -> Unit) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Text(
-            text = stringResource(R.string.element_call_permission_microphone_title),
-            style = ElementCallTheme.typography.bodyLgMedium,
-            color = ElementCallTheme.colors.textPrimary,
-            textAlign = TextAlign.Center,
-        )
-        Text(
-            text = stringResource(R.string.element_call_lobby_microphone_description),
-            style = ElementCallTheme.typography.bodyMdRegular,
-            color = ElementCallTheme.colors.textSecondary,
-            textAlign = TextAlign.Center,
-        )
-        LobbyButton(
-            text = stringResource(
-                when (action) {
-                    ElementCallLobbyMicrophoneAction.ALLOW -> R.string.element_call_lobby_microphone_allow
-                    ElementCallLobbyMicrophoneAction.OPEN_SETTINGS -> R.string.element_call_action_open_settings
-                }
-            ),
-            isPrimary = false,
-            onClick = {
-                when (action) {
-                    ElementCallLobbyMicrophoneAction.ALLOW -> eventSink(ElementCallScreenEvent.RequestMicrophonePermission)
-                    ElementCallLobbyMicrophoneAction.OPEN_SETTINGS -> eventSink(ElementCallScreenEvent.OpenAppSettings)
-                }
-            },
-            modifier = Modifier.testTag(ElementCallTestTags.LOBBY_MICROPHONE_ACTION),
-        )
-    }
-}
-
 /**
  * One node from the first frame, loading or not, so a screen reader that starts on it hears it change in place (R35,
- * R59, contract C20). Disabled, it says why (R51).
+ * R59, contract C20). Disabled while loading. Blocked by a refused microphone, it looks disabled and a tap says why,
+ * in a dialog (R27, R51).
  */
 @Composable
-private fun JoinButton(lobby: ElementCallLobbyState, onJoin: () -> Unit, modifier: Modifier = Modifier) {
+private fun JoinButton(lobby: ElementCallLobbyState, onJoin: () -> Unit, onExplainMicrophone: () -> Unit, modifier: Modifier = Modifier) {
     val ready = lobby as? ElementCallLobbyState.Ready
-    val isEnabled = ready != null && ready.joinUnavailableReason == null
+    val isBlocked = ready?.joinUnavailableReason != null
+    val isEnabled = ready != null && !isBlocked
     val label = ready?.joinLabel?.let { stringResource(it.text) }
     val description = label ?: stringResource(R.string.element_call_lobby_loading)
     // Disabled, the reason (R51, C26); enabled, the count with the label (R35, R41).
@@ -255,7 +191,7 @@ private fun JoinButton(lobby: ElementCallLobbyState, onJoin: () -> Unit, modifie
             .clip(CircleShape)
             .background(ElementCallTheme.colors.bgActionPrimaryRest)
             .alpha(if (isEnabled) 1f else DISABLED_ALPHA)
-            .clickable(enabled = isEnabled, onClick = onJoin)
+            .clickable(enabled = ready != null, onClick = if (isBlocked) onExplainMicrophone else onJoin)
             .clearAndSetSemantics {
                 testTag = ElementCallTestTags.LOBBY_JOIN
                 contentDescription = description
@@ -264,7 +200,7 @@ private fun JoinButton(lobby: ElementCallLobbyState, onJoin: () -> Unit, modifie
                 traversalIndex = -1f
                 // The description changes in place as loading ends; said without moving focus (C20).
                 liveRegion = LiveRegionMode.Polite
-                if (!isEnabled) disabled()
+                if (ready == null) disabled()
                 state?.let { stateDescription = it }
             },
         contentAlignment = Alignment.Center,
@@ -274,25 +210,6 @@ private fun JoinButton(lobby: ElementCallLobbyState, onJoin: () -> Unit, modifie
         } else {
             Text(text = label, style = ElementCallTheme.typography.bodyLgMedium, color = ElementCallTheme.colors.iconOnSolidPrimary)
         }
-    }
-}
-
-@Composable
-private fun LobbyButton(text: String, isPrimary: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Box(
-        modifier = modifier
-            .heightIn(min = 40.dp)
-            .clip(CircleShape)
-            .background(if (isPrimary) ElementCallTheme.colors.bgActionPrimaryRest else ElementCallTheme.colors.bgSubtleSecondary)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 20.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = text,
-            style = ElementCallTheme.typography.bodyMdMedium,
-            color = if (isPrimary) ElementCallTheme.colors.iconOnSolidPrimary else ElementCallTheme.colors.textPrimary,
-        )
     }
 }
 

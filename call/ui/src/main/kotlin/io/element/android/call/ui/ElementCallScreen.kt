@@ -166,6 +166,8 @@ fun ElementCallScreen(
             val lobbySummaryHeight = if (state.lobby != null) LOBBY_SUMMARY_HEIGHT else 0.dp
             val topClearance = if (isLandscape) 0.dp else statusBarTop + TOP_BAR_HEIGHT + bannerHeight + lobbySummaryHeight
             val density = LocalDensity.current
+            // Opened by a tap on the lobby's refused microphone or its blocked Join (045 R27).
+            var isMicrophoneDialogShown by remember { mutableStateOf(false) }
             val controls = @Composable { controlsModifier: Modifier ->
                 Box(
                     modifier = controlsModifier
@@ -183,17 +185,38 @@ fun ElementCallScreen(
                                 onLower = { state.eventSink(ElementCallScreenEvent.ToggleRaisedHand) },
                             )
                         }
-                        CallControlsBar(state)
+                        CallControlsBar(state, onExplainMicrophone = { isMicrophoneDialogShown = true })
                         // Fades at the tap, with the bar growing its other buttons in place (045 R24).
                         var lastLobby by remember { mutableStateOf(state.lobby) }
                         state.lobby?.let { lastLobby = it }
                         AnimatedVisibility(visible = state.lobby != null, enter = fadeIn(), exit = fadeOut() + shrinkVertically()) {
-                            lastLobby?.let { CallLobbyJoinSection(lobby = it, eventSink = state.eventSink) }
+                            lastLobby?.let {
+                                CallLobbyJoinSection(lobby = it, eventSink = state.eventSink, onExplainMicrophone = {
+                                    isMicrophoneDialogShown =
+                                true
+                                })
+                            }
                         }
                     }
                 }
             }
             val reduceMotion = rememberReduceMotion()
+            val microphoneAction = (state.lobby as? ElementCallLobbyState.Ready)?.microphoneAction
+            if (isMicrophoneDialogShown && microphoneAction != null) {
+                MicrophoneNeededDialog(
+                    action = microphoneAction,
+                    onAction = {
+                        isMicrophoneDialogShown = false
+                        state.eventSink(
+                            when (microphoneAction) {
+                                ElementCallLobbyMicrophoneAction.ALLOW -> ElementCallScreenEvent.RequestMicrophonePermission
+                                ElementCallLobbyMicrophoneAction.OPEN_SETTINGS -> ElementCallScreenEvent.OpenAppSettings
+                            }
+                        )
+                    },
+                    onDismiss = { isMicrophoneDialogShown = false },
+                )
+            }
             ReportScreenReader(state.eventSink)
             ReportScreenStopped(state.eventSink)
             val fullscreen = state.fullscreenTile
@@ -695,6 +718,7 @@ private fun ConnectingPlaceholder(state: ElementCallScreenState) {
 @Composable
 private fun CallControlsBar(
     state: ElementCallScreenState,
+    onExplainMicrophone: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -714,16 +738,19 @@ private fun CallControlsBar(
     ) {
         // While the lobby loads nothing is known to show: settings and Close alone work (045 R59).
         val isLoading = state.lobby is ElementCallLobbyState.Loading
-        // Refused in the lobby, there is no microphone to mute: off and disabled, the preview says why (045 R27).
+        // Refused in the lobby, there is no microphone to mute (045 R27).
         val isMicrophoneRefused = (state.lobby as? ElementCallLobbyState.Ready)?.joinUnavailableReason == ElementCallLobbyJoinBlock.MICROPHONE_REFUSED
         RoundCallButton(
-            enabled = !isLoading && !isMicrophoneRefused,
-            onClick = { state.eventSink(ElementCallScreenEvent.ToggleMicrophoneMuted) },
+            enabled = !isLoading,
+            // Looks unavailable, and a tap says why rather than doing nothing (R27).
+            looksDisabled = isMicrophoneRefused,
+            onClick = { if (isMicrophoneRefused) onExplainMicrophone() else state.eventSink(ElementCallScreenEvent.ToggleMicrophoneMuted) },
             icon = if (state.isMicrophoneMuted || isMicrophoneRefused) ElementCallTheme.icons.microphoneOff else ElementCallTheme.icons.microphoneOn,
             contentDescription = stringResource(
                 if (state.isMicrophoneMuted) R.string.element_call_a11y_unmute_microphone else R.string.element_call_a11y_mute_microphone
             ),
             isActive = state.isMicrophoneMuted,
+            stateDescription = if (isMicrophoneRefused) stringResource(R.string.element_call_permission_microphone_title) else null,
         )
         // Refused in the lobby, it looks unavailable but still answers a tap, which asks or explains (045 R28, 042 C5).
         val isCameraRefused = (state.lobby as? ElementCallLobbyState.Ready)?.camera == ElementCallLobbyCamera.NOT_ALLOWED

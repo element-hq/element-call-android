@@ -83,7 +83,7 @@ class ElementCallLobbyScreenTest : RobolectricTest() {
     }
 
     @Test
-    fun `a Join disabled by a refused microphone says so`() = runAndroidComposeUiTest<ComponentActivity> {
+    fun `a refused microphone blocks Join, and a tap on Join or the microphone says why`() = runAndroidComposeUiTest<ComponentActivity> {
         val refused = aReadyLobby(
             label = ElementCallLobbyJoinLabel.JOIN,
             memberCount = 1,
@@ -95,9 +95,13 @@ class ElementCallLobbyScreenTest : RobolectricTest() {
         setLobby(aLobbyScreenState(lobby = refused, camera = ElementCallLobbyCamera.OFF), events)
 
         onNodeWithTag(ElementCallTestTags.LOBBY_JOIN)
-            .assertIsNotEnabled()
             .assert(hasStateDescription("Allow access to the microphone to join."))
+            .performClick()
         onNodeWithTag(ElementCallTestTags.LOBBY_MICROPHONE_ACTION).performClick()
+        onNodeWithContentDescription("Mute microphone").performClick()
+        onNodeWithTag(ElementCallTestTags.LOBBY_MICROPHONE_ACTION).assertExists()
+
+        // Never a join, never a mute: only the way to the permission (R27).
         assertThat(events.recorded().filter { it.isUserAction() }).containsExactly(ElementCallScreenEvent.OpenAppSettings)
     }
 
