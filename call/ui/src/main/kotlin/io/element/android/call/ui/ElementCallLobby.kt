@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -56,10 +55,6 @@ import io.element.android.call.ui.theme.ElementCallTheme
  * refused microphone's message and the loading Join are placed here and in [JOIN_SECTION_HEIGHT] alone.
  */
 
-/** Whether [CallLobbySummary] is drawn: while somebody is in the call. */
-internal val ElementCallLobbyState?.showsSummary: Boolean
-    get() = this is ElementCallLobbyState.Ready && memberCount > 0
-
 /** The summary's height, kept for the whole lobby so the preview under it never moves. */
 internal val LOBBY_SUMMARY_HEIGHT = 64.dp
 
@@ -91,7 +86,6 @@ internal fun CallLobbyPreviewOverlay(lobby: ElementCallLobbyState, eventSink: (E
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                if (lobby.isCallEndedNoticeShown) CallEndedNotice()
                 lobby.microphoneAction?.let { action -> MicrophoneRefused(action = action, eventSink = eventSink) }
                 if (lobby.camera == ElementCallLobbyCamera.NOT_ALLOWED) CameraNotAllowed(onOpenSettings = { eventSink(ElementCallScreenEvent.OpenAppSettings) })
             }
@@ -137,11 +131,18 @@ internal fun CallLobbyJoinSection(lobby: ElementCallLobbyState, eventSink: (Elem
     }
 }
 
-/** Under the top bar, while somebody is in the call: that it is in progress, and how many (R41). */
+/**
+ * Under the top bar, in the space the lobby always keeps: while somebody is in the call, that it is in progress and how
+ * many (R41); once it has emptied, that it has ended (R57). Empty otherwise.
+ */
 @Composable
 internal fun CallLobbySummary(lobby: ElementCallLobbyState?, isAudioCall: Boolean, modifier: Modifier = Modifier) {
-    if (!lobby.showsSummary) return
-    val ready = lobby as ElementCallLobbyState.Ready
+    val ready = lobby as? ElementCallLobbyState.Ready ?: return
+    if (ready.isCallEndedNoticeShown) {
+        Box(modifier = modifier.height(LOBBY_SUMMARY_HEIGHT), contentAlignment = Alignment.Center) { CallEndedNotice() }
+        return
+    }
+    if (ready.memberCount <= 0) return
     Column(
         modifier = modifier.height(LOBBY_SUMMARY_HEIGHT),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -183,14 +184,11 @@ internal fun CallLobbySummary(lobby: ElementCallLobbyState?, isAudioCall: Boolea
 private fun CallEndedNotice() {
     Text(
         text = stringResource(R.string.element_call_lobby_call_ended),
-        style = ElementCallTheme.typography.bodyMdMedium,
-        color = ElementCallTheme.colors.onOverlay,
+        style = ElementCallTheme.typography.bodyLgMedium,
+        color = ElementCallTheme.colors.textPrimary,
         textAlign = TextAlign.Center,
         modifier = Modifier
             .padding(horizontal = 16.dp)
-            .clip(RoundedCornerShape(percent = 50))
-            .background(ElementCallTheme.colors.overlayScrim)
-            .padding(horizontal = 14.dp, vertical = 6.dp)
             .semantics { liveRegion = LiveRegionMode.Polite }
             .testTag(ElementCallTestTags.LOBBY_CALL_ENDED),
     )
