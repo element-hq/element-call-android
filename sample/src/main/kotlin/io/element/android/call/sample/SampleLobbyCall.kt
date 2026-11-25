@@ -106,6 +106,13 @@ enum class SampleLobbyFixture(
         intent = MatrixRtcCallIntent.VIDEO,
         count = 1,
     ),
+    CAMERA_REFUSED(
+        key = "lobby_camera_refused",
+        title = "Lobby, camera refused",
+        description = "The camera answers refused, whatever the device says: the preview says why and offers settings, Join stays on (R28).",
+        intent = MatrixRtcCallIntent.VIDEO,
+        count = 2,
+    ),
     LOADING(
         key = "lobby_loading",
         title = "Lobby, slow to read the call",
@@ -168,13 +175,20 @@ class SampleLobbyCall(context: Context, private val scope: CoroutineScope, priva
         .analytics(SampleAnalytics)
         .build(scope)
 
-    /** The microphone fixture answers refused whatever the device has granted, so the refusal can be seen on any phone. */
-    override val controller: ElementCallController = if (fixture == SampleLobbyFixture.MIC_REFUSED) {
-        object : ElementCallController by stack.controller {
+    /** The refusal fixtures answer refused whatever the device has granted, so the refusal can be seen on any phone. */
+    override val controller: ElementCallController = when (fixture) {
+        SampleLobbyFixture.MIC_REFUSED -> object : ElementCallController by stack.controller {
             override fun setMicrophonePermissionGranted(granted: Boolean) = stack.controller.setMicrophonePermissionGranted(false)
         }
-    } else {
-        stack.controller
+        // A tap that would have asked turns nothing on either: the camera stays refused.
+        SampleLobbyFixture.CAMERA_REFUSED -> object : ElementCallController by stack.controller {
+            override fun setCameraPermissionGranted(granted: Boolean) = stack.controller.setCameraPermissionGranted(false)
+
+            override fun setCameraEnabled(enabled: Boolean) {
+                if (!enabled) stack.controller.setCameraEnabled(false)
+            }
+        }
+        else -> stack.controller
     }
 
     override fun start() {
