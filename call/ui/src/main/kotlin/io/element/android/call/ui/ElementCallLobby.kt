@@ -168,14 +168,13 @@ private fun CallEndedNotice() {
 
 /**
  * One node from the first frame, loading or not, so a screen reader that starts on it hears it change in place (R35,
- * R59, contract C20). Disabled while loading. Blocked by a refused microphone, it looks disabled and a tap says why,
- * in a dialog (R27, R51).
+ * R59, contract C20). Disabled while loading. Blocked by a refused microphone, it looks as usual, never joins, and a
+ * tap says why in a dialog (R27, R51).
  */
 @Composable
 private fun JoinButton(lobby: ElementCallLobbyState, onJoin: () -> Unit, onExplainMicrophone: () -> Unit, modifier: Modifier = Modifier) {
     val ready = lobby as? ElementCallLobbyState.Ready
     val isBlocked = ready?.joinUnavailableReason != null
-    val isEnabled = ready != null && !isBlocked
     val label = ready?.joinLabel?.let { stringResource(it.text) }
     val description = label ?: stringResource(R.string.element_call_lobby_loading)
     // Disabled, the reason (R51, C26); enabled, the count with the label (R35, R41).
@@ -190,7 +189,8 @@ private fun JoinButton(lobby: ElementCallLobbyState, onJoin: () -> Unit, onExpla
             .heightIn(min = 48.dp)
             .clip(CircleShape)
             .background(ElementCallTheme.colors.bgActionPrimaryRest)
-            .alpha(if (isEnabled) 1f else DISABLED_ALPHA)
+            // Dimmed only while loading: blocked, it looks like the way forward, and its tap says what is missing.
+            .alpha(if (ready != null) 1f else DISABLED_ALPHA)
             .clickable(enabled = ready != null, onClick = if (isBlocked) onExplainMicrophone else onJoin)
             .clearAndSetSemantics {
                 testTag = ElementCallTestTags.LOBBY_JOIN
