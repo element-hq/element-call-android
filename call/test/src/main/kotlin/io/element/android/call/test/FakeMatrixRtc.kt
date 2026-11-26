@@ -49,6 +49,7 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.onStart
 
 class FakeMatrixRtcClient(
@@ -524,8 +525,10 @@ class FakeMatrixRtcLocalCamera(
     override val isCapturing = MutableStateFlow(false)
     override val isFrontFacing = MutableStateFlow(true)
 
+    // Retained once more, as the real camera's copies are never released by it: the self view's operators buffer, and a
+    // test pattern releases its own reference as soon as emit returns, before the renderer has the frame.
     @OptIn(ExperimentalCoroutinesApi::class)
-    override val frames: Flow<MatrixRtcVideoFrame> = isCapturing.flatMapLatest { if (it) pictures else emptyFlow() }
+    override val frames: Flow<MatrixRtcVideoFrame> = isCapturing.flatMapLatest { if (it) pictures.onEach { frame -> frame.retain() } else emptyFlow() }
 
     var startCount = 0
         private set
