@@ -17,6 +17,7 @@ import android.view.accessibility.AccessibilityManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandHorizontally
@@ -41,10 +42,13 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
@@ -150,8 +154,19 @@ fun ElementCallScreen(
             // R43), so the stage is told how much of its bottom the bar covers and scrolls its last
             // row clear of it (R44).
             val bottomInset = LocalCallStageTestHooks.current?.bottomInset ?: WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
+            // Sideways, under the preview, the lobby's controls left it a strip: they take a column at the end instead.
+            val isLobbySplit = isLandscape && state.lobby != null
+            val lobbyPanelWidth = minOf(LOBBY_PANEL_WIDTH, maxWidth / 2)
+            // Grown back to the full width at Join, never on a rotation; the same stage, so our renderer stays (045 R49).
+            val lobbyPanelShare = remember(isLandscape) { Animatable(if (isLobbySplit) 1f else 0f) }
+            LaunchedEffect(isLobbySplit) { lobbyPanelShare.animateTo(if (isLobbySplit) 1f else 0f) }
+            val stageWidth = maxWidth - lobbyPanelWidth * lobbyPanelShare.value
             // The lobby's Join line sits under the bar, and the preview's frame stays clear of both (045 R9).
-            val controlsClearance = CONTROLS_HEIGHT + bottomInset + if (state.lobby != null) JOIN_SECTION_HEIGHT else 0.dp
+            val controlsClearance = when {
+                isLobbySplit -> bottomInset
+                state.lobby != null -> CONTROLS_HEIGHT + bottomInset + JOIN_SECTION_HEIGHT
+                else -> CONTROLS_HEIGHT + bottomInset
+            }
             // The stage has the same bounds in every arrangement, fullscreen included, and the chrome
             // floats over it: a stage that moved or resized when a tile went fullscreen would take the
             // whole grid with it on the first frame of the move (spec 000 R7). Held upright, the top
@@ -239,7 +254,7 @@ fun ElementCallScreen(
                     isFullBleed && !state.isStageChromeVisible -> statusBarTop - topClearance
                     else -> 0.dp
                 },
-                right = systemBars.calculateRightPadding(LayoutDirection.Ltr),
+                right = if (isLobbySplit) 0.dp else systemBars.calculateRightPadding(LayoutDirection.Ltr),
                 bottom = if (state.isStageChromeVisible) controlsClearance else bottomInset,
             )
 
@@ -248,13 +263,17 @@ fun ElementCallScreen(
                     ConnectingPlaceholder(state)
                 } else {
                     ReportStageOrientation(isLandscape = isLandscape, eventSink = state.eventSink)
+                    // Across the panel too, or the stage's edge would cut it.
+                    val isGlowShared = lobbyPanelShare.value > 0f
+                    if (isGlowShared) StageGlowBand(Modifier.align(Alignment.BottomCenter))
                     CallStage(
                         state = state,
                         controlsClearance = controlsClearance,
                         topClearance = topClearance,
                         fullscreenTop = statusBarTop,
                         floatingInsets = floatingInsets,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxHeight().width(stageWidth),
+                        drawsGlow = !isGlowShared,
                     )
                 }
                 // All the chrome, gone at once rather than slid away when the system is about to shrink the
@@ -344,7 +363,7 @@ fun ElementCallScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             ScreenShareBanner(state = state)
-                            CallLobbySummary(lobby = state.lobby, isAudioCall = state.isAudioCall)
+                            if (!isLobbySplit) CallLobbySummary(lobby = state.lobby, isAudioCall = state.isAudioCall)
                             AnimatedVisibility(
                                 visible = state.isStageChromeVisible,
                                 enter = fadeIn(tween(CHROME_SLIDE_MS)),
@@ -353,13 +372,23 @@ fun ElementCallScreen(
                                 CallDurationLabel(state = state)
                             }
                         }
-                        StageChrome(
-                            isVisible = state.isStageChromeVisible,
-                            edge = Alignment.Bottom,
-                            reduceMotion = reduceMotion,
-                            modifier = Modifier.align(Alignment.BottomCenter),
-                        ) {
-                            controls(Modifier)
+                        if (isLobbySplit) {
+                            CallLobbyPanel(
+                                state = state,
+                                onExplainMicrophone = { isMicrophoneDialogShown = true },
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .width(lobbyPanelWidth),
+                            )
+                        } else {
+                            StageChrome(
+                                isVisible = state.isStageChromeVisible,
+                                edge = Alignment.Bottom,
+                                reduceMotion = reduceMotion,
+                                modifier = Modifier.align(Alignment.BottomCenter),
+                            ) {
+                                controls(Modifier)
+                            }
                         }
                     } else {
                         CallDurationLabel(
@@ -718,6 +747,23 @@ private fun ConnectingPlaceholder(state: ElementCallScreenState) {
  * spread across the phone they read as unrelated buttons rather than one bar.
  */
 @Composable
+private fun CallLobbyPanel(state: ElementCallScreenState, onExplainMicrophone: () -> Unit, modifier: Modifier = Modifier) {
+    val lobby = state.lobby ?: return
+    Column(
+        modifier = modifier
+            .fillMaxHeight()
+            .windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility.only(WindowInsetsSides.End + WindowInsetsSides.Vertical))
+            .padding(top = TOP_BAR_HEIGHT),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        CallLobbySummary(lobby = lobby, isAudioCall = state.isAudioCall)
+        CallControlsBar(state, onExplainMicrophone = onExplainMicrophone)
+        CallLobbyJoinSection(lobby = lobby, eventSink = state.eventSink, onExplainMicrophone = onExplainMicrophone)
+    }
+}
+
+@Composable
 private fun CallControlsBar(
     state: ElementCallScreenState,
     onExplainMicrophone: () -> Unit,
@@ -1009,6 +1055,9 @@ private val TOP_SCRIM_EXTENT = 24.dp
 
 /** The top bar's height: an icon button and the bar's padding either side of it. */
 private val TOP_BAR_HEIGHT = 56.dp
+
+/** The lobby's column of controls beside its preview, held sideways; at most half the screen. */
+private val LOBBY_PANEL_WIDTH = 320.dp
 
 /** An icon button's width plus the bar's own padding, kept clear on both sides of the title. */
 private val TOP_BAR_BUTTON_ROOM = 52.dp

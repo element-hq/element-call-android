@@ -131,6 +131,8 @@ internal fun CallStage(
     modifier: Modifier = Modifier,
     /** Null to choose by the call: the small-call layout up to five tiles, the ranked grid beyond (019 R1, R8). */
     arrangement: CallStageArrangement? = null,
+    /** False while the screen draws the glow across more than the stage: the lobby's side panel. */
+    drawsGlow: Boolean = true,
 ) {
     val isLobby = state.lobby != null
     val chosen = arrangement ?: when {
@@ -508,7 +510,7 @@ internal fun CallStage(
         Box(modifier = Modifier.fillMaxSize().graphicsLayer { translationY = gridTop - scrollOffset.floatValue }) {
         // The design's glow, at the end of the content: always there in a stage that does not scroll, and reached at the
         // bottom of one that does. Behind every tile.
-        StageGlow(contentBottom = layout.contentHeight)
+        if (drawsGlow) StageGlow(contentBottom = layout.contentHeight)
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -1133,12 +1135,17 @@ private val APPEARANCE_SPEC = tween<Float>(durationMillis = 220)
 /** The glow under the controls, ending at [contentBottom] in content coordinates and fading into the canvas upwards. */
 @Composable
 private fun StageGlow(contentBottom: Float) {
+    val height = with(LocalDensity.current) { STAGE_GLOW_HEIGHT.toPx() }
+    StageGlowBand(Modifier.offset { IntOffset(0, (contentBottom - height).roundToInt()) })
+}
+
+/** The glow alone, as wide as it is given. */
+@Composable
+internal fun StageGlowBand(modifier: Modifier = Modifier) {
     val glow = ElementCallTheme.colors.stageGlow
     val canvas = ElementCallTheme.colors.bgCanvas
-    val height = with(LocalDensity.current) { STAGE_GLOW_HEIGHT.toPx() }
     Box(
-        modifier = Modifier
-            .offset { IntOffset(0, (contentBottom - height).roundToInt()) }
+        modifier = modifier
             .fillMaxWidth()
             .height(STAGE_GLOW_HEIGHT)
             .drawBehind {
