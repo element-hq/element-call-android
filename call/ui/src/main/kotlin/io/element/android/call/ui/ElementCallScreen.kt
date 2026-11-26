@@ -39,6 +39,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -50,6 +51,7 @@ import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.systemBarsIgnoringVisibility
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.layout.wrapContentWidth
@@ -768,7 +770,7 @@ private fun CallControlsBar(
         )
         // Absent in the lobby, the output included (design, 2026-11-25), grown in place at the tap (045 R24).
         AnimatedVisibility(visible = state.lobby == null, enter = expandHorizontally() + fadeIn(), exit = shrinkHorizontally() + fadeOut()) {
-            Row(horizontalArrangement = Arrangement.spacedBy(BUTTON_GAP), verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 AudioDeviceButton(state)
                 CallBarSlotAndHangUp(state)
             }
@@ -776,42 +778,21 @@ private fun CallControlsBar(
     }
 }
 
-/** The bar's last two places: the slot, then hang up. */
+/** The bar's last two places: the slot, grown in and out as it comes and goes, then hang up. */
 @Composable
 private fun CallBarSlotAndHangUp(state: ElementCallScreenState) {
+    val slot = state.barSlot
+    // Kept while it shrinks away, so the exit shows the button that is leaving.
+    val shownSlot = remember { SlotHolder() }
+    if (slot != null) shownSlot.value = slot
     run {
-        when (val slot = state.barSlot) {
-            ElementCallBarSlot.More -> RoundCallButton(
-                onClick = { state.eventSink(ElementCallScreenEvent.Present(ElementCallSheet.MORE)) },
-                icon = ElementCallTheme.icons.overflow,
-                contentDescription = stringResource(R.string.element_call_more_title),
-                isActive = false,
-                modifier = Modifier.testTag(ElementCallTestTags.CONTROLS_MORE),
-            )
-            is ElementCallBarSlot.Action -> when (slot.action) {
-                ElementCallBarAction.RAISED_HAND -> RaiseHandButton(state)
-                ElementCallBarAction.REACTIONS -> RoundCallButton(
-                    onClick = { state.eventSink(ElementCallScreenEvent.Present(ElementCallSheet.REACTIONS)) },
-                    icon = ElementCallTheme.icons.reaction,
-                    contentDescription = stringResource(R.string.element_call_a11y_send_reaction),
-                    isActive = false,
-                    enabled = state.isReactionControlEnabled,
-                    modifier = Modifier.testTag(ElementCallTestTags.REACTIONS),
-                )
-                ElementCallBarAction.SCREEN_SHARE -> RoundCallButton(
-                    onClick = { state.eventSink(ElementCallScreenEvent.ToggleScreenShare) },
-                    icon = if (state.isScreenSharing) ElementCallTheme.icons.shareScreenActive else ElementCallTheme.icons.shareScreen,
-                    contentDescription = stringResource(
-                        if (state.isScreenSharing) R.string.element_call_a11y_stop_screen_share else R.string.element_call_a11y_start_screen_share
-                    ),
-                    isActive = state.isScreenSharing,
-                    enabled = state.isScreenSharing || state.isScreenShareStartEnabled,
-                    modifier = Modifier.testTag(ElementCallTestTags.SCREEN_SHARE),
-                )
+        AnimatedVisibility(visible = slot != null, enter = expandHorizontally() + fadeIn(), exit = shrinkHorizontally() + fadeOut()) {
+            Row {
+                Spacer(Modifier.width(BUTTON_GAP))
+                shownSlot.value?.let { CallBarSlot(state, it) }
             }
-            // Four controls: nothing else is offered, and an empty slot is not drawn.
-            null -> Unit
         }
+        Spacer(Modifier.width(BUTTON_GAP))
         RoundCallButton(
             onClick = { state.eventSink(ElementCallScreenEvent.HangUp) },
             icon = ElementCallTheme.icons.endCall,
@@ -820,6 +801,44 @@ private fun CallBarSlotAndHangUp(state: ElementCallScreenState) {
             background = ElementCallTheme.colors.hangUp,
             tint = ElementCallTheme.colors.onOverlay,
         )
+    }
+}
+
+/** Not snapshot state: written during composition, read only by the same composition. */
+@Suppress("UseDataClass") // A mutable cell remembered by identity, never compared.
+private class SlotHolder(var value: ElementCallBarSlot? = null)
+
+@Composable
+private fun CallBarSlot(state: ElementCallScreenState, slot: ElementCallBarSlot) {
+    when (slot) {
+        ElementCallBarSlot.More -> RoundCallButton(
+            onClick = { state.eventSink(ElementCallScreenEvent.Present(ElementCallSheet.MORE)) },
+            icon = ElementCallTheme.icons.overflow,
+            contentDescription = stringResource(R.string.element_call_more_title),
+            isActive = false,
+            modifier = Modifier.testTag(ElementCallTestTags.CONTROLS_MORE),
+        )
+        is ElementCallBarSlot.Action -> when (slot.action) {
+            ElementCallBarAction.RAISED_HAND -> RaiseHandButton(state)
+            ElementCallBarAction.REACTIONS -> RoundCallButton(
+                onClick = { state.eventSink(ElementCallScreenEvent.Present(ElementCallSheet.REACTIONS)) },
+                icon = ElementCallTheme.icons.reaction,
+                contentDescription = stringResource(R.string.element_call_a11y_send_reaction),
+                isActive = false,
+                enabled = state.isReactionControlEnabled,
+                modifier = Modifier.testTag(ElementCallTestTags.REACTIONS),
+            )
+            ElementCallBarAction.SCREEN_SHARE -> RoundCallButton(
+                onClick = { state.eventSink(ElementCallScreenEvent.ToggleScreenShare) },
+                icon = if (state.isScreenSharing) ElementCallTheme.icons.shareScreenActive else ElementCallTheme.icons.shareScreen,
+                contentDescription = stringResource(
+                    if (state.isScreenSharing) R.string.element_call_a11y_stop_screen_share else R.string.element_call_a11y_start_screen_share
+                ),
+                isActive = state.isScreenSharing,
+                enabled = state.isScreenSharing || state.isScreenShareStartEnabled,
+                modifier = Modifier.testTag(ElementCallTestTags.SCREEN_SHARE),
+            )
+        }
     }
 }
 
