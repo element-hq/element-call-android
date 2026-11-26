@@ -139,6 +139,12 @@ sealed interface ElementCallScreenEvent {
     data class SendReaction(val kind: MatrixRtcReactionKind) : ElementCallScreenEvent
 
     data object HangUp : ElementCallScreenEvent
+
+    /** Start or Join, from the lobby (feature-hq 045 R21). */
+    data object Join : ElementCallScreenEvent
+
+    /** The lobby's refused-microphone button, where the system will still ask (045 R27). */
+    data object RequestMicrophonePermission : ElementCallScreenEvent
 }
 
 /** What the stage and the screen tell the presenter about the chrome (spec 014). Theirs alone, so not a host's to send. */

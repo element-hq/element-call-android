@@ -21,6 +21,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.google.common.truth.Truth.assertThat
 import io.element.android.call.ui.ElementCallTestTags
+import io.element.android.call.ui.OWN_CAMERA_TILE_ID
 import io.element.android.call.ui.R
 import org.junit.Rule
 import org.junit.Test
@@ -85,7 +86,7 @@ class SmallCallTest {
         }
     }
 
-    private fun ownTile(): DpRect = composeRule.onNodeWithTag(ElementCallTestTags.tile(SampleFixture.memberIdOf("Alice"))).getBoundsInRoot()
+    private fun ownTile(): DpRect = composeRule.onNodeWithTag(ElementCallTestTags.tile(OWN_CAMERA_TILE_ID)).getBoundsInRoot()
 
     private fun ownTileCentre(): Offset {
         val tile = ownTile()

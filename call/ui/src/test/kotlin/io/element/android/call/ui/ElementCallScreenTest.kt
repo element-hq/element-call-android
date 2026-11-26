@@ -190,7 +190,7 @@ class ElementCallScreenTest : RobolectricTest() {
                         isScreenSharing = true,
                         // The switch-camera button is on our own tile, so we need one with a picture.
                         participants = listOf(aLocalParticipant()),
-                        videoFrames = mapOf(A_LOCAL_MEMBER_ID to emptyFlow()),
+                        videoFrames = mapOf(OWN_CAMERA_TILE_ID to emptyFlow()),
                         eventSink = events,
                     ),
                 )
@@ -519,7 +519,7 @@ class ElementCallScreenTest : RobolectricTest() {
         // With our camera on: off, our floating tile is not on the stage (030 R17).
         val events = setOneToOne()
         waitForIdle()
-        val own = onNodeWithTag(ElementCallTestTags.tile(A_LOCAL_MEMBER_ID))
+        val own = onNodeWithTag(ElementCallTestTags.tile(OWN_CAMERA_TILE_ID))
 
         events.clear()
         own.performTouchInput { click() }
@@ -544,19 +544,19 @@ class ElementCallScreenTest : RobolectricTest() {
             }
         }
         waitForIdle()
-        val own = onNodeWithTag(ElementCallTestTags.tile(A_LOCAL_MEMBER_ID))
+        val own = onNodeWithTag(ElementCallTestTags.tile(OWN_CAMERA_TILE_ID))
 
         events.clear()
         own.performTouchInput { doubleClick() }
         waitForIdle()
-        events.assertList(listOf(StageChromeEvent.TapStage, ElementCallScreenEvent.ToggleFullscreen(A_LOCAL_MEMBER_ID)))
+        events.assertList(listOf(StageChromeEvent.TapStage, ElementCallScreenEvent.ToggleFullscreen(OWN_CAMERA_TILE_ID)))
     }
 
     /** Dropped after a slow drag, our floating tile goes to the corner it was let go nearest (019 R21). */
     @Test
     fun `a slow drag drops our tile on the nearest corner`() = runAndroidComposeUiTest<ComponentActivity> {
         val events = setOneToOne()
-        val tile = onNodeWithTag(ElementCallTestTags.tile(A_LOCAL_MEMBER_ID))
+        val tile = onNodeWithTag(ElementCallTestTags.tile(OWN_CAMERA_TILE_ID))
         val start = tile.fetchSemanticsNode().boundsInRoot.center
 
         onRoot().performTouchInput { swipe(start, Offset(60f, 200f), durationMillis = 1_500) }
@@ -569,7 +569,7 @@ class ElementCallScreenTest : RobolectricTest() {
     @Test
     fun `a flick carries our tile to the corner it was thrown towards`() = runAndroidComposeUiTest<ComponentActivity> {
         val events = setOneToOne()
-        val start = onNodeWithTag(ElementCallTestTags.tile(A_LOCAL_MEMBER_ID)).fetchSemanticsNode().boundsInRoot.center
+        val start = onNodeWithTag(ElementCallTestTags.tile(OWN_CAMERA_TILE_ID)).fetchSemanticsNode().boundsInRoot.center
 
         onRoot().performTouchInput {
             down(start)
@@ -585,7 +585,7 @@ class ElementCallScreenTest : RobolectricTest() {
     @Test
     fun `a flick that rests before the release is a drop`() = runAndroidComposeUiTest<ComponentActivity> {
         val events = setOneToOne()
-        val start = onNodeWithTag(ElementCallTestTags.tile(A_LOCAL_MEMBER_ID)).fetchSemanticsNode().boundsInRoot.center
+        val start = onNodeWithTag(ElementCallTestTags.tile(OWN_CAMERA_TILE_ID)).fetchSemanticsNode().boundsInRoot.center
 
         onRoot().performTouchInput {
             down(start)
@@ -636,7 +636,7 @@ class ElementCallScreenTest : RobolectricTest() {
     fun `our floating tile is announced with its camera and its corner`() = runAndroidComposeUiTest<ComponentActivity> {
         setOneToOne()
 
-        onNodeWithTag(ElementCallTestTags.tile(A_LOCAL_MEMBER_ID))
+        onNodeWithTag(ElementCallTestTags.tile(OWN_CAMERA_TILE_ID))
             .assert(hasContentDescription("You, Camera on, Bottom right"))
     }
 
@@ -644,7 +644,7 @@ class ElementCallScreenTest : RobolectricTest() {
     @Test
     fun `our floating tile offers to move to the three other corners`() = runAndroidComposeUiTest<ComponentActivity> {
         val events = setOneToOne()
-        val tile = onNodeWithTag(ElementCallTestTags.tile(A_LOCAL_MEMBER_ID))
+        val tile = onNodeWithTag(ElementCallTestTags.tile(OWN_CAMERA_TILE_ID))
 
         val actions = tile.fetchSemanticsNode().config[SemanticsActions.CustomActions]
         assertThat(actions.map { it.label }).containsExactly("Move to top left", "Move to top right", "Move to bottom left")
@@ -667,7 +667,7 @@ class ElementCallScreenTest : RobolectricTest() {
                         isCameraEnabled = true,
                         isCameraPermissionGranted = true,
                         isCameraSwitchAvailable = isCameraSwitchAvailable,
-                        videoFrames = mapOf(A_LOCAL_MEMBER_ID to emptyFlow(), A_REMOTE_MEMBER_ID to emptyFlow()),
+                        videoFrames = mapOf(OWN_CAMERA_TILE_ID to emptyFlow(), A_REMOTE_MEMBER_ID to emptyFlow()),
                         eventSink = events,
                     ),
                 )
@@ -722,7 +722,7 @@ class ElementCallScreenTest : RobolectricTest() {
         waitForIdle()
 
         events.clear()
-        onNodeWithTag(ElementCallTestTags.tile(A_LOCAL_MEMBER_ID)).performTouchInput { swipeUp() }
+        onNodeWithTag(ElementCallTestTags.tile(OWN_CAMERA_TILE_ID)).performTouchInput { swipeUp() }
         waitForIdle()
 
         val chromeEvents = events.recorded().filterIsInstance<StageChromeEvent>()

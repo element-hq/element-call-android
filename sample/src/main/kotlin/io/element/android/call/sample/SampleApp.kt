@@ -111,6 +111,10 @@ fun SampleApp(
                                 harness.stopScenario()
                                 controller.startOutage(it)
                             },
+                            onOpenLobby = {
+                                harness.stopScenario()
+                                controller.startLobby(it)
+                            },
                             onOpenReactions = {
                                 harness.stopScenario()
                                 controller.startReactions()

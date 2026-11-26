@@ -18,6 +18,7 @@ import io.element.android.call.api.rtc.MatrixRtcClient
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcInterruptions
 import io.element.android.call.api.rtc.MatrixRtcLeaveReason
+import io.element.android.call.api.rtc.MatrixRtcLocalCamera
 import io.element.android.call.api.rtc.MatrixRtcLocalState
 import io.element.android.call.api.rtc.MatrixRtcMediaSession
 import io.element.android.call.api.rtc.MatrixRtcMembership
@@ -37,20 +38,33 @@ import io.element.android.call.api.rtc.MatrixRtcVideoFrame
 import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.call.api.rtc.windowed
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.onStart
 
 class FakeMatrixRtcClient(
     private val roomResult: () -> Result<MatrixRtcRoom>? = { null },
     private val joinResult: () -> Result<MatrixRtcCall>? = { null },
     /** Completed by a test to let a join return; a join waits on it while it is pending. */
     private val joinGate: CompletableDeferred<Unit>? = null,
-    /** What a call joined here settles on when we did not start it, as the core would from its members. */
-    private val callIntent: MatrixRtcCallIntent = MatrixRtcCallIntent.VIDEO,
+    /** What the members of a call here agree on, as the core reads them; null when they do not, and video then applies. */
+    private val membersIntent: MatrixRtcCallIntent? = null,
+    /** Completed by a test to let a room open; an open waits on it while it is pending, as the core seeding it. */
+    private val roomGate: CompletableDeferred<Unit>? = null,
+    /** Called on each room as it opens, before anyone has read it: what a test scripts the lobby's reads with. */
+    private val onRoomOpened: (FakeMatrixRtcRoom) -> Unit = {},
+    /** What our camera shows while it runs: a harness gives it a pattern; none for a test, which counts. */
+    private val cameraFrames: () -> Flow<MatrixRtcVideoFrame> = { emptyFlow() },
     /** What [supportedVideoCodecs] answers: the codecs "this device" can encode. */
     var videoCodecs: List<MatrixRtcVideoCodec> = listOf(MatrixRtcVideoCodec.VP8, MatrixRtcVideoCodec.H264, MatrixRtcVideoCodec.VP9),
 ) : MatrixRtcClient {
@@ -63,6 +77,17 @@ class FakeMatrixRtcClient(
 
     /** The call joined in the last room. */
     val lastCall: FakeMatrixRtcCall? get() = lastRoom?.lastCall
+
+    /** Every room opened, in order. */
+    val rooms = mutableListOf<FakeMatrixRtcRoom>()
+
+    /** Every camera handed out, one per call attempt. */
+    val cameras = mutableListOf<FakeMatrixRtcLocalCamera>()
+
+    /** What [camera] hands out; a harness gives it pictures. */
+    var newCamera: () -> FakeMatrixRtcLocalCamera = { FakeMatrixRtcLocalCamera(pictures = cameraFrames()) }
+
+    override fun camera(): MatrixRtcLocalCamera = newCamera().also { cameras += it }
 
     /** What [signallingHealth] reports; set it to move the homeserver in and out of reach. */
     val signalling = MutableStateFlow<MatrixRtcSignallingHealth>(MatrixRtcSignallingHealth.Reachable)
@@ -81,8 +106,13 @@ class FakeMatrixRtcClient(
     override suspend fun room(roomId: RoomId, format: MatrixRtcMembershipFormat): Result<MatrixRtcRoom> {
         roomCount++
         lastMembershipFormat = format
+        roomGate?.await()
         roomResult()?.let { return it }
-        return Result.success(FakeMatrixRtcRoom(roomId, joinResult, joinGate, callIntent).also { lastRoom = it })
+        val room = FakeMatrixRtcRoom(roomId, joinResult, joinGate, membersIntent, format)
+        onRoomOpened(room)
+        rooms += room
+        lastRoom = room
+        return Result.success(room)
     }
 }
 
@@ -90,7 +120,10 @@ class FakeMatrixRtcRoom(
     override val roomId: RoomId,
     private val joinResult: () -> Result<MatrixRtcCall>? = { null },
     private val joinGate: CompletableDeferred<Unit>? = null,
-    private val callIntent: MatrixRtcCallIntent = MatrixRtcCallIntent.VIDEO,
+    /** What the members agree on; null when they do not. */
+    private val membersIntent: MatrixRtcCallIntent? = null,
+    /** The format it was opened in. */
+    val membershipFormat: MatrixRtcMembershipFormat = MatrixRtcMembershipFormat.MSC,
 ) : MatrixRtcRoom {
     var joinCallCount = 0
         private set
@@ -101,23 +134,49 @@ class FakeMatrixRtcRoom(
     var shutdownCount = 0
         private set
 
-    override suspend fun joinCall(kind: MatrixRtcCallKind, applicationSlotId: String?): Result<MatrixRtcCall> {
+    /** The intent the last join stated. */
+    var lastJoinIntent: MatrixRtcCallIntent? = null
+        private set
+
+    /** Every `requested` [callIntent] was asked with, in order. */
+    val callIntentRequests = mutableListOf<MatrixRtcCallIntent?>()
+
+    /** What [callIntent] answers; by default the core's order: requested, else the members', else video. Suspend in it to hold it. */
+    var callIntentResult: suspend (requested: MatrixRtcCallIntent?) -> Result<MatrixRtcCallIntent> = { requested ->
+        Result.success(requested ?: membersIntent ?: MatrixRtcCallIntent.VIDEO)
+    }
+
+    /** The core's count for the room's call; null before its first snapshot, which holds the lobby in loading. */
+    val memberCount = MutableStateFlow<Int?>(0)
+
+    /** What [memberCountUpdates] returns; replace it to end or fail the subscription. */
+    var memberCountFlow: Flow<Int> = memberCount.filterNotNull()
+
+    /** How many count subscriptions are open now. */
+    var openMemberCountSubscriptions = 0
+        private set
+
+    override suspend fun joinCall(kind: MatrixRtcCallKind, intent: MatrixRtcCallIntent, applicationSlotId: String?): Result<MatrixRtcCall> {
         joinCallCount++
         lastKind = kind
+        lastJoinIntent = intent
         joinGate?.await()
         joinResult()?.let { return it }
-        return Result.success(FakeMatrixRtcCall(roomId, "m.call#${applicationSlotId ?: "room"}", kind.startedIntent() ?: callIntent).also { lastCall = it })
+        return Result.success(FakeMatrixRtcCall(roomId, "m.call#${applicationSlotId ?: "room"}", intent).also { lastCall = it })
     }
+
+    override suspend fun callIntent(requested: MatrixRtcCallIntent?, applicationSlotId: String?): Result<MatrixRtcCallIntent> {
+        callIntentRequests += requested
+        return callIntentResult(requested)
+    }
+
+    override fun memberCountUpdates(applicationSlotId: String?): Flow<Int> = memberCountFlow
+        .onStart { openMemberCountSubscriptions++ }
+        .onCompletion { openMemberCountSubscriptions-- }
 
     override suspend fun shutdown() {
         shutdownCount++
     }
-}
-
-/** The intent a call is started with; a join into a call in progress has none, and takes its members'. */
-private fun MatrixRtcCallKind.startedIntent(): MatrixRtcCallIntent? = when (this) {
-    is MatrixRtcCallKind.Group -> notify?.intent
-    is MatrixRtcCallKind.Direct -> ring?.intent
 }
 
 class FakeMatrixRtcCall(
@@ -192,13 +251,25 @@ class FakeMatrixRtcCall(
     var lastVideoCodec: MatrixRtcVideoCodec? = null
         private set
 
-    override suspend fun connectMedia(isSfuFallbackEnabled: Boolean, videoCodec: MatrixRtcVideoCodec): Result<MatrixRtcMediaSession> {
+    /** The camera the last [connectMedia] was handed. */
+    var lastCamera: MatrixRtcLocalCamera? = null
+        private set
+
+    override suspend fun connectMedia(
+        camera: MatrixRtcLocalCamera,
+        isSfuFallbackEnabled: Boolean,
+        videoCodec: MatrixRtcVideoCodec,
+    ): Result<MatrixRtcMediaSession> {
+        lastCamera = camera
         lastIsSfuFallbackEnabled = isSfuFallbackEnabled
         lastVideoCodec = videoCodec
         connectMediaCount++
         onConnectMedia()
         connectMediaFailure?.let { return Result.failure(it) }
-        return Result.success(newMediaSession().also { lastMediaSession = it }).also {
+        val session = newMediaSession()
+        session.camera = camera as? FakeMatrixRtcLocalCamera
+        lastMediaSession = session
+        return Result.success(session).also {
             if (status.value == MatrixRtcCallStatus.Connecting) status.value = MatrixRtcCallStatus.Connected(connectedSinceMs, degraded = false)
         }
     }
@@ -217,6 +288,9 @@ class FakeMatrixRtcMediaSession(
     private val frames: ((memberId: String, kind: MatrixRtcStreamKind) -> Flow<MatrixRtcVideoFrame>)? = null,
 ) : MatrixRtcMediaSession {
     override val localMemberId: String = "aLocalMemberId"
+
+    /** The camera the call was handed: turning ours on starts it and attaches it, as the real session does (045 R49). */
+    var camera: FakeMatrixRtcLocalCamera? = null
 
     private val _events = MutableSharedFlow<MatrixRtcCallEvent>(extraBufferCapacity = 8)
     override val events: Flow<MatrixRtcCallEvent> = _events
@@ -379,12 +453,21 @@ class FakeMatrixRtcMediaSession(
 
     override suspend fun setCameraEnabled(enabled: Boolean): Result<Unit> {
         cameraEnabledCalls += enabled
+        camera?.let {
+            if (enabled) {
+                it.start()
+                it.attachCount++
+            } else {
+                it.stop()
+            }
+        }
         _isCameraEnabled.value = enabled
         return Result.success(Unit)
     }
 
     override suspend fun switchCamera(): Result<Unit> {
         switchCameraCount++
+        camera?.switchCamera()
         _isFrontCamera.value = !_isFrontCamera.value
         return Result.success(Unit)
     }
@@ -428,4 +511,50 @@ class FakeMatrixRtcMediaSession(
     }
 
     override fun close() = Unit
+}
+
+/**
+ * Our camera, with no device: frames from [frames] while started, and every start and stop counted, so a test can say the
+ * device opened once from the lobby into the call (feature-hq 045 R49).
+ */
+class FakeMatrixRtcLocalCamera(
+    private val pictures: Flow<MatrixRtcVideoFrame> = emptyFlow(),
+    /** What [start] answers. */
+    var startResult: () -> Result<Unit> = { Result.success(Unit) },
+) : MatrixRtcLocalCamera {
+    override val isCapturing = MutableStateFlow(false)
+    override val isFrontFacing = MutableStateFlow(true)
+
+    // Retained once more, as the real camera's copies are never released by it: the self view's operators buffer, and a
+    // test pattern releases its own reference as soon as emit returns, before the renderer has the frame.
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override val frames: Flow<MatrixRtcVideoFrame> = isCapturing.flatMapLatest { if (it) pictures.onEach { frame -> frame.retain() } else emptyFlow() }
+
+    var startCount = 0
+        private set
+    var stopCount = 0
+        private set
+    var switchCount = 0
+        private set
+
+    /** How many times a media session attached a track to it. */
+    var attachCount = 0
+
+    override suspend fun start(): Result<Unit> {
+        if (isCapturing.value) return Result.success(Unit)
+        startCount++
+        return startResult().onSuccess { isCapturing.value = true }
+    }
+
+    override suspend fun switchCamera(): Result<Unit> {
+        if (!isCapturing.value) return Result.success(Unit)
+        switchCount++
+        isFrontFacing.value = !isFrontFacing.value
+        return Result.success(Unit)
+    }
+
+    override fun stop() {
+        if (isCapturing.value) stopCount++
+        isCapturing.value = false
+    }
 }

@@ -15,6 +15,21 @@ import io.element.android.call.api.rtc.MatrixRtcVideoCodec
  * things with no text and no content description, because they are pictures.
  */
 object ElementCallTestTags {
+    /** The lobby's Start or Join button (feature-hq 045). */
+    const val LOBBY_JOIN = "element_call_lobby_join"
+
+    /** The lobby's call-ended notice (R57). */
+    const val LOBBY_CALL_ENDED = "element_call_lobby_call_ended"
+
+    /** The refused microphone's Allow or Open settings (R27). */
+    const val LOBBY_MICROPHONE_ACTION = "element_call_lobby_microphone_action"
+
+    /** The refused camera's Open settings, in the preview's frame (R28). */
+    const val LOBBY_CAMERA_SETTINGS = "element_call_lobby_camera_settings"
+
+    /** The lobby's Close (R20). */
+    const val LOBBY_CLOSE = "element_call_lobby_close"
+
     /** One tile in the call screen's layout, by its [CallTileData.tileId]. */
     fun tile(tileId: String): String = "element_call_tile_$tileId"
 

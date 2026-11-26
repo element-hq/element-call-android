@@ -13,6 +13,7 @@ import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallRoomContext
 import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.rtc.MatrixRtcCallEnd
+import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.MatrixRtcCallStatus
 import io.element.android.call.api.rtc.MatrixRtcConnectionLossReason
 import io.element.android.call.api.rtc.MatrixRtcConnectionState
@@ -115,7 +116,11 @@ enum class SampleOutageFixture(val key: String, val title: String, val descripti
  */
 class SampleOutageCall(context: Context, private val scope: CoroutineScope, private val fixture: SampleOutageFixture) : SampleLiveCall {
     private val joined = CompletableDeferred<Unit>()
-    private val client = FakeMatrixRtcClient(joinResult = { Result.success(call).also { joined.complete(Unit) } })
+    private val client =
+        FakeMatrixRtcClient(
+            joinResult = { Result.success(call).also { joined.complete(Unit) } },
+            cameraFrames = { ElementCallTestPattern.landscape().frames() }
+        )
     private val call: FakeMatrixRtcCall = FakeMatrixRtcCall(ROOM_ID, "m.call#room").apply {
         status.value = MatrixRtcCallStatus.Connected(sinceMs = System.currentTimeMillis(), degraded = false)
         newMediaSession = { FakeMatrixRtcMediaSession(frames = ::pattern) }
@@ -128,7 +133,7 @@ class SampleOutageCall(context: Context, private val scope: CoroutineScope, priv
     override val controller: ElementCallController get() = stack.controller
 
     override fun start() {
-        controller.startCall(ElementCallData(roomId = ROOM_ID, isAudioCall = false, isStartingCall = true))
+        controller.startCall(ElementCallData(roomId = ROOM_ID, intent = MatrixRtcCallIntent.VIDEO, isStartingCall = true, isDm = false, skipsLobby = true))
         scope.launch { play() }
     }
 

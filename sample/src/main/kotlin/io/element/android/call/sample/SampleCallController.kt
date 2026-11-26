@@ -77,6 +77,8 @@ class SampleCallController(private val context: Context, private val scope: Coro
 
     fun startOutage(fixture: SampleOutageFixture) = startLive(SampleOutageCall(context, scope, fixture))
 
+    fun startLobby(fixture: SampleLobbyFixture) = startLive(SampleLobbyCall(context, scope, fixture))
+
     fun startReactions(pace: Duration = 1.seconds) = startLive(SampleReactionsCall(context, scope, pace))
 
     fun startPermissionProbe() = startLive(SamplePermissionProbeCall(context, scope))
@@ -125,6 +127,9 @@ class SampleCallController(private val context: Context, private val scope: Coro
         pictureInPictureEntryFlow.value = entry
     }
     override fun startCall(callData: ElementCallData) = target.startCall(callData)
+    override fun join() = target.join()
+    override fun setCallScreenVisible(visible: Boolean) = target.setCallScreenVisible(visible)
+    override val ownCameraFrames: Flow<MatrixRtcVideoFrame> = current.flatMapLatest { it.ownCameraFrames }
     override fun setMicrophonePermissionGranted(granted: Boolean) = target.setMicrophonePermissionGranted(granted)
     override fun setCameraPermissionGranted(granted: Boolean) = target.setCameraPermissionGranted(granted)
     override fun setMicrophoneMuted(muted: Boolean) = target.setMicrophoneMuted(muted)

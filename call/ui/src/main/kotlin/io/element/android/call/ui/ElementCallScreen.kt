@@ -17,11 +17,14 @@ import android.view.accessibility.AccessibilityManager
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -37,17 +40,22 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsIgnoringVisibility
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.systemBarsIgnoringVisibility
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.foundation.layout.wrapContentWidth
@@ -146,7 +154,19 @@ fun ElementCallScreen(
             // R43), so the stage is told how much of its bottom the bar covers and scrolls its last
             // row clear of it (R44).
             val bottomInset = LocalCallStageTestHooks.current?.bottomInset ?: WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
-            val controlsClearance = CONTROLS_HEIGHT + bottomInset
+            // Sideways, under the preview, the lobby's controls left it a strip: they take a column at the end instead.
+            val isLobbySplit = isLandscape && state.lobby != null
+            val lobbyPanelWidth = minOf(LOBBY_PANEL_WIDTH, maxWidth / 2)
+            // Grown back to the full width at Join, never on a rotation; the same stage, so our renderer stays (045 R49).
+            val lobbyPanelShare = remember(isLandscape) { Animatable(if (isLobbySplit) 1f else 0f) }
+            LaunchedEffect(isLobbySplit) { lobbyPanelShare.animateTo(if (isLobbySplit) 1f else 0f) }
+            val stageWidth = maxWidth - lobbyPanelWidth * lobbyPanelShare.value
+            // The lobby's Join line sits under the bar, and the preview's frame stays clear of both (045 R9).
+            val controlsClearance = when {
+                isLobbySplit -> bottomInset
+                state.lobby != null -> CONTROLS_HEIGHT + bottomInset + JOIN_SECTION_HEIGHT
+                else -> CONTROLS_HEIGHT + bottomInset
+            }
             // The stage has the same bounds in every arrangement, fullscreen included, and the chrome
             // floats over it: a stage that moved or resized when a tile went fullscreen would take the
             // whole grid with it on the first frame of the move (spec 000 R7). Held upright, the top
@@ -159,8 +179,12 @@ fun ElementCallScreen(
             val statusBarTop = WindowInsets.statusBarsIgnoringVisibility.asPaddingValues().calculateTopPadding()
             // Kept while the bar is not drawn, so the grid does not move under a fullscreen tile.
             var bannerHeight by remember { mutableStateOf(0.dp) }
-            val topClearance = if (isLandscape) 0.dp else statusBarTop + TOP_BAR_HEIGHT + bannerHeight
+            // Kept for the whole lobby, empty or not, so the preview never moves as people come and go (045 R9, R42).
+            val lobbySummaryHeight = if (state.lobby != null) LOBBY_SUMMARY_HEIGHT else 0.dp
+            val topClearance = if (isLandscape) 0.dp else statusBarTop + TOP_BAR_HEIGHT + bannerHeight + lobbySummaryHeight
             val density = LocalDensity.current
+            // Opened by a tap on the lobby's refused microphone or its blocked Join (045 R27).
+            var isMicrophoneDialogShown by remember { mutableStateOf(false) }
             val controls = @Composable { controlsModifier: Modifier ->
                 Box(
                     modifier = controlsModifier
@@ -178,11 +202,38 @@ fun ElementCallScreen(
                                 onLower = { state.eventSink(ElementCallScreenEvent.ToggleRaisedHand) },
                             )
                         }
-                        CallControlsBar(state)
+                        CallControlsBar(state, onExplainMicrophone = { isMicrophoneDialogShown = true })
+                        // Fades at the tap, with the bar growing its other buttons in place (045 R24).
+                        var lastLobby by remember { mutableStateOf(state.lobby) }
+                        state.lobby?.let { lastLobby = it }
+                        AnimatedVisibility(visible = state.lobby != null, enter = fadeIn(), exit = fadeOut() + shrinkVertically()) {
+                            lastLobby?.let {
+                                CallLobbyJoinSection(lobby = it, eventSink = state.eventSink, onExplainMicrophone = {
+                                    isMicrophoneDialogShown =
+                                true
+                                })
+                            }
+                        }
                     }
                 }
             }
             val reduceMotion = rememberReduceMotion()
+            val microphoneAction = (state.lobby as? ElementCallLobbyState.Ready)?.microphoneAction
+            if (isMicrophoneDialogShown && microphoneAction != null) {
+                MicrophoneNeededDialog(
+                    action = microphoneAction,
+                    onAction = {
+                        isMicrophoneDialogShown = false
+                        state.eventSink(
+                            when (microphoneAction) {
+                                ElementCallLobbyMicrophoneAction.ALLOW -> ElementCallScreenEvent.RequestMicrophonePermission
+                                ElementCallLobbyMicrophoneAction.OPEN_SETTINGS -> ElementCallScreenEvent.OpenAppSettings
+                            }
+                        )
+                    },
+                    onDismiss = { isMicrophoneDialogShown = false },
+                )
+            }
             ReportScreenReader(state.eventSink)
             ReportScreenStopped(state.eventSink)
             val fullscreen = state.fullscreenTile
@@ -203,7 +254,7 @@ fun ElementCallScreen(
                     isFullBleed && !state.isStageChromeVisible -> statusBarTop - topClearance
                     else -> 0.dp
                 },
-                right = systemBars.calculateRightPadding(LayoutDirection.Ltr),
+                right = if (isLobbySplit) 0.dp else systemBars.calculateRightPadding(LayoutDirection.Ltr),
                 bottom = if (state.isStageChromeVisible) controlsClearance else bottomInset,
             )
 
@@ -212,13 +263,17 @@ fun ElementCallScreen(
                     ConnectingPlaceholder(state)
                 } else {
                     ReportStageOrientation(isLandscape = isLandscape, eventSink = state.eventSink)
+                    // Across the panel too, or the stage's edge would cut it.
+                    val isGlowShared = lobbyPanelShare.value > 0f
+                    if (isGlowShared) StageGlowBand(Modifier.align(Alignment.BottomCenter))
                     CallStage(
                         state = state,
                         controlsClearance = controlsClearance,
                         topClearance = topClearance,
                         fullscreenTop = statusBarTop,
                         floatingInsets = floatingInsets,
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxHeight().width(stageWidth),
+                        drawsGlow = !isGlowShared,
                     )
                 }
                 // All the chrome, gone at once rather than slid away when the system is about to shrink the
@@ -256,6 +311,8 @@ fun ElementCallScreen(
                                         .align(Alignment.CenterHorizontally)
                                         .onSizeChanged { bannerHeight = with(density) { it.height.toDp() } },
                                 )
+                                // Above the preview, in a space the lobby always keeps (045 R41, Q8).
+                                CallLobbySummary(lobby = state.lobby, isAudioCall = state.isAudioCall, modifier = Modifier.align(Alignment.CenterHorizontally))
                             }
                         }
                     }
@@ -306,6 +363,7 @@ fun ElementCallScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             ScreenShareBanner(state = state)
+                            if (!isLobbySplit) CallLobbySummary(lobby = state.lobby, isAudioCall = state.isAudioCall)
                             AnimatedVisibility(
                                 visible = state.isStageChromeVisible,
                                 enter = fadeIn(tween(CHROME_SLIDE_MS)),
@@ -314,13 +372,23 @@ fun ElementCallScreen(
                                 CallDurationLabel(state = state)
                             }
                         }
-                        StageChrome(
-                            isVisible = state.isStageChromeVisible,
-                            edge = Alignment.Bottom,
-                            reduceMotion = reduceMotion,
-                            modifier = Modifier.align(Alignment.BottomCenter),
-                        ) {
-                            controls(Modifier)
+                        if (isLobbySplit) {
+                            CallLobbyPanel(
+                                state = state,
+                                onExplainMicrophone = { isMicrophoneDialogShown = true },
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .width(lobbyPanelWidth),
+                            )
+                        } else {
+                            StageChrome(
+                                isVisible = state.isStageChromeVisible,
+                                edge = Alignment.Bottom,
+                                reduceMotion = reduceMotion,
+                                modifier = Modifier.align(Alignment.BottomCenter),
+                            ) {
+                                controls(Modifier)
+                            }
                         }
                     } else {
                         CallDurationLabel(
@@ -503,15 +571,31 @@ private fun CallTopBar(state: ElementCallScreenState, modifier: Modifier = Modif
             .fillMaxWidth()
             .padding(horizontal = 4.dp, vertical = 4.dp),
     ) {
-        IconButton(
-            onClick = { state.eventSink(ElementCallScreenEvent.Minimize) },
-            modifier = Modifier.align(Alignment.CenterStart),
-        ) {
-            Icon(
-                imageVector = ElementCallTheme.icons.minimize,
-                contentDescription = stringResource(R.string.element_call_a11y_minimize_call),
-                tint = ElementCallTheme.colors.iconPrimary,
-            )
+        if (state.lobby != null) {
+            // "Close", never minimise: the lobby is not a call to come back to (045 R20).
+            TextButton(
+                onClick = { state.eventSink(ElementCallScreenEvent.HangUp) },
+                modifier = Modifier
+                    .align(Alignment.CenterStart)
+                    .testTag(ElementCallTestTags.LOBBY_CLOSE),
+            ) {
+                Text(
+                    text = stringResource(R.string.element_call_action_close),
+                    style = ElementCallTheme.typography.bodyLgMedium,
+                    color = ElementCallTheme.colors.textPrimary,
+                )
+            }
+        } else {
+            IconButton(
+                onClick = { state.eventSink(ElementCallScreenEvent.Minimize) },
+                modifier = Modifier.align(Alignment.CenterStart),
+            ) {
+                Icon(
+                    imageVector = ElementCallTheme.icons.minimize,
+                    contentDescription = stringResource(R.string.element_call_a11y_minimize_call),
+                    tint = ElementCallTheme.colors.iconPrimary,
+                )
+            }
         }
         CallSettingsMenu(state = state, modifier = Modifier.align(Alignment.CenterEnd))
         Column(
@@ -531,6 +615,14 @@ private fun CallTopBar(state: ElementCallScreenState, modifier: Modifier = Modif
                 overflow = TextOverflow.Ellipsis,
             )
             if (state.connection is ElementCallConnection.Calling) CallingLabel(isAudioCall = state.isAudioCall)
+            // From the lobby our tile is already on the stage, so the joining state is said here, not by a placeholder (045 R23).
+            if (state.isJoiningFromLobby) {
+                Text(
+                    text = state.connection.label(),
+                    style = ElementCallTheme.typography.bodySmRegular,
+                    color = ElementCallTheme.colors.textSecondary,
+                )
+            }
         }
     }
 }
@@ -655,8 +747,26 @@ private fun ConnectingPlaceholder(state: ElementCallScreenState) {
  * spread across the phone they read as unrelated buttons rather than one bar.
  */
 @Composable
+private fun CallLobbyPanel(state: ElementCallScreenState, onExplainMicrophone: () -> Unit, modifier: Modifier = Modifier) {
+    val lobby = state.lobby ?: return
+    Column(
+        modifier = modifier
+            .fillMaxHeight()
+            .windowInsetsPadding(WindowInsets.systemBarsIgnoringVisibility.only(WindowInsetsSides.End + WindowInsetsSides.Vertical))
+            .padding(top = TOP_BAR_HEIGHT),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        CallLobbySummary(lobby = lobby, isAudioCall = state.isAudioCall)
+        CallControlsBar(state, onExplainMicrophone = onExplainMicrophone)
+        CallLobbyJoinSection(lobby = lobby, eventSink = state.eventSink, onExplainMicrophone = onExplainMicrophone)
+    }
+}
+
+@Composable
 private fun CallControlsBar(
     state: ElementCallScreenState,
+    onExplainMicrophone: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(
@@ -674,15 +784,27 @@ private fun CallControlsBar(
         horizontalArrangement = Arrangement.spacedBy(BUTTON_GAP),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // While the lobby loads nothing is known to show: settings and Close alone work (045 R59).
+        val isLoading = state.lobby is ElementCallLobbyState.Loading
+        // Refused in the lobby, there is no microphone to mute (045 R27).
+        val isMicrophoneRefused = (state.lobby as? ElementCallLobbyState.Ready)?.joinUnavailableReason == ElementCallLobbyJoinBlock.MICROPHONE_REFUSED
         RoundCallButton(
-            onClick = { state.eventSink(ElementCallScreenEvent.ToggleMicrophoneMuted) },
-            icon = if (state.isMicrophoneMuted) ElementCallTheme.icons.microphoneOff else ElementCallTheme.icons.microphoneOn,
+            enabled = !isLoading,
+            // Looks unavailable, and a tap says why rather than doing nothing (R27).
+            looksDisabled = isMicrophoneRefused,
+            onClick = { if (isMicrophoneRefused) onExplainMicrophone() else state.eventSink(ElementCallScreenEvent.ToggleMicrophoneMuted) },
+            icon = if (state.isMicrophoneMuted || isMicrophoneRefused) ElementCallTheme.icons.microphoneOff else ElementCallTheme.icons.microphoneOn,
             contentDescription = stringResource(
                 if (state.isMicrophoneMuted) R.string.element_call_a11y_unmute_microphone else R.string.element_call_a11y_mute_microphone
             ),
             isActive = state.isMicrophoneMuted,
+            stateDescription = if (isMicrophoneRefused) stringResource(R.string.element_call_permission_microphone_title) else null,
         )
+        // Refused in the lobby, it looks unavailable but still answers a tap, which asks or explains (045 R28, 042 C5).
+        val isCameraRefused = (state.lobby as? ElementCallLobbyState.Ready)?.camera == ElementCallLobbyCamera.NOT_ALLOWED
         RoundCallButton(
+            enabled = !isLoading,
+            looksDisabled = isCameraRefused,
             onClick = { state.eventSink(ElementCallScreenEvent.ToggleCamera) },
             icon = if (state.isCameraEnabled) ElementCallTheme.icons.cameraOn else ElementCallTheme.icons.cameraOff,
             contentDescription = stringResource(
@@ -690,40 +812,33 @@ private fun CallControlsBar(
             ),
             // Same reading as the mic: the highlighted button is the one that is switched off.
             isActive = !state.isCameraEnabled,
+            stateDescription = if (isCameraRefused) stringResource(R.string.element_call_a11y_camera_not_allowed) else null,
         )
-        AudioDeviceButton(state)
-        when (val slot = state.barSlot) {
-            ElementCallBarSlot.More -> RoundCallButton(
-                onClick = { state.eventSink(ElementCallScreenEvent.Present(ElementCallSheet.MORE)) },
-                icon = ElementCallTheme.icons.overflow,
-                contentDescription = stringResource(R.string.element_call_more_title),
-                isActive = false,
-                modifier = Modifier.testTag(ElementCallTestTags.CONTROLS_MORE),
-            )
-            is ElementCallBarSlot.Action -> when (slot.action) {
-                ElementCallBarAction.RAISED_HAND -> RaiseHandButton(state)
-                ElementCallBarAction.REACTIONS -> RoundCallButton(
-                    onClick = { state.eventSink(ElementCallScreenEvent.Present(ElementCallSheet.REACTIONS)) },
-                    icon = ElementCallTheme.icons.reaction,
-                    contentDescription = stringResource(R.string.element_call_a11y_send_reaction),
-                    isActive = false,
-                    enabled = state.isReactionControlEnabled,
-                    modifier = Modifier.testTag(ElementCallTestTags.REACTIONS),
-                )
-                ElementCallBarAction.SCREEN_SHARE -> RoundCallButton(
-                    onClick = { state.eventSink(ElementCallScreenEvent.ToggleScreenShare) },
-                    icon = if (state.isScreenSharing) ElementCallTheme.icons.shareScreenActive else ElementCallTheme.icons.shareScreen,
-                    contentDescription = stringResource(
-                        if (state.isScreenSharing) R.string.element_call_a11y_stop_screen_share else R.string.element_call_a11y_start_screen_share
-                    ),
-                    isActive = state.isScreenSharing,
-                    enabled = state.isScreenSharing || state.isScreenShareStartEnabled,
-                    modifier = Modifier.testTag(ElementCallTestTags.SCREEN_SHARE),
-                )
+        // Absent in the lobby, the output included (design, 2026-11-25), grown in place at the tap (045 R24).
+        AnimatedVisibility(visible = state.lobby == null, enter = expandHorizontally() + fadeIn(), exit = shrinkHorizontally() + fadeOut()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                AudioDeviceButton(state)
+                CallBarSlotAndHangUp(state)
             }
-            // Four controls: nothing else is offered, and an empty slot is not drawn.
-            null -> Unit
         }
+    }
+}
+
+/** The bar's last two places: the slot, grown in and out as it comes and goes, then hang up. */
+@Composable
+private fun CallBarSlotAndHangUp(state: ElementCallScreenState) {
+    val slot = state.barSlot
+    // Kept while it shrinks away, so the exit shows the button that is leaving.
+    val shownSlot = remember { SlotHolder() }
+    if (slot != null) shownSlot.value = slot
+    run {
+        AnimatedVisibility(visible = slot != null, enter = expandHorizontally() + fadeIn(), exit = shrinkHorizontally() + fadeOut()) {
+            Row {
+                Spacer(Modifier.width(BUTTON_GAP))
+                shownSlot.value?.let { CallBarSlot(state, it) }
+            }
+        }
+        Spacer(Modifier.width(BUTTON_GAP))
         RoundCallButton(
             onClick = { state.eventSink(ElementCallScreenEvent.HangUp) },
             icon = ElementCallTheme.icons.endCall,
@@ -732,6 +847,44 @@ private fun CallControlsBar(
             background = ElementCallTheme.colors.hangUp,
             tint = ElementCallTheme.colors.onOverlay,
         )
+    }
+}
+
+/** Not snapshot state: written during composition, read only by the same composition. */
+@Suppress("UseDataClass") // A mutable cell remembered by identity, never compared.
+private class SlotHolder(var value: ElementCallBarSlot? = null)
+
+@Composable
+private fun CallBarSlot(state: ElementCallScreenState, slot: ElementCallBarSlot) {
+    when (slot) {
+        ElementCallBarSlot.More -> RoundCallButton(
+            onClick = { state.eventSink(ElementCallScreenEvent.Present(ElementCallSheet.MORE)) },
+            icon = ElementCallTheme.icons.overflow,
+            contentDescription = stringResource(R.string.element_call_more_title),
+            isActive = false,
+            modifier = Modifier.testTag(ElementCallTestTags.CONTROLS_MORE),
+        )
+        is ElementCallBarSlot.Action -> when (slot.action) {
+            ElementCallBarAction.RAISED_HAND -> RaiseHandButton(state)
+            ElementCallBarAction.REACTIONS -> RoundCallButton(
+                onClick = { state.eventSink(ElementCallScreenEvent.Present(ElementCallSheet.REACTIONS)) },
+                icon = ElementCallTheme.icons.reaction,
+                contentDescription = stringResource(R.string.element_call_a11y_send_reaction),
+                isActive = false,
+                enabled = state.isReactionControlEnabled,
+                modifier = Modifier.testTag(ElementCallTestTags.REACTIONS),
+            )
+            ElementCallBarAction.SCREEN_SHARE -> RoundCallButton(
+                onClick = { state.eventSink(ElementCallScreenEvent.ToggleScreenShare) },
+                icon = if (state.isScreenSharing) ElementCallTheme.icons.shareScreenActive else ElementCallTheme.icons.shareScreen,
+                contentDescription = stringResource(
+                    if (state.isScreenSharing) R.string.element_call_a11y_stop_screen_share else R.string.element_call_a11y_start_screen_share
+                ),
+                isActive = state.isScreenSharing,
+                enabled = state.isScreenSharing || state.isScreenShareStartEnabled,
+                modifier = Modifier.testTag(ElementCallTestTags.SCREEN_SHARE),
+            )
+        }
     }
 }
 
@@ -811,15 +964,19 @@ private fun RoundCallButton(
     isActive: Boolean,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    /** Drawn as [enabled] false draws it, while still taking a tap. */
+    looksDisabled: Boolean = false,
     background: Color? = null,
     tint: Color? = null,
+    stateDescription: String? = null,
 ) {
+    val looksEnabled = enabled && !looksDisabled
     val resolvedBackground = background
         // Darker than the pill it sits in, which is bgSubtleSecondary.
-        ?: if (isActive && enabled) ElementCallTheme.colors.controlActiveBackground else ElementCallTheme.colors.bgCanvas
+        ?: if (isActive && looksEnabled) ElementCallTheme.colors.controlActiveBackground else ElementCallTheme.colors.bgCanvas
     val resolvedTint = when {
         // Resting, with a faint glyph: the theme has no disabled colour, and adding one would change a port every host fills.
-        !enabled -> ElementCallTheme.colors.iconSecondary.copy(alpha = DISABLED_ALPHA)
+        !looksEnabled -> ElementCallTheme.colors.iconSecondary.copy(alpha = DISABLED_ALPHA)
         tint != null -> tint
         isActive -> ElementCallTheme.colors.controlActiveContent
         else -> ElementCallTheme.colors.iconPrimary
@@ -827,13 +984,19 @@ private fun RoundCallButton(
     val unavailable = stringResource(R.string.element_call_a11y_unavailable)
     // A dark button over a dark tile would be only its icon; the ring tells it apart from what it
     // floats over, as the design draws it. The light and the coloured ones stand out on their own.
-    val hasRing = background == null && !(isActive && enabled)
+    val hasRing = background == null && !(isActive && looksEnabled)
     IconButton(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier
             // Said rather than only drawn: a screen reader user needs to know why the tap does nothing (034 R15).
-            .semantics { if (!enabled) stateDescription = unavailable }
+            .semantics {
+                if (!enabled) {
+                    this.stateDescription = unavailable
+                } else if (stateDescription != null) {
+                    this.stateDescription = stateDescription
+                }
+            }
             .size(BUTTON_SIZE)
             .clip(CircleShape)
             .background(resolvedBackground)
@@ -870,6 +1033,7 @@ private val BAR_VERTICAL_PADDING = 14.dp
 /** What the placeholder says about the connection while there is nobody to show. */
 @Composable
 private fun ElementCallConnection.label(): String = when (this) {
+    is ElementCallConnection.Lobby,
     ElementCallConnection.RequestingPermission,
     ElementCallConnection.Joining,
     ElementCallConnection.ConnectingMedia -> stringResource(R.string.element_call_connecting)
@@ -891,6 +1055,9 @@ private val TOP_SCRIM_EXTENT = 24.dp
 
 /** The top bar's height: an icon button and the bar's padding either side of it. */
 private val TOP_BAR_HEIGHT = 56.dp
+
+/** The lobby's column of controls beside its preview, held sideways; at most half the screen. */
+private val LOBBY_PANEL_WIDTH = 320.dp
 
 /** An icon button's width plus the bar's own padding, kept clear on both sides of the title. */
 private val TOP_BAR_BUTTON_ROOM = 52.dp

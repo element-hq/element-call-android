@@ -26,6 +26,8 @@ import kotlinx.coroutines.flow.Flow
 
 data class ElementCallScreenState(
     val connection: ElementCallConnection,
+    /** The lobby's own state while the call is in it (feature-hq 045), null outside it. */
+    val lobby: ElementCallLobbyState?,
     /** A voice call rather than a video one, as the user asked for it: the icon beside "Calling…" (030 R14). */
     val isAudioCall: Boolean,
     /**
@@ -194,6 +196,11 @@ data class ElementCallScreenState(
     val isSettingsSheetDrawn: Boolean get() = connection !is ElementCallConnection.Failed
 
     val showsRaiseHandControl: Boolean get() = ElementCallBarAction.RAISED_HAND in extraActions
+
+    /** Joining from the lobby, our tile already on the stage before the core reports it (feature-hq 045 R23). */
+    val isJoiningFromLobby: Boolean
+        get() = (connection == ElementCallConnection.Joining || connection == ElementCallConnection.ConnectingMedia) &&
+            tiles.any { it.isLocal && it.memberId == OWN_CAMERA_TILE_ID }
 
     val barSlot: ElementCallBarSlot? get() = extraActions.toBarSlot()
 

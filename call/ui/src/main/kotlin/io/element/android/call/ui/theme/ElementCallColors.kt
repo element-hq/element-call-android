@@ -71,6 +71,8 @@ data class ElementCallColors(
     val speakingPulse: Color = Color.White,
     /** The ring round each reaction in the picker: Compound's `border/interactive/secondary`. */
     val borderInteractiveSecondary: Color = Color(0xFF3C3F44),
+    /** The glow at the end of the stage, under the controls, teal to blue; the stage fades it into [bgCanvas] upwards. */
+    val stageGlow: Brush = Brush.horizontalGradient(listOf(Color(0xFF0DBDA8).copy(alpha = 0.6f), Color(0xFF0D5CBD).copy(alpha = 0.6f))),
 ) {
     companion object {
         /** Compound's dark semantic tokens, as of compound-design-tokens 2026. */

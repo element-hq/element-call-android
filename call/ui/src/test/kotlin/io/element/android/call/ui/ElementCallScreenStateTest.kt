@@ -18,6 +18,7 @@ import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.ElementCallVersion
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
+import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 import io.element.android.call.api.rtc.MatrixRtcParticipant
 import io.element.android.call.api.rtc.MatrixRtcReaction
@@ -421,8 +422,10 @@ class ElementCallScreenStateTest {
             val state = awaitItem()
 
             // The unmuted camera only: not the muted one, and not the audio-only member.
-            assertThat(state.videoFrames.keys).containsExactly(A_LOCAL_MEMBER_ID)
-            assertThat(controller.videoFramesRequests.map { it.memberId }.distinct()).containsExactly(A_LOCAL_MEMBER_ID)
+            assertThat(state.videoFrames.keys).containsExactly(OWN_CAMERA_TILE_ID)
+            // Ours is the camera's own flow, never a stream of the call (045 R49).
+            assertThat(controller.videoFramesRequests).isEmpty()
+            assertThat(state.videoFrames[OWN_CAMERA_TILE_ID]).isSameInstanceAs(controller.ownCameraFrames)
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -496,7 +499,7 @@ class ElementCallScreenStateTest {
         moleculeFlow(RecompositionMode.Immediate) { rememberElementCallScreenState(controller, aNavigator()) }.test {
             val state = awaitItem()
 
-            assertThat(state.tiles.map { it.tileId }).containsExactly(A_LOCAL_MEMBER_ID)
+            assertThat(state.tiles.map { it.tileId }).containsExactly(OWN_CAMERA_TILE_ID)
             assertThat(state.videoFrames.keys).doesNotContain("$A_LOCAL_MEMBER_ID#SCREEN_SHARE")
             cancelAndIgnoreRemainingEvents()
         }
@@ -544,7 +547,7 @@ class ElementCallScreenStateTest {
             )
             val later = consumeItemsUntilTimeout().last()
 
-            assertThat(later.videoFrames[A_LOCAL_MEMBER_ID]).isSameInstanceAs(first.videoFrames[A_LOCAL_MEMBER_ID])
+            assertThat(later.videoFrames[OWN_CAMERA_TILE_ID]).isSameInstanceAs(first.videoFrames[OWN_CAMERA_TILE_ID])
             cancelAndIgnoreRemainingEvents()
         }
     }
@@ -603,7 +606,7 @@ class ElementCallScreenStateTest {
             val state = awaitItem()
 
             assertThat(state.tiles.map { it.tileId })
-                .containsExactly(A_LOCAL_MEMBER_ID, "$A_REMOTE_MEMBER_ID#SCREEN_SHARE", A_REMOTE_MEMBER_ID, ANOTHER_REMOTE_MEMBER_ID)
+                .containsExactly(OWN_CAMERA_TILE_ID, "$A_REMOTE_MEMBER_ID#SCREEN_SHARE", A_REMOTE_MEMBER_ID, ANOTHER_REMOTE_MEMBER_ID)
                 .inOrder()
             val reference = state.tiles.single { it.memberId == ANOTHER_REMOTE_MEMBER_ID }
             assertThat(reference.hasDetail).isFalse()
@@ -934,7 +937,7 @@ class ElementCallScreenStateTest {
         roster: MatrixRtcTileRoster = tiles.previewRoster(),
         isDm: Boolean = false,
     ) = ElementCallSnapshot(
-        callData = ElementCallData(roomId = A_ROOM_ID, isAudioCall = true, isStartingCall = true),
+        callData = ElementCallData(roomId = A_ROOM_ID, intent = MatrixRtcCallIntent.AUDIO, isStartingCall = true, isDm = false, skipsLobby = true),
         connection = ElementCallConnection.Connected,
         isMicrophonePermissionGranted = true,
         roster = roster,

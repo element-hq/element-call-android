@@ -44,7 +44,7 @@ internal object CallStageDump {
         }
         val spotlight = hooks.spotlightTileId?.let { id -> roster.order.firstOrNull { it.id.tileId() == id }?.let { tokens[it.id] } } ?: "-"
         val fullscreen = hooks.fullscreenTileId?.let { id ->
-            if (id == call.localMemberId) "own" else roster.order.firstOrNull { it.id.tileId() == id }?.let { tokens[it.id] }
+            if (id == OWN_CAMERA_TILE_ID) "own" else roster.order.firstOrNull { it.id.tileId() == id }?.let { tokens[it.id] }
         } ?: "-"
         val out = StringBuilder()
         out.append("== ${formatTime(timeMs)} $source\n")
@@ -52,7 +52,7 @@ internal object CallStageDump {
             "window $windowText  composed ${call.composedTiles.lastOrNull()?.size ?: 0}  subscribed $subscribed  spotlight $spotlight  fullscreen $fullscreen\n"
         )
         out.append(row("rank", "slot", "rect", "vis", "detail", "constraints"))
-        out.append(ownRow(call.localMemberId, layout, offset, hooks))
+        out.append(ownRow(layout, offset, hooks))
         roster.order.forEachIndexed { rank, ref ->
             val id = ref.id.tileId()
             val (slot, rect) = placement(id, layout, offset, hooks)
@@ -64,9 +64,9 @@ internal object CallStageDump {
         return out.toString()
     }
 
-    private fun ownRow(localMemberId: String, layout: CallStageLayout?, offset: Float, hooks: CallStageTestHooks): String {
-        val (slot, rect) = placement(localMemberId, layout, offset, hooks)
-        return row("-", "own", slot, rect, visibility(localMemberId, hooks, isMounted = layout != null), "-", "-")
+    private fun ownRow(layout: CallStageLayout?, offset: Float, hooks: CallStageTestHooks): String {
+        val (slot, rect) = placement(OWN_CAMERA_TILE_ID, layout, offset, hooks)
+        return row("-", "own", slot, rect, visibility(OWN_CAMERA_TILE_ID, hooks, isMounted = layout != null), "-", "-")
     }
 
     private fun placement(id: String, layout: CallStageLayout?, offset: Float, hooks: CallStageTestHooks): Pair<String, String> {

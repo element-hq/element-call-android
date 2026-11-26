@@ -247,7 +247,7 @@ class SmallCallLayoutTest {
         // R15.
         assertThat(SmallCallLayout.pictureInPictureTile(tiles, speakerId = "c")?.tileId).isEqualTo("c")
         assertThat(SmallCallLayout.pictureInPictureTile(tiles, speakerId = null)?.tileId).isEqualTo("b")
-        assertThat(SmallCallLayout.pictureInPictureTile(listOf(us), speakerId = null)?.tileId).isEqualTo(OWN)
+        assertThat(SmallCallLayout.pictureInPictureTile(listOf(us), speakerId = null)?.tileId).isEqualTo(OWN_CAMERA_TILE_ID)
     }
 
     private fun small(

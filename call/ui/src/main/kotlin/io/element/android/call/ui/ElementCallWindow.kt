@@ -36,6 +36,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -51,10 +52,12 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.round
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallController
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.ElementCallWindowRect
+import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.MatrixRtcDetailWindow
 import io.element.android.call.api.rtc.MatrixRtcScreenCaptureToken
 import io.element.android.call.ui.util.KeepScreenOn
@@ -207,6 +210,10 @@ private fun CallScreenWindow(
             override fun openAppSettings() = onOpenAppSettings()
 
             override fun requestScreenCapture() = permissions.requestScreenCapture()
+
+            override fun requestMicrophonePermission() = permissions.requestMicrophone()
+
+            override val canRequestMicrophonePermission: Boolean get() = permissions.canRequestMicrophone
         }
     }
 
@@ -241,7 +248,10 @@ private fun CallScreenWindow(
         )
     }
 
-    if (current.isMaximized) {
+    if (current.connection is ElementCallConnection.Lobby) {
+        // Closes the lobby, never minimises it (045 R20).
+        BackHandler(onBack = controller::hangUp)
+    } else if (current.isMaximized) {
         BackHandler(onBack = onMinimize)
     }
 }
@@ -249,11 +259,16 @@ private fun CallScreenWindow(
 internal class CallPermissions(
     val requestCamera: () -> Unit,
     val requestScreenCapture: () -> Unit,
+    /** The lobby's refused microphone, asked again (045 R27). */
+    val requestMicrophone: () -> Unit,
+    /** Whether the system would still show its microphone request: read after each answer and on return. */
+    canRequestMicrophone: State<Boolean>,
     /** A camera tap the system refused without asking: explained, since nothing else would show (042 R11). */
     isCameraRefusedDialogVisible: State<Boolean>,
     val dismissCameraRefusedDialog: () -> Unit,
 ) {
     val isCameraRefusedDialogVisible by isCameraRefusedDialogVisible
+    val canRequestMicrophone by canRequestMicrophone
 }
 
 /** Whether a refusal came from the system without its dialog: the "denied, don't ask again" state (042 R11). */
@@ -267,15 +282,18 @@ internal fun isRefusedWithoutAsking(granted: Boolean, rationaleBefore: Boolean, 
 @Composable
 internal fun rememberCallPermissions(controller: ElementCallController, current: ElementCallSnapshot): CallPermissions {
     val context = LocalContext.current
+    val activity = LocalActivity.current
+    // After a first refusal the system still asks; after a second, or "don't ask again", it answers alone (045 R27).
+    val canRequestMicrophone = remember { mutableStateOf(false) }
     val microphoneLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         controller.setMicrophonePermissionGranted(granted)
+        canRequestMicrophone.value = activity.shouldShowRationale(Manifest.permission.RECORD_AUDIO)
     }
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         controller.setCameraPermissionGranted(granted)
     }
     // A refusal can only be told apart from a dialog the user answered after the fact: Android does not say beforehand
     // whether a request will show anything.
-    val activity = LocalActivity.current
     val isCameraRefusedDialogVisible = rememberSaveable { mutableStateOf(false) }
     var cameraRationaleBefore by remember { mutableStateOf(false) }
     val cameraTapLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -301,6 +319,41 @@ internal fun rememberCallPermissions(controller: ElementCallController, current:
 
     // Keyed on the state that needs answering rather than on the call, so it asks once and does
     // not ask again on every recomposition of a call that is already connected.
+    // The lobby asks once it has loaded, never while it loads, in 042's order (045 R26, R59).
+    val isLobbyLoaded = (current.connection as? ElementCallConnection.Lobby)?.isLoading == false
+    // Once per lobby: a format change loads it again, and is not a reason to ask again (C23).
+    var hasLobbyAsked by remember { mutableStateOf(false) }
+    LaunchedEffect(isLobbyLoaded) {
+        if (!isLobbyLoaded || hasLobbyAsked) return@LaunchedEffect
+        hasLobbyAsked = true
+        if (context.isGranted(Manifest.permission.RECORD_AUDIO)) {
+            controller.setMicrophonePermissionGranted(true)
+        } else {
+            microphoneLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+    // Then the camera, only if it starts on and the microphone was granted (R26, 042 C4).
+    LaunchedEffect(isLobbyLoaded, current.isMicrophonePermissionGranted) {
+        if (!isLobbyLoaded || !current.isMicrophonePermissionGranted) return@LaunchedEffect
+        if (!current.isCameraEnabled || current.isCameraPermissionGranted) return@LaunchedEffect
+        if (context.isGranted(Manifest.permission.CAMERA)) {
+            controller.setCameraPermissionGranted(true)
+        } else {
+            cameraLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+    // Back from the settings: a microphone granted there enables Join at once; a camera only waits for the next tap (R29).
+    val isInLobby = current.connection is ElementCallConnection.Lobby
+    val latest by rememberUpdatedState(current)
+    LifecycleResumeEffect(isInLobby) {
+        if (isInLobby) {
+            if (context.isGranted(Manifest.permission.RECORD_AUDIO) && !latest.isMicrophonePermissionGranted) controller.setMicrophonePermissionGranted(true)
+            if (context.isGranted(Manifest.permission.CAMERA) && !latest.isCameraPermissionGranted) controller.setCameraPermissionGranted(true)
+            canRequestMicrophone.value = activity.shouldShowRationale(Manifest.permission.RECORD_AUDIO)
+        }
+        onPauseOrDispose {}
+    }
+
     LaunchedEffect(current.connection) {
         if (current.connection != ElementCallConnection.RequestingPermission) return@LaunchedEffect
         if (context.isGranted(Manifest.permission.RECORD_AUDIO)) {
@@ -313,8 +366,11 @@ internal fun rememberCallPermissions(controller: ElementCallController, current:
     // A video call needs the camera from the moment it connects, so it is asked for up front, after
     // the microphone so the user answers one dialog at a time. A denial is final: the keys do not
     // change, so this does not ask again for the rest of the call.
-    LaunchedEffect(current.callData.isAudioCall, current.isMicrophonePermissionGranted) {
-        if (current.callData.isAudioCall || !current.isMicrophonePermissionGranted) return@LaunchedEffect
+    // The intent the core settled, which a call opened without a choice waits for (045 R17).
+    LaunchedEffect(current.settledIntent, current.isMicrophonePermissionGranted) {
+        // A call opened on the lobby asked there.
+        if (current.callData.showsLobby) return@LaunchedEffect
+        if (current.settledIntent != MatrixRtcCallIntent.VIDEO || !current.isMicrophonePermissionGranted) return@LaunchedEffect
         if (current.isCameraPermissionGranted) return@LaunchedEffect
         if (context.isGranted(Manifest.permission.CAMERA)) {
             controller.setCameraPermissionGranted(true)
@@ -328,6 +384,8 @@ internal fun rememberCallPermissions(controller: ElementCallController, current:
             requestCamera = {
                 if (context.isGranted(Manifest.permission.CAMERA)) {
                     controller.setCameraPermissionGranted(true)
+                    // The tap is the ask: in the lobby a grant only records, so a camera allowed in settings comes on here (042 R12).
+                    controller.setCameraEnabled(true)
                 } else {
                     cameraRationaleBefore = activity.shouldShowCameraRationale()
                     cameraTapLauncher.launch(Manifest.permission.CAMERA)
@@ -343,12 +401,16 @@ internal fun rememberCallPermissions(controller: ElementCallController, current:
             },
             isCameraRefusedDialogVisible = isCameraRefusedDialogVisible,
             dismissCameraRefusedDialog = { isCameraRefusedDialogVisible.value = false },
+            requestMicrophone = { microphoneLauncher.launch(Manifest.permission.RECORD_AUDIO) },
+            canRequestMicrophone = canRequestMicrophone,
         )
     }
 }
 
-private fun Activity?.shouldShowCameraRationale() =
-    this != null && ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.CAMERA)
+private fun Activity?.shouldShowCameraRationale() = shouldShowRationale(Manifest.permission.CAMERA)
+
+private fun Activity?.shouldShowRationale(permission: String) =
+    this != null && ActivityCompat.shouldShowRequestPermissionRationale(this, permission)
 
 private fun Context.isGranted(permission: String) = ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
 

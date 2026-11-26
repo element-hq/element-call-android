@@ -10,6 +10,7 @@ package io.element.android.call.impl.rtc
 import android.content.Context
 import io.element.android.call.api.ElementCallDispatchers
 import io.element.android.call.api.rtc.MatrixRtcClient
+import io.element.android.call.api.rtc.MatrixRtcLocalCamera
 import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
 import io.element.android.call.api.rtc.MatrixRtcRoom
 import io.element.android.call.api.rtc.MatrixRtcSignallingHealth
@@ -39,7 +40,7 @@ import org.matrix.rtc.supportedVideoCodecs as ffiSupportedVideoCodecs
 internal class RustMatrixRtcClient(
     private val backend: MatrixBackend,
     private val dispatchers: ElementCallDispatchers,
-    /** Only reaches as far as the camera, via the room, the call and then the media session. */
+    /** For the camera, and the screen capture via the room, the call and then the media session. */
     private val context: Context,
     private val sessionCoroutineScope: CoroutineScope,
 ) : MatrixRtcClient {
@@ -70,6 +71,8 @@ internal class RustMatrixRtcClient(
             sessionCoroutineScope = sessionCoroutineScope,
         )
     }
+
+    override fun camera(): MatrixRtcLocalCamera = RustMatrixRtcLocalCamera(context, dispatchers)
 
     override fun signallingHealth(): Flow<MatrixRtcSignallingHealth> = flow {
         val subscription = withContext(ffiDispatcher) { rtcClient().subscribeSignallingHealth() }

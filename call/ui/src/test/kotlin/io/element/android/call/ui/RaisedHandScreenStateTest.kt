@@ -14,6 +14,7 @@ import com.google.common.truth.Truth.assertThat
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallSnapshot
+import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.MatrixRtcConnectionState
 import io.element.android.call.api.rtc.MatrixRtcSignallingHealth
 import io.element.android.call.api.rtc.MatrixRtcTile
@@ -129,7 +130,7 @@ class RaisedHandScreenStateTest {
         moleculeFlow(RecompositionMode.Immediate) { rememberElementCallScreenState(controller, aNavigator()) }.test {
             val state = awaitItem()
 
-            assertThat(state.videoFrames.keys).containsExactly(A_LOCAL_MEMBER_ID, ANOTHER_REMOTE_MEMBER_ID)
+            assertThat(state.videoFrames.keys).containsExactly(OWN_CAMERA_TILE_ID, ANOTHER_REMOTE_MEMBER_ID)
             assertThat(state.tiles.map { it.mediaState })
                 .containsExactly(CallTileMediaState.RECONNECTING, CallTileMediaState.KEYS_MISSING, CallTileMediaState.LIVE)
                 .inOrder()
@@ -188,7 +189,7 @@ class RaisedHandScreenStateTest {
     }
 
     private fun aHandSnapshot(own: MatrixRtcTile?, vararg remotes: MatrixRtcTile) = ElementCallSnapshot(
-        callData = ElementCallData(roomId = A_ROOM_ID, isAudioCall = true, isStartingCall = true),
+        callData = ElementCallData(roomId = A_ROOM_ID, intent = MatrixRtcCallIntent.AUDIO, isStartingCall = true, isDm = false, skipsLobby = true),
         connection = ElementCallConnection.Connected,
         isMicrophonePermissionGranted = true,
         roster = remotes.toList().previewRoster(),

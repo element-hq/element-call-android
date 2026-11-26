@@ -29,6 +29,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -60,8 +63,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -77,6 +82,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.traversalIndex
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -125,10 +131,17 @@ internal fun CallStage(
     modifier: Modifier = Modifier,
     /** Null to choose by the call: the small-call layout up to five tiles, the ranked grid beyond (019 R1, R8). */
     arrangement: CallStageArrangement? = null,
+    /** False while the screen draws the glow across more than the stage: the lobby's side panel. */
+    drawsGlow: Boolean = true,
 ) {
-    val chosen = arrangement ?: if (SmallCallLayout.applies(state.tiles)) CallStageArrangement.SmallCall else CallStageArrangement.RankedGrid
-    // Nothing scrolls in a small call (019 R30), and a drag on the stage is then nobody's.
-    val isStatic = chosen == CallStageArrangement.SmallCall
+    val isLobby = state.lobby != null
+    val chosen = arrangement ?: when {
+        isLobby -> CallStageArrangement.Lobby
+        SmallCallLayout.applies(state.tiles) -> CallStageArrangement.SmallCall
+        else -> CallStageArrangement.RankedGrid
+    }
+    // Nothing scrolls in a small call (019 R30) or the lobby, and a drag on the stage is then nobody's.
+    val isStatic = chosen == CallStageArrangement.SmallCall || chosen == CallStageArrangement.Lobby
     val scrollOffset = remember { mutableFloatStateOf(0f) }
     val currentLayout = remember { LayoutRef() }
     val userScroll = remember { UserScrollTracker() }
@@ -155,8 +168,9 @@ internal fun CallStage(
     // Whether the touch that began the current gesture landed on a moving grid: that touch stops the
     // fling and does nothing else (014 R17).
     val downStoppedScroll = remember { BooleanRef(false) }
+    // The lobby's preview takes no tap, double tap or pinch: only its camera switch (045 R36).
     val onTap = {
-        if (!downStoppedScroll.value) state.eventSink(StageChromeEvent.TapStage)
+        if (!downStoppedScroll.value && !isLobby) state.eventSink(StageChromeEvent.TapStage)
     }
     // The stage clips to its bounds so a grid tile passing under the spotlight is still drawn up to
     // the edge (R27). Screen readers read the spotlight first, then the grid in order (R69).
@@ -464,8 +478,8 @@ internal fun CallStage(
                 onExit = onExit,
                 isArrival = tile.tileId !in knownIds && !isRingHandover,
                 stats = state.tileStats(tile, slot.rect),
-                onTap = if (isOwnFloatingTile || isRinging) NoOp else onTap,
-                allowsFullscreen = !isOwnFloatingTile && !isRinging,
+                onTap = if (isOwnFloatingTile || isRinging || isLobby) NoOp else onTap,
+                allowsFullscreen = !isOwnFloatingTile && !isRinging && !isLobby,
                 isLandscapeStage = metrics.isLandscape,
                 drag = ownDrag.takeIf { slot.appearance == CallTileAppearance.Floating },
                 floatingCorner = layout.floating?.corner?.takeIf { slot.appearance == CallTileAppearance.Floating },
@@ -494,6 +508,9 @@ internal fun CallStage(
             scrim.animateTo(if (isIn) 1f else 0f, tween(if (isIn) FULLSCREEN_SCRIM_IN_MS else FULLSCREEN_SCRIM_OUT_MS))
         }
         Box(modifier = Modifier.fillMaxSize().graphicsLayer { translationY = gridTop - scrollOffset.floatValue }) {
+        // The design's glow, at the end of the content: always there in a stage that does not scroll, and reached at the
+        // bottom of one that does. Behind every tile.
+        if (drawsGlow) StageGlow(contentBottom = layout.contentHeight)
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -549,7 +566,8 @@ internal fun CallStage(
         val currentOwnRect by rememberUpdatedState(ownSlot?.rect ?: Rect.Zero)
         val currentStage by rememberUpdatedState(Rect(0f, -gridTop, width, height))
         val currentArea by rememberUpdatedState(floatingArea)
-        val hasOverlay = isFloating || showsSwitch
+        val lobby = state.lobby
+        val hasOverlay = isFloating || showsSwitch || lobby != null
         if (ownSlot != null && fullscreenId == null && hasOverlay) {
             Box(
                 modifier = Modifier
@@ -569,6 +587,9 @@ internal fun CallStage(
                         }
                     ),
             ) {
+                if (lobby != null) {
+                    CallLobbyPreviewOverlay(lobby = lobby)
+                }
                 if (showsSwitch) {
                     SwitchCameraButton(
                         onClick = { state.eventSink(ElementCallScreenEvent.SwitchCamera) },
@@ -864,7 +885,7 @@ private fun SwitchCameraButton(onClick: () -> Unit, modifier: Modifier = Modifie
 
 /** How many the core counts in the slot, which is not always how many tiles there are. */
 @Composable
-private fun MemberCountPill(count: Int, modifier: Modifier = Modifier) {
+internal fun MemberCountPill(count: Int, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(percent = 50))
@@ -1110,3 +1131,29 @@ private val STICKY_SPEC = spring(
 
 /** Short: this is an acknowledgement that someone arrived, not an event in its own right. */
 private val APPEARANCE_SPEC = tween<Float>(durationMillis = 220)
+
+/** The glow under the controls, ending at [contentBottom] in content coordinates and fading into the canvas upwards. */
+@Composable
+private fun StageGlow(contentBottom: Float) {
+    val height = with(LocalDensity.current) { STAGE_GLOW_HEIGHT.toPx() }
+    StageGlowBand(Modifier.offset { IntOffset(0, (contentBottom - height).roundToInt()) })
+}
+
+/** The glow alone, as wide as it is given. */
+@Composable
+internal fun StageGlowBand(modifier: Modifier = Modifier) {
+    val glow = ElementCallTheme.colors.stageGlow
+    val canvas = ElementCallTheme.colors.bgCanvas
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(STAGE_GLOW_HEIGHT)
+            .drawBehind {
+                drawRect(glow)
+                drawRect(Brush.verticalGradient(listOf(canvas, canvas.copy(alpha = 0f))))
+            },
+    )
+}
+
+/** About the controls and the Join line, as the design draws it. */
+private val STAGE_GLOW_HEIGHT = 280.dp

@@ -57,6 +57,8 @@ data class CallTileData(
     val handPosition: Int? = null,
     /** Set on the callee a DM call is ringing: not a tile, but drawn in the slot their tile will take (030 R15, R21). */
     val ring: CallRing? = null,
+    /** Our camera in the lobby (feature-hq 045): announced as our camera with its state, not as a person's tile (R50). */
+    val lobbyCamera: ElementCallLobbyCamera? = null,
 ) {
     val isHandRaised: Boolean get() = handPosition != null
 
@@ -77,7 +79,13 @@ data class CallTileData(
      * in it - including the ids in a test.
      */
     val tileId: String
-        get() = if (streamKind == MatrixRtcStreamKind.CAMERA) memberId else "$memberId#$streamKind"
+        get() = when {
+            // One identity from the lobby on, whatever our member id and whenever the core reports us: a new id is a new
+            // renderer, black until its first frame (feature-hq 045 R49, C5).
+            isLocal && streamKind == MatrixRtcStreamKind.CAMERA -> OWN_CAMERA_TILE_ID
+            streamKind == MatrixRtcStreamKind.CAMERA -> memberId
+            else -> "$memberId#$streamKind"
+        }
 
     /**
      * Falls back to the user id, which is always available and is at least identifying, rather than
@@ -158,6 +166,9 @@ fun MatrixRtcTileRef.toCallTileData(
         hasDetail = false,
     )
 }
+
+/** Our camera tile's [CallTileData.tileId], from the lobby into the call. Never a member id: the core mints those as hex. */
+const val OWN_CAMERA_TILE_ID = "own-camera"
 
 /** Where a DM call's ring is, for the callee's ringing avatar (030). */
 enum class CallRing {

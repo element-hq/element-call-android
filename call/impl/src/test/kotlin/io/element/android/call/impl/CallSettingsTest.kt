@@ -16,6 +16,7 @@ import io.element.android.call.api.ElementCallPreferences
 import io.element.android.call.api.ElementCallRoomContext
 import io.element.android.call.api.analytics.NoOpElementCallAnalytics
 import io.element.android.call.api.rtc.MatrixRtcCallEvent
+import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.MatrixRtcJoinException
 import io.element.android.call.api.rtc.MatrixRtcLocalState
 import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
@@ -92,7 +93,7 @@ class CallSettingsTest {
 
         controller.hangUp()
         runCurrent()
-        controller.startCall(ElementCallData(roomId = A_ROOM_ID, isAudioCall = true, isStartingCall = true))
+        controller.startCall(ElementCallData(roomId = A_ROOM_ID, intent = MatrixRtcCallIntent.AUDIO, isStartingCall = true, isDm = false, skipsLobby = true))
         joinFully(controller)
         assertThat(rtcClient.roomCount).isEqualTo(2)
         assertThat(rtcClient.lastMembershipFormat).isEqualTo(MatrixRtcMembershipFormat.MSC)
@@ -133,7 +134,7 @@ class CallSettingsTest {
 
         controller.hangUp()
         runCurrent()
-        controller.startCall(ElementCallData(roomId = A_ROOM_ID, isAudioCall = true, isStartingCall = true))
+        controller.startCall(ElementCallData(roomId = A_ROOM_ID, intent = MatrixRtcCallIntent.AUDIO, isStartingCall = true, isDm = false, skipsLobby = true))
         joinFully(controller)
         assertThat(rtcClient.lastCall?.lastVideoCodec).isEqualTo(MatrixRtcVideoCodec.VP9)
     }
@@ -249,7 +250,7 @@ class CallSettingsTest {
         // The sample's Lab writes a scanned code's format straight to its store, not through the controller.
         store.membershipFormat = MatrixRtcMembershipFormat.MSC
         store.videoCodec = MatrixRtcVideoCodec.VP8
-        controller.startCall(ElementCallData(roomId = A_ROOM_ID, isAudioCall = true, isStartingCall = true))
+        controller.startCall(ElementCallData(roomId = A_ROOM_ID, intent = MatrixRtcCallIntent.AUDIO, isStartingCall = true, isDm = false, skipsLobby = true))
         joinFully(controller)
 
         assertThat(rtcClient.lastMembershipFormat).isEqualTo(MatrixRtcMembershipFormat.MSC)
@@ -282,8 +283,9 @@ class CallSettingsTest {
             options = ElementCallOptions(isDeveloperModeEnabled = isDeveloperModeEnabled),
             preferencesStore = preferencesStore,
             analytics = NoOpElementCallAnalytics,
+            ownUserId = A_USER_ID,
         )
-        controller.startCall(ElementCallData(roomId = A_ROOM_ID, isAudioCall = true, isStartingCall = true))
+        controller.startCall(ElementCallData(roomId = A_ROOM_ID, intent = MatrixRtcCallIntent.AUDIO, isStartingCall = true, isDm = false, skipsLobby = true))
         runCurrent()
         return controller
     }

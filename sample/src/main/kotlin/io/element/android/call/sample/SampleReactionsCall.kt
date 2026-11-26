@@ -14,6 +14,7 @@ import io.element.android.call.api.ElementCallOptions
 import io.element.android.call.api.ElementCallRoomContext
 import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.rtc.MatrixRtcCallEvent
+import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.MatrixRtcCallStatus
 import io.element.android.call.api.rtc.MatrixRtcConnectionState
 import io.element.android.call.api.rtc.MatrixRtcLocalState
@@ -48,7 +49,11 @@ import kotlin.time.Duration.Companion.seconds
  */
 class SampleReactionsCall(context: Context, private val scope: CoroutineScope, private val pace: Duration = 1.seconds) : SampleLiveCall {
     private val joined = CompletableDeferred<Unit>()
-    private val client = FakeMatrixRtcClient(joinResult = { Result.success(call).also { joined.complete(Unit) } })
+    private val client =
+        FakeMatrixRtcClient(
+            joinResult = { Result.success(call).also { joined.complete(Unit) } },
+            cameraFrames = { ElementCallTestPattern.landscape().frames() }
+        )
     private val call: FakeMatrixRtcCall = FakeMatrixRtcCall(ROOM_ID, "m.call#room").apply {
         status.value = MatrixRtcCallStatus.Connected(sinceMs = System.currentTimeMillis(), degraded = false)
         newMediaSession = { FakeMatrixRtcMediaSession(frames = ::pattern) }
@@ -64,7 +69,7 @@ class SampleReactionsCall(context: Context, private val scope: CoroutineScope, p
     override val controller: ElementCallController get() = stack.controller
 
     override fun start() {
-        controller.startCall(ElementCallData(roomId = ROOM_ID, isAudioCall = false, isStartingCall = true))
+        controller.startCall(ElementCallData(roomId = ROOM_ID, intent = MatrixRtcCallIntent.VIDEO, isStartingCall = true, isDm = false, skipsLobby = true))
         scope.launch { play() }
     }
 

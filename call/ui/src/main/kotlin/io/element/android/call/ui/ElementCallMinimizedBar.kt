@@ -181,6 +181,8 @@ private fun CircularCallButton(
  */
 @Composable
 private fun ElementCallSnapshot.subtitle(): String = when (val connection = connection) {
+    // Never minimised (feature-hq 045 R33); said as the moment before joining if it ever is.
+    is ElementCallConnection.Lobby,
     ElementCallConnection.RequestingPermission,
     ElementCallConnection.Joining,
     ElementCallConnection.ConnectingMedia -> stringResource(R.string.element_call_connecting)

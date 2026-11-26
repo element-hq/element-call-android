@@ -15,6 +15,7 @@ import io.element.android.call.api.ElementCallRoomContext
 import io.element.android.call.api.ElementCallRoomMember
 import io.element.android.call.api.rtc.MatrixRtcCallEnd
 import io.element.android.call.api.rtc.MatrixRtcCallEvent
+import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.MatrixRtcCallStatus
 import io.element.android.call.api.rtc.MatrixRtcConnectionState
 import io.element.android.call.api.rtc.MatrixRtcLocalState
@@ -96,7 +97,12 @@ class SampleRingingCall(context: Context, private val scope: CoroutineScope, pri
         }
     }
     private val stack = ElementCallStack.Builder(context, FakeMatrixBackend())
-        .rtcClient(FakeMatrixRtcClient(joinResult = { Result.success(call).also { joined.complete(Unit) } }))
+        .rtcClient(
+            FakeMatrixRtcClient(
+                joinResult = { Result.success(call).also { joined.complete(Unit) } },
+                cameraFrames = { ElementCallTestPattern.portrait().frames() }
+            )
+        )
         .roomContext(FakeElementCallRoomContextProvider(ElementCallRoomContext(displayName = "Bob", isDm = true, members = MEMBERS)))
         .options(ElementCallOptions(ringLifetime = RING_LIFETIME))
         .analytics(SampleAnalytics)
@@ -105,7 +111,12 @@ class SampleRingingCall(context: Context, private val scope: CoroutineScope, pri
     override val controller: ElementCallController get() = stack.controller
 
     override fun start() {
-        controller.startCall(ElementCallData(roomId = ROOM_ID, isAudioCall = fixture.isAudioCall, isStartingCall = true))
+        controller.startCall(ElementCallData(
+                roomId = ROOM_ID,
+                intent = if (fixture.isAudioCall) MatrixRtcCallIntent.AUDIO else MatrixRtcCallIntent.VIDEO,
+                isStartingCall = true,
+                isDm = true,
+            ))
         scope.launch { play() }
     }
 

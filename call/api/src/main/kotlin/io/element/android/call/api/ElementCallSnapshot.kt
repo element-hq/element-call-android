@@ -9,6 +9,7 @@ package io.element.android.call.api
 
 import io.element.android.call.api.audio.CallAudioDevice
 import io.element.android.call.api.rtc.MatrixRtcAudioLevel
+import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.MatrixRtcConnectionLossReason
 import io.element.android.call.api.rtc.MatrixRtcFrameEncryptionState
 import io.element.android.call.api.rtc.MatrixRtcMembershipFormat
@@ -47,15 +48,15 @@ data class ElementCallSnapshot(
      * assertion.
      */
     val roomName: String? = null,
-    /**
-     * Whether the room the call is in is a DM, which is what decides between the one-to-one and the
-     * group layout.
-     *
-     * False rather than null until the room has been read: a DM drawn as a group call for the moment
-     * before its info arrives is the harmless direction, and the layout animates into place once it
-     * does.
-     */
+    /** Whether the room is a DM, as the host said when it opened the call: the one-to-one or the group layout. */
     val isDm: Boolean = false,
+    /** Us, for our avatar before the core reports our tile (feature-hq 045 R9). Null only in a fixture that does not need it. */
+    val ownUserId: UserId? = null,
+    /**
+     * Voice or video, as the core settled it from the host's intent, else the call's, else video (045 R17); null until
+     * it has. What the camera starts from, what a start notifies or rings with, and what the default output follows.
+     */
+    val settledIntent: MatrixRtcCallIntent? = null,
     /**
      * Room profiles by user id, for putting names and faces to [tiles] and [ownTile].
      *
@@ -113,6 +114,8 @@ data class ElementCallSnapshot(
     /** Where call audio is going, or null before the route has been taken. */
     val selectedAudioDevice: CallAudioDevice? = null,
     val isMicrophonePermissionGranted: Boolean = false,
+    /** The microphone was asked for and refused. In the lobby it disables Join; muted is [isMicrophoneMuted], which never does (045 R27, R30). */
+    val isMicrophonePermissionRefused: Boolean = false,
     /**
      * Whether our camera is capturing and publishing - and, until the media connects, whether it is
      * going to: the control bar is on screen throughout the join, so this is what the button reads
@@ -129,6 +132,8 @@ data class ElementCallSnapshot(
      * is concerned: tapping the button is what resolves either.
      */
     val isCameraPermissionGranted: Boolean = false,
+    /** The camera was asked for and refused: the lobby's frame says why (045 R28). */
+    val isCameraPermissionRefused: Boolean = false,
     /**
      * Whether the host has turned screen sharing on, see `ElementCallOptions.isScreenSharingEnabled`.
      *
@@ -204,6 +209,13 @@ data class ElementCallSnapshot(
             roster.order.count { it.id.kind == MatrixRtcTileKind.PERSON } == 1
 }
 
+/** The lobby's button: "Start group call", "Join call", "Join anyway" (feature-hq 045 R21, R57). */
+enum class ElementCallLobbyJoinLabel {
+    START,
+    JOIN,
+    JOIN_ANYWAY,
+}
+
 /** Which request on our hand failed. */
 enum class ElementCallHandRequestFailure {
     RAISE,
@@ -211,6 +223,24 @@ enum class ElementCallHandRequestFailure {
 }
 
 sealed interface ElementCallConnection {
+    /**
+     * The lobby (feature-hq 045): nothing has reached the room (R6). [memberCount] is the core's count of the call, null
+     * while the lobby loads, until the room is open, the intent settled and the first count in (R59). [hasSeenMembers]
+     * once the count has been above zero, so an empty call reads as ended rather than as one to start (R57).
+     */
+    data class Lobby(val memberCount: Int?, val hasSeenMembers: Boolean) : ElementCallConnection {
+        val isLoading: Boolean get() = memberCount == null
+
+        /** The button shown, and so what a tap does: only Start notifies the room (R21, R57). Null while loading. */
+        val joinLabel: ElementCallLobbyJoinLabel?
+            get() = when {
+                memberCount == null -> null
+                memberCount > 0 -> ElementCallLobbyJoinLabel.JOIN
+                hasSeenMembers -> ElementCallLobbyJoinLabel.JOIN_ANYWAY
+                else -> ElementCallLobbyJoinLabel.START
+            }
+    }
+
     /** Waiting for the microphone permission before anything can start. */
     data object RequestingPermission : ElementCallConnection
 

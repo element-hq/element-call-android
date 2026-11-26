@@ -10,6 +10,8 @@ package io.element.android.call.impl
 import android.content.Context
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
+import android.media.AudioManager
+import android.os.Build
 import android.os.SystemClock
 import io.element.android.call.api.rtc.MatrixRtcReactionKind
 import io.element.android.call.impl.audio.CallSoundEffectRenderer
@@ -17,10 +19,19 @@ import io.element.android.call.impl.audio.DefaultCallSoundEffectRenderer
 import io.element.android.call.impl.rtc.coreReactionCatalogue
 import io.element.android.call.impl.services.ElementCallForegroundService
 import io.element.android.call.impl.util.runCatchingExceptions
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import timber.log.Timber
 import kotlin.random.Random
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * The Android surface a running call needs, behind an interface so [DefaultElementCallController] can be
@@ -71,6 +82,9 @@ internal interface ElementCallPlatform {
 
     /** The core's reaction catalogue, empty if it cannot be read: native, so not on a JVM test. */
     fun reactionCatalogue(): List<MatrixRtcReactionKind>
+
+    /** Whether a call, ringing or answered, from any app, holds the phone's audio: its audio mode is not normal (045 R48). */
+    fun anotherCallHoldsAudio(): Flow<Boolean>
 }
 
 internal class DefaultElementCallPlatform(
@@ -106,7 +120,30 @@ internal class DefaultElementCallPlatform(
         Timber.e(e, "ElementCall: no reaction catalogue from the core")
         emptyList()
     }
+
+    override fun anotherCallHoldsAudio(): Flow<Boolean> {
+        val audioManager = context.getSystemService(AudioManager::class.java) ?: return flowOf(false)
+        val modes = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            callbackFlow {
+                val listener = AudioManager.OnModeChangedListener { trySend(it) }
+                audioManager.addOnModeChangedListener(context.mainExecutor, listener)
+                send(audioManager.mode)
+                awaitClose { audioManager.removeOnModeChangedListener(listener) }
+            }
+        } else {
+            // No mode listener before Android 12.
+            flow {
+                while (true) {
+                    emit(audioManager.mode)
+                    delay(MODE_POLL_INTERVAL)
+                }
+            }
+        }
+        return modes.map { it != AudioManager.MODE_NORMAL }.distinctUntilChanged()
+    }
 }
+
+private val MODE_POLL_INTERVAL = 1.seconds
 
 /** Reactions one sync delivered together neither rise in a line nor fuse into one sound (037 R2b). */
 internal val MAXIMUM_REACTION_SPREAD: Duration = 500.milliseconds

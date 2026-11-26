@@ -30,7 +30,9 @@ internal data class PreparedCamera(
 )
 
 /**
- * Captures the camera and feeds it to a published RTC track, one I420 frame at a time.
+ * Captures the camera for the self view and, once a track is attached, feeds it to the call, one I420 frame at a time.
+ * The capture runs without a track in the lobby, and the track is attached at Join without reopening the camera
+ * (feature-hq 045 R49).
  *
  * The camera stack comes from `libwebrtc.jar`, which ships inside the RTC AAR with its JNI half
  * compiled into the same `.so` the FFI loads - so `MatrixRtcFfi.ensureInitialized()` is what makes
@@ -46,7 +48,7 @@ internal data class PreparedCamera(
  * the indicator light staying on while the UI says the camera is off is not a thing worth being
  * clever about. `MatrixRtcMediaSession.setCameraEnabled` mutes the track at the transport instead.
  *
- * [onFrame] receives a copy of every captured frame, for a self view. Called on a camera thread.
+ * [onFrame] receives a copy of every captured frame, for a self view, with or without a track. Called on a camera thread.
  */
 internal class CameraVideoCapture(
     private val context: Context,
@@ -55,8 +57,15 @@ internal class CameraVideoCapture(
     private var eglBase: EglBase? = null
     private var surfaceTextureHelper: SurfaceTextureHelper? = null
     private var capturer: CameraVideoCapturer? = null
+
+    /** Attached from a coroutine, read on the camera thread. */
+    @Volatile
     private var track: FfiLocalTrack? = null
-    private var camera: PreparedCamera? = null
+
+    /** The camera open and its format, or null while stopped: what a track attached later is published with. */
+    @Volatile
+    var camera: PreparedCamera? = null
+        private set
 
     private val frontFacing = AtomicBoolean(true)
 
@@ -72,8 +81,8 @@ internal class CameraVideoCapture(
     private val enumerator by lazy { Camera2Enumerator(context) }
 
     /**
-     * Pick the camera to open and its format, without opening it. The track has to be published
-     * with [CameraCaptureFormat.output] before [start], because the declared size sets the layers.
+     * Pick the camera to open and its format, without opening it. A track attached later is published
+     * with [CameraCaptureFormat.output], because the declared size sets the layers.
      *
      * @return null when the device has no camera.
      */
@@ -89,9 +98,12 @@ internal class CameraVideoCapture(
         return formatFor(deviceName)?.let { PreparedCamera(deviceName, it) }
     }
 
-    /** Open [camera] and start publishing to [track]. */
-    fun start(track: FfiLocalTrack, camera: PreparedCamera) {
-        if (capturer != null) return
+    /** Whether the camera is open. */
+    val isCapturing: Boolean get() = capturer != null
+
+    /** Open [camera] for the self view; nothing is published until [attach]. @return whether it opened. */
+    fun start(camera: PreparedCamera): Boolean {
+        if (capturer != null) return true
         frontFacing.set(enumerator.isFrontFacing(camera.deviceName))
 
         val egl = EglBase.create()
@@ -101,11 +113,10 @@ internal class CameraVideoCapture(
         if (helper == null) {
             Timber.w("MatrixRTC: could not create a surface texture helper, not capturing video")
             egl.release()
-            return
+            return false
         }
 
         val cameraCapturer = enumerator.createCapturer(camera.deviceName, cameraEvents)
-        this.track = track
         this.camera = camera
         outputShortEdge = min(camera.format.output.width, camera.format.output.height)
         eglBase = egl
@@ -120,8 +131,19 @@ internal class CameraVideoCapture(
         Timber.i(
             "MatrixRTC: capturing video from ${camera.deviceName} (front facing=${frontFacing.get()}) at " +
                 "${candidate.width}x${candidate.height}@${CameraCaptureFormat.FRAME_RATE}, " +
-                "published as ${camera.format.output.width}x${camera.format.output.height}"
+                "scaled to ${camera.format.output.width}x${camera.format.output.height}"
         )
+        return true
+    }
+
+    /** Publish what the running capture produces to [track], from the next frame, without touching the camera. */
+    fun attach(track: FfiLocalTrack) {
+        this.track = track
+    }
+
+    /** Stop publishing; the capture and the self view carry on. */
+    fun detach() {
+        track = null
     }
 
     /**
@@ -222,7 +244,7 @@ internal class CameraVideoCapture(
         }
 
         override fun onFrameCaptured(frame: VideoFrame) {
-            val track = track ?: return
+            val track = track
             val buffer = frame.buffer
             val size = CameraCaptureFormat.scaledToShortEdge(buffer.width, buffer.height, outputShortEdge)
             if (size.width == buffer.width && size.height == buffer.height) {

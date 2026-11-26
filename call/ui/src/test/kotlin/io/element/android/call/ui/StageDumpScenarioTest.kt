@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import com.google.common.truth.Truth.assertWithMessage
 import io.element.android.call.api.ElementCallData
+import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.MatrixRtcTileKind
 import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.call.impl.ElementCallStack
@@ -127,7 +128,15 @@ class StageDumpScenarioTest : RobolectricTest() {
                     }
                 }
             }
-            controller.startCall(ElementCallData(roomId = RoomId("!room:example.com"), isAudioCall = false, isStartingCall = true))
+            controller.startCall(
+                ElementCallData(
+                    roomId = RoomId("!room:example.com"),
+                    intent = MatrixRtcCallIntent.VIDEO,
+                    isStartingCall = true,
+                    isDm = false,
+                    skipsLobby = true
+                )
+            )
             settle(scheduler)
             controller.setMicrophonePermissionGranted(true)
             controller.setCameraPermissionGranted(true)

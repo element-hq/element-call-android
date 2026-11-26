@@ -13,6 +13,7 @@ import io.element.android.call.api.rtc.MatrixRtcCall
 import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.MatrixRtcCallStatus
 import io.element.android.call.api.rtc.MatrixRtcLeaveReason
+import io.element.android.call.api.rtc.MatrixRtcLocalCamera
 import io.element.android.call.api.rtc.MatrixRtcMediaSession
 import io.element.android.call.api.rtc.MatrixRtcMembership
 import io.element.android.call.api.rtc.MatrixRtcReactionKind
@@ -45,7 +46,7 @@ internal class RustMatrixRtcCall(
     private val callScope: CoroutineScope,
     private val dispatchers: ElementCallDispatchers,
     private val ffiDispatcher: CoroutineDispatcher,
-    /** Passed straight to the media session, which needs one to open the camera. */
+    /** Passed straight to the media session, which needs one for the screen capture. */
     private val context: Context,
 ) : MatrixRtcCall {
     override val slotId: String = rtcCall.slotId()
@@ -117,7 +118,11 @@ internal class RustMatrixRtcCall(
             .onFailure { Timber.i("MatrixRTC: reaction ${kind.name} not sent in $roomId/$slotId: ${it.message}") }
     }
 
-    override suspend fun connectMedia(isSfuFallbackEnabled: Boolean, videoCodec: MatrixRtcVideoCodec): Result<MatrixRtcMediaSession> = runCatchingExceptions {
+    override suspend fun connectMedia(
+        camera: MatrixRtcLocalCamera,
+        isSfuFallbackEnabled: Boolean,
+        videoCodec: MatrixRtcVideoCodec,
+    ): Result<MatrixRtcMediaSession> = runCatchingExceptions {
         mediaSession?.let { return@runCatchingExceptions it }
         // The core takes the focus from the join and the account and tokens from the backend.
         val ffiMediaSession =
@@ -130,6 +135,7 @@ internal class RustMatrixRtcCall(
             callScope = callScope.childScope(dispatchers.io, "MatrixRtcMediaSession-$roomId-$slotId"),
             ffiDispatcher = ffiDispatcher,
             context = context,
+            camera = checkNotNull(camera as? RustMatrixRtcLocalCamera) { "the Rust media session publishes the Rust client's camera" },
             dispatchers = dispatchers,
             videoCodec = videoCodec,
         ).also {

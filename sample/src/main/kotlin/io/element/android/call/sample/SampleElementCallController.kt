@@ -106,6 +106,13 @@ class SampleElementCallController(
         _state.value = ElementCallSnapshot(callData = callData, connection = ElementCallConnection.RequestingPermission)
     }
 
+    /** The fixtures open connected; the lobby's are live calls on the real controller. */
+    override fun join() = Unit
+
+    override fun setCallScreenVisible(visible: Boolean) = Unit
+
+    override val ownCameraFrames: Flow<MatrixRtcVideoFrame> get() = videoFrames(OWN_MEMBER, MatrixRtcStreamKind.CAMERA)
+
     override fun setMicrophonePermissionGranted(granted: Boolean) = update {
         it.copy(
             isMicrophonePermissionGranted = granted,

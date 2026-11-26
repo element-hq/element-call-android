@@ -172,6 +172,31 @@ class CallStageLayoutTest {
         assertThat(CallTileVisibility.forRect(wellAbove, viewport, wasLive = true)).isEqualTo(CallTileVisibility.Paused)
     }
 
+    @Test
+    fun `the lobby's frame is the space between the chrome, whatever our picture`() {
+        fun frame(metrics: CallStageMetrics, hasVideo: Boolean, aspect: Float?): Rect? = CallStageArrangement.Lobby.compute(
+            CallStageLayout.Input(
+                gridTileIds = listOf(OWN_CAMERA_TILE_ID),
+                spotlightTileId = null,
+                heroIds = emptyList(),
+                metrics = metrics,
+                own = OwnTileInput(OWN_CAMERA_TILE_ID, hasVideo = hasVideo, videoAspect = aspect, corner = ElementCallOwnTileCorner.Initial),
+            )
+        ).tiles[OWN_CAMERA_TILE_ID]
+
+        listOf(PORTRAIT, LANDSCAPE).forEach { metrics ->
+            val frames =
+                listOf(
+                    frame(metrics, hasVideo = true, aspect = 3f / 4f),
+                    frame(metrics, hasVideo = true, aspect = 16f / 9f),
+                    frame(metrics, hasVideo = false, aspect = null)
+                )
+            // On, off or refused, upright or sideways: the frame does not move (045 R9).
+            assertThat(frames.toSet()).hasSize(1)
+            assertThat(frames.first()).isEqualTo(Rect(MARGIN, MARGIN, metrics.width - MARGIN, metrics.height - CLEARANCE - MARGIN))
+        }
+    }
+
     private fun rankedGrid(
         gridTiles: List<String>,
         spotlight: String? = null,

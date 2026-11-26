@@ -14,6 +14,7 @@ import androidx.compose.material3.Text
 import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallSnapshot
+import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.api.rtc.id.RoomId
 import io.element.android.call.test.FakeElementCallController
 import io.element.android.call.ui.ElementCallOverlay
@@ -30,7 +31,7 @@ class ConsumerActivity : ComponentActivity() {
         // What is drawn: a fake call, so the overlay has something to show without joining anything.
         val controller = FakeElementCallController(
             initialState = ElementCallSnapshot(
-                callData = ElementCallData(roomId = RoomId("!consumer:example.org"), isAudioCall = true, isStartingCall = true),
+                callData = ElementCallData(roomId = RoomId("!consumer:example.org"), intent = MatrixRtcCallIntent.AUDIO, isStartingCall = true, isDm = false),
                 connection = ElementCallConnection.Connected,
                 roomName = "Consumer check",
                 isMaximized = false,

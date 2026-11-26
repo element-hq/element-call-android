@@ -19,6 +19,7 @@ import io.element.android.call.api.ElementCallConnection
 import io.element.android.call.api.ElementCallData
 import io.element.android.call.api.ElementCallSnapshot
 import io.element.android.call.api.ElementCallWindowRect
+import io.element.android.call.api.rtc.MatrixRtcCallIntent
 import io.element.android.call.test.A_ROOM_ID
 import io.element.android.call.test.FakeElementCallController
 import io.element.android.call.tests.testutils.robolectric.RobolectricTest
@@ -228,7 +229,7 @@ class ElementCallPictureInPictureTest : RobolectricTest() {
     }
 
     private fun aCall() = ElementCallSnapshot(
-        callData = ElementCallData(roomId = A_ROOM_ID, isAudioCall = false, isStartingCall = true),
+        callData = ElementCallData(roomId = A_ROOM_ID, intent = MatrixRtcCallIntent.VIDEO, isStartingCall = true, isDm = false, skipsLobby = true),
         connection = ElementCallConnection.Connected,
     )
 

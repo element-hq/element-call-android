@@ -142,6 +142,18 @@ class ElementCallActivity : ComponentActivity() {
         }
     }
 
+    // From STARTED, not RESUMED: in split screen with the other window focused the lobby's preview stays (045 R34).
+    override fun onStart() {
+        super.onStart()
+        if (::controller.isInitialized) controller.setCallScreenVisible(true)
+    }
+
+    // A rotation is not leaving: the camera keeps running through it (R34).
+    override fun onStop() {
+        super.onStop()
+        if (::controller.isInitialized && !isChangingConfigurations) controller.setCallScreenVisible(false)
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         // Destroyed while floating, the call ending in the window: no mode change follows, and the next call

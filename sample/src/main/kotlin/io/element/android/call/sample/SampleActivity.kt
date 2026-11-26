@@ -43,6 +43,8 @@ class SampleActivity : ComponentActivity() {
         ringingFixture?.let { controller.startRinging(it) }
         val outageFixture = requested?.let(SampleOutageFixture::fromKey)
         outageFixture?.let { controller.startOutage(it) }
+        val lobbyFixture = requested?.let(SampleLobbyFixture::fromKey)
+        lobbyFixture?.let { controller.startLobby(it) }
         val isReactionsFixture = requested == REACTIONS_FIXTURE
         if (isReactionsFixture) {
             val pace = intent.getStringExtra(EXTRA_REACTION_INTERVAL)?.toDoubleOrNull()?.seconds ?: 1.seconds
@@ -55,10 +57,10 @@ class SampleActivity : ComponentActivity() {
         // On the home screen rather than only in the log: a test that asked for a fixture that is not
         // there otherwise fails on a missing tile, which is true and about nothing.
         val launchError = when {
-            requested != null && fixture == null && ringingFixture == null && outageFixture == null && !isReactionsFixture &&
-                !isPermissionProbeFixture -> {
+            requested != null && fixture == null && ringingFixture == null && outageFixture == null && lobbyFixture == null &&
+                !isReactionsFixture && !isPermissionProbeFixture -> {
                 val known = SampleFixture.entries.map { it.key } + SampleRingingFixture.entries.map { it.key } +
-                    SampleOutageFixture.entries.map { it.key } + REACTIONS_FIXTURE + SamplePermissionProbeCall.KEY
+                    SampleOutageFixture.entries.map { it.key } + SampleLobbyFixture.entries.map { it.key } + REACTIONS_FIXTURE + SamplePermissionProbeCall.KEY
                 "Unknown fixture '$requested'. Known: ${known.joinToString()}"
             }
             requestedScenario != null && scenario == null -> "Unknown scenario '$requestedScenario'. Known: ${scenarios.joinToString()}"
